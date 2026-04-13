@@ -1961,10 +1961,9 @@ textarea:focus-visible,
 }
 
 .pp-shell[data-theme='chat-desktop'] .pp-panel--devices .pp-empty {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  min-height: 100%;
+  width: calc(100% - 12px);
+  margin: 20px auto 0;
+  min-height: auto;
   padding: 24px;
   text-align: center;
 }
