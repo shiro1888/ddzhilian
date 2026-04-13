@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --paper: #f5f4ed;
+  --paper-bright: #faf9f5;
+  --sand: #e8e6dc;
+  --ink: #141413;
+  --ink-soft: #4d4c48;
+  --muted: #87867f;
+  --brand: #c96442;
+  --brand-bright: #d97757;
+  --focus: #3898ec;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Manrope', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--ink-soft);
+  background: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100svh;
+  background: var(--paper);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(201, 100, 66, 0.08), transparent 20%),
+    radial-gradient(circle at 84% 10%, rgba(232, 230, 220, 0.65), transparent 18%);
+  z-index: -1;
+}
+
+a,
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  padding: 0;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+textarea {
+  field-sizing: content;
+}
+
+#root {
+  min-height: 100svh;
+}

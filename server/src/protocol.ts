@@ -1,0 +1,226 @@
+export type PairReason =
+  | 'manual'
+  | 'short-code'
+  | 'pair-link'
+  | 'account-auto'
+  | 'lan-discovery';
+
+export type SessionState = 'connecting' | 'connected' | 'failed' | 'closed';
+
+export type TransportMode = 'lan-webrtc' | 'remote-webrtc';
+
+export interface NativeLanCapabilityPayload {
+  lanNativeEnabled: boolean;
+  lanDiscoveryEnabled: boolean;
+  lanTransferEnabled: boolean;
+  localProtocol?: 'http' | 'https';
+  localPort?: number;
+  localFingerprint?: string;
+  localDownloadFallback?: boolean;
+}
+
+export type SignalEnvelope =
+  | {
+      kind: 'offer' | 'answer';
+      description: {
+        sdp: string;
+        type: 'offer' | 'answer';
+      };
+    }
+  | {
+      kind: 'ice-candidate';
+      candidate: {
+        candidate: string;
+        sdpMid?: string | null;
+        sdpMLineIndex?: number | null;
+        usernameFragment?: string | null;
+      };
+    };
+
+export interface DeviceHelloPayload {
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
+  accountId?: string;
+  autoConnect?: boolean;
+  discoverable?: boolean;
+  allowShortCode?: boolean;
+  requestedPairToken?: string | null;
+  nativeLan?: NativeLanCapabilityPayload;
+}
+
+export interface DeviceSettingsPayload {
+  deviceName?: string;
+  platform?: string;
+  accountId?: string;
+  autoConnect?: boolean;
+  discoverable?: boolean;
+  allowShortCode?: boolean;
+  nativeLan?: NativeLanCapabilityPayload;
+}
+
+export interface PeerSummary {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  shortCode: string;
+  pairToken: string;
+  online: boolean;
+  preferredTransport: TransportMode;
+  relation: {
+    sameAccount: boolean;
+    sameLan: boolean;
+    autoConnectEligible: boolean;
+    discoverable: boolean;
+  };
+  nativeLan?: NativeLanCapabilityPayload;
+  lastSeenAt: string;
+}
+
+export interface SessionSummary {
+  sessionId: string;
+  peerId: string;
+  state: SessionState;
+  reason: PairReason;
+  transportMode: TransportMode;
+  initiator: boolean;
+  updatedAt: string;
+}
+
+export interface DirectorySnapshotPayload {
+  self: {
+    deviceId: string;
+    deviceName: string;
+    shortCode: string;
+    pairToken: string;
+    accountId?: string;
+    autoConnect: boolean;
+    discoverable: boolean;
+    allowShortCode: boolean;
+    platform: string;
+    nativeLan?: NativeLanCapabilityPayload;
+  };
+  peers: PeerSummary[];
+  lanPeers: PeerSummary[];
+  accountPeers: PeerSummary[];
+  sessions: SessionSummary[];
+  rtcConfig: {
+    iceServers: Array<{
+      urls: string | string[];
+      username?: string;
+      credential?: string;
+    }>;
+  };
+  publicWsUrl: string;
+  serverTime: string;
+}
+
+export type ClientEvent =
+  | {
+      type: 'hello';
+      payload: DeviceHelloPayload;
+    }
+  | {
+      type: 'update-settings';
+      payload: DeviceSettingsPayload;
+    }
+  | {
+      type: 'pair-by-short-code';
+      payload: { shortCode: string };
+    }
+  | {
+      type: 'pair-by-token';
+      payload: { pairToken: string };
+    }
+  | {
+      type: 'request-connect';
+      payload: { targetDeviceId: string; reason?: PairReason };
+    }
+  | {
+      type: 'signal';
+      payload: {
+        sessionId: string;
+        targetDeviceId: string;
+        signal: SignalEnvelope;
+      };
+    }
+  | {
+      type: 'session-state';
+      payload: {
+        sessionId: string;
+        targetDeviceId: string;
+        state: SessionState;
+      };
+    }
+  | {
+      type: 'request-snapshot';
+      payload?: undefined;
+    };
+
+export type ServerEvent =
+  | {
+      type: 'welcome';
+      payload: DirectorySnapshotPayload;
+    }
+  | {
+      type: 'directory-snapshot';
+      payload: DirectorySnapshotPayload;
+    }
+  | {
+      type: 'session-created';
+      payload: {
+        sessionId: string;
+        peer: PeerSummary;
+        reason: PairReason;
+        transportMode: TransportMode;
+        initiator: boolean;
+      };
+    }
+  | {
+      type: 'signal';
+      payload: {
+        sessionId: string;
+        fromDeviceId: string;
+        signal: SignalEnvelope;
+      };
+    }
+  | {
+      type: 'peer-state';
+      payload: {
+        sessionId: string;
+        peerId: string;
+        state: SessionState;
+      };
+    }
+  | {
+      type: 'error';
+      payload: {
+        code:
+          | 'BAD_EVENT'
+          | 'DEVICE_NOT_READY'
+          | 'DEVICE_NOT_FOUND'
+          | 'SHORT_CODE_BLOCKED'
+          | 'PAIR_TOKEN_NOT_FOUND'
+          | 'SESSION_NOT_FOUND'
+          | 'SESSION_FORBIDDEN';
+        message: string;
+      };
+    };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+export function parseClientEvent(raw: string): ClientEvent | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!isRecord(parsed) || typeof parsed.type !== 'string') {
+      return null;
+    }
+
+    return parsed as ClientEvent;
+  } catch {
+    return null;
+  }
+}
