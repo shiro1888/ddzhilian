@@ -1406,6 +1406,87 @@ export function useCcconnect() {
     })
   }
 
+  const disconnectSession = (sessionId: string) => {
+    const peerConnection = peerConnectionsRef.current.get(sessionId)
+    const dataChannel = dataChannelsRef.current.get(sessionId)
+    const session = sessionsRef.current[sessionId]
+    const peerId = session?.peer?.deviceId ?? session?.peerId
+    const peerName = session?.peer?.deviceName ?? session?.peerId ?? '对方设备'
+    const reason = session?.reason ?? 'manual'
+
+    try {
+      dataChannel?.close()
+    } catch {
+      // Ignore close failures to keep local state consistent.
+    }
+
+    try {
+      peerConnection?.close()
+    } catch {
+      // Ignore close failures to keep local state consistent.
+    }
+
+    dataChannelsRef.current.delete(sessionId)
+    peerConnectionsRef.current.delete(sessionId)
+    pendingIceCandidatesRef.current.delete(sessionId)
+
+    if (peerId) {
+      updateConnectionState(sessionId, {
+        peerId,
+        peerName,
+        reason,
+        status: 'closed',
+      })
+
+      sendEvent({
+        type: 'session-state',
+        payload: {
+          sessionId,
+          targetDeviceId: peerId,
+          state: 'closed',
+        },
+      })
+    }
+
+    mergeSession(sessionId, {
+      state: 'closed',
+      channelState: 'closed',
+    })
+  }
+
+  const updateSettings = (patch: Partial<DeviceSettingsPayload>) => {
+    const nextIdentity: StoredIdentity = {
+      ...identityRef.current,
+      ...patch,
+    }
+
+    identityRef.current = nextIdentity
+    writeStoredIdentity(nextIdentity)
+
+    startTransition(() => {
+      setSelf((previous) =>
+        previous
+          ? {
+              ...previous,
+              ...patch,
+            }
+          : previous,
+      )
+    })
+
+    sendEvent({
+      type: 'update-settings',
+      payload: {
+        deviceName: nextIdentity.deviceName,
+        platform: nextIdentity.platform,
+        accountId: nextIdentity.accountId,
+        autoConnect: nextIdentity.autoConnect,
+        discoverable: nextIdentity.discoverable,
+        allowShortCode: nextIdentity.allowShortCode,
+      },
+    })
+  }
+
   const waitForBufferedAmount = async (channel: RTCDataChannel) => {
     if (channel.bufferedAmount < CHANNEL_BUFFER_HIGH_WATER) {
       return
@@ -1524,7 +1605,9 @@ export function useCcconnect() {
     errorMessage,
     pairByShortCode,
     requestConnect,
+    disconnectSession,
     requestSnapshot,
+    updateSettings,
     createTransferItems,
     retryTransfer,
     cancelTransfer,

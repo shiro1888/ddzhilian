@@ -1,11 +1,12 @@
-import { startTransition, useDeferredValue, useId, useState } from 'react'
-import type { ChangeEvent, DragEvent } from 'react'
+import { startTransition, useDeferredValue, useEffect, useId, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import './App.css'
 import { useCcconnect } from './lib/use-ccconnect'
 
 type TransferMode = 'file' | 'text'
 type SessionStatus = 'waiting' | 'active' | 'completed'
 type NavView = 'connect' | 'send' | 'receive' | 'text' | 'sessions'
+type ThemeId = 'classic' | 'chat-desktop'
 
 type UiSession = {
   id: string
@@ -19,6 +20,58 @@ type UiSession = {
   via: string
   canTransfer: boolean
 }
+
+type FileConversationEntry = {
+  id: string
+  sessionId?: string
+  kind: 'outgoing' | 'incoming'
+  fromSelf: boolean
+  createdAt: string
+  fileName: string
+  fileSize: number
+  subtitle: string
+  detail: string
+  statusLabel: string
+  tone: 'pending' | 'active' | 'completed' | 'failed'
+  progress: number
+  downloadUrl?: string
+  downloadName?: string
+  action?: 'retry' | 'cancel'
+}
+
+type ConversationNotice = {
+  id: string
+  sessionId: string
+  deviceId: string
+  createdAt: string
+  text: string
+}
+
+type UnifiedConversationEntry =
+  | {
+      id: string
+      entryType: 'text'
+      sessionId: string
+      fromSelf: boolean
+      createdAt: string
+      text: string
+    }
+  | {
+      id: string
+      entryType: 'notice'
+      sessionId: string
+      fromSelf: false
+      createdAt: string
+      text: string
+    }
+  | {
+      id: string
+      entryType: 'file'
+      sessionId: string
+      fromSelf: boolean
+      createdAt: string
+      file: FileConversationEntry
+    }
 
 function transferStatusLabel(
   status:
@@ -55,12 +108,82 @@ const navItems: Array<{
   id: NavView
   label: string
   hint: string
+  icon: ReactNode
 }> = [
-  { id: 'connect', label: '连接设备', hint: '发现并接入其他设备' },
-  { id: 'send', label: '发送文件', hint: '投递文件并生成会话' },
-  { id: 'receive', label: '接收文件', hint: '查看待接收与签收记录' },
-  { id: 'text', label: '长文本', hint: '发送验证码、链接与便笺' },
-  { id: 'sessions', label: '会话记录', hint: '搜索当前与历史会话' },
+  {
+    id: 'connect',
+    label: '连接设备',
+    hint: '发现并接入其他设备',
+    icon: (
+      <>
+        <rect x="3.5" y="5" width="17" height="14" rx="3" />
+        <path d="M8 3.5v3" />
+        <path d="M16 3.5v3" />
+        <path d="M8 20.5v-3" />
+        <path d="M16 20.5v-3" />
+      </>
+    ),
+  },
+  {
+    id: 'send',
+    label: '发送文件',
+    hint: '投递文件并生成会话',
+    icon: (
+      <>
+        <path d="M12 20V6" />
+        <path d="M6.5 11.5 12 6l5.5 5.5" />
+        <path d="M5 20.5h14" />
+      </>
+    ),
+  },
+  {
+    id: 'receive',
+    label: '接收文件',
+    hint: '查看待接收与签收记录',
+    icon: (
+      <>
+        <path d="M12 4v14" />
+        <path d="m6.5 12.5 5.5 5.5 5.5-5.5" />
+        <path d="M5 20.5h14" />
+      </>
+    ),
+  },
+  {
+    id: 'text',
+    label: '长文本',
+    hint: '发送验证码、链接与便笺',
+    icon: (
+      <>
+        <path d="M4 6.5a2.5 2.5 0 0 1 2.5-2.5h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5z" />
+        <path d="M8 8.5h8" />
+        <path d="M8 11.5h5.5" />
+      </>
+    ),
+  },
+  {
+    id: 'sessions',
+    label: '会话记录',
+    hint: '搜索当前与历史会话',
+    icon: (
+      <>
+        <path d="M6.5 5h11A1.5 1.5 0 0 1 19 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 17.5v-11A1.5 1.5 0 0 1 6.5 5Z" />
+        <path d="M8 9h8" />
+        <path d="M8 12h8" />
+        <path d="M8 15h5" />
+      </>
+    ),
+  },
+]
+
+const THEME_STORAGE_KEY = 'ccconnect-theme'
+
+const themeOptions: Array<{
+  id: ThemeId
+  label: string
+  description: string
+}> = [
+  { id: 'classic', label: '经典暖砂', description: '暖色、杂志感、强调卡片层次。' },
+  { id: 'chat-desktop', label: '聊天桌面', description: '灰绿桌面聊天风，强调消息工作区。' },
 ]
 
 const viewMeta: Record<
@@ -122,6 +245,80 @@ const quickPanels = [
     body: '发送台、会话列表、详情面板保持同步，不用在多个页面来回跳。',
   },
 ]
+
+function transferStatusTone(
+  status:
+    | 'queued'
+    | 'waiting_for_target'
+    | 'connecting'
+    | 'ready'
+    | 'transferring'
+    | 'completed'
+    | 'failed'
+    | 'cancelled',
+): FileConversationEntry['tone'] {
+  switch (status) {
+    case 'failed':
+      return 'failed'
+    case 'completed':
+      return 'completed'
+    case 'transferring':
+      return 'active'
+    default:
+      return 'pending'
+  }
+}
+
+function deviceRelationText(peer: {
+  relation: {
+    sameAccount: boolean
+    sameLan: boolean
+    autoConnectEligible: boolean
+    discoverable: boolean
+  }
+}) {
+  if (peer.relation.sameLan) {
+    return '同网设备'
+  }
+
+  if (peer.relation.sameAccount) {
+    return '同账号设备'
+  }
+
+  return '可发现设备'
+}
+
+function deviceBarStatus(
+  status?: 'connecting' | 'connected' | 'failed' | 'closed',
+): 'connected' | 'connectable' | 'connecting' | 'failed' {
+  switch (status) {
+    case 'connected':
+      return 'connected'
+    case 'connecting':
+      return 'connecting'
+    case 'failed':
+      return 'failed'
+    case 'closed':
+    default:
+      return 'connectable'
+  }
+}
+
+function deviceBarStatusLabel(
+  status: ReturnType<typeof deviceBarStatus>,
+) {
+  switch (status) {
+    case 'connected':
+      return '已连接'
+    case 'connecting':
+      return '连接中'
+    case 'failed':
+      return '连接失败'
+    case 'connectable':
+    default:
+      return '可连接'
+  }
+}
 
 function formatFileSize(bytes: number) {
   if (bytes >= 1024 * 1024 * 1024) {
@@ -275,8 +472,18 @@ async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<File[]> 
   return batches.flat()
 }
 
+function resolveInitialTheme(): ThemeId {
+  if (typeof window === 'undefined') {
+    return 'classic'
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+  return storedTheme === 'chat-desktop' || storedTheme === 'classic' ? storedTheme : 'classic'
+}
+
 function App() {
   const fileInputId = useId()
+  const [theme, setTheme] = useState<ThemeId>(resolveInitialTheme)
   const [activeView, setActiveView] = useState<NavView>('connect')
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -288,10 +495,21 @@ function App() {
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
   const [sessionQuery, setSessionQuery] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
+  const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [sessionArtifacts, setSessionArtifacts] = useState<
     Record<string, { kind: TransferMode; summary: string }>
   >({})
+  const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const deferredQuery = useDeferredValue(sessionQuery)
+  const isChatDesktopTheme = theme === 'chat-desktop'
+  const visibleNavItems = isChatDesktopTheme
+    ? navItems.filter((item) => item.id !== 'send' && item.id !== 'receive')
+    : navItems
+  const effectiveNavView: NavView =
+    isChatDesktopTheme && (activeView === 'send' || activeView === 'receive') ? 'text' : activeView
+  const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
+  const hasConnectionSnapshotRef = useRef(false)
 
   const {
     socketState,
@@ -306,7 +524,9 @@ function App() {
     errorMessage,
     pairByShortCode,
     requestConnect,
+    disconnectSession,
     requestSnapshot,
+    updateSettings,
     createTransferItems,
     retryTransfer,
     cancelTransfer,
@@ -329,6 +549,13 @@ function App() {
   const latestFileBySession = new Map<string, (typeof receivedFiles)[number]>()
   for (const file of receivedFiles) {
     latestFileBySession.set(file.sessionId, file)
+  }
+
+  const sessionPeerNameById = new Map<string, string>()
+  const sessionPeerIdById = new Map<string, string>()
+  for (const session of sessions) {
+    sessionPeerNameById.set(session.sessionId, session.peer?.deviceName ?? session.peerId)
+    sessionPeerIdById.set(session.sessionId, session.peer?.deviceId ?? session.peerId)
   }
 
   const uiSessions: UiSession[] = sessions.map((session) => {
@@ -362,6 +589,31 @@ function App() {
       canTransfer: session.state === 'connected' && session.channelState === 'open',
     }
   })
+
+  const latestSessionByPeerId = new Map<string, { uiSession: UiSession; updatedAt: string }>()
+  for (const session of sessions) {
+    const uiSession = uiSessions.find((item) => item.id === session.sessionId)
+    if (!uiSession) {
+      continue
+    }
+
+    const previous = latestSessionByPeerId.get(session.peerId)
+    if (!previous || new Date(session.updatedAt).getTime() > new Date(previous.updatedAt).getTime()) {
+      latestSessionByPeerId.set(session.peerId, { uiSession, updatedAt: session.updatedAt })
+    }
+  }
+
+  const filteredDevicePeers = onlinePeers.filter((peer) => {
+    const keyword = deferredQuery.trim().toLowerCase()
+    const haystack = `${peer.deviceName} ${peer.platform} ${peer.shortCode} ${peer.pairToken}`.toLowerCase()
+    return keyword.length === 0 || haystack.includes(keyword)
+  })
+
+  const selectedDevicePeer = onlinePeers.find((peer) => peer.deviceId === effectiveSelectedPeerId) ?? null
+  const selectedDeviceSessions = sessions
+    .filter((session) => session.peerId === selectedDevicePeer?.deviceId)
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+  const selectedDeviceSessionIds = new Set(selectedDeviceSessions.map((session) => session.sessionId))
 
   const filteredSessions = uiSessions.filter((session) => {
     const keyword = deferredQuery.trim().toLowerCase()
@@ -406,7 +658,9 @@ function App() {
   const receivedPendingFiles = receivedFiles.filter((file) => !file.completed)
   const onlineCount = onlinePeers.length
   const activeCount = sessions.filter((session) => session.state === 'connected').length
-  const currentMeta = viewMeta[activeView]
+  const selfName = self?.deviceName ?? '当前设备'
+  const isChatConversationView =
+    isChatDesktopTheme && (activeView === 'send' || activeView === 'receive' || activeView === 'text')
 
   const peerStatusById = new Map<string, 'connecting' | 'connected' | 'failed' | 'closed'>()
   for (const state of Object.values(connectionStates)) {
@@ -422,46 +676,258 @@ function App() {
     }
   }
 
+  const selectedDeviceStatus =
+    selectedDevicePeer ? peerStatusById.get(selectedDevicePeer.deviceId) : undefined
+  const selectedConversationName = isChatDesktopTheme
+    ? selectedDevicePeer?.deviceName ?? '设备对话'
+    : selectedUiSession
+      ? selectedUiSession.source === selfName
+        ? selectedUiSession.target
+        : selectedUiSession.source
+      : '当前会话'
+  const currentMeta = isChatConversationView
+    ? {
+        title: selectedConversationName,
+        description: selectedDevicePeer
+          ? `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
+          : '选择一个在线设备开始对话。',
+        primaryAction: '发送',
+        secondaryAction: '加入会话',
+      }
+    : viewMeta[activeView]
+
   const connectingTargetCount = Object.values(connectionStates).filter(
     (state) => state.status === 'connecting',
   ).length
 
+  const selectedConnectedTarget =
+    connectedTargets.find((target) => target.peerId === selectedDevicePeer?.deviceId) ?? null
+
   const activeTransferLabel =
-    activeTransferTarget?.peerName ??
-    (connectedTargets.length > 1
-      ? '所有已连接设备'
-      : onlinePeers.length > 0 && connectingTargetCount > 0
-        ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-        : onlinePeers.length > 0
-          ? '当前没有可接收文件的已连接设备'
-          : '暂无已连接设备')
+    isChatDesktopTheme && selectedDevicePeer
+      ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
+      : activeTransferTarget?.peerName ??
+        (connectedTargets.length > 1
+          ? '所有已连接设备'
+          : onlinePeers.length > 0 && connectingTargetCount > 0
+            ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
+            : onlinePeers.length > 0
+              ? '当前没有可接收文件的已连接设备'
+              : '暂无已连接设备')
 
   const fileSenderEmptyState =
-    connectedTargets.length === 0
-      ? onlinePeers.length > 0 && connectingTargetCount > 0
-        ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-        : '当前没有可接收文件的已连接设备'
-      : '请选择文件后发送到所有已连接设备'
+    isChatDesktopTheme && selectedDevicePeer
+      ? selectedConnectedTarget
+        ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
+        : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
+      : connectedTargets.length === 0
+        ? onlinePeers.length > 0 && connectingTargetCount > 0
+          ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
+          : '当前没有可接收文件的已连接设备'
+        : '请选择文件后发送到所有已连接设备'
 
   const visibleTransferItems = transferItems.filter(
     (item) => item.status !== 'cancelled',
   )
-  const hasRunnableTransfers = visibleTransferItems.some((item) =>
-    ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status),
-  )
-
   const sortedChatRecords = collapseBroadcastTextRecords(
     [...textRecords].sort(
       (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
     ),
   )
+  const visibleTransferItemsForConversation =
+    isChatDesktopTheme && selectedDevicePeer
+      ? visibleTransferItems.filter(
+          (item) =>
+            item.targetDeviceId === selectedDevicePeer.deviceId ||
+            (item.sessionId ? selectedDeviceSessionIds.has(item.sessionId) : false),
+        )
+      : visibleTransferItems
+  const receivedFilesForConversation =
+    isChatDesktopTheme && selectedDevicePeer
+      ? receivedFiles.filter((file) => selectedDeviceSessionIds.has(file.sessionId))
+      : receivedFiles
+  const sortedChatRecordsForConversation =
+    isChatDesktopTheme && selectedDevicePeer
+      ? sortedChatRecords.filter((record) => selectedDeviceSessionIds.has(record.sessionId))
+      : sortedChatRecords
+  const conversationNoticesForConversation =
+    isChatDesktopTheme && selectedDevicePeer
+      ? conversationNotices.filter((notice) => selectedDeviceSessionIds.has(notice.sessionId))
+      : conversationNotices
+  const hasRunnableTransfers = visibleTransferItemsForConversation.some((item) =>
+    ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status),
+  )
+
+  const fileConversationEntries: FileConversationEntry[] = [
+    ...visibleTransferItemsForConversation.map((item) => ({
+      id: item.id,
+      sessionId: item.sessionId,
+      kind: 'outgoing' as const,
+      fromSelf: true,
+      createdAt: item.createdAt,
+      fileName: item.fileName,
+      fileSize: item.fileSize,
+      subtitle: item.targetDeviceName ?? activeTransferLabel,
+      detail: `${formatFileSize(item.sentBytes)} / ${formatFileSize(item.fileSize)}`,
+      statusLabel: transferStatusLabel(item.status),
+      tone: transferStatusTone(item.status),
+      progress: item.progress,
+      action:
+        item.status === 'failed'
+          ? ('retry' as const)
+          : item.status !== 'completed'
+            ? ('cancel' as const)
+            : undefined,
+    })),
+    ...receivedFilesForConversation.map((file) => ({
+      id: `incoming-${file.id}`,
+      sessionId: file.sessionId,
+      kind: 'incoming' as const,
+      fromSelf: false,
+      createdAt: file.createdAt,
+      fileName: file.name,
+      fileSize: file.size,
+      subtitle: sessionPeerNameById.get(file.sessionId) ?? '对方设备',
+      detail: file.completed
+        ? `${formatFileSize(file.size)} · 已可下载`
+        : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
+      statusLabel: file.completed ? '已接收' : '接收中',
+      tone: file.completed ? ('completed' as const) : ('active' as const),
+      progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
+      downloadUrl: file.objectUrl,
+      downloadName: file.name,
+    })),
+  ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+
+  const unifiedConversationEntries: UnifiedConversationEntry[] = [
+    ...sortedChatRecordsForConversation.map((record) => ({
+      id: `text-${record.id}`,
+      entryType: 'text' as const,
+      sessionId: record.sessionId,
+      fromSelf: record.fromSelf,
+      createdAt: record.createdAt,
+      text: record.text,
+    })),
+    ...conversationNoticesForConversation.map((notice) => ({
+      id: `notice-${notice.id}`,
+      entryType: 'notice' as const,
+      sessionId: notice.sessionId,
+      fromSelf: false as const,
+      createdAt: notice.createdAt,
+      text: notice.text,
+    })),
+    ...fileConversationEntries.map((entry) => ({
+      id: `file-${entry.id}`,
+      entryType: 'file' as const,
+      sessionId: entry.sessionId ?? '',
+      fromSelf: entry.fromSelf,
+      createdAt: entry.createdAt,
+      file: entry,
+    })),
+  ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+
+  const fileConversationEmptyState =
+    selectedDevicePeer
+      ? selectedConnectedTarget
+        ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
+        : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
+      : '发现到新设备后，它们会显示在这里。'
+  const selectedDeviceTransferSessionId = selectedConnectedTarget?.sessionId ?? null
+  const runnableTransferIds = visibleTransferItemsForConversation
+    .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
+    .map((item) => item.id)
+  const devicePreviewText = (peer: (typeof onlinePeers)[number]) => {
+    const latestSession = latestSessionByPeerId.get(peer.deviceId)?.uiSession
+    if (latestSession) {
+      return latestSession.kind === 'file' ? `[文件] ${latestSession.summary}` : latestSession.summary
+    }
+
+    return `${peer.platform} · 互传码 ${peer.shortCode}`
+  }
+
+  useEffect(() => {
+    const currentStatuses = Object.fromEntries(
+      Object.entries(connectionStates).map(([sessionId, state]) => [sessionId, state.status]),
+    )
+
+    if (!hasConnectionSnapshotRef.current) {
+      previousConnectionStatusesRef.current = currentStatuses
+      hasConnectionSnapshotRef.current = true
+      return
+    }
+
+    const nextNotices: ConversationNotice[] = []
+    for (const [sessionId, state] of Object.entries(connectionStates)) {
+      const previousStatus = previousConnectionStatusesRef.current[sessionId]
+      const currentStatus = state.status
+
+      if (previousStatus !== 'connected' && currentStatus === 'connected') {
+        nextNotices.push({
+          id: `${sessionId}-joined-${Date.now()}-${state.peerId}`,
+          sessionId,
+          deviceId: state.peerId,
+          createdAt: new Date().toISOString(),
+          text: `${state.peerName} 加入对话`,
+        })
+      }
+
+      if (previousStatus === 'connected' && (currentStatus === 'closed' || currentStatus === 'failed')) {
+        nextNotices.push({
+          id: `${sessionId}-left-${Date.now()}-${state.peerId}`,
+          sessionId,
+          deviceId: state.peerId,
+          createdAt: new Date().toISOString(),
+          text: `${state.peerName} 退出对话`,
+        })
+      }
+    }
+
+    if (nextNotices.length > 0) {
+      queueMicrotask(() => {
+        setConversationNotices((previous) => [...previous, ...nextNotices])
+      })
+    }
+
+    previousConnectionStatusesRef.current = currentStatuses
+  }, [connectionStates])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      // Ignore storage failures so the UI can still render normally.
+    }
+  }, [theme])
 
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
       setActiveView(view)
       setIsMobileNavOpen(false)
+      setIsEditingDeviceName(false)
       setLocalError(null)
     })
+  }
+
+  const beginEditDeviceName = () => {
+    setDeviceNameDraft(self?.deviceName ?? '')
+    setIsEditingDeviceName(true)
+  }
+
+  const cancelEditDeviceName = () => {
+    setIsEditingDeviceName(false)
+    setDeviceNameDraft('')
+  }
+
+  const saveDeviceName = () => {
+    const nextName = deviceNameDraft.trim()
+    if (!nextName) {
+      setLocalError('设备名不能为空。')
+      return
+    }
+
+    updateSettings({ deviceName: nextName })
+    setLocalError(null)
+    setIsEditingDeviceName(false)
   }
 
   const handlePrimaryConnect = () => {
@@ -481,13 +947,16 @@ function App() {
   }
 
   const handleSendFiles = async () => {
-    if (visibleTransferItems.length === 0) {
+    if (visibleTransferItemsForConversation.length === 0) {
       setLocalError('请先选择文件。')
       return
     }
 
     try {
-      await startPendingTransfers()
+      await startPendingTransfers(
+        isChatDesktopTheme ? runnableTransferIds : undefined,
+        isChatDesktopTheme ? selectedDeviceTransferSessionId : null,
+      )
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文件发送失败。')
@@ -495,9 +964,19 @@ function App() {
   }
 
   const handleSendText = async () => {
-    const rawText = textMode === 'chat' ? chatDraft : draftText
+    const rawText = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
     const normalizedText = rawText.trim()
-    if (connectedTargets.length === 0 || normalizedText.length === 0) {
+    if (normalizedText.length === 0) {
+      setLocalError('请输入要发送的内容。')
+      return
+    }
+
+    if (isChatDesktopTheme) {
+      if (!selectedDeviceTransferSessionId) {
+        setLocalError('先与当前选中的设备建立连接，再发送消息。')
+        return
+      }
+    } else if (connectedTargets.length === 0) {
       setLocalError('先建立一个已连接会话，再发送长文本。')
       return
     }
@@ -506,7 +985,11 @@ function App() {
       const recordId = crypto.randomUUID()
       const createdAt = new Date().toISOString()
 
-      for (const [index, target] of connectedTargets.entries()) {
+      const targets = isChatDesktopTheme
+        ? connectedTargets.filter((target) => target.sessionId === selectedDeviceTransferSessionId)
+        : connectedTargets
+
+      for (const [index, target] of targets.entries()) {
         await sendText(target.session.sessionId, rawText, {
           logLocalRecord: index === 0,
           recordId,
@@ -525,7 +1008,7 @@ function App() {
         return next
       })
 
-      if (textMode === 'chat') {
+      if (isChatDesktopTheme || textMode === 'chat') {
         setChatDraft('')
       } else {
         setDraftText('')
@@ -551,11 +1034,11 @@ function App() {
       return
     }
 
-    const created = createTransferItems(files, null)
+    const created = createTransferItems(files, isChatDesktopTheme ? selectedDeviceTransferSessionId : null)
     setActiveView('send')
     void startPendingTransfers(
       created.map((item) => item.id),
-      null,
+      isChatDesktopTheme ? selectedDeviceTransferSessionId : null,
     )
   }
 
@@ -589,7 +1072,7 @@ function App() {
   }
 
   return (
-    <div className="pp-shell">
+    <div className="pp-shell" data-theme={theme}>
       <aside className={`pp-sidebar${isMobileNavOpen ? ' is-mobile-open' : ''}`}>
         <div className="pp-brand">
           <span className="pp-brand__mark">CC</span>
@@ -609,6 +1092,25 @@ function App() {
         </div>
 
         <div className="pp-sidebar__menu" id="pp-primary-nav">
+          <div className="pp-theme-switch" role="group" aria-label="主题切换">
+            {themeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={theme === option.id ? 'is-active' : ''}
+                aria-pressed={theme === option.id}
+                title={option.label}
+                onClick={() => setTheme(option.id)}
+              >
+                <span className={`pp-theme-switch__swatch is-${option.id}`} aria-hidden="true" />
+                <span className="pp-theme-switch__copy">
+                  <strong>{option.label}</strong>
+                  <small>{option.description}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+
           <div className="pp-sidebar__actions">
             <button type="button" onClick={() => handleViewChange('connect')}>
               新会话
@@ -619,41 +1121,250 @@ function App() {
           </div>
 
           <nav className="pp-nav" aria-label="功能导航">
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={activeView === item.id ? 'is-active' : ''}
+                className={effectiveNavView === item.id ? 'is-active' : ''}
+                title={item.label}
+                aria-label={item.label}
                 onClick={() => handleViewChange(item.id)}
               >
-                <strong>{item.label}</strong>
-                <span>{item.hint}</span>
+                <span className="pp-nav__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    {item.icon}
+                  </svg>
+                </span>
+                <span className="pp-nav__copy">
+                  <strong>{item.label}</strong>
+                  <span>{item.hint}</span>
+                </span>
               </button>
             ))}
           </nav>
         </div>
       </aside>
 
-      <main className="pp-main">
+      <main className={`pp-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}`}>
         <header className="pp-header">
           <div>
-            <p className="pp-header__eyebrow">连接 · 传输 · 共享</p>
+            <p className="pp-header__eyebrow">{isChatConversationView ? '当前对话' : '连接 · 传输 · 共享'}</p>
             <h1>{currentMeta.title}</h1>
             <p>{currentMeta.description}</p>
             {(localError || errorMessage) && <p className="pp-error-note">{localError ?? errorMessage}</p>}
           </div>
 
-          <div className="pp-header__status">
-            <span>{onlineCount} 台设备在线</span>
-            <span>{activeCount} 个活跃会话</span>
-            <span>{socketState}</span>
-          </div>
+          {isChatDesktopTheme ? (
+            <div className="pp-header__actions">
+              <button type="button" className="pp-icon-button pp-icon-button--plain" aria-label="刷新" onClick={requestSnapshot}>
+                ↻
+              </button>
+              <button
+                type="button"
+                className="pp-icon-button pp-icon-button--plain"
+                aria-label="连接设备"
+                onClick={() => handleViewChange('connect')}
+              >
+                ⊕
+              </button>
+              <button
+                type="button"
+                className="pp-icon-button pp-icon-button--plain"
+                aria-label="会话记录"
+                onClick={() => handleViewChange('sessions')}
+              >
+                ⋯
+              </button>
+            </div>
+          ) : (
+            <div className="pp-header__status">
+              <span>{onlineCount} 台设备在线</span>
+              <span>{activeCount} 个活跃会话</span>
+              <span>{socketState}</span>
+            </div>
+          )}
         </header>
 
         <section className="pp-stage">
           <div className="pp-stage__backdrop" aria-hidden="true" />
 
-          {activeView === 'send' && (
+          {isChatConversationView && (
+            <section className="pp-view pp-view--single pp-view--files">
+              <div
+                className={`pp-chatbox pp-chatbox--files${isDragging ? ' is-dragging' : ''}`}
+                onDragEnter={() => setIsDragging(true)}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  if (!isDragging) {
+                    setIsDragging(true)
+                  }
+                }}
+                onDragLeave={handleDragLeave}
+                onDrop={(event) => {
+                  void handleDrop(event)
+                }}
+              >
+                <div className="pp-chatbox__thread">
+                  {unifiedConversationEntries.length > 0 ? (
+                    unifiedConversationEntries.map((entry, index) => {
+                      const previousIso = index > 0 ? unifiedConversationEntries[index - 1].createdAt : null
+                      const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
+
+                      return (
+                        <div key={entry.id} className="pp-chatbox__entry">
+                          {entry.entryType === 'notice' ? (
+                            <div className="pp-chatbox__notice">
+                              <span>{entry.text}</span>
+                            </div>
+                          ) : (
+                            <>
+                          {showDivider && (
+                            <div className="pp-chatbox__divider">
+                              <span>{formatChatDivider(entry.createdAt)}</span>
+                            </div>
+                          )}
+
+                          <div className={`pp-chatbox__message${entry.fromSelf ? ' is-self' : ' is-peer'}`}>
+                            {!entry.fromSelf && <div className="pp-chatbox__avatar">TA</div>}
+
+                            {entry.entryType === 'text' ? (
+                              <div className="pp-chatbox__bubble">
+                                <p>{entry.text}</p>
+                              </div>
+                            ) : (
+                              <div className={`pp-file-bubble is-${entry.file.tone}`}>
+                                <small className="pp-file-bubble__eyebrow">
+                                  {entry.file.kind === 'outgoing' ? '我发送的文件' : '收到的文件'}
+                                </small>
+                                <strong>{entry.file.fileName}</strong>
+                                <span className="pp-file-bubble__meta">
+                                  {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
+                                </span>
+                                <div className="pp-file-bubble__progress">
+                                  <div
+                                    className={`pp-file-bubble__bar is-${entry.file.tone}`}
+                                    style={{ width: `${Math.round(entry.file.progress * 100)}%` }}
+                                  />
+                                </div>
+                                <div className="pp-file-bubble__footer">
+                                  <span>{entry.file.statusLabel}</span>
+                                  <span>{entry.file.detail}</span>
+                                </div>
+                                {(entry.file.downloadUrl || entry.file.action) && (
+                                  <div className="pp-file-bubble__actions">
+                                    {entry.file.downloadUrl ? (
+                                      <a
+                                        className="pp-file-bubble__action"
+                                        href={entry.file.downloadUrl}
+                                        download={entry.file.downloadName}
+                                      >
+                                        下载文件
+                                      </a>
+                                    ) : null}
+                                    {entry.file.action === 'retry' ? (
+                                      <button
+                                        type="button"
+                                        className="pp-file-bubble__action"
+                                        onClick={() => retryTransfer(entry.file.id)}
+                                      >
+                                        重试
+                                      </button>
+                                    ) : null}
+                                    {entry.file.action === 'cancel' ? (
+                                      <button
+                                        type="button"
+                                        className="pp-file-bubble__action"
+                                        onClick={() => cancelTransfer(entry.file.id)}
+                                      >
+                                        取消
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {entry.fromSelf && <div className="pp-chatbox__avatar is-self">我</div>}
+                          </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="pp-chatbox__empty pp-chatbox__empty--files">{fileConversationEmptyState}</div>
+                  )}
+                </div>
+
+                <div className="pp-chatbox__composer">
+                  <div className="pp-chatbox__textarea-wrap">
+                    <textarea
+                      className="pp-chatbox__textarea"
+                      placeholder="输入消息，Ctrl/Cmd + Enter 发送。"
+                      value={chatDraft}
+                      onChange={(event) => setChatDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                          event.preventDefault()
+                          void handleSendText()
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="pp-chatbox__composer-footer">
+                    <div className="pp-chatbox__toolbar pp-chatbox__toolbar--files">
+                      <button type="button" aria-label="表情">
+                        ☺
+                      </button>
+                      <button type="button" aria-label="文件夹">
+                        ▣
+                      </button>
+                      <button type="button" aria-label="剪贴板">
+                        ✂
+                      </button>
+                      <button type="button" aria-label="语音">
+                        ◉
+                      </button>
+                    </div>
+
+                    <div className="pp-chatbox__composer-actions">
+                      <label className="pp-chatbox__file-trigger" htmlFor={fileInputId}>
+                        <input
+                          id={fileInputId}
+                          className="sr-only"
+                          type="file"
+                          multiple
+                          onChange={handleFileSelection}
+                        />
+                        选择文件
+                      </label>
+                      <button
+                        type="button"
+                        className="pp-button pp-button--primary"
+                        onClick={handleSendText}
+                        disabled={
+                          chatDraft.trim().length === 0 ||
+                          (isChatDesktopTheme ? !selectedDeviceTransferSessionId : connectedTargets.length === 0)
+                        }
+                      >
+                        发送
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pp-chatbox__toolbar pp-chatbox__toolbar--meta">
+                    <span className="pp-chatbox__meta-note">
+                      文件、消息、接收进度都在同一条对话里
+                    </span>
+                    <span className="pp-chatbox__meta-note">当前目标：{activeTransferLabel}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {activeView === 'send' && !isChatConversationView && (
             <section className="pp-view pp-view--single pp-view--send">
               <div
                 className={`pp-bluebox${isDragging ? ' is-dragging' : ''}`}
@@ -751,7 +1462,7 @@ function App() {
             </section>
           )}
 
-          {activeView === 'text' && (
+          {activeView === 'text' && !isChatConversationView && (
             <section className="pp-view pp-view--single pp-view--text">
               <div className="pp-text-topbar">
                 <div className="pp-text-mode">
@@ -840,11 +1551,21 @@ function App() {
 
                   <div className="pp-chatbox__composer">
                     <div className="pp-chatbox__toolbar">
-                      <button type="button" aria-label="表情">☺</button>
-                      <button type="button" aria-label="文件">□</button>
-                      <button type="button" aria-label="目录">▣</button>
-                      <button type="button" aria-label="剪贴板">✂</button>
-                      <button type="button" aria-label="语音">◉</button>
+                      <button type="button" aria-label="表情">
+                        ☺
+                      </button>
+                      <button type="button" aria-label="文件">
+                        □
+                      </button>
+                      <button type="button" aria-label="目录">
+                        ▣
+                      </button>
+                      <button type="button" aria-label="剪贴板">
+                        ✂
+                      </button>
+                      <button type="button" aria-label="语音">
+                        ◉
+                      </button>
                     </div>
 
                     <div className="pp-chatbox__input-row">
@@ -860,14 +1581,14 @@ function App() {
                           }
                         }}
                       />
-                    <button
-                      type="button"
-                      className="pp-button pp-button--primary"
-                      onClick={handleSendText}
-                      disabled={chatDraft.trim().length === 0 || connectedTargets.length === 0}
-                    >
-                      发送
-                    </button>
+                      <button
+                        type="button"
+                        className="pp-button pp-button--primary"
+                        onClick={handleSendText}
+                        disabled={chatDraft.trim().length === 0 || connectedTargets.length === 0}
+                      >
+                        发送
+                      </button>
                     </div>
 
                     <p className="pp-inline-note">当前目标：{activeTransferLabel}</p>
@@ -902,7 +1623,7 @@ function App() {
             </section>
           )}
 
-          {activeView === 'receive' && (
+          {activeView === 'receive' && !isChatConversationView && (
             <section className="pp-view pp-view--single pp-view--receive">
               <div className="pp-receive-topbar">
                 <div className="pp-receive-topbar__actions">
@@ -1049,9 +1770,52 @@ function App() {
                   <div className="pp-detailcard">
                     <p>连接提示</p>
                     <ul>
-                      <li>
+                      <li
+                        className={`pp-device-name-row${isEditingDeviceName ? ' is-editing' : ''}`}
+                        onClick={() => {
+                          if (!isEditingDeviceName) {
+                            beginEditDeviceName()
+                          }
+                        }}
+                      >
                         <span>设备名</span>
-                        <strong>{self?.deviceName ?? '正在连接…'}</strong>
+                        {isEditingDeviceName ? (
+                          <div
+                            className="pp-device-name-editor"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <input
+                              type="text"
+                              value={deviceNameDraft}
+                              onChange={(event) => setDeviceNameDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  saveDeviceName()
+                                }
+
+                                if (event.key === 'Escape') {
+                                  event.preventDefault()
+                                  cancelEditDeviceName()
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <div className="pp-device-name-editor__actions">
+                              <button type="button" onClick={saveDeviceName}>
+                                保存
+                              </button>
+                              <button type="button" className="is-ghost" onClick={cancelEditDeviceName}>
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pp-device-name-display">
+                            <strong>{self?.deviceName ?? '正在连接…'}</strong>
+                            <small>点击名称可修改</small>
+                          </div>
+                        )}
                       </li>
                       <li>
                         <span>连接方式</span>
@@ -1140,46 +1904,139 @@ function App() {
         </section>
 
         <section className="pp-content-grid">
-          <section className="pp-panel">
+          <section className={`pp-panel ${isChatDesktopTheme ? 'pp-panel--devices' : 'pp-panel--sessions'}`}>
             <div className="pp-panel__head">
-              <div>
-                <p>当前会话</p>
-                <h2>会话列表</h2>
-              </div>
-              <input
-                type="search"
-                placeholder="搜索会话码、设备或载荷"
-                value={sessionQuery}
-                onChange={(event) => setSessionQuery(event.target.value)}
-              />
-            </div>
-
-            <ul className="pp-session-list">
-              {filteredSessions.map((session) => (
-                <li key={session.id}>
+              {!isChatDesktopTheme && (
+                <div>
+                  <p>当前会话</p>
+                  <h2>会话列表</h2>
+                </div>
+              )}
+              <div className="pp-panel__search">
+                <input
+                  type="search"
+                  placeholder={isChatDesktopTheme ? '搜索设备名称或互传码' : '搜索会话码、设备或载荷'}
+                  value={sessionQuery}
+                  onChange={(event) => setSessionQuery(event.target.value)}
+                />
+                {isChatDesktopTheme && (
                   <button
                     type="button"
-                    className={selectedUiSession?.id === session.id ? 'is-selected' : ''}
-                    onClick={() => setSelectedSessionId(session.id)}
+                    className="pp-icon-button pp-icon-button--plain"
+                    aria-label="新会话"
+                    onClick={() => handleViewChange('connect')}
                   >
-                    <div className="pp-session-list__head">
-                      <strong>{session.id}</strong>
-                      <span className={`is-${session.status}`}>{session.status === 'waiting' ? '待接收' : session.status === 'active' ? '传输中' : '已关闭'}</span>
-                    </div>
-                    <p>{session.summary}</p>
-                    <small>
-                      {session.source} {'->'} {session.target}
-                    </small>
-                    <small>
-                      {session.via} · {session.updatedAt}
-                    </small>
+                    +
                   </button>
-                </li>
-              ))}
-            </ul>
+                )}
+              </div>
+            </div>
+
+            {isChatDesktopTheme ? (
+              filteredDevicePeers.length > 0 ? (
+                <ul className="pp-device-bar">
+                  {filteredDevicePeers.map((peer) => {
+                    const peerStatus = peerStatusById.get(peer.deviceId)
+                    const deviceStatus = deviceBarStatus(peerStatus)
+                    const peerLatestSession = sessions
+                      .filter((session) => session.peerId === peer.deviceId)
+                      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
+                    return (
+                      <li key={peer.deviceId}>
+                        <div className={`pp-device-bar__item${effectiveSelectedPeerId === peer.deviceId ? ' is-selected' : ''}`}>
+                          <button
+                            type="button"
+                            className="pp-device-bar__summary"
+                            onClick={() => {
+                              setSelectedPeerId(peer.deviceId)
+                              setSelectedSessionId(peerLatestSession?.sessionId ?? null)
+                              if (activeView === 'connect' || activeView === 'sessions') {
+                                handleViewChange('text')
+                              }
+                            }}
+                          >
+                            <span className="pp-device-bar__avatar" aria-hidden="true">
+                              {peer.deviceName.slice(0, 1)}
+                            </span>
+                            <div className="pp-device-bar__body">
+                              <div className="pp-device-bar__head">
+                                <strong>{peer.deviceName}</strong>
+                                <small>{formatRelativeTime(peer.lastSeenAt)}</small>
+                              </div>
+                              <p>{devicePreviewText(peer)}</p>
+                              <div className="pp-device-bar__meta">
+                                <small>{peer.platform} · {deviceRelationText(peer)}</small>
+                                <span className={`pp-peer-badge pp-peer-badge--${deviceStatus}`}>
+                                  {deviceBarStatusLabel(deviceStatus)}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`pp-device-bar__action is-${deviceStatus}`}
+                            onClick={() => {
+                              setSelectedPeerId(peer.deviceId)
+                              setSelectedSessionId(peerLatestSession?.sessionId ?? null)
+
+                              if (deviceStatus === 'connected' && peerLatestSession) {
+                                disconnectSession(peerLatestSession.sessionId)
+                                return
+                              }
+
+                              if (deviceStatus === 'connectable' || deviceStatus === 'failed') {
+                                requestConnect(peer.deviceId)
+                                if (activeView === 'connect' || activeView === 'sessions') {
+                                  handleViewChange('text')
+                                }
+                              }
+                            }}
+                            disabled={deviceStatus === 'connecting'}
+                          >
+                            {deviceStatus === 'connected' ? '断开' : '连接中' === deviceBarStatusLabel(deviceStatus) ? '连接中' : '连接'}
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <div className="pp-empty">当前没有发现设备。新发现的设备会在这里按时间竖向排列。</div>
+              )
+            ) : (
+              <ul className="pp-session-list">
+                {filteredSessions.map((session) => (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      className={selectedUiSession?.id === session.id ? 'is-selected' : ''}
+                      onClick={() => setSelectedSessionId(session.id)}
+                    >
+                      <span className={`pp-session-list__avatar is-${session.kind}`} aria-hidden="true">
+                        {session.kind === 'file' ? '文' : session.source === selfName ? session.target.slice(0, 1) : session.source.slice(0, 1)}
+                      </span>
+                      <div className="pp-session-list__body">
+                        <div className="pp-session-list__head">
+                          <strong>{session.source === selfName ? session.target : session.source}</strong>
+                          <small>{session.updatedAt}</small>
+                        </div>
+                        <p>{session.kind === 'file' ? `[文件] ${session.summary}` : session.summary}</p>
+                        <div className="pp-session-list__meta-row">
+                          <small>
+                            {session.source} {'->'} {session.target}
+                          </small>
+                          <span className={`is-${session.status}`}>{session.status === 'waiting' ? '待接收' : session.status === 'active' ? '传输中' : '已关闭'}</span>
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
-          <aside className="pp-side-stack">
+          {!isChatDesktopTheme && <aside className="pp-side-stack">
             <section className="pp-panel">
               <div className="pp-panel__head pp-panel__head--compact">
                 <div>
@@ -1244,17 +2101,19 @@ function App() {
                 ))}
               </ul>
             </section>
-          </aside>
+          </aside>}
         </section>
 
-        <section className="pp-utility-row pp-utility-row--footer">
-          {quickPanels.map((panel) => (
-            <article key={panel.title}>
-              <strong>{panel.title}</strong>
-              <p>{panel.body}</p>
-            </article>
-          ))}
-        </section>
+        {!isChatDesktopTheme && (
+          <section className="pp-utility-row pp-utility-row--footer">
+            {quickPanels.map((panel) => (
+              <article key={panel.title}>
+                <strong>{panel.title}</strong>
+                <p>{panel.body}</p>
+              </article>
+            ))}
+          </section>
+        )}
       </main>
     </div>
   )
