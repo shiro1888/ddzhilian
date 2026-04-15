@@ -1,5 +1,7 @@
 # CCConnect
 
+[中文说明](C:/Users/12467/Documents/707/CCConnect/README.zh-CN.md)
+
 CCConnect is a desktop-style cross-device transfer app for quickly sending files and long text between devices. The current repository includes a React frontend prototype and a signaling server for device discovery, pairing, session management, and WebRTC signaling.
 
 ## What It Does
