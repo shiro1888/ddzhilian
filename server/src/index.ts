@@ -554,6 +554,49 @@ function joinRoomViaTarget(input: {
   };
 }
 
+function joinRoomById(input: {
+  requesterId: string;
+  roomId: string;
+  reason: PairReason;
+}) {
+  const requester = devices.getById(input.requesterId);
+  const room = rooms.getById(input.roomId);
+
+  if (!requester) {
+    return {
+      ok: false as const,
+      code: 'DEVICE_NOT_FOUND' as const,
+      message: 'The current device is no longer registered.',
+    };
+  }
+
+  if (!room) {
+    return {
+      ok: false as const,
+      code: 'ROOM_NOT_FOUND' as const,
+      message: 'No active room matches that room ID.',
+    };
+  }
+
+  const existingMemberIds = room.memberIds.filter(
+    (memberId) => memberId !== requester.deviceId,
+  );
+
+  rooms.addMember(room.roomId, requester.deviceId);
+  connectDeviceToRoom(
+    requester.deviceId,
+    room.roomId,
+    input.reason,
+    existingMemberIds,
+  );
+  broadcastSnapshots();
+
+  return {
+    ok: true as const,
+    room,
+  };
+}
+
 function autoJoinLanRoom(deviceId: string) {
   const device = devices.getById(deviceId);
 
@@ -774,6 +817,20 @@ function handleEvent(
         requesterId: activeDeviceId,
         targetId: target.deviceId,
         reason: 'pair-link',
+      });
+
+      if (!result.ok) {
+        emitError(socket, result);
+      }
+
+      return deviceId;
+    }
+
+    case 'join-room': {
+      const result = joinRoomById({
+        requesterId: activeDeviceId,
+        roomId: event.payload.roomId,
+        reason: 'manual',
       });
 
       if (!result.ok) {

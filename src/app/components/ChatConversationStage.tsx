@@ -293,6 +293,7 @@ type ChatConversationStageProps = {
 function normalizeEditorHtml(value: string) {
   const normalizedValue = value
     .replace(/^(<div><br><\/div>|<p><br><\/p>|<br>)+$/gi, '')
+    .replace(/\u200B/g, '')
     .replace(/&nbsp;/gi, ' ')
     .trim()
   return normalizedValue
@@ -652,11 +653,28 @@ export function ChatConversationStage({
     }
 
     if (range.collapsed) {
+      const wrapper = document.createElement('span')
+      for (const [property, value] of styles) {
+        wrapper.style.setProperty(property, value)
+      }
+
+      const marker = document.createTextNode('\u200B')
+      wrapper.appendChild(marker)
+      range.insertNode(wrapper)
+
+      const nextRange = document.createRange()
+      nextRange.setStart(marker, 1)
+      nextRange.setEnd(marker, 1)
+      selection.removeAllRanges()
+      selection.addRange(nextRange)
+      savedRangeRef.current = nextRange.cloneRange()
+
       if (fallbackCommand) {
         document.execCommand('styleWithCSS', false, 'true')
         document.execCommand(fallbackCommand.command, false, fallbackCommand.value)
-        syncDraftFromEditor()
       }
+
+      editorRef.current?.focus()
       return
     }
 

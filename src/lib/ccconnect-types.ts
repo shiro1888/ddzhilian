@@ -140,6 +140,10 @@ export type ClientEvent =
       payload: { pairToken: string }
     }
   | {
+      type: 'join-room'
+      payload: { roomId: string }
+    }
+  | {
       type: 'request-connect'
       payload: { targetDeviceId: string; reason?: PairReason }
     }

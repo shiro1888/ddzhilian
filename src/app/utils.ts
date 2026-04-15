@@ -240,13 +240,13 @@ export function extractPlainTextFromRichText(value: string) {
   }
 
   if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-    return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return value.replace(/\u200B/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   }
 
   const parser = new DOMParser()
   const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
   const text = documentFragment.body.textContent ?? ''
-  return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.replace(/\u200B/g, '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 export function sanitizeRichTextHtml(value: string) {
@@ -298,7 +298,7 @@ export function sanitizeRichTextHtml(value: string) {
 
   const sanitizeNode = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return escapeHtml(node.textContent ?? '')
+      return escapeHtml((node.textContent ?? '').replace(/\u200B/g, ''))
     }
 
     if (!(node instanceof HTMLElement)) {

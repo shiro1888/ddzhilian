@@ -173,6 +173,10 @@ export type ClientEvent =
       payload: { pairToken: string };
     }
   | {
+      type: 'join-room';
+      payload: { roomId: string };
+    }
+  | {
       type: 'request-connect';
       payload: { targetDeviceId: string; reason?: PairReason };
     }
@@ -240,6 +244,7 @@ export type ServerEvent =
           | 'BAD_EVENT'
           | 'DEVICE_NOT_READY'
           | 'DEVICE_NOT_FOUND'
+          | 'ROOM_NOT_FOUND'
           | 'SHORT_CODE_BLOCKED'
           | 'PAIR_TOKEN_NOT_FOUND'
           | 'SESSION_NOT_FOUND'

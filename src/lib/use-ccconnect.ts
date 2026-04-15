@@ -1573,6 +1573,15 @@ export function useCcconnect() {
     })
   }
 
+  const joinRoom = (roomId: string) => {
+    sendEvent({
+      type: 'join-room',
+      payload: {
+        roomId: roomId.trim(),
+      },
+    })
+  }
+
   const requestConnect = (
     targetDeviceId: string,
     reason: 'manual' | 'lan-discovery' = 'manual',
@@ -1793,6 +1802,7 @@ export function useCcconnect() {
     historyTexts,
     errorMessage,
     pairByShortCode,
+    joinRoom,
     requestConnect,
     disconnectSession,
     requestSnapshot,

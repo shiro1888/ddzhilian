@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useId, useRef, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
@@ -46,6 +46,8 @@ function App() {
   const [chatDraft, setChatDraft] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
+  const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
+  const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [sessionQuery, setSessionQuery] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
@@ -76,6 +78,7 @@ function App() {
     historyTexts,
     errorMessage,
     pairByShortCode,
+    joinRoom,
     requestConnect,
     disconnectSession,
     requestSnapshot,
@@ -104,7 +107,10 @@ function App() {
     latestFileBySession.set(file.sessionId, file)
   }
 
-  const roomById = new Map(rooms.map((room) => [room.roomId, room] as const))
+  const roomById = useMemo(
+    () => new Map(rooms.map((room) => [room.roomId, room] as const)),
+    [rooms],
+  )
   const deviceNameById = new Map<string, string>()
   if (self) {
     deviceNameById.set(self.deviceId, self.deviceName)
@@ -194,6 +200,34 @@ function App() {
   const selectedConversationSessionIds = new Set(
     selectedConversationSessions.map((session) => session.sessionId),
   )
+
+  useEffect(() => {
+    if (!pendingRoomSelectionId || !self) {
+      return
+    }
+
+    const room = roomById.get(pendingRoomSelectionId)
+    if (!room) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const firstPeer = room.members.find((member) => member.deviceId !== self.deviceId)
+      if (firstPeer) {
+        setSelectedPeerId(firstPeer.deviceId)
+        const latestSession = sessions
+          .filter((session) => session.roomId === room.roomId && session.peerId === firstPeer.deviceId)
+          .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
+        setSelectedSessionId(latestSession?.sessionId ?? null)
+      }
+
+      setPendingRoomSelectionId(null)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [pendingRoomSelectionId, roomById, self, sessions])
 
   const filteredSessions = uiSessions.filter((session) => {
     const keyword = deferredQuery.trim().toLowerCase()
@@ -297,6 +331,13 @@ function App() {
   ).length
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
+  const selectedDeviceStatusLabel = deviceConnectionLabel(selectedDeviceStatus)
+  const selectedRoomMemberSummary =
+    selectedRoomMemberNames.length > 0 ? selectedRoomMemberNames.join('、') : '当前只有你自己'
+  const connectionActionLabel =
+    selectedDeviceStatus === 'connected' && selectedPeerLatestSession ? '断开当前设备' : '连接当前设备'
+  const connectionActionDisabled =
+    !selectedDevicePeer || selectedDeviceStatus === 'connecting'
 
   const activeTransferLabel =
     isChatDesktopTheme && selectedDevicePeer
@@ -620,6 +661,23 @@ function App() {
     setLocalError('请输入互传码，或先从在线设备里选择一个目标。')
   }
 
+  const handleJoinRoomById = () => {
+    const nextRoomId = joinRoomIdDraft.trim()
+    if (!nextRoomId) {
+      setLocalError('请输入 roomId。')
+      return
+    }
+
+    joinRoom(nextRoomId)
+    setPendingRoomSelectionId(nextRoomId)
+    setJoinRoomIdDraft('')
+    setLocalError(null)
+
+    if (activeView !== 'text') {
+      handleViewChange('text')
+    }
+  }
+
   const handleSendFiles = async () => {
     if (visibleTransferItemsForConversation.length === 0) {
       setLocalError('请先选择文件。')
@@ -791,6 +849,19 @@ function App() {
     }
   }
 
+  const handleSelectedDeviceConnectionAction = () => {
+    if (!selectedDevicePeer) {
+      return
+    }
+
+    if (selectedDeviceStatus === 'connected' && selectedPeerLatestSession) {
+      disconnectSession(selectedPeerLatestSession.id)
+      return
+    }
+
+    requestConnect(selectedDevicePeer.deviceId)
+  }
+
   const chatRouteElement = (
     <ChatConversationStage
       isDragging={isDragging}
@@ -888,6 +959,7 @@ function App() {
         <AppHeader
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
+          currentRoomId={selectedRoomId}
           localError={localError}
           errorMessage={errorMessage}
         />
@@ -950,10 +1022,24 @@ function App() {
         </section>
 
         <ContentGrid
+          currentRoomId={selectedRoomId}
+          selectedConversationName={selectedConversationName}
+          selectedDeviceName={selectedDevicePeer?.deviceName ?? null}
+          selectedDeviceStatusLabel={selectedDeviceStatusLabel}
+          selectedDeviceShortCode={selectedDevicePeer?.shortCode ?? null}
+          selectedDevicePlatform={selectedDevicePeer?.platform ?? null}
+          selectedRoomMemberSummary={selectedRoomMemberSummary}
+          connectedDeviceCount={selectedRoomConnectedTargets.length}
+          roomJoinDraft={joinRoomIdDraft}
           sessionQuery={sessionQuery}
           deviceBarItems={deviceBarItems}
           effectiveSelectedPeerId={effectiveSelectedPeerId}
+          connectionActionLabel={connectionActionLabel}
+          connectionActionDisabled={connectionActionDisabled}
           onSessionQueryChange={setSessionQuery}
+          onRoomJoinDraftChange={setJoinRoomIdDraft}
+          onJoinRoom={handleJoinRoomById}
+          onConnectionAction={handleSelectedDeviceConnectionAction}
           onShowConnect={() => handleViewChange('connect')}
           onOpenDeviceConversation={handleOpenDeviceConversation}
           onDeviceAction={handleDeviceAction}
