@@ -1,312 +1,359 @@
-# Design System Inspired by Claude (Anthropic)
+# CCConnect Desktop Chat Design System
 
 ## 1. Visual Theme & Atmosphere
 
-Claude's interface is a literary salon reimagined as a product page — warm, unhurried, and quietly intellectual. The entire experience is built on a parchment-toned canvas (`#f5f4ed`) that deliberately evokes the feeling of high-quality paper rather than a digital surface. Where most AI product pages lean into cold, futuristic aesthetics, Claude's design radiates human warmth, as if the AI itself has good taste in interior design.
+CCConnect should feel like a desktop chat client in the same family as WeChat for Windows: quiet, efficient, familiar, and system-native. The interface is not trying to impress through gradients, floating cards, or dashboard spectacle. Its quality comes from restraint. Users should feel that sending a file, reading a long message, or checking a session is as lightweight as glancing at a desktop messenger.
 
-The signature move is the custom Anthropic Serif typeface — a medium-weight serif with generous proportions that gives every headline the gravitas of a book title. Combined with organic, hand-drawn-feeling illustrations in terracotta (`#c96442`), black, and muted green, the visual language says "thoughtful companion" rather than "powerful tool." The serif headlines breathe at tight-but-comfortable line-heights (1.10–1.30), creating a cadence that feels more like reading an essay than scanning a product page.
+The core visual idea is a three-zone workspace:
 
-What makes Claude's design truly distinctive is its warm neutral palette. Every gray has a yellow-brown undertone (`#5e5d59`, `#87867f`, `#4d4c48`) — there are no cool blue-grays anywhere. Borders are cream-tinted (`#f0eee6`, `#e8e6dc`), shadows use warm transparent blacks, and even the darkest surfaces (`#141413`, `#30302e`) carry a barely perceptible olive warmth. This chromatic consistency creates a space that feels lived-in and trustworthy.
+- a narrow utility rail for global navigation and identity
+- a conversation and session column for fast scanning
+- a large, calm message workspace for the active transfer or discussion
 
-**Key Characteristics:**
-- Warm parchment canvas (`#f5f4ed`) evoking premium paper, not screens
-- Custom Anthropic type family: Serif for headlines, Sans for UI, Mono for code
-- Terracotta brand accent (`#c96442`) — warm, earthy, deliberately un-tech
-- Exclusively warm-toned neutrals — every gray has a yellow-brown undertone
-- Organic, editorial illustrations replacing typical tech iconography
-- Ring-based shadow system (`0px 0px 0px 1px`) creating border-like depth without visible borders
-- Magazine-like pacing with generous section spacing and serif-driven hierarchy
+The emotional baseline is soft neutral gray rather than bright white. Surfaces are layered through small shifts in temperature and brightness, not through heavy shadows. The interface should look close to the host operating system, with the product personality showing up mainly in the outgoing bubble green, presence dots, and a few key action controls.
+
+This style depends on disciplined color usage. Green is not a theme washed across the whole product; it is a state signal. It marks "my side", "online", "ready", or "send". Everything else should stay neutral and supportive so the content itself becomes the focal point.
+
+**Key Characteristics**
+- Desktop-first chat workspace with clear left-to-right functional zoning
+- Soft gray shell with thin dividers and very light elevation
+- Single accent family based on WeChat-style green
+- High information density without visual pressure
+- Mostly flat surfaces, minimal borders, almost no card language
+- Sans-serif only, optimized for Chinese UI and utility reading
+- Message bubbles as the main visual rhythm, not panels or widgets
+- Calm, native interaction feel with short hover and state transitions
 
 ## 2. Color Palette & Roles
 
-### Primary
-- **Anthropic Near Black** (`#141413`): The primary text color and dark-theme surface — not pure black but a warm, almost olive-tinted dark that's gentler on the eyes. The warmest "black" in any major tech brand.
-- **Terracotta Brand** (`#c96442`): The core brand color — a burnt orange-brown used for primary CTA buttons, brand moments, and the signature accent. Deliberately earthy and un-tech.
-- **Coral Accent** (`#d97757`): A lighter, warmer variant of the brand color used for text accents, links on dark surfaces, and secondary emphasis.
+### Primary Accent
+- **Bubble Green** (`#95ec69`): Main outgoing message bubble color. Friendly, light, instantly recognizable, and reserved for user-originated content.
+- **Action Green** (`#07c160`): Stronger action state for online presence, send buttons, progress-positive moments, and focused status.
+- **Green Deep** (`#06ad56`): Hover and pressed state for green actions.
 
-### Secondary & Accent
-- **Error Crimson** (`#b53333`): A deep, warm red for error states — serious without being alarming.
-- **Focus Blue** (`#3898ec`): Standard blue for input focus rings — the only cool color in the entire system, used purely for accessibility.
+### Neutral Surfaces
+- **Window Gray** (`#f5f5f5`): Primary app background and message canvas base.
+- **Sidebar Gray** (`#ededed`): Left navigation rail and secondary tool areas.
+- **Panel Gray** (`#f7f7f7`): Conversation list, top bars, and input container backgrounds.
+- **White Surface** (`#ffffff`): Incoming message bubbles, elevated inputs, menus, and lightweight floating layers.
+- **Hover Gray** (`#e8e8e8`): Hover state for rows, list items, and utility buttons.
+- **Active Row Gray** (`#dcdcdc`): Selected conversation row background.
+- **Muted Fill** (`#f0f0f0`): Input backgrounds, file pills, and metadata chips.
 
-### Surface & Background
-- **Parchment** (`#f5f4ed`): The primary page background — a warm cream with a yellow-green tint that feels like aged paper. The emotional foundation of the entire design.
-- **Ivory** (`#faf9f5`): The lightest surface — used for cards and elevated containers on the Parchment background. Barely distinguishable but creates subtle layering.
-- **Pure White** (`#ffffff`): Reserved for specific button surfaces and maximum-contrast elements.
-- **Warm Sand** (`#e8e6dc`): Button backgrounds and prominent interactive surfaces — a noticeably warm light gray.
-- **Dark Surface** (`#30302e`): Dark-theme containers, nav borders, and elevated dark elements — warm charcoal.
-- **Deep Dark** (`#141413`): Dark-theme page background and primary dark surface.
+### Borders & Separators
+- **Divider Gray** (`#d9d9d9`): Standard vertical and horizontal separators.
+- **Soft Divider** (`#e5e5e5`): Secondary separators inside lists and message utilities.
+- **Input Stroke** (`#cfcfcf`): Input outlines and lightweight control containment.
 
-### Neutrals & Text
-- **Charcoal Warm** (`#4d4c48`): Button text on light warm surfaces — the go-to dark-on-light text.
-- **Olive Gray** (`#5e5d59`): Secondary body text — a distinctly warm medium-dark gray.
-- **Stone Gray** (`#87867f`): Tertiary text, footnotes, and de-emphasized metadata.
-- **Dark Warm** (`#3d3d3a`): Dark text links and emphasized secondary text.
-- **Warm Silver** (`#b0aea5`): Text on dark surfaces — a warm, parchment-tinted light gray.
+### Text
+- **Primary Text** (`#111111`): Main labels, message text, and important values.
+- **Secondary Text** (`#666666`): Conversation preview text, helper labels, timestamps inside dense UI.
+- **Tertiary Text** (`#999999`): Placeholder text, muted metadata, empty-state support copy.
+- **Inverse Text** (`#ffffff`): Text placed on strong green actions or dark overlays.
 
-### Semantic & Accent
-- **Border Cream** (`#f0eee6`): Standard light-theme border — barely visible warm cream, creating the gentlest possible containment.
-- **Border Warm** (`#e8e6dc`): Prominent borders, section dividers, and emphasized containment on light surfaces.
-- **Border Dark** (`#30302e`): Standard border on dark surfaces — maintains the warm tone.
-- **Ring Warm** (`#d1cfc5`): Shadow ring color for button hover/focus states.
-- **Ring Subtle** (`#dedc01`): Secondary ring variant for lighter interactive surfaces.
-- **Ring Deep** (`#c2c0b6`): Deeper ring for active/pressed states.
+### Semantic
+- **Error Red** (`#fa5151`): Failed transfers, destructive badges, and unread counters where urgency is required.
+- **Warning Orange** (`#fa9d3b`): Warning states such as unstable network or expiring sessions.
+- **Link Blue** (`#576b95`): Optional inline link color for paths, codes, or help actions.
 
-### Gradient System
-- Claude's design is **gradient-free** in the traditional sense. Depth and visual richness come from the interplay of warm surface tones, organic illustrations, and light/dark section alternation. The warm palette itself creates a "gradient" effect as the eye moves through cream → sand → stone → charcoal → black sections.
+### Usage Principles
+- Neutrals should cover at least 85% of the interface.
+- Bubble Green should mostly appear in outgoing messages and a small number of CTA states.
+- Avoid using both Bubble Green and Action Green in the same component unless there is a clear default-to-hover relationship.
+- Keep error red rare so unread counts and failures remain easy to scan.
+- Prefer background shifts over border-heavy state changes.
 
 ## 3. Typography Rules
 
 ### Font Family
-- **Headline**: `Anthropic Serif`, with fallback: `Georgia`
-- **Body / UI**: `Anthropic Sans`, with fallback: `Arial`
-- **Code**: `Anthropic Mono`, with fallback: `Arial`
+- **Primary UI Font**: `PingFang SC`
+- **Windows Fallback**: `Microsoft YaHei`
+- **Cross-platform Fallback**: `Noto Sans SC`, `Segoe UI`, `system-ui`, `sans-serif`
 
-*Note: These are custom typefaces. For external implementations, Georgia serves as the serif substitute and system-ui/Inter as the sans substitute.*
+CCConnect should use one sans-serif system for nearly everything. This is a utility product, not an editorial or brand-heavy surface. Strong hierarchy should come from size, spacing, color, and placement rather than from mixing font personalities.
 
 ### Hierarchy
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display / Hero | Anthropic Serif | 64px (4rem) | 500 | 1.10 (tight) | normal | Maximum impact, book-title presence |
-| Section Heading | Anthropic Serif | 52px (3.25rem) | 500 | 1.20 (tight) | normal | Feature section anchors |
-| Sub-heading Large | Anthropic Serif | 36–36.8px (~2.3rem) | 500 | 1.30 | normal | Secondary section markers |
-| Sub-heading | Anthropic Serif | 32px (2rem) | 500 | 1.10 (tight) | normal | Card titles, feature names |
-| Sub-heading Small | Anthropic Serif | 25–25.6px (~1.6rem) | 500 | 1.20 | normal | Smaller section titles |
-| Feature Title | Anthropic Serif | 20.8px (1.3rem) | 500 | 1.20 | normal | Small feature headings |
-| Body Serif | Anthropic Serif | 17px (1.06rem) | 400 | 1.60 (relaxed) | normal | Serif body text (editorial passages) |
-| Body Large | Anthropic Sans | 20px (1.25rem) | 400 | 1.60 (relaxed) | normal | Intro paragraphs |
-| Body / Nav | Anthropic Sans | 17px (1.06rem) | 400–500 | 1.00–1.60 | normal | Navigation links, UI text |
-| Body Standard | Anthropic Sans | 16px (1rem) | 400–500 | 1.25–1.60 | normal | Standard body, button text |
-| Body Small | Anthropic Sans | 15px (0.94rem) | 400–500 | 1.00–1.60 | normal | Compact body text |
-| Caption | Anthropic Sans | 14px (0.88rem) | 400 | 1.43 | normal | Metadata, descriptions |
-| Label | Anthropic Sans | 12px (0.75rem) | 400–500 | 1.25–1.60 | 0.12px | Badges, small labels |
-| Overline | Anthropic Sans | 10px (0.63rem) | 400 | 1.60 | 0.5px | Uppercase overline labels |
-| Micro | Anthropic Sans | 9.6px (0.6rem) | 400 | 1.60 | 0.096px | Smallest text |
-| Code | Anthropic Mono | 15px (0.94rem) | 400 | 1.60 | -0.32px | Inline code, terminal |
+| Role | Size | Weight | Line Height | Usage |
+|------|------|--------|-------------|-------|
+| Window Title | 15px | 600 | 1.3 | Chat header titles, major panel titles |
+| Section Title | 14px | 600 | 1.4 | Secondary panel headings, list group labels |
+| Body Large | 15px | 400 | 1.6 | Message text, long text content |
+| Body Standard | 14px | 400 | 1.5 | Conversation previews, form content |
+| Body Small | 13px | 400 | 1.45 | Helper text, inline metadata |
+| Caption | 12px | 400 | 1.4 | Timestamps, connection hints, empty states |
+| Label | 11px | 500 | 1.3 | Badges, compact labels, status chips |
 
 ### Principles
-- **Serif for authority, sans for utility**: Anthropic Serif carries all headline content with medium weight (500), giving every heading the gravitas of a published title. Anthropic Sans handles all functional UI text — buttons, labels, navigation — with quiet efficiency.
-- **Single weight for serifs**: All Anthropic Serif headings use weight 500 — no bold, no light. This creates a consistent "voice" across all headline sizes, as if the same author wrote every heading.
-- **Relaxed body line-height**: Most body text uses 1.60 line-height — significantly more generous than typical tech sites (1.4–1.5). This creates a reading experience closer to a book than a dashboard.
-- **Tight-but-not-compressed headings**: Line-heights of 1.10–1.30 for headings are tight but never claustrophobic. The serif letterforms need breathing room that sans-serif fonts don't.
-- **Micro letter-spacing on labels**: Small sans text (12px and below) uses deliberate letter-spacing (0.12px–0.5px) to maintain readability at tiny sizes.
+- Default body size should stay at `14px` or `15px`; smaller text is only for metadata.
+- Message content should use `15px` for readability in long chat sessions.
+- Avoid bold paragraphs. Weight `600` is for headings or highlighted numeric data only.
+- Use truncation aggressively in conversation rows but avoid truncating active chat titles.
+- Numbers such as transfer size, progress, and time should align consistently and avoid decorative formatting.
 
 ## 4. Component Stylings
 
-### Buttons
+### App Shell
+- Structure: `72px` icon rail + `280px` conversation column + flexible message workspace
+- Background: Window Gray (`#f5f5f5`)
+- Dividers: `1px solid #d9d9d9`
+- Shadow: none inside the app; only the outer desktop window may use a soft OS-level shadow
 
-**Warm Sand (Secondary)**
-- Background: Warm Sand (`#e8e6dc`)
-- Text: Charcoal Warm (`#4d4c48`)
-- Padding: 0px 12px 0px 8px (asymmetric — icon-first layout)
-- Radius: comfortably rounded (8px)
-- Shadow: ring-based (`#e8e6dc 0px 0px 0px 0px, #d1cfc5 0px 0px 0px 1px`)
-- The workhorse button — warm, unassuming, clearly interactive
+The shell should read as one continuous desktop application, not three separate cards.
 
-**White Surface**
-- Background: Pure White (`#ffffff`)
-- Text: Anthropic Near Black (`#141413`)
-- Padding: 8px 16px 8px 12px
-- Radius: generously rounded (12px)
-- Hover: shifts to secondary background color
-- Clean, elevated button for light surfaces
+### Left Navigation Rail
+- Width: `72px`
+- Background: Sidebar Gray (`#ededed`)
+- Layout: top-aligned brand/avatar, middle nav icons, bottom utility actions
+- Icon size: `22px` to `24px`
+- Active marker: green dot, green stroke, or slightly darker neutral tile
+- Hover: background shift to Hover Gray (`#e8e8e8`)
+- Badge style: small red circle anchored to icon corner
 
-**Dark Charcoal**
-- Background: Dark Surface (`#30302e`)
-- Text: Ivory (`#faf9f5`)
-- Padding: 0px 12px 0px 8px
-- Radius: comfortably rounded (8px)
-- Shadow: ring-based (`#30302e 0px 0px 0px 0px, ring 0px 0px 0px 1px`)
-- The inverted variant for dark-on-light emphasis
+The rail should feel dense and stable. It is not a large navigation menu. Labels may appear on hover or in adjacent panels, but the base rail should stay icon-led.
 
-**Brand Terracotta**
-- Background: Terracotta Brand (`#c96442`)
-- Text: Ivory (`#faf9f5`)
-- Radius: 8–12px
-- Shadow: ring-based (`#c96442 0px 0px 0px 0px, #c96442 0px 0px 0px 1px`)
-- The primary CTA — the only button with chromatic color
+### Conversation List Column
+- Width: `280px`
+- Background: Panel Gray (`#f7f7f7`)
+- Top area: search box plus optional quick filters
+- Row height: `72px` default, `64px` compact
+- Selected row: Active Row Gray (`#dcdcdc`)
+- Hover row: Hover Gray (`#e8e8e8`)
+- Avatar: `40px` square or circle with `10px` radius if using square system avatars
+- Primary line: `15px`, `600`
+- Secondary preview: `13px`, `#666666`
+- Time label: `12px`, `#999999`, right aligned
+- Unread badge: red pill, minimum `18px` height
 
-**Dark Primary**
-- Background: Anthropic Near Black (`#141413`)
-- Text: Warm Silver (`#b0aea5`)
-- Padding: 9.6px 16.8px
-- Radius: generously rounded (12px)
-- Border: thin solid Dark Surface (`1px solid #30302e`)
-- Used on dark theme surfaces
+Each row should prioritize scan speed:
 
-### Cards & Containers
-- Background: Ivory (`#faf9f5`) or Pure White (`#ffffff`) on light surfaces; Dark Surface (`#30302e`) on dark
-- Border: thin solid Border Cream (`1px solid #f0eee6`) on light; `1px solid #30302e` on dark
-- Radius: comfortably rounded (8px) for standard cards; generously rounded (16px) for featured; very rounded (32px) for hero containers and embedded media
-- Shadow: whisper-soft (`rgba(0,0,0,0.05) 0px 4px 24px`) for elevated content
-- Ring shadow: `0px 0px 0px 1px` patterns for interactive card states
-- Section borders: `1px 0px 0px` (top-only) for list item separators
+- name on the first line
+- latest activity preview on the second line
+- time and unread state aligned to the right
 
-### Inputs & Forms
-- Text: Anthropic Near Black (`#141413`)
-- Padding: 1.6px 12px (very compact vertical)
-- Border: standard warm borders
-- Focus: ring with Focus Blue (`#3898ec`) border-color — the only cool color moment
-- Radius: generously rounded (12px)
+### Chat Header
+- Height: `64px`
+- Background: Panel Gray (`#f7f7f7`)
+- Border-bottom: `1px solid #d9d9d9`
+- Title: `15px`, `600`
+- Subtitle or status: `12px`, `#999999`
+- Right actions: icon buttons with `32px` hit area
 
-### Navigation
-- Sticky top nav with warm background
-- Logo: Claude wordmark in Anthropic Near Black
-- Links: mix of Near Black (`#141413`), Olive Gray (`#5e5d59`), and Dark Warm (`#3d3d3a`)
-- Nav border: `1px solid #30302e` (dark) or `1px solid #f0eee6` (light)
-- CTA: Terracotta Brand button or White Surface button
-- Hover: text shifts to foreground-primary, no decoration
+This header should be visually quiet. It orients the user but never competes with the conversation itself.
 
-### Image Treatment
-- Product screenshots showing the Claude chat interface
-- Generous border-radius on media (16–32px)
-- Embedded video players with rounded corners
-- Dark UI screenshots provide contrast against warm light canvas
-- Organic, hand-drawn illustrations for conceptual sections
+### Message History Area
+- Background: Window Gray (`#f5f5f5`)
+- Horizontal padding: `24px`
+- Vertical padding: `20px`
+- Max readable line width for text bubbles: `62%` of content width on desktop
+- Message stack gap: `8px`
+- Group gap between distinct senders or time blocks: `16px`
 
-### Distinctive Components
+Avoid card containers around the whole message pane. The conversation should live directly on the canvas with bubbles creating the rhythm.
 
-**Model Comparison Cards**
-- Opus 4.5, Sonnet 4.5, Haiku 4.5 presented in a clean card grid
-- Each model gets a bordered card with name, description, and capability badges
-- Border Warm (`#e8e6dc`) separation between items
+### Time Divider
+- Alignment: centered
+- Text size: `12px`
+- Color: `#999999`
+- Spacing: `24px` above, `16px` below
+- Optional background chip: Muted Fill (`#f0f0f0`) with `999px` radius and `6px 10px` padding
 
-**Organic Illustrations**
-- Hand-drawn-feeling vector illustrations in terracotta, black, and muted green
-- Abstract, conceptual rather than literal product diagrams
-- The primary visual personality — no other AI company uses this style
+Time dividers should feel like small pauses in the stream, not heavy separators.
 
-**Dark/Light Section Alternation**
-- The page alternates between Parchment light and Near Black dark sections
-- Creates a reading rhythm like chapters in a book
-- Each section feels like a distinct environment
+### Incoming Message Bubble
+- Background: White Surface (`#ffffff`)
+- Text: Primary Text (`#111111`)
+- Radius: `8px`
+- Padding: `10px 14px`
+- Border: optional `1px solid #ececec` only if the background lacks contrast
+- Shadow: none
+
+Incoming content should feel lightweight and neutral. If tails are used, they should be very subtle and geometric.
+
+### Outgoing Message Bubble
+- Background: Bubble Green (`#95ec69`)
+- Text: Primary Text (`#111111`)
+- Radius: `8px`
+- Padding: `10px 14px`
+- Shadow: none
+- Alignment: right
+
+Outgoing bubbles are the primary brand moment inside the chat stream. They should stand out through color only, not through heavier shape treatment.
+
+### Avatar Rules
+- Standard size: `32px` in chat stream, `40px` in conversation list
+- Shape: square with `8px` to `10px` radius or full circle depending on product icon system
+- Gap to bubble: `8px`
+- Consecutive messages from same sender may omit repeated avatar to reduce noise
+
+### Composer / Input Area
+- Height: `136px` to `168px` depending on tool rows
+- Background: Panel Gray (`#f7f7f7`)
+- Border-top: `1px solid #d9d9d9`
+- Toolbar row: icon-led actions, `36px` hit area
+- Text area: white or very light neutral field, no heavy border
+- Placeholder: `#999999`
+- Send button: green only when text or files are ready to send
+
+The composer should feel integrated into the window, not boxed like a form card.
+
+### File Transfer Bubble / Card
+- Container background: White Surface for incoming, pale green-tinted neutral for outgoing
+- Radius: `10px`
+- Padding: `12px`
+- File icon block: `40px`
+- Title: `14px`, `600`
+- Meta row: file size, transfer speed, source, expiry in `12px`
+- Progress bar height: `4px`
+- Progress fill: Action Green (`#07c160`)
+
+For CCConnect, transfer cards are functional first. Keep them short, easy to scan, and clearly distinct from plain text bubbles.
+
+### Session Status Chips
+- Height: `24px`
+- Radius: `999px`
+- Padding: `0 10px`
+- Font: `11px`, `500`
+- Neutral chip: Muted Fill (`#f0f0f0`) + Secondary Text (`#666666`)
+- Success chip: pale green background + Action Green text
+- Error chip: pale red background + Error Red text
+
+### Search Box
+- Height: `36px`
+- Background: White Surface or Muted Fill
+- Radius: `8px`
+- Border: none by default
+- Placeholder color: Tertiary Text (`#999999`)
+- Focus: `1px` green or blue-tinted outline kept subtle and desktop-like
 
 ## 5. Layout Principles
 
-### Spacing System
-- Base unit: 8px
-- Scale: 3px, 4px, 6px, 8px, 10px, 12px, 16px, 20px, 24px, 30px
-- Button padding: asymmetric (0px 12px 0px 8px) or balanced (8px 16px)
-- Card internal padding: approximately 24–32px
-- Section vertical spacing: generous (estimated 80–120px between major sections)
+### Primary Grid
+- Global shell: `72 / 280 / auto`
+- If an inspector or detail pane is needed, prefer overlay or temporary split instead of permanent four-column layout
+- Chat area structure: header / scrollable history / composer
 
-### Grid & Container
-- Max container width: approximately 1200px, centered
-- Hero: centered with editorial layout
-- Feature sections: single-column or 2–3 column card grids
-- Model comparison: clean 3-column grid
-- Full-width dark sections breaking the container for emphasis
+### Spacing System
+- Base unit: `4px`
+- Recommended scale: `4, 8, 12, 16, 20, 24, 32`
+- Dense list internals: `8px`
+- Chat bubble outer gaps: `8px`
+- Panel paddings: `16px` to `24px`
 
 ### Whitespace Philosophy
-- **Editorial pacing**: Each section breathes like a magazine spread — generous top/bottom margins create natural reading pauses.
-- **Serif-driven rhythm**: The serif headings establish a literary cadence that demands more whitespace than sans-serif designs.
-- **Content island approach**: Sections alternate between light and dark environments, creating distinct "rooms" for each message.
+- Keep the shell compact and information-rich.
+- Spend whitespace inside the active message workspace, not around the chrome.
+- Use empty space to separate message groups and reading blocks, not to decorate panels.
 
-### Border Radius Scale
-- Sharp (4px): Minimal inline elements
-- Subtly rounded (6–7.5px): Small buttons, secondary interactive elements
-- Comfortably rounded (8–8.5px): Standard buttons, cards, containers
-- Generously rounded (12px): Primary buttons, input fields, nav elements
-- Very rounded (16px): Featured containers, video players, tab lists
-- Highly rounded (24px): Tag-like elements, highlighted containers
-- Maximum rounded (32px): Hero containers, embedded media, large cards
+### Shape Language
+- Default corner radius: `8px`
+- Compact controls: `6px`
+- Large pills and chips: `999px`
+- Avoid mixing many radius styles in one screen
 
-## 6. Depth & Elevation
+### Alignment Rules
+- Conversation list content aligns to a consistent left text column after the avatar.
+- Message bubbles align to sender edges, not to a centered content column.
+- Header actions and composer tools should follow a strict icon grid.
+
+## 6. Depth, States & Motion
+
+### Elevation Model
 
 | Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow, no border | Parchment background, inline text |
-| Contained (Level 1) | `1px solid #f0eee6` (light) or `1px solid #30302e` (dark) | Standard cards, sections |
-| Ring (Level 2) | `0px 0px 0px 1px` ring shadows using warm grays | Interactive cards, buttons, hover states |
-| Whisper (Level 3) | `rgba(0,0,0,0.05) 0px 4px 24px` | Elevated feature cards, product screenshots |
-| Inset (Level 4) | `inset 0px 0px 0px 1px` at 15% opacity | Active/pressed button states |
+|------|-----------|-----|
+| Level 0 | Flat surface, no shadow | Main shell, panels, chat canvas |
+| Level 1 | Divider only | Headers, panel boundaries, rows |
+| Level 2 | Background shift | Hover rows, hover icon buttons |
+| Level 3 | Lightweight floating layer | Context menus, popovers, picker panels |
 
-**Shadow Philosophy**: Claude communicates depth through **warm-toned ring shadows** rather than traditional drop shadows. The signature `0px 0px 0px 1px` pattern creates a border-like halo that's softer than an actual border — it's a shadow pretending to be a border, or a border that's technically a shadow. When drop shadows do appear, they're extremely soft (0.05 opacity, 24px blur) — barely visible lifts that suggest floating rather than casting.
+This design should not rely on shadow stacks for hierarchy. Depth comes from partition, alignment, and tone shifts.
 
-### Decorative Depth
-- **Light/Dark alternation**: The most dramatic depth effect comes from alternating between Parchment (`#f5f4ed`) and Near Black (`#141413`) sections — entire sections shift elevation by changing the ambient light level.
-- **Warm ring halos**: Button and card interactions use ring shadows that match the warm palette — never cool-toned or generic gray.
+### Interaction States
+- Hover: background changes by one neutral step
+- Active: slightly darker neutral fill or selected-row gray
+- Focus: thin visible ring, preferably `#07c160` at low opacity
+- Disabled: reduce contrast, never reduce legibility below a usable level
+
+### Motion Rules
+- Hover transitions: `120ms` to `180ms`
+- Drawer or menu transitions: `180ms` to `220ms`
+- Message arrival: very small fade and `translateY(4px)` settle
+- Avoid springy or playful motion; the feel should stay efficient and desktop-native
 
 ## 7. Do's and Don'ts
 
 ### Do
-- Use Parchment (`#f5f4ed`) as the primary light background — the warm cream tone IS the Claude personality
-- Use Anthropic Serif at weight 500 for all headlines — the single-weight consistency is intentional
-- Use Terracotta Brand (`#c96442`) only for primary CTAs and the highest-signal brand moments
-- Keep all neutrals warm-toned — every gray should have a yellow-brown undertone
-- Use ring shadows (`0px 0px 0px 1px`) for interactive element states instead of drop shadows
-- Maintain the editorial serif/sans hierarchy — serif for content headlines, sans for UI
-- Use generous body line-height (1.60) for a literary reading experience
-- Alternate between light and dark sections to create chapter-like page rhythm
-- Apply generous border-radius (12–32px) for a soft, approachable feel
+- Use neutral gray panels as the visual foundation
+- Keep green reserved for sender identity, positive state, and readiness
+- Let conversation content dominate the active screen
+- Make list scanning effortless through strong alignment and predictable row rhythm
+- Use very thin separators instead of boxed card layouts
+- Optimize for long-running usage sessions with low visual fatigue
+- Keep iconography simple and system-like
 
 ### Don't
-- Don't use cool blue-grays anywhere — the palette is exclusively warm-toned
-- Don't use bold (700+) weight on Anthropic Serif — weight 500 is the ceiling for serifs
-- Don't introduce saturated colors beyond Terracotta — the palette is deliberately muted
-- Don't use sharp corners (< 6px radius) on buttons or cards — softness is core to the identity
-- Don't apply heavy drop shadows — depth comes from ring shadows and background color shifts
-- Don't use pure white (`#ffffff`) as a page background — Parchment (`#f5f4ed`) or Ivory (`#faf9f5`) are always warmer
-- Don't use geometric/tech-style illustrations — Claude's illustrations are organic and hand-drawn-feeling
-- Don't reduce body line-height below 1.40 — the generous spacing supports the editorial personality
-- Don't use monospace fonts for non-code content — Anthropic Mono is strictly for code
-- Don't mix in sans-serif for headlines — the serif/sans split is the typographic identity
+- Don't turn the app into a marketing dashboard with cards and spotlight panels
+- Don't use gradients, glassmorphism, or colorful background effects in routine product UI
+- Don't scatter accent green across navigation, headers, and panels at the same time
+- Don't use oversized headings that waste desktop real estate
+- Don't add deep shadows to bubbles or list rows
+- Don't mix serif display typography into the core app shell
+- Don't center content that users expect to scan left-to-right
 
 ## 8. Responsive Behavior
 
 ### Breakpoints
-| Name | Width | Key Changes |
-|------|-------|-------------|
-| Small Mobile | <479px | Minimum layout, stacked everything, compact typography |
-| Mobile | 479–640px | Single column, hamburger nav, reduced heading sizes |
-| Large Mobile | 640–767px | Slightly wider content area |
-| Tablet | 768–991px | 2-column grids begin, condensed nav |
-| Desktop | 992px+ | Full multi-column layout, expanded nav, maximum hero typography (64px) |
 
-### Touch Targets
-- Buttons use generous padding (8–16px vertical minimum)
-- Navigation links adequately spaced for thumb navigation
-- Card surfaces serve as large touch targets
-- Minimum recommended: 44x44px
+| Name | Width | Behavior |
+|------|-------|----------|
+| Desktop Large | `>= 1440px` | Standard three-zone shell with generous message width |
+| Desktop Standard | `1200px - 1439px` | Default layout, conversation list at `280px` |
+| Desktop Compact | `1024px - 1199px` | Reduce conversation list to `240px`, tighten paddings |
+| Tablet / Narrow Window | `768px - 1023px` | Collapse left rail labels, allow conversation list hide/show |
+| Mobile Fallback | `< 768px` | One-pane navigation pattern; list and chat should not be permanently side by side |
 
-### Collapsing Strategy
-- **Navigation**: Full horizontal nav collapses to hamburger on mobile
-- **Feature sections**: Multi-column → stacked single column
-- **Hero text**: 64px → 36px → ~25px progressive scaling
-- **Model cards**: 3-column → stacked vertical
-- **Section padding**: Reduces proportionally but maintains editorial rhythm
-- **Illustrations**: Scale proportionally, maintain aspect ratios
+### Responsive Priorities
+- Preserve message readability before preserving peripheral chrome.
+- On narrow widths, shrink the conversation list first, not the bubble text size.
+- Keep outgoing and incoming bubble distinction strong at every width.
+- Maintain minimum tap targets of `36px` even in compact layouts.
 
-### Image Behavior
-- Product screenshots scale proportionally within rounded containers
-- Illustrations maintain quality at all sizes
-- Video embeds maintain 16:9 aspect ratio with rounded corners
-- No art direction changes between breakpoints
+## 9. CCConnect-Specific Recommendations
 
-## 9. Agent Prompt Guide
+Because CCConnect is not only a chat client but also a device-to-device transfer tool, the WeChat-like shell should be adapted for operational clarity:
 
-### Quick Color Reference
-- Brand CTA: "Terracotta Brand (#c96442)"
-- Page Background: "Parchment (#f5f4ed)"
-- Card Surface: "Ivory (#faf9f5)"
-- Primary Text: "Anthropic Near Black (#141413)"
-- Secondary Text: "Olive Gray (#5e5d59)"
-- Tertiary Text: "Stone Gray (#87867f)"
-- Borders (light): "Border Cream (#f0eee6)"
-- Dark Surface: "Dark Surface (#30302e)"
+- File transfer states should appear inline in the chat stream, not hidden in a separate dashboard by default.
+- Device presence, session code, and transfer progress should use compact chips and rows, not large hero modules.
+- "Connect", "Send", "Receive", and "Sessions" can live in the left rail or list filters, but the active workspace should still look like one continuous chat environment.
+- Long text, transfer cards, and connection notices should all respect the same bubble rhythm so the product feels coherent.
 
-### Example Component Prompts
-- "Create a hero section on Parchment (#f5f4ed) with a headline at 64px Anthropic Serif weight 500, line-height 1.10. Use Anthropic Near Black (#141413) text. Add a subtitle in Olive Gray (#5e5d59) at 20px Anthropic Sans with 1.60 line-height. Place a Terracotta Brand (#c96442) CTA button with Ivory text, 12px radius."
-- "Design a feature card on Ivory (#faf9f5) with a 1px solid Border Cream (#f0eee6) border and comfortably rounded corners (8px). Title in Anthropic Serif at 25px weight 500, description in Olive Gray (#5e5d59) at 16px Anthropic Sans. Add a whisper shadow (rgba(0,0,0,0.05) 0px 4px 24px)."
-- "Build a dark section on Anthropic Near Black (#141413) with Ivory (#faf9f5) headline text in Anthropic Serif at 52px weight 500. Use Warm Silver (#b0aea5) for body text. Borders in Dark Surface (#30302e)."
-- "Create a button in Warm Sand (#e8e6dc) with Charcoal Warm (#4d4c48) text, 8px radius, and a ring shadow (0px 0px 0px 1px #d1cfc5). Padding: 0px 12px 0px 8px."
-- "Design a model comparison grid with three cards on Ivory surfaces. Each card gets a Border Warm (#e8e6dc) top border, model name in Anthropic Serif at 25px, and description in Olive Gray at 15px Anthropic Sans."
+## 10. Suggested CSS Tokens
 
-### Iteration Guide
-1. Focus on ONE component at a time
-2. Reference specific color names — "use Olive Gray (#5e5d59)" not "make it gray"
-3. Always specify warm-toned variants — no cool grays
-4. Describe serif vs sans usage explicitly — "Anthropic Serif for the heading, Anthropic Sans for the label"
-5. For shadows, use "ring shadow (0px 0px 0px 1px)" or "whisper shadow" — never generic "drop shadow"
-6. Specify the warm background — "on Parchment (#f5f4ed)" or "on Near Black (#141413)"
-7. Keep illustrations organic and conceptual — describe "hand-drawn-feeling" style
+```css
+:root {
+  --cc-window: #f5f5f5;
+  --cc-sidebar: #ededed;
+  --cc-panel: #f7f7f7;
+  --cc-surface: #ffffff;
+  --cc-hover: #e8e8e8;
+  --cc-active-row: #dcdcdc;
+  --cc-divider: #d9d9d9;
+  --cc-divider-soft: #e5e5e5;
+  --cc-text: #111111;
+  --cc-text-secondary: #666666;
+  --cc-text-tertiary: #999999;
+  --cc-bubble-out: #95ec69;
+  --cc-green: #07c160;
+  --cc-green-deep: #06ad56;
+  --cc-danger: #fa5151;
+  --cc-warning: #fa9d3b;
+  --cc-link: #576b95;
+  --cc-radius-sm: 6px;
+  --cc-radius-md: 8px;
+  --cc-radius-lg: 10px;
+  --cc-shadow-float: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+```
+
+This token set is intentionally small. The design should gain quality from consistency and restraint, not from a large theme matrix.
