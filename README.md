@@ -43,6 +43,8 @@ CCConnect is a desktop-style cross-device transfer app for quickly sending files
 - Browser-based route navigation for `connect`, `send`, `receive`, `text`, and `sessions`
 - Component-split app shell with isolated stage views and content panels
 - Floating emoji picker with direct insertion into the chat composer
+- Rich chat composer toolbar inspired by classroom editors
+- Text formatting, color palette, table insertion, TEX/code block insertion, and link-style attachment insertion
 - Google Fonts based UI typography
 
 ## Backend Responsibilities

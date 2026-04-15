@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { UnifiedConversationEntry } from '../types'
 import {
   formatChatDivider,
@@ -8,6 +9,16 @@ import {
   shouldInsertDivider,
 } from '../utils'
 
+type SelectOption = {
+  label: string
+  value: string
+}
+
+type FloatingPanelPosition = {
+  left: number
+  top: number
+}
+
 const quickEmojis = [
   '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
   '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
@@ -15,22 +26,34 @@ const quickEmojis = [
   '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
 ]
 
-const richTextFonts = [
+const defaultRichTextFonts: SelectOption[] = [
   { label: '字体样式', value: '' },
-  { label: '宋体', value: 'SimSun, serif' },
-  { label: '黑体', value: '"Noto Sans SC", sans-serif' },
-  { label: 'Jakarta', value: '"Plus Jakarta Sans", sans-serif' },
-  { label: '等宽', value: '"IBM Plex Mono", monospace' },
+  { label: 'Microsoft YaHei', value: '"Microsoft YaHei"' },
+  { label: 'SimSun', value: 'SimSun' },
+  { label: 'SimHei', value: 'SimHei' },
+  { label: 'KaiTi', value: 'KaiTi' },
+  { label: 'Arial', value: 'Arial' },
+  { label: 'Georgia', value: 'Georgia' },
+  { label: 'Times New Roman', value: '"Times New Roman"' },
+  { label: 'Segoe UI', value: '"Segoe UI"' },
+  { label: 'Noto Sans SC', value: '"Noto Sans SC"' },
+  { label: 'IBM Plex Mono', value: '"IBM Plex Mono"' },
 ]
 
-const richTextSizes = [
+const richTextSizes: SelectOption[] = [
   { label: '字体大小', value: '' },
-  { label: '小五', value: '2' },
-  { label: '五号', value: '3' },
-  { label: '小四', value: '4' },
-  { label: '四号', value: '5' },
-  { label: '小三', value: '6' },
-  { label: '三号', value: '7' },
+  { label: '10 px', value: '10' },
+  { label: '12 px', value: '12' },
+  { label: '14 px', value: '14' },
+  { label: '16 px', value: '16' },
+  { label: '18 px', value: '18' },
+  { label: '20 px', value: '20' },
+  { label: '24 px', value: '24' },
+  { label: '28 px', value: '28' },
+  { label: '32 px', value: '32' },
+  { label: '36 px', value: '36' },
+  { label: '42 px', value: '42' },
+  { label: '48 px', value: '48' },
 ]
 
 function escapeInlineHtml(value: string) {
@@ -41,7 +64,7 @@ function escapeInlineHtml(value: string) {
     .replaceAll('"', '&quot;')
 }
 
-const paragraphFormats = [
+const paragraphFormats: SelectOption[] = [
   { label: '段落', value: '' },
   { label: '正文', value: 'p' },
   { label: '标题 1', value: 'h1' },
@@ -51,14 +74,42 @@ const paragraphFormats = [
   { label: '代码块', value: 'pre' },
 ]
 
-const richTextColors = [
-  { label: '字体颜色', value: '' },
-  { label: '黑色', value: '#111111' },
-  { label: '红色', value: '#fa5151' },
-  { label: '绿色', value: '#07c160' },
-  { label: '蓝色', value: '#1c7ed6' },
-  { label: '橙色', value: '#f59f00' },
-  { label: '紫色', value: '#845ef7' },
+const themeRichTextColors: SelectOption[] = [
+  { label: '炭黑 #111111', value: '#111111' },
+  { label: '深灰 #434343', value: '#434343' },
+  { label: '灰色 #666666', value: '#666666' },
+  { label: '银灰 #999999', value: '#999999' },
+  { label: '浅灰 #b7b7b7', value: '#b7b7b7' },
+  { label: '雾白 #d9d9d9', value: '#d9d9d9' },
+  { label: '米白 #efefef', value: '#efefef' },
+  { label: '纯白 #ffffff', value: '#ffffff' },
+  { label: '深红 #980000', value: '#980000' },
+  { label: '红色 #ff0000', value: '#ff0000' },
+  { label: '橘红 #ff5b00', value: '#ff5b00' },
+  { label: '粉橘 #ff8c5a', value: '#ff8c5a' },
+  { label: '棕色 #783f04', value: '#783f04' },
+  { label: '赭色 #b45f06', value: '#b45f06' },
+  { label: '金黄 #f1c232', value: '#f1c232' },
+  { label: '亮黄 #ffff00', value: '#ffff00' },
+]
+
+const standardRichTextColors: SelectOption[] = [
+  { label: '深绿 #274e13', value: '#274e13' },
+  { label: '绿色 #38761d', value: '#38761d' },
+  { label: '草绿 #6aa84f', value: '#6aa84f' },
+  { label: '浅绿 #93c47d', value: '#93c47d' },
+  { label: '青绿 #0c7f65', value: '#0c7f65' },
+  { label: '青色 #00a2a8', value: '#00a2a8' },
+  { label: '湖蓝 #00c0ff', value: '#00c0ff' },
+  { label: '天蓝 #9fc5e8', value: '#9fc5e8' },
+  { label: '海军蓝 #073763', value: '#073763' },
+  { label: '蓝色 #1155cc', value: '#1155cc' },
+  { label: '亮蓝 #3c78d8', value: '#3c78d8' },
+  { label: '淡蓝 #6fa8dc', value: '#6fa8dc' },
+  { label: '靛蓝 #20124d', value: '#20124d' },
+  { label: '紫色 #674ea7', value: '#674ea7' },
+  { label: '兰紫 #8e7cc3', value: '#8e7cc3' },
+  { label: '粉紫 #c27ba0', value: '#c27ba0' },
 ]
 
 const specialCharacterPresets = [
@@ -260,6 +311,29 @@ function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
   return compactName.slice(0, 2)
 }
 
+function legacyFontSizeForPixels(sizeInPixels: number) {
+  if (sizeInPixels <= 10) {
+    return '1'
+  }
+  if (sizeInPixels <= 12) {
+    return '2'
+  }
+  if (sizeInPixels <= 14) {
+    return '3'
+  }
+  if (sizeInPixels <= 18) {
+    return '4'
+  }
+  if (sizeInPixels <= 24) {
+    return '5'
+  }
+  if (sizeInPixels <= 32) {
+    return '6'
+  }
+
+  return '7'
+}
+
 function createInsertPanelState(type: InsertPanelType): InsertPanelState {
   switch (type) {
     case 'special-character':
@@ -295,9 +369,15 @@ export function ChatConversationStage({
   const [insertPanel, setInsertPanel] = useState<InsertPanelState | null>(null)
   const [insertPanelError, setInsertPanelError] = useState<string | null>(null)
   const [isFormulaBetaDialogOpen, setIsFormulaBetaDialogOpen] = useState(false)
+  const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false)
+  const [activeTextColor, setActiveTextColor] = useState<string | null>(null)
+  const [fontOptions, setFontOptions] = useState<SelectOption[]>(defaultRichTextFonts)
+  const [colorPalettePosition, setColorPalettePosition] = useState<FloatingPanelPosition | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const colorPaletteRef = useRef<HTMLDivElement | null>(null)
+  const colorPaletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
 
@@ -319,6 +399,56 @@ export function ChatConversationStage({
       editorRef.current.innerHTML = nextHtml
     }
   }, [chatDraft])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    const loadSystemFonts = async () => {
+      const api = (
+        window as Window & {
+          queryLocalFonts?: () => Promise<Array<{ family: string }>>
+        }
+      ).queryLocalFonts
+
+      if (!api) {
+        return
+      }
+
+      try {
+        const localFonts = await api()
+        const families = [...new Set(
+          localFonts
+            .map((font) => font.family?.trim())
+            .filter((family): family is string => Boolean(family)),
+        )].sort((left, right) => left.localeCompare(right, 'zh-CN'))
+
+        if (families.length === 0 || isCancelled) {
+          return
+        }
+
+        const mergedOptions = [
+          defaultRichTextFonts[0],
+          ...[...new Set([
+            ...defaultRichTextFonts.slice(1).map((option) => option.label),
+            ...families,
+          ])].map((family) => ({
+            label: family,
+            value: family.includes(' ') ? `"${family}"` : family,
+          })),
+        ]
+
+        setFontOptions(mergedOptions)
+      } catch {
+        // Fall back to the bundled common font list when local fonts are unavailable.
+      }
+    }
+
+    void loadSystemFonts()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -374,6 +504,85 @@ export function ChatConversationStage({
   }, [isEmojiPickerOpen])
 
   useEffect(() => {
+    if (!isColorPaletteOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (colorPaletteRef.current?.contains(target) || colorPaletteTriggerRef.current?.contains(target)) {
+        return
+      }
+
+      setIsColorPaletteOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsColorPaletteOpen(false)
+        editorRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isColorPaletteOpen])
+
+  useEffect(() => {
+    if (!isColorPaletteOpen) {
+      return
+    }
+
+    const updateColorPalettePosition = () => {
+      const trigger = colorPaletteTriggerRef.current
+      const palette = colorPaletteRef.current
+      if (!trigger || !palette) {
+        return
+      }
+
+      const triggerRect = trigger.getBoundingClientRect()
+      const paletteRect = palette.getBoundingClientRect()
+      const horizontalMargin = 12
+      const verticalGap = 8
+      const paletteWidth = paletteRect.width || 214
+      const paletteHeight = paletteRect.height || 232
+
+      let left = triggerRect.left
+      const maxLeft = window.innerWidth - paletteWidth - horizontalMargin
+      left = Math.min(Math.max(horizontalMargin, left), Math.max(horizontalMargin, maxLeft))
+
+      let top = triggerRect.top - paletteHeight - verticalGap
+      if (top < horizontalMargin) {
+        top = triggerRect.bottom + verticalGap
+      }
+
+      const maxTop = window.innerHeight - paletteHeight - horizontalMargin
+      top = Math.min(Math.max(horizontalMargin, top), Math.max(horizontalMargin, maxTop))
+
+      setColorPalettePosition({ left, top })
+    }
+
+    const frameId = window.requestAnimationFrame(updateColorPalettePosition)
+    window.addEventListener('resize', updateColorPalettePosition)
+    window.addEventListener('scroll', updateColorPalettePosition, true)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', updateColorPalettePosition)
+      window.removeEventListener('scroll', updateColorPalettePosition, true)
+    }
+  }, [isColorPaletteOpen])
+
+  useEffect(() => {
     if (!insertPanel) {
       return
     }
@@ -427,6 +636,46 @@ export function ChatConversationStage({
     syncDraftFromEditor()
   }
 
+  const applyInlineStyle = (
+    styles: Array<[property: string, value: string]>,
+    fallbackCommand?: { command: string; value: string },
+  ) => {
+    restoreSelection()
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) {
+      return
+    }
+
+    const range = selection.getRangeAt(0)
+    if (!editorRef.current.contains(range.commonAncestorContainer)) {
+      return
+    }
+
+    if (range.collapsed) {
+      if (fallbackCommand) {
+        document.execCommand('styleWithCSS', false, 'true')
+        document.execCommand(fallbackCommand.command, false, fallbackCommand.value)
+        syncDraftFromEditor()
+      }
+      return
+    }
+
+    const wrapper = document.createElement('span')
+    for (const [property, value] of styles) {
+      wrapper.style.setProperty(property, value)
+    }
+
+    wrapper.appendChild(range.extractContents())
+    range.insertNode(wrapper)
+
+    const nextRange = document.createRange()
+    nextRange.selectNodeContents(wrapper)
+    selection.removeAllRanges()
+    selection.addRange(nextRange)
+    savedRangeRef.current = nextRange.cloneRange()
+    syncDraftFromEditor()
+  }
+
   const handleFormulaBetaMessage = useEffectEvent((payload: unknown) => {
     if (
       !payload ||
@@ -476,15 +725,30 @@ export function ChatConversationStage({
   const openInsertPanel = (type: InsertPanelType) => {
     setIsEmojiPickerOpen(false)
     setIsFormulaBetaDialogOpen(false)
+    setIsColorPaletteOpen(false)
     setInsertPanelError(null)
     setInsertPanel(createInsertPanelState(type))
   }
 
   const openFormulaBetaDialog = () => {
     setIsEmojiPickerOpen(false)
+    setIsColorPaletteOpen(false)
     setInsertPanel(null)
     setInsertPanelError(null)
     setIsFormulaBetaDialogOpen(true)
+  }
+
+  const toggleColorPalette = () => {
+    setIsEmojiPickerOpen(false)
+    setInsertPanel(null)
+    setInsertPanelError(null)
+    setIsFormulaBetaDialogOpen(false)
+    setIsColorPaletteOpen((current) => !current)
+  }
+
+  const handleColorPaletteTriggerMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    toggleColorPalette()
   }
 
   const closeInsertPanel = () => {
@@ -498,6 +762,35 @@ export function ChatConversationStage({
   const updateInsertPanel = (patch: Partial<InsertPanelState>) => {
     setInsertPanel((current) => (current ? { ...current, ...patch } : current))
     setInsertPanelError(null)
+  }
+
+  const applyTextColor = (color: string | null) => {
+    if (color) {
+      applyInlineStyle(
+        [['color', color]],
+        { command: 'foreColor', value: color },
+      )
+      setActiveTextColor(color)
+      return
+    }
+
+    applyInlineStyle([['color', 'inherit']])
+    setActiveTextColor(null)
+  }
+
+  const handleClearTextColorMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    applyTextColor(null)
+    setIsColorPaletteOpen(false)
+  }
+
+  const handleColorSwatchMouseDown = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    color: string,
+  ) => {
+    event.preventDefault()
+    applyTextColor(color)
+    setIsColorPaletteOpen(false)
   }
 
   const handleInsertPanelSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -669,12 +962,12 @@ export function ChatConversationStage({
         </div>
 
         <div className="pp-chatbox__composer">
-          <div className="pp-rich-toolbar">
-            <div className="pp-rich-toolbar__group">
+          <div className="pp-rich-toolbar-scroll">
+            <div className="pp-rich-toolbar">
+              <div className="pp-rich-toolbar__group">
               <select
                 className="pp-rich-toolbar__select"
                 defaultValue=""
-                onMouseDown={preserveEditorFocus}
                 onChange={(event) => {
                   if (event.target.value) {
                     runCommand('formatBlock', event.target.value)
@@ -691,15 +984,17 @@ export function ChatConversationStage({
               <select
                 className="pp-rich-toolbar__select"
                 defaultValue=""
-                onMouseDown={preserveEditorFocus}
                 onChange={(event) => {
                   if (event.target.value) {
-                    runCommand('fontName', event.target.value)
+                    applyInlineStyle(
+                      [['font-family', event.target.value]],
+                      { command: 'fontName', value: event.target.value },
+                    )
                     event.target.value = ''
                   }
                 }}
               >
-                {richTextFonts.map((option) => (
+                {fontOptions.map((option) => (
                   <option key={option.label} value={option.value}>
                     {option.label}
                   </option>
@@ -708,10 +1003,16 @@ export function ChatConversationStage({
               <select
                 className="pp-rich-toolbar__select"
                 defaultValue=""
-                onMouseDown={preserveEditorFocus}
                 onChange={(event) => {
                   if (event.target.value) {
-                    runCommand('fontSize', event.target.value)
+                    const fontSize = Number.parseInt(event.target.value, 10)
+                    applyInlineStyle(
+                      [['font-size', `${fontSize.toString()}px`]],
+                      {
+                        command: 'fontSize',
+                        value: legacyFontSizeForPixels(fontSize),
+                      },
+                    )
                     event.target.value = ''
                   }
                 }}
@@ -722,177 +1023,186 @@ export function ChatConversationStage({
                   </option>
                 ))}
               </select>
-              <select
-                className="pp-rich-toolbar__select"
-                defaultValue=""
-                onMouseDown={preserveEditorFocus}
-                onChange={(event) => {
-                  if (event.target.value) {
-                    runCommand('foreColor', event.target.value)
-                    event.target.value = ''
-                  }
-                }}
-              >
-                {richTextColors.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="pp-rich-toolbar__color-field">
+                <button
+                  ref={colorPaletteTriggerRef}
+                  type="button"
+                  className={`pp-rich-toolbar__button pp-rich-toolbar__color-trigger${isColorPaletteOpen ? ' is-active' : ''}`}
+                  aria-label="字体颜色"
+                  aria-expanded={isColorPaletteOpen}
+                  aria-haspopup="dialog"
+                  title="字体颜色"
+                  onMouseDown={handleColorPaletteTriggerMouseDown}
+                >
+                  <span className="pp-rich-toolbar__color-glyph" aria-hidden="true">
+                    A
+                  </span>
+                  <span
+                    className="pp-rich-toolbar__color-line"
+                    style={{ backgroundColor: activeTextColor ?? '#111111' }}
+                    aria-hidden="true"
+                  />
+                  <span className="pp-rich-toolbar__color-caret" aria-hidden="true">
+                    ▼
+                  </span>
+                </button>
 
-            <div className="pp-rich-toolbar__group">
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="清除格式"
-                title="清除格式"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('removeFormat')}
-              >
-                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
-                aria-label="格式刷暂未接入"
-                title="格式刷暂未接入"
-                disabled
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">Fb</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="加粗"
-                title="加粗"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('bold')}
-              >
-                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--bold" aria-hidden="true">B</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="斜体"
-                title="斜体"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('italic')}
-              >
-                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--italic" aria-hidden="true">I</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="下划线"
-                title="下划线"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('underline')}
-              >
-                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--underline" aria-hidden="true">U</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="缩进"
-                title="缩进"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('indent')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">⇥</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="左对齐"
-                title="左对齐"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('justifyLeft')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">L</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="居中"
-                title="居中"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('justifyCenter')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">C</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="右对齐"
-                title="右对齐"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => runCommand('justifyRight')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">R</span>
-              </button>
-            </div>
+              </div>
+              </div>
 
-            <div className="pp-rich-toolbar__group">
-              <button
-                type="button"
-                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
-                aria-label="特殊字符"
-                title="特殊字符"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => openInsertPanel('special-character')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">Ω</span>
-              </button>
-              <button
-                type="button"
-                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
-                aria-label="插入表格"
-                title="插入表格"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => openInsertPanel('table')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">▦</span>
-              </button>
-              <button
-                type="button"
-                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
-                aria-label="TEX 公式"
-                title="TEX 公式"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => openInsertPanel('tex')}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">∑</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
-                aria-label="公式 beta"
-                title="公式 beta"
-                onMouseDown={preserveEditorFocus}
-                onClick={openFormulaBetaDialog}
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">β</span>
-              </button>
-              <button
-                type="button"
-                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
-                aria-label="画板待接入"
-                title="画板待接入"
-                disabled
-              >
-                <span className="pp-rich-toolbar__glyph" aria-hidden="true">✎</span>
-              </button>
-              <button
-                type="button"
-                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
-                aria-label="代码块"
-                title="代码块"
-                onMouseDown={preserveEditorFocus}
-                onClick={() => openInsertPanel('code')}
-              >
-                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
-              </button>
+              <div className="pp-rich-toolbar__group">
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="清除格式"
+                  title="清除格式"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('removeFormat')}
+                >
+                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                  aria-label="格式刷暂未接入"
+                  title="格式刷暂未接入"
+                  disabled
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">Fb</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="加粗"
+                  title="加粗"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('bold')}
+                >
+                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--bold" aria-hidden="true">B</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="斜体"
+                  title="斜体"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('italic')}
+                >
+                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--italic" aria-hidden="true">I</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="下划线"
+                  title="下划线"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('underline')}
+                >
+                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--underline" aria-hidden="true">U</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="缩进"
+                  title="缩进"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('indent')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">⇥</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="左对齐"
+                  title="左对齐"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('justifyLeft')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">L</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="居中"
+                  title="居中"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('justifyCenter')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">C</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="右对齐"
+                  title="右对齐"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => runCommand('justifyRight')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">R</span>
+                </button>
+              </div>
+
+              <div className="pp-rich-toolbar__group">
+                <button
+                  type="button"
+                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
+                  aria-label="特殊字符"
+                  title="特殊字符"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => openInsertPanel('special-character')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">Ω</span>
+                </button>
+                <button
+                  type="button"
+                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
+                  aria-label="插入表格"
+                  title="插入表格"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => openInsertPanel('table')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">▦</span>
+                </button>
+                <button
+                  type="button"
+                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
+                  aria-label="TEX 公式"
+                  title="TEX 公式"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => openInsertPanel('tex')}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">∑</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  aria-label="公式 beta"
+                  title="公式 beta"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={openFormulaBetaDialog}
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">β</span>
+                </button>
+                <button
+                  type="button"
+                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                  aria-label="画板待接入"
+                  title="画板待接入"
+                  disabled
+                >
+                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">✎</span>
+                </button>
+                <button
+                  type="button"
+                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
+                  aria-label="代码块"
+                  title="代码块"
+                  onMouseDown={preserveEditorFocus}
+                  onClick={() => openInsertPanel('code')}
+                >
+                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -928,6 +1238,73 @@ export function ChatConversationStage({
                 </div>
               </div>
             </div>
+          )}
+
+          {isColorPaletteOpen && createPortal(
+            <div
+              ref={colorPaletteRef}
+              className="pp-color-palette"
+              role="dialog"
+              aria-label="字体颜色面板"
+              style={
+                colorPalettePosition
+                  ? {
+                      left: `${colorPalettePosition.left.toString()}px`,
+                      top: `${colorPalettePosition.top.toString()}px`,
+                    }
+                  : undefined
+              }
+            >
+              <div className="pp-color-palette__topbar">
+                <div
+                  className="pp-color-palette__preview"
+                  style={{ backgroundColor: activeTextColor ?? '#ffffff' }}
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  className="pp-color-palette__clear"
+                  onMouseDown={handleClearTextColorMouseDown}
+                >
+                  清空颜色
+                </button>
+              </div>
+
+              <div className="pp-color-palette__section">
+                <span className="pp-color-palette__label">主题颜色</span>
+                <div className="pp-color-palette__grid">
+                  {themeRichTextColors.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className="pp-color-palette__swatch"
+                      style={{ backgroundColor: option.value }}
+                      title={option.label}
+                      aria-label={option.label}
+                      onMouseDown={(event) => handleColorSwatchMouseDown(event, option.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="pp-color-palette__section">
+                <span className="pp-color-palette__label">标准颜色</span>
+                <div className="pp-color-palette__grid">
+                  {standardRichTextColors.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className="pp-color-palette__swatch"
+                      style={{ backgroundColor: option.value }}
+                      title={option.label}
+                      aria-label={option.label}
+                      onMouseDown={(event) => handleColorSwatchMouseDown(event, option.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>,
+            document.body,
           )}
 
           {insertPanel && (
