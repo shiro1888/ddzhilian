@@ -11,7 +11,10 @@ import {
   type TransportMode,
   parseClientEvent,
 } from './protocol.js';
-import { DeviceRegistry } from './registry/device-registry.js';
+import {
+  type ConnectedDevice,
+  DeviceRegistry,
+} from './registry/device-registry.js';
 import { HistoryRegistry } from './registry/history-registry.js';
 import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
@@ -31,15 +34,37 @@ const history = new HistoryRegistry(config.historyRetentionMs);
 const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
 
-function setCorsHeaders(response: {
+function setCorsHeaders(
+  request: {
+    headers: {
+      origin?: string | string[];
+    };
+  },
+  response: {
   setHeader(name: string, value: string): void;
-}) {
-  response.setHeader('Access-Control-Allow-Origin', '*');
+  },
+) {
+  const origin = Array.isArray(request.headers.origin)
+    ? request.headers.origin[0]
+    : request.headers.origin;
+
+  if (!origin) {
+    return true;
+  }
+
+  if (!config.allowedOrigins.includes(origin)) {
+    return false;
+  }
+
+  response.setHeader('Access-Control-Allow-Origin', origin);
+  response.setHeader('Vary', 'Origin');
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type,X-File-Name,X-File-Created-At,X-Source-Device-Id,X-Source-Device-Name,X-Session-Id',
+    'Authorization,Content-Type,X-File-Name,X-File-Created-At,X-Session-Id',
   );
+
+  return true;
 }
 
 async function readRequestBuffer(
@@ -67,15 +92,137 @@ function decodeHeaderValue(value: string | string[] | undefined) {
   }
 }
 
+function writeJson(
+  response: {
+    writeHead(
+      statusCode: number,
+      headers?: Record<string, string>,
+    ): unknown;
+    end(body?: string): void;
+  },
+  statusCode: number,
+  payload: Record<string, unknown>,
+) {
+  response.writeHead(statusCode, { 'content-type': 'application/json' });
+  response.end(JSON.stringify(payload));
+}
+
+function readBearerToken(value: string | string[] | undefined) {
+  const headerValue = Array.isArray(value) ? value[0] : value;
+  const trimmedValue = headerValue?.trim();
+
+  if (!trimmedValue) {
+    return undefined;
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec(trimmedValue);
+  return match?.[1]?.trim();
+}
+
+function authenticateHistoryRequest(request: {
+  headers: {
+    authorization?: string | string[];
+  };
+}) {
+  const historyAuthToken = readBearerToken(request.headers.authorization);
+
+  if (!historyAuthToken) {
+    return {
+      ok: false as const,
+      statusCode: 401,
+      message: 'Missing bearer token.',
+    };
+  }
+
+  const device = devices.getByHistoryAuthToken(historyAuthToken);
+
+  if (!device) {
+    return {
+      ok: false as const,
+      statusCode: 401,
+      message: 'Invalid bearer token.',
+    };
+  }
+
+  return {
+    ok: true as const,
+    device,
+  };
+}
+
+function authorizeRoomMember(
+  device: ConnectedDevice,
+  roomId: string,
+) {
+  const room = rooms.getById(roomId);
+
+  if (!room) {
+    return {
+      ok: false as const,
+      statusCode: 404,
+      message: 'Room not found.',
+    };
+  }
+
+  if (!room.memberIds.includes(device.deviceId)) {
+    return {
+      ok: false as const,
+      statusCode: 403,
+      message: 'The current device is not a member of that room.',
+    };
+  }
+
+  return {
+    ok: true as const,
+    room,
+  };
+}
+
+function authorizeSessionMember(
+  device: ConnectedDevice,
+  roomId: string,
+  sessionId: string | undefined,
+) {
+  if (!sessionId) {
+    return {
+      ok: true as const,
+    };
+  }
+
+  const session = sessions.getById(sessionId);
+
+  if (
+    !session ||
+    session.roomId !== roomId ||
+    (session.initiatorId !== device.deviceId &&
+      session.responderId !== device.deviceId)
+  ) {
+    return {
+      ok: false as const,
+      statusCode: 403,
+      message: 'The requested session is not accessible to the current device.',
+    };
+  }
+
+  return {
+    ok: true as const,
+  };
+}
+
 const httpServer = createServer((request, response) => {
   if (!request.url) {
     response.writeHead(404).end();
     return;
   }
 
-  setCorsHeaders(response);
+  const corsAllowed = setCorsHeaders(request, response);
 
-if (request.method === 'OPTIONS') {
+  if (!corsAllowed) {
+    writeJson(response, 403, { error: 'Origin not allowed.' });
+    return;
+  }
+
+  if (request.method === 'OPTIONS') {
     response.writeHead(204).end();
     return;
   }
@@ -90,54 +237,58 @@ if (request.method === 'OPTIONS') {
     const createdAt =
       decodeHeaderValue(request.headers['x-file-created-at']) ??
       new Date().toISOString();
-    const sourceDeviceId = decodeHeaderValue(request.headers['x-source-device-id']);
-    const sourceDeviceName = decodeHeaderValue(request.headers['x-source-device-name']);
-
-    if (!roomId || !historyId || !fileName || !sourceDeviceId) {
-      response.writeHead(400, { 'content-type': 'application/json' });
-      response.end(
-        JSON.stringify({
-          error: 'Missing roomId, historyId, fileName, or sourceDeviceId.',
-        }),
-      );
+    if (!roomId || !historyId || !fileName) {
+      writeJson(response, 400, {
+        error: 'Missing roomId, historyId, or fileName.',
+      });
       return;
     }
 
-    if (!rooms.getById(roomId)) {
-      response.writeHead(404, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Room not found.' }));
+    const authResult = authenticateHistoryRequest(request);
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return;
+    }
+
+    const roomAccess = authorizeRoomMember(authResult.device, roomId);
+    if (!roomAccess.ok) {
+      writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+      return;
+    }
+
+    const sessionAccess = authorizeSessionMember(
+      authResult.device,
+      roomId,
+      sessionId,
+    );
+    if (!sessionAccess.ok) {
+      writeJson(response, sessionAccess.statusCode, {
+        error: sessionAccess.message,
+      });
       return;
     }
 
     void readRequestBuffer(request)
       .then(async (data) => {
-        const device = devices.getById(sourceDeviceId);
         const record = await history.saveFile({
           historyId,
           roomId,
           sessionId,
-          sourceDeviceId,
-          sourceDeviceName:
-            sourceDeviceName ??
-            device?.deviceName ??
-            sourceDeviceId,
+          sourceDeviceId: authResult.device.deviceId,
+          sourceDeviceName: authResult.device.deviceName,
           fileName,
           mimeType: request.headers['content-type']?.toString(),
           createdAt,
           data,
         });
 
-        response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify({ ok: true, file: history.toSummary(record) }));
+        writeJson(response, 200, { ok: true, file: history.toSummary(record) });
         broadcastSnapshots();
       })
       .catch((error) => {
-        response.writeHead(500, { 'content-type': 'application/json' });
-        response.end(
-          JSON.stringify({
-            error: error instanceof Error ? error.message : 'History upload failed.',
-          }),
-        );
+        writeJson(response, 500, {
+          error: error instanceof Error ? error.message : 'History upload failed.',
+        });
       });
     return;
   }
@@ -149,58 +300,58 @@ if (request.method === 'OPTIONS') {
           historyId?: string;
           roomId?: string;
           sessionId?: string;
-          sourceDeviceId?: string;
-          sourceDeviceName?: string;
           text?: string;
           createdAt?: string;
         };
 
-        if (
-          !payload.historyId ||
-          !payload.roomId ||
-          !payload.sourceDeviceId ||
-          !payload.text
-        ) {
-          response.writeHead(400, { 'content-type': 'application/json' });
-          response.end(
-            JSON.stringify({
-              error: 'Missing historyId, roomId, sourceDeviceId, or text.',
-            }),
-          );
+        if (!payload.historyId || !payload.roomId || !payload.text) {
+          writeJson(response, 400, {
+            error: 'Missing historyId, roomId, or text.',
+          });
           return;
         }
 
-        if (!rooms.getById(payload.roomId)) {
-          response.writeHead(404, { 'content-type': 'application/json' });
-          response.end(JSON.stringify({ error: 'Room not found.' }));
+        const authResult = authenticateHistoryRequest(request);
+        if (!authResult.ok) {
+          writeJson(response, authResult.statusCode, { error: authResult.message });
           return;
         }
 
-        const device = devices.getById(payload.sourceDeviceId);
+        const roomAccess = authorizeRoomMember(authResult.device, payload.roomId);
+        if (!roomAccess.ok) {
+          writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+          return;
+        }
+
+        const sessionAccess = authorizeSessionMember(
+          authResult.device,
+          payload.roomId,
+          payload.sessionId,
+        );
+        if (!sessionAccess.ok) {
+          writeJson(response, sessionAccess.statusCode, {
+            error: sessionAccess.message,
+          });
+          return;
+        }
+
         const record = history.saveText({
           historyId: payload.historyId,
           roomId: payload.roomId,
           sessionId: payload.sessionId,
-          sourceDeviceId: payload.sourceDeviceId,
-          sourceDeviceName:
-            payload.sourceDeviceName ??
-            device?.deviceName ??
-            payload.sourceDeviceId,
+          sourceDeviceId: authResult.device.deviceId,
+          sourceDeviceName: authResult.device.deviceName,
           text: payload.text,
           createdAt: payload.createdAt ?? new Date().toISOString(),
         });
 
-        response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify({ ok: true, text: history.toTextSummary(record) }));
+        writeJson(response, 200, { ok: true, text: history.toTextSummary(record) });
         broadcastSnapshots();
       })
       .catch((error) => {
-        response.writeHead(500, { 'content-type': 'application/json' });
-        response.end(
-          JSON.stringify({
-            error: error instanceof Error ? error.message : 'History text upload failed.',
-          }),
-        );
+        writeJson(response, 500, {
+          error: error instanceof Error ? error.message : 'History text upload failed.',
+        });
       });
     return;
   }
@@ -209,11 +360,21 @@ if (request.method === 'OPTIONS') {
     const historyId = decodeURIComponent(
       url.pathname.slice('/api/history/download/'.length),
     );
+    const authResult = authenticateHistoryRequest(request);
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return;
+    }
+
     const record = history.getById(historyId);
 
-    if (!record) {
-      response.writeHead(404, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ error: 'History file not found.' }));
+    if (
+      !record ||
+      !rooms
+        .getById(record.roomId)
+        ?.memberIds.includes(authResult.device.deviceId)
+    ) {
+      writeJson(response, 404, { error: 'History file not found.' });
       return;
     }
 
@@ -254,6 +415,16 @@ if (request.method === 'OPTIONS') {
   }
 
   if (url.pathname === '/api/debug/state') {
+    if (!config.debugStateApiEnabled || !config.debugStateApiToken) {
+      writeJson(response, 404, { error: 'Not found' });
+      return;
+    }
+
+    if (readBearerToken(request.headers.authorization) !== config.debugStateApiToken) {
+      writeJson(response, 404, { error: 'Not found' });
+      return;
+    }
+
     const uniqueSessions = devices
       .list()
       .flatMap((device) => sessions.listForDevice(device.deviceId))

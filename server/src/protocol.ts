@@ -130,6 +130,7 @@ export interface DirectorySnapshotPayload {
     deviceName: string;
     shortCode: string;
     pairToken: string;
+    historyAuthToken: string;
     accountId?: string;
     autoConnect: boolean;
     discoverable: boolean;

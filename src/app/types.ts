@@ -37,6 +37,7 @@ export type FileConversationEntry = {
   progress: number
   downloadUrl?: string
   downloadName?: string
+  onDownload?: () => void
   action?: 'retry' | 'cancel'
 }
 

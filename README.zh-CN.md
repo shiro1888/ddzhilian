@@ -161,7 +161,7 @@ npm run build
 3. 将非静态文件请求重写到 `dist/index.html`
 4. 暴露 `/ws` 到信令后端，或通过 `VITE_SIGNALING_WS_URL` / `VITE_SIGNALING_HTTP_URL` 显式指定
 
-当前生产前端地址为 `https://cc.changr888.com`。
+当前生产前端地址为 `https://ddzhilian.com`。
 
 ### 后端
 

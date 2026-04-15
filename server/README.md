@@ -51,6 +51,9 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `PORT`: HTTP and WebSocket port, default `8787`
 - `HOST`: bind host, default `0.0.0.0`
 - `PUBLIC_WS_URL`: public socket URL returned to clients
+- `ALLOWED_ORIGINS`: optional comma-separated list of allowed browser origins for cross-origin HTTP access
+- `ENABLE_DEBUG_STATE_API`: optional flag to expose `/api/debug/state`, default `false`
+- `DEBUG_STATE_API_TOKEN`: bearer token required when `/api/debug/state` is enabled
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
 - `TURN_URL`: optional single TURN server URL
@@ -61,7 +64,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 ## Endpoints
 
 - `GET /health`
-- `GET /api/debug/state`
+- `GET /api/debug/state` (disabled by default; requires bearer token when enabled)
 - `WS /ws`
 
 ## Primary Client Events

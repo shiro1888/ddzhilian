@@ -28,12 +28,16 @@ export function createPairToken() {
   return createToken(12, TOKEN_ALPHABET);
 }
 
+export function createHistoryAuthToken() {
+  return createToken(32, TOKEN_ALPHABET);
+}
+
 export function createSessionId() {
   return `sess_${createToken(18, TOKEN_ALPHABET)}`;
 }
 
 export function createRoomId() {
-  return createToken(4, ROOM_ID_ALPHABET);
+  return createToken(6, ROOM_ID_ALPHABET);
 }
 
 export function createLanSessionId() {

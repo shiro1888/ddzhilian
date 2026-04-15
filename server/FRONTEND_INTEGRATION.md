@@ -4,9 +4,9 @@ This document explains how the current frontend should connect to the deployed C
 
 ## Live Endpoints
 
-- App base URL: `https://cc.changr888.com`
-- Health check: `https://cc.changr888.com/health`
-- WebSocket endpoint: `wss://cc.changr888.com/ws`
+- App base URL: `https://ddzhilian.com`
+- Health check: `https://ddzhilian.com/health`
+- WebSocket endpoint: `wss://ddzhilian.com/ws`
 
 ## What The Backend Does
 
@@ -25,7 +25,7 @@ The backend does **not** store file contents. Text messages and file chunks shou
 
 ## Suggested Frontend Connection Flow
 
-1. Open `wss://cc.changr888.com/ws`
+1. Open `wss://ddzhilian.com/ws`
 2. Send a `hello` message
 3. Persist `payload.self.deviceId` locally
 4. Render `peers`, `lanPeers`, `accountPeers`, and `sessions`
@@ -97,7 +97,7 @@ The server replies with `welcome`:
         }
       ]
     },
-    "publicWsUrl": "wss://cc.changr888.com/ws",
+    "publicWsUrl": "wss://ddzhilian.com/ws",
     "serverTime": "2026-04-13T00:00:00.000Z"
   }
 }
@@ -148,7 +148,7 @@ Recommended UI behavior:
 If you build a share link such as:
 
 ```text
-https://your-frontend-domain/connect?token=<pairToken>
+https://ddzhilian.com/connect?token=<pairToken>
 ```
 
 then you can either:
@@ -410,7 +410,7 @@ Known error codes:
 
 ## Minimum Frontend Checklist
 
-- connect to `wss://cc.changr888.com/ws`
+- connect to `wss://ddzhilian.com/ws`
 - send `hello`
 - persist `deviceId`
 - show `shortCode`

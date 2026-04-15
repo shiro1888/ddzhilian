@@ -59,6 +59,12 @@ function resolveApiBaseUrl() {
 
 const API_BASE_URL = resolveApiBaseUrl()
 
+function buildHistoryAuthHeaders(self: DirectorySnapshotPayload['self']) {
+  return {
+    authorization: `Bearer ${self.historyAuthToken}`,
+  }
+}
+
 type StoredIdentity = {
   deviceId?: string
   deviceName: string
@@ -1283,7 +1289,7 @@ export function useCcconnect() {
     const session = sessionsRef.current[sessionId]
     const activeSelf = selfRef.current
 
-    if (!session?.roomId || !activeSelf?.deviceId) {
+    if (!session?.roomId || !activeSelf?.deviceId || !activeSelf.historyAuthToken) {
       return
     }
 
@@ -1298,11 +1304,10 @@ export function useCcconnect() {
       const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
+          ...buildHistoryAuthHeaders(activeSelf),
           'content-type': file.type || 'application/octet-stream',
           'x-file-name': encodeURIComponent(file.name),
           'x-file-created-at': encodeURIComponent(new Date().toISOString()),
-          'x-source-device-id': activeSelf.deviceId,
-          'x-source-device-name': encodeURIComponent(activeSelf.deviceName),
         },
         body: file,
       })
@@ -1331,7 +1336,7 @@ export function useCcconnect() {
     const session = sessionsRef.current[record.sessionId]
     const activeSelf = selfRef.current
 
-    if (!session?.roomId || !activeSelf?.deviceId) {
+    if (!session?.roomId || !activeSelf?.deviceId || !activeSelf.historyAuthToken) {
       return
     }
 
@@ -1341,14 +1346,13 @@ export function useCcconnect() {
       const response = await fetch(`${API_BASE_URL}/api/history/text`, {
         method: 'POST',
         headers: {
+          ...buildHistoryAuthHeaders(activeSelf),
           'content-type': 'application/json',
         },
         body: JSON.stringify({
           historyId: record.id,
           roomId: session.roomId,
           sessionId: record.sessionId,
-          sourceDeviceId: activeSelf.deviceId,
-          sourceDeviceName: activeSelf.deviceName,
           text: record.text,
           createdAt: record.createdAt,
         }),
@@ -1365,6 +1369,36 @@ export function useCcconnect() {
     } finally {
       archivingTextHistoryIdsRef.current.delete(record.id)
     }
+  }
+
+  const downloadHistoryFile = async (file: HistoryFileSummary) => {
+    const activeSelf = selfRef.current
+
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成历史记录授权。')
+    }
+
+    const response = await fetch(new URL(file.downloadPath, API_BASE_URL), {
+      headers: buildHistoryAuthHeaders(activeSelf),
+    })
+
+    if (!response.ok) {
+      throw new Error(`History download failed with status ${response.status.toString()}`)
+    }
+
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = file.fileName
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    window.setTimeout(() => {
+      URL.revokeObjectURL(objectUrl)
+    }, 60_000)
   }
 
   const startTransfer = async (transferId: string, preferredSessionId?: string | null) => {
@@ -1810,6 +1844,7 @@ export function useCcconnect() {
     createTransferItems,
     retryTransfer,
     cancelTransfer,
+    downloadHistoryFile,
     startPendingTransfers,
     sendText,
     sendFiles,

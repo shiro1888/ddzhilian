@@ -936,8 +936,17 @@ export function ChatConversationStage({
                             <span>{entry.file.statusLabel}</span>
                             <span>{entry.file.detail}</span>
                           </div>
-                          {(entry.file.downloadUrl || entry.file.action) && (
+                          {(entry.file.downloadUrl || entry.file.onDownload || entry.file.action) && (
                             <div className="pp-file-bubble__actions">
+                              {entry.file.onDownload ? (
+                                <button
+                                  type="button"
+                                  className="pp-file-bubble__action"
+                                  onClick={entry.file.onDownload}
+                                >
+                                  下载文件
+                                </button>
+                              ) : null}
                               {entry.file.downloadUrl ? (
                                 <a
                                   className="pp-file-bubble__action"

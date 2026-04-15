@@ -12,7 +12,12 @@ import {
   type SessionSummary,
   type TransportMode,
 } from '../protocol.js';
-import { createDeviceId, createPairToken, createShortCode } from '../utils/id.js';
+import {
+  createDeviceId,
+  createHistoryAuthToken,
+  createPairToken,
+  createShortCode,
+} from '../utils/id.js';
 import {
   type NetworkContext,
 } from '../utils/network.js';
@@ -31,6 +36,7 @@ export interface ConnectedDevice {
   allowShortCode: boolean;
   shortCode: string;
   pairToken: string;
+  historyAuthToken: string;
   nativeLan?: NativeLanCapabilityPayload;
   network: NetworkContext;
   lastSeenAt: string;
@@ -98,6 +104,8 @@ export class DeviceRegistry {
 
   private readonly byPairToken = new Map<string, string>();
 
+  private readonly byHistoryAuthToken = new Map<string, string>();
+
   register(
     socket: WebSocket,
     payload: DeviceHelloPayload,
@@ -126,6 +134,7 @@ export class DeviceRegistry {
       allowShortCode: payload.allowShortCode ?? true,
       shortCode: this.createUniqueShortCode(deviceId),
       pairToken: this.createUniquePairToken(deviceId),
+      historyAuthToken: this.createUniqueHistoryAuthToken(deviceId),
       nativeLan: normalizeNativeLan(payload.nativeLan),
       network,
       lastSeenAt: now,
@@ -134,6 +143,7 @@ export class DeviceRegistry {
     this.byId.set(deviceId, device);
     this.byShortCode.set(device.shortCode, deviceId);
     this.byPairToken.set(device.pairToken, deviceId);
+    this.byHistoryAuthToken.set(device.historyAuthToken, deviceId);
 
     return device;
   }
@@ -206,6 +216,12 @@ export class DeviceRegistry {
     return deviceId ? this.byId.get(deviceId) : undefined;
   }
 
+  getByHistoryAuthToken(historyAuthToken: string) {
+    const deviceId = this.byHistoryAuthToken.get(historyAuthToken.trim());
+
+    return deviceId ? this.byId.get(deviceId) : undefined;
+  }
+
   remove(deviceId: string) {
     const device = this.byId.get(deviceId);
 
@@ -215,6 +231,7 @@ export class DeviceRegistry {
 
     this.byShortCode.delete(device.shortCode);
     this.byPairToken.delete(device.pairToken);
+    this.byHistoryAuthToken.delete(device.historyAuthToken);
     this.byId.delete(deviceId);
 
     return device;
@@ -285,6 +302,7 @@ export class DeviceRegistry {
         deviceName: viewer.deviceName,
         shortCode: viewer.shortCode,
         pairToken: viewer.pairToken,
+        historyAuthToken: viewer.historyAuthToken,
         accountId: viewer.accountId,
         autoConnect: viewer.autoConnect,
         discoverable: viewer.discoverable,
@@ -406,5 +424,18 @@ export class DeviceRegistry {
     }
 
     return pairToken;
+  }
+
+  private createUniqueHistoryAuthToken(deviceId: string) {
+    let historyAuthToken = createHistoryAuthToken();
+
+    while (
+      this.byHistoryAuthToken.has(historyAuthToken) &&
+      this.byHistoryAuthToken.get(historyAuthToken) !== deviceId
+    ) {
+      historyAuthToken = createHistoryAuthToken();
+    }
+
+    return historyAuthToken;
   }
 }

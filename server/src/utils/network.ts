@@ -55,7 +55,6 @@ export function buildNetworkContext(address: string | undefined): NetworkContext
 
     return {
       remoteAddress,
-      lanKey: `public:${remoteAddress}`,
       lanMode: 'public-ip',
     };
   }

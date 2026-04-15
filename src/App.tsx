@@ -87,6 +87,7 @@ function App() {
     createTransferItems,
     retryTransfer,
     cancelTransfer,
+    downloadHistoryFile,
     startPendingTransfers,
     sendText,
     stateToUiStatus,
@@ -497,8 +498,12 @@ function App() {
       statusLabel: '可回放',
       tone: 'completed' as const,
       progress: 1,
-      downloadUrl: file.downloadPath,
       downloadName: file.fileName,
+      onDownload: () => {
+        void downloadHistoryFile(file).catch((error) => {
+          setLocalError(error instanceof Error ? error.message : '历史文件下载失败。')
+        })
+      },
     })),
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
 

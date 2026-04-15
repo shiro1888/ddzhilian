@@ -161,7 +161,7 @@ Typical production setup:
 3. Rewrite non-file frontend requests to `dist/index.html`
 4. Expose `/ws` to the signaling backend, or set `VITE_SIGNALING_WS_URL` and `VITE_SIGNALING_HTTP_URL`
 
-Current production frontend is served from `https://cc.changr888.com`.
+Current production frontend is served from `https://ddzhilian.com`.
 
 ### Backend
 
