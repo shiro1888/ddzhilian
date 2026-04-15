@@ -1,23 +1,19 @@
-import { navItems, themeOptions } from '../config'
-import type { NavView, ThemeId } from '../types'
+import { navItems } from '../config'
+import type { NavView } from '../types'
 
 type AppSidebarProps = {
   isMobileNavOpen: boolean
-  theme: ThemeId
   effectiveNavView: NavView
   visibleNavItems: typeof navItems
   onToggleMobileNav: () => void
-  onThemeChange: (theme: ThemeId) => void
   onViewChange: (view: NavView) => void
 }
 
 export function AppSidebar({
   isMobileNavOpen,
-  theme,
   effectiveNavView,
   visibleNavItems,
   onToggleMobileNav,
-  onThemeChange,
   onViewChange,
 }: AppSidebarProps) {
   return (
@@ -40,25 +36,6 @@ export function AppSidebar({
       </div>
 
       <div className="pp-sidebar__menu" id="pp-primary-nav">
-        <div className="pp-theme-switch" role="group" aria-label="主题切换">
-          {themeOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={theme === option.id ? 'is-active' : ''}
-              aria-pressed={theme === option.id}
-              title={option.label}
-              onClick={() => onThemeChange(option.id)}
-            >
-              <span className={`pp-theme-switch__swatch is-${option.id}`} aria-hidden="true" />
-              <span className="pp-theme-switch__copy">
-                <strong>{option.label}</strong>
-                <small>{option.description}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-
         <div className="pp-sidebar__actions">
           <button type="button" onClick={() => onViewChange('connect')}>
             新会话

@@ -4,7 +4,6 @@ import type { PeerSummary } from '../lib/ccconnect-types'
 export type TransferMode = 'file' | 'text'
 export type SessionStatus = 'waiting' | 'active' | 'completed'
 export type NavView = 'connect' | 'send' | 'receive' | 'text' | 'sessions'
-export type ThemeId = 'classic' | 'chat-desktop'
 export type TextMode = 'long' | 'chat'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
 export type DeviceBarStatus = 'connected' | 'connectable' | 'connecting' | 'failed'
@@ -74,12 +73,6 @@ export type UnifiedConversationEntry =
       createdAt: string
       file: FileConversationEntry
     }
-
-export type ThemeOption = {
-  id: ThemeId
-  label: string
-  description: string
-}
 
 export type NavItem = {
   id: NavView

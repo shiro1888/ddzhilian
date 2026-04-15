@@ -1,10 +1,4 @@
-import { THEME_STORAGE_KEY } from './config'
-import type {
-  DeviceBarStatus,
-  FileConversationEntry,
-  PeerConnectionStatus,
-  ThemeId,
-} from './types'
+import type { DeviceBarStatus, FileConversationEntry, PeerConnectionStatus } from './types'
 
 export function transferStatusLabel(
   status:
@@ -257,13 +251,4 @@ export async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<F
 
   const batches = await Promise.all(entries.map((entry) => readEntryFiles(entry)))
   return batches.flat()
-}
-
-export function resolveInitialTheme(): ThemeId {
-  if (typeof window === 'undefined') {
-    return 'classic'
-  }
-
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-  return storedTheme === 'chat-desktop' || storedTheme === 'classic' ? storedTheme : 'classic'
 }

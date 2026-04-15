@@ -2,7 +2,7 @@ import { startTransition, useDeferredValue, useEffect, useId, useRef, useState }
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
-import { navItems, quickPanels, viewMeta } from './app/config'
+import { navItems, viewMeta } from './app/config'
 import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'
 import { ChatConversationStage } from './app/components/ChatConversationStage'
@@ -18,7 +18,6 @@ import type {
   DeviceBarItem,
   NavView,
   SessionArtifact,
-  ThemeId,
   UiSession,
   UnifiedConversationEntry,
 } from './app/types'
@@ -29,7 +28,6 @@ import {
   deviceConnectionLabel,
   formatFileSize,
   formatRelativeTime,
-  resolveInitialTheme,
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
@@ -39,7 +37,6 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const fileInputId = useId()
-  const [theme, setTheme] = useState<ThemeId>(resolveInitialTheme)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [joinCode, setJoinCode] = useState('')
@@ -56,12 +53,10 @@ function App() {
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const deferredQuery = useDeferredValue(sessionQuery)
   const activeView = resolveViewFromPathname(location.pathname)
-  const isChatDesktopTheme = theme === 'chat-desktop'
-  const visibleNavItems = isChatDesktopTheme
-    ? navItems.filter((item) => item.id !== 'send' && item.id !== 'receive')
-    : navItems
+  const isChatDesktopTheme = true
+  const visibleNavItems = navItems.filter((item) => item.id !== 'send' && item.id !== 'receive')
   const effectiveNavView: NavView =
-    isChatDesktopTheme && (activeView === 'send' || activeView === 'receive') ? 'text' : activeView
+    activeView === 'send' || activeView === 'receive' ? 'text' : activeView
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const hasConnectionSnapshotRef = useRef(false)
 
@@ -239,8 +234,6 @@ function App() {
 
   const receivedCompletedFiles = receivedFiles.filter((file) => file.completed)
   const receivedPendingFiles = receivedFiles.filter((file) => !file.completed)
-  const onlineCount = onlinePeers.length
-  const activeCount = sessions.filter((session) => session.state === 'connected').length
   const selfName = self?.deviceName ?? '当前设备'
   const isChatConversationView =
     isChatDesktopTheme && (activeView === 'send' || activeView === 'receive' || activeView === 'text')
@@ -567,18 +560,10 @@ function App() {
   }, [connectionStates])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('ccconnect-theme', theme)
-    } catch {
-      // Ignore storage failures so the UI can still render normally.
-    }
-  }, [theme])
-
-  useEffect(() => {
-    if (isChatDesktopTheme && (activeView === 'send' || activeView === 'receive')) {
+    if (activeView === 'send' || activeView === 'receive') {
       navigate(pathForView('text'), { replace: true })
     }
-  }, [activeView, isChatDesktopTheme, navigate])
+  }, [activeView, navigate])
 
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
@@ -882,29 +867,21 @@ function App() {
   )
 
   return (
-    <div className="pp-shell" data-theme={theme}>
+    <div className="pp-shell" data-theme="chat-desktop">
       <AppSidebar
         isMobileNavOpen={isMobileNavOpen}
-        theme={theme}
         effectiveNavView={effectiveNavView}
         visibleNavItems={visibleNavItems}
         onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
-        onThemeChange={setTheme}
         onViewChange={handleViewChange}
       />
 
       <main className={`pp-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}`}>
         <AppHeader
-          isChatDesktopTheme={isChatDesktopTheme}
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
           localError={localError}
           errorMessage={errorMessage}
-          onlineCount={onlineCount}
-          activeCount={activeCount}
-          socketState={socketState}
-          onRequestSnapshot={requestSnapshot}
-          onViewChange={handleViewChange}
         />
 
         <section className="pp-stage">
@@ -965,32 +942,14 @@ function App() {
         </section>
 
         <ContentGrid
-          isChatDesktopTheme={isChatDesktopTheme}
           sessionQuery={sessionQuery}
-          selfName={selfName}
           deviceBarItems={deviceBarItems}
-          filteredSessions={filteredSessions}
-          selectedUiSession={selectedUiSession}
           effectiveSelectedPeerId={effectiveSelectedPeerId}
-          onlinePeers={onlinePeers}
-          peerStatusById={peerStatusById}
           onSessionQueryChange={setSessionQuery}
           onShowConnect={() => handleViewChange('connect')}
           onOpenDeviceConversation={handleOpenDeviceConversation}
           onDeviceAction={handleDeviceAction}
-          onSelectSession={setSelectedSessionId}
         />
-
-        {!isChatDesktopTheme && (
-          <section className="pp-utility-row pp-utility-row--footer">
-            {quickPanels.map((panel) => (
-              <article key={panel.title}>
-                <strong>{panel.title}</strong>
-                <p>{panel.body}</p>
-              </article>
-            ))}
-          </section>
-        )}
       </main>
     </div>
   )

@@ -1,6 +1,4 @@
-import type { NavItem, NavView, QuickPanel, StageMeta, ThemeOption } from './types'
-
-export const THEME_STORAGE_KEY = 'ccconnect-theme'
+import type { NavItem, NavView, QuickPanel, StageMeta } from './types'
 
 export const navItems: NavItem[] = [
   {
@@ -66,11 +64,6 @@ export const navItems: NavItem[] = [
       </>
     ),
   },
-]
-
-export const themeOptions: ThemeOption[] = [
-  { id: 'classic', label: '经典暖砂', description: '暖色、杂志感、强调卡片层次。' },
-  { id: 'chat-desktop', label: '聊天桌面', description: '灰绿桌面聊天风，强调消息工作区。' },
 ]
 
 export const viewMeta: Record<NavView, StageMeta> = {

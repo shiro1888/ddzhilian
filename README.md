@@ -9,7 +9,7 @@ CCConnect is a desktop-style cross-device transfer app for quickly sending files
 - Send files through transfer sessions with progress states
 - Exchange long text or chat-style messages between devices
 - View active and historical sessions in a chat-inspired desktop UI
-- Support a WeChat-for-desktop style visual theme alongside the earlier classic theme
+- Use a single chat-desktop workspace tuned for device-to-device messaging and transfer
 
 ## Repository Layout
 
@@ -37,9 +37,11 @@ CCConnect is a desktop-style cross-device transfer app for quickly sending files
 - Receive queue and completed transfer history
 - Long text and chat conversation views
 - Session search and session detail panels
-- Theme switcher with `classic` and `chat-desktop`
+- Single chat-desktop interface with routed workspace views
 - Browser-based route navigation for `connect`, `send`, `receive`, `text`, and `sessions`
 - Component-split app shell with isolated stage views and content panels
+- Floating emoji picker with direct insertion into the chat composer
+- Google Fonts based UI typography
 
 ## Backend Responsibilities
 
@@ -81,7 +83,7 @@ This starts the Vite frontend, typically on `http://localhost:5173`.
 
 ### Frontend Routes
 
-The frontend now uses `react-router-dom` with browser history:
+The frontend uses `react-router-dom` with browser history:
 
 - `/connect`
 - `/send`
@@ -89,7 +91,7 @@ The frontend now uses `react-router-dom` with browser history:
 - `/text`
 - `/sessions`
 
-When the `chat-desktop` theme is active, file send and receive flows are folded into the conversation workspace and will redirect to `/text`.
+The app now ships with only the chat-desktop experience. File send and receive flows are folded into the conversation workspace and redirect to `/text`.
 
 ### Run The Backend
 
@@ -154,6 +156,8 @@ Typical production setup:
 2. Serve the generated `dist/` directory
 3. Rewrite non-file frontend requests to `dist/index.html`
 4. Expose `/ws` to the signaling backend, or set `VITE_SIGNALING_WS_URL` and `VITE_SIGNALING_HTTP_URL`
+
+Current production frontend is served from `https://cc.changr888.com`.
 
 ### Backend
 

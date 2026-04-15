@@ -1,6 +1,14 @@
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import type { UnifiedConversationEntry } from '../types'
 import { formatChatDivider, formatFileSize, shouldInsertDivider } from '../utils'
+
+const quickEmojis = [
+  '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
+  '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
+  '👍', '👎', '🙏', '💪', '👋', '🤝', '🎉', '🎊', '✨', '🔥', '⭐', '🌈',
+  '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
+]
 
 type ChatConversationStageProps = {
   isDragging: boolean
@@ -39,6 +47,67 @@ export function ChatConversationStage({
   onDragLeave,
   onDrop,
 }: ChatConversationStageProps) {
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null)
+  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!isEmojiPickerOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (emojiPickerRef.current?.contains(target) || emojiTriggerRef.current?.contains(target)) {
+        return
+      }
+
+      setIsEmojiPickerOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsEmojiPickerOpen(false)
+        textareaRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isEmojiPickerOpen])
+
+  const handleEmojiInsert = (emoji: string) => {
+    const textarea = textareaRef.current
+    if (!textarea) {
+      onChatDraftChange(`${chatDraft}${emoji}`)
+      setIsEmojiPickerOpen(false)
+      return
+    }
+
+    const selectionStart = textarea.selectionStart ?? chatDraft.length
+    const selectionEnd = textarea.selectionEnd ?? chatDraft.length
+    const nextValue = `${chatDraft.slice(0, selectionStart)}${emoji}${chatDraft.slice(selectionEnd)}`
+    const nextCursorPosition = selectionStart + emoji.length
+
+    onChatDraftChange(nextValue)
+    setIsEmojiPickerOpen(false)
+
+    queueMicrotask(() => {
+      textarea.focus()
+      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition)
+    })
+  }
+
   return (
     <section className="pp-view pp-view--single pp-view--files">
       <div
@@ -143,6 +212,7 @@ export function ChatConversationStage({
         <div className="pp-chatbox__composer">
           <div className="pp-chatbox__textarea-wrap">
             <textarea
+              ref={textareaRef}
               className="pp-chatbox__textarea"
               placeholder="输入消息，Ctrl/Cmd + Enter 发送。"
               value={chatDraft}
@@ -158,17 +228,16 @@ export function ChatConversationStage({
 
           <div className="pp-chatbox__composer-footer">
             <div className="pp-chatbox__toolbar pp-chatbox__toolbar--files">
-              <button type="button" aria-label="表情">
-                ☺
-              </button>
-              <button type="button" aria-label="文件夹">
-                ▣
-              </button>
-              <button type="button" aria-label="剪贴板">
-                ✂
-              </button>
-              <button type="button" aria-label="语音">
-                ◉
+              <button
+                ref={emojiTriggerRef}
+                type="button"
+                aria-label="表情"
+                aria-expanded={isEmojiPickerOpen}
+                aria-haspopup="dialog"
+                className={`pp-chatbox__emoji-trigger${isEmojiPickerOpen ? ' is-open' : ''}`}
+                onClick={() => setIsEmojiPickerOpen((previous) => !previous)}
+              >
+                🙂
               </button>
             </div>
 
@@ -187,6 +256,32 @@ export function ChatConversationStage({
               </button>
             </div>
           </div>
+
+          {isEmojiPickerOpen && (
+            <div
+              ref={emojiPickerRef}
+              className="pp-emoji-picker"
+              role="dialog"
+              aria-label="Emoji 选择器"
+            >
+              <div className="pp-emoji-picker__header">
+                <strong>表情</strong>
+                <span>点击即可插入到输入框</span>
+              </div>
+              <div className="pp-emoji-picker__grid">
+                {quickEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="pp-emoji-picker__item"
+                    onClick={() => handleEmojiInsert(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="pp-chatbox__toolbar pp-chatbox__toolbar--meta">
             <span className="pp-chatbox__meta-note">文件、消息、接收进度都在同一条对话里</span>

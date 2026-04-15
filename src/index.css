@@ -1,113 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
 
 :root {
-  --font-editorial: 'Cormorant Garamond', Georgia, serif;
-  --font-sans-warm: 'Manrope', 'Segoe UI', sans-serif;
-  --font-ui: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Noto Sans SC', 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
-  --font-body: var(--font-sans-warm);
-  --font-display: var(--font-editorial);
-  --base-font-size: 17px;
-  --line-height-body: 1.6;
-
-  --paper: #f5f4ed;
-  --paper-bright: #faf9f5;
-  --sand: #e8e6dc;
-  --ink: #141413;
-  --ink-soft: #4d4c48;
-  --muted: #87867f;
-  --brand: #c96442;
-  --brand-strong: #d97757;
-  --focus: #3898ec;
-  --success: #506c50;
-  --success-soft: rgba(88, 122, 88, 0.14);
-  --danger: #b53333;
-  --danger-soft: rgba(181, 51, 51, 0.12);
-  --warning: #fa9d3b;
-  --link: #576b95;
-
-  --shell-bg: var(--paper);
-  --sidebar-bg: linear-gradient(180deg, #ece7db 0%, #e4ddd0 100%);
-  --sidebar-border: rgba(196, 184, 163, 0.72);
-  --sidebar-border-soft: rgba(196, 184, 163, 0.56);
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-strong: rgba(255, 255, 255, 0.92);
-  --surface-elevated: rgba(255, 255, 255, 0.96);
-  --surface-soft: rgba(255, 255, 255, 0.62);
-  --panel-bg: rgba(255, 255, 255, 0.7);
-  --panel-muted: rgba(238, 232, 221, 0.72);
-  --panel-muted-soft: rgba(238, 232, 221, 0.56);
-  --stage-bg: rgba(255, 255, 255, 0.68);
-  --stage-backdrop:
-    radial-gradient(circle at center, rgba(201, 100, 66, 0.06), transparent 42%),
-    radial-gradient(circle at center, rgba(186, 170, 137, 0.18), transparent 64%);
-  --line: rgba(224, 219, 203, 0.9);
-  --line-soft: rgba(224, 219, 203, 0.86);
-  --line-strong: rgba(224, 219, 203, 0.84);
-  --row-hover: rgba(201, 100, 66, 0.06);
-  --row-active: rgba(201, 100, 66, 0.08);
-  --row-active-strong: rgba(201, 100, 66, 0.14);
-  --row-tint: rgba(224, 219, 203, 0.8);
-  --input-border: rgba(208, 214, 223, 0.9);
-  --input-border-soft: rgba(216, 210, 198, 0.92);
-  --input-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 244, 238, 0.96));
-  --button-primary-bg: var(--brand);
-  --button-secondary-bg: #4d4c48;
-  --button-neutral-bg: #1b1b1b;
-  --button-contrast: #ffffff;
-  --badge-neutral-bg: rgba(77, 76, 72, 0.08);
-  --badge-neutral-text: #4d4c48;
-  --badge-pending-bg: rgba(201, 100, 66, 0.1);
-  --badge-pending-text: var(--brand);
-  --bubble-self: #9ef0a0;
-  --bubble-self-text: #182814;
-  --bubble-peer: #ffffff;
-  --bubble-peer-text: var(--ink);
-
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 22px;
-  --radius-2xl: 30px;
-  --shadow-soft: 0 8px 18px rgba(44, 39, 30, 0.03);
-  --shadow-panel: 0 0 0 1px var(--line);
-  --shadow-stage:
-    0 0 0 1px var(--line),
-    0 24px 50px rgba(44, 39, 30, 0.05);
-  --shadow-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    0 10px 24px rgba(44, 39, 30, 0.04);
-  --shadow-avatar: 0 8px 18px rgba(24, 24, 24, 0.12);
-
-  --sidebar-width: 264px;
-  --stage-side-width: 260px;
-  --detail-column-width: 320px;
-  --chat-list-width: 320px;
-  --hero-title-size: clamp(3rem, 5vw, 4.3rem);
-  --section-title-size: 2rem;
-  --panel-title-size: 2rem;
-  --eyebrow-size: 0.82rem;
-  --body-large-size: 1.08rem;
-  --body-standard-size: 1rem;
-  --body-small-size: 0.94rem;
-
-  color: var(--ink-soft);
-  background: var(--shell-bg);
-  font-family: var(--font-body);
-  font-size: var(--base-font-size);
-  line-height: var(--line-height-body);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.pp-shell[data-theme='chat-desktop'] {
   --font-body: var(--font-ui);
-  --font-display: var(--font-ui);
+  --font-display: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
   --base-font-size: 15px;
   --line-height-body: 1.5;
+
+  --ink: #111111;
+  --ink-soft: #666666;
+  --muted: #999999;
+  --brand: #07c160;
+  --brand-strong: #06ad56;
+  --focus: rgba(7, 193, 96, 0.3);
+  --success: #07c160;
+  --success-soft: rgba(7, 193, 96, 0.12);
+  --danger: #fa5151;
+  --danger-soft: rgba(250, 81, 81, 0.12);
+  --warning: #fa9d3b;
+  --link: #576b95;
 
   --shell-bg: #f5f5f5;
   --sidebar-bg: #ededed;
@@ -132,12 +44,6 @@
   --input-border: #cfcfcf;
   --input-border-soft: #d9d9d9;
   --input-bg: #ffffff;
-  --ink: #111111;
-  --ink-soft: #666666;
-  --muted: #999999;
-  --brand: #07c160;
-  --brand-strong: #06ad56;
-  --focus: rgba(7, 193, 96, 0.3);
   --button-primary-bg: #07c160;
   --button-secondary-bg: #ededed;
   --button-neutral-bg: #f0f0f0;
@@ -146,16 +52,12 @@
   --badge-neutral-text: #666666;
   --badge-pending-bg: rgba(7, 193, 96, 0.12);
   --badge-pending-text: #07c160;
-  --success: #07c160;
-  --success-soft: rgba(7, 193, 96, 0.12);
-  --danger: #fa5151;
-  --danger-soft: rgba(250, 81, 81, 0.12);
-  --warning: #fa9d3b;
   --bubble-self: #95ec69;
   --bubble-self-text: #111111;
   --bubble-peer: #ffffff;
   --bubble-peer-text: #111111;
 
+  --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -168,9 +70,9 @@
   --shadow-avatar: none;
 
   --sidebar-width: 72px;
-  --stage-side-width: 240px;
+  --stage-side-width: 260px;
   --detail-column-width: 280px;
-  --chat-list-width: 280px;
+  --chat-list-width: 320px;
   --hero-title-size: 1.05rem;
   --section-title-size: 0.95rem;
   --panel-title-size: 0.95rem;
@@ -178,6 +80,16 @@
   --body-large-size: 0.96rem;
   --body-standard-size: 0.94rem;
   --body-small-size: 0.82rem;
+
+  color: var(--ink-soft);
+  background: var(--shell-bg);
+  font-family: var(--font-body);
+  font-size: var(--base-font-size);
+  line-height: var(--line-height-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 html {
@@ -198,14 +110,7 @@ body {
 }
 
 body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(201, 100, 66, 0.08), transparent 20%),
-    radial-gradient(circle at 84% 10%, rgba(232, 230, 220, 0.65), transparent 18%);
-  z-index: -1;
+  content: none;
 }
 
 a,
