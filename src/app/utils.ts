@@ -193,6 +193,223 @@ export function deviceConnectionLabel(status?: PeerConnectionStatus) {
   }
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function normalizePlainRichText(value: string) {
+  return escapeHtml(value).replace(/\r?\n/g, '<br />')
+}
+
+function isSafeUrl(value: string, kind: 'href' | 'src') {
+  const normalizedValue = value.trim()
+
+  if (!normalizedValue) {
+    return false
+  }
+
+  if (kind === 'src' && normalizedValue.startsWith('data:image/')) {
+    return true
+  }
+
+  return /^(https?:|mailto:|tel:)/i.test(normalizedValue)
+}
+
+function sanitizeStyleAttribute(style: CSSStyleDeclaration) {
+  const declarations: string[] = []
+  const allowedProperties = ['color', 'font-family', 'font-size', 'text-align', 'text-indent', 'margin-left']
+
+  for (const property of allowedProperties) {
+    const value = style.getPropertyValue(property).trim()
+    if (value) {
+      declarations.push(`${property}: ${value}`)
+    }
+  }
+
+  return declarations.join('; ')
+}
+
+export function extractPlainTextFromRichText(value: string) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const text = documentFragment.body.textContent ?? ''
+  return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+export function sanitizeRichTextHtml(value: string) {
+  if (!value) {
+    return ''
+  }
+
+  if (!/[<>]/.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return normalizePlainRichText(value)
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  if (!root) {
+    return normalizePlainRichText(value)
+  }
+
+  const allowedTags = new Set([
+    'a',
+    'audio',
+    'b',
+    'blockquote',
+    'br',
+    'code',
+    'div',
+    'em',
+    'font',
+    'h1',
+    'h2',
+    'h3',
+    'i',
+    'img',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'span',
+    'strong',
+    'table',
+    'tbody',
+    'td',
+    'th',
+    'thead',
+    'tr',
+    'u',
+    'ul',
+  ])
+
+  const sanitizeNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return escapeHtml(node.textContent ?? '')
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return ''
+    }
+
+    const tagName = node.tagName.toLowerCase()
+    const childrenHtml = Array.from(node.childNodes).map((childNode) => sanitizeNode(childNode)).join('')
+
+    if (!allowedTags.has(tagName)) {
+      return childrenHtml
+    }
+
+    const attributes: string[] = []
+    const styleDeclarations: string[] = []
+    const sanitizedStyle = sanitizeStyleAttribute(node.style)
+    if (sanitizedStyle) {
+      styleDeclarations.push(sanitizedStyle)
+    }
+
+    const align = node.getAttribute('align')?.trim()
+    if (align && ['left', 'center', 'right', 'justify'].includes(align.toLowerCase())) {
+      styleDeclarations.push(`text-align: ${align.toLowerCase()}`)
+    }
+
+    if (tagName === 'a') {
+      const href = node.getAttribute('href')?.trim() ?? ''
+      if (isSafeUrl(href, 'href')) {
+        attributes.push(`href="${escapeHtml(href)}"`)
+        attributes.push('target="_blank"')
+        attributes.push('rel="noreferrer noopener"')
+      }
+    }
+
+    if (tagName === 'img') {
+      const src = node.getAttribute('src')?.trim() ?? ''
+      if (!isSafeUrl(src, 'src')) {
+        return ''
+      }
+
+      attributes.push(`src="${escapeHtml(src)}"`)
+      const alt = node.getAttribute('alt')?.trim() ?? ''
+      if (alt) {
+        attributes.push(`alt="${escapeHtml(alt)}"`)
+      }
+    }
+
+    if (tagName === 'audio') {
+      const src = node.getAttribute('src')?.trim() ?? ''
+      if (!isSafeUrl(src, 'src')) {
+        return ''
+      }
+
+      attributes.push(`src="${escapeHtml(src)}"`)
+      attributes.push('controls')
+    }
+
+    if (tagName === 'font') {
+      const color = node.getAttribute('color')?.trim()
+      if (color) {
+        styleDeclarations.push(`color: ${color}`)
+      }
+
+      const face = node.getAttribute('face')?.trim()
+      if (face) {
+        styleDeclarations.push(`font-family: ${face}`)
+      }
+
+      const size = node.getAttribute('size')?.trim()
+      const sizeMap: Record<string, string> = {
+        '1': '12px',
+        '2': '13px',
+        '3': '14px',
+        '4': '16px',
+        '5': '18px',
+        '6': '24px',
+        '7': '32px',
+      }
+      if (size && sizeMap[size]) {
+        styleDeclarations.push(`font-size: ${sizeMap[size]}`)
+      }
+    }
+
+    if (tagName === 'td' || tagName === 'th') {
+      const colspan = node.getAttribute('colspan')?.trim()
+      if (colspan && /^\d+$/.test(colspan)) {
+        attributes.push(`colspan="${colspan}"`)
+      }
+
+      const rowspan = node.getAttribute('rowspan')?.trim()
+      if (rowspan && /^\d+$/.test(rowspan)) {
+        attributes.push(`rowspan="${rowspan}"`)
+      }
+    }
+
+    if (tagName === 'br') {
+      return '<br />'
+    }
+
+    if (styleDeclarations.length > 0) {
+      const mergedStyle = Array.from(new Set(styleDeclarations)).join('; ')
+      attributes.push(`style="${escapeHtml(mergedStyle)}"`)
+    }
+
+    const attributeString = attributes.length > 0 ? ` ${attributes.join(' ')}` : ''
+    return `<${tagName}${attributeString}>${childrenHtml}</${tagName}>`
+  }
+
+  return Array.from(root.childNodes).map((node) => sanitizeNode(node)).join('')
+}
+
 type DataTransferItemWithEntry = DataTransferItem & {
   webkitGetAsEntry?: () => FileSystemEntry | null
 }

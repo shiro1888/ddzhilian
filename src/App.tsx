@@ -26,6 +26,7 @@ import {
   collectDroppedFiles,
   deviceBarStatus,
   deviceConnectionLabel,
+  extractPlainTextFromRichText,
   formatFileSize,
   formatRelativeTime,
   transferStatusLabel,
@@ -127,12 +128,13 @@ function App() {
     const text = latestTextBySession.get(session.sessionId)
     const artifact = sessionArtifacts[session.sessionId]
     const kind = artifact?.kind ?? session.kind ?? (text ? 'text' : 'file')
+    const textPreview = text ? extractPlainTextFromRichText(text.text) : ''
     const summary =
       artifact?.summary ??
       (file
         ? `${file.name} · ${formatFileSize(file.size)}`
         : text
-          ? `${text.text.split(/\r?\n/).length} 行文本 · ${text.text.slice(0, 18)}`
+          ? `${Math.max(1, textPreview.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${textPreview.slice(0, 18)}`
           : `${session.peer?.deviceName ?? session.peerId} · ${session.state === 'connected' ? '可传输' : '等待连接'}`)
 
     return {
@@ -631,7 +633,7 @@ function App() {
 
   const handleSendText = async () => {
     const rawText = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
-    const normalizedText = rawText.trim()
+    const normalizedText = extractPlainTextFromRichText(rawText).trim()
     if (normalizedText.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
@@ -668,7 +670,7 @@ function App() {
         for (const target of targets) {
           next[target.session.sessionId] = {
             kind: 'text',
-            summary: `${rawText.split(/\r?\n/).length} 行文本 · ${normalizedText.slice(0, 18)}`,
+            summary: `${Math.max(1, normalizedText.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${normalizedText.slice(0, 18)}`,
           }
         }
         return next
