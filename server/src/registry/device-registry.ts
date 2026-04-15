@@ -4,8 +4,11 @@ import {
   type DeviceHelloPayload,
   type DeviceSettingsPayload,
   type DirectorySnapshotPayload,
+  type HistoryFileSummary,
+  type HistoryTextSummary,
   type NativeLanCapabilityPayload,
   type PeerSummary,
+  type RoomSummary,
   type SessionSummary,
   type TransportMode,
 } from '../protocol.js';
@@ -13,6 +16,8 @@ import { createDeviceId, createPairToken, createShortCode } from '../utils/id.js
 import {
   type NetworkContext,
 } from '../utils/network.js';
+import { type HistoryRegistry } from './history-registry.js';
+import { type RoomRegistry } from './room-registry.js';
 import { type SessionRegistry } from './session-registry.js';
 
 export interface ConnectedDevice {
@@ -71,6 +76,19 @@ function getPreferredTransport(
   )
     ? 'lan-webrtc'
     : 'remote-webrtc';
+}
+
+function derivePublicHttpBaseUrl(publicWsUrl: string) {
+  try {
+    const url = new URL(publicWsUrl);
+    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+    url.pathname = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return undefined;
+  }
 }
 
 export class DeviceRegistry {
@@ -209,6 +227,8 @@ export class DeviceRegistry {
   buildSnapshot(
     viewerId: string,
     sessionRegistry: SessionRegistry,
+    roomRegistry: RoomRegistry,
+    historyRegistry: HistoryRegistry,
     rtcConfig: DirectorySnapshotPayload['rtcConfig'],
     publicWsUrl: string,
   ): DirectorySnapshotPayload | undefined {
@@ -218,10 +238,35 @@ export class DeviceRegistry {
       return undefined;
     }
 
-    const peers = this.listVisiblePeersFor(viewerId);
+    const peers = this.listVisiblePeersFor(viewerId, roomRegistry);
+    const publicHttpBaseUrl = derivePublicHttpBaseUrl(publicWsUrl);
+    const rooms = roomRegistry.listForDevice(viewerId).map<RoomSummary>((room) => ({
+      roomId: room.roomId,
+      members: room.memberIds
+        .map((memberId) => this.byId.get(memberId))
+        .filter((member): member is ConnectedDevice => Boolean(member))
+        .map((member) => ({
+          deviceId: member.deviceId,
+          deviceName: member.deviceName,
+          platform: member.platform,
+          online: true,
+        })),
+      updatedAt: room.updatedAt,
+    }));
+    const historyFiles = roomRegistry
+      .listForDevice(viewerId)
+      .flatMap((room) => historyRegistry.listForRoom(room.roomId))
+      .map<HistoryFileSummary>((record) =>
+        historyRegistry.toSummary(record, publicHttpBaseUrl),
+      );
+    const historyTexts = roomRegistry
+      .listForDevice(viewerId)
+      .flatMap((room) => historyRegistry.listTextsForRoom(room.roomId))
+      .map<HistoryTextSummary>((record) => historyRegistry.toTextSummary(record));
     const sessions = sessionRegistry.listForDevice(viewerId).map<SessionSummary>(
       (session) => ({
         sessionId: session.sessionId,
+        roomId: session.roomId,
         peerId:
           session.initiatorId === viewerId
             ? session.responderId
@@ -250,6 +295,9 @@ export class DeviceRegistry {
       peers,
       lanPeers: peers.filter((peer) => peer.relation.sameLan),
       accountPeers: peers.filter((peer) => peer.relation.sameAccount),
+      rooms,
+      historyFiles,
+      historyTexts,
       sessions,
       rtcConfig,
       publicWsUrl,
@@ -315,7 +363,7 @@ export class DeviceRegistry {
     };
   }
 
-  private listVisiblePeersFor(viewerId: string) {
+  private listVisiblePeersFor(viewerId: string, roomRegistry: RoomRegistry) {
     const viewer = this.byId.get(viewerId);
 
     if (!viewer) {
@@ -327,7 +375,8 @@ export class DeviceRegistry {
       .filter(
         (candidate) =>
           candidate.discoverable ||
-          (!!viewer.accountId && viewer.accountId === candidate.accountId),
+          (!!viewer.accountId && viewer.accountId === candidate.accountId) ||
+          roomRegistry.shareRoom(viewerId, candidate.deviceId),
       )
       .map((candidate) => this.toPeerSummary(viewer, candidate))
       .sort((left, right) => left.deviceName.localeCompare(right.deviceName));

@@ -31,6 +31,10 @@ export function createSessionId() {
   return `sess_${createToken(18, TOKEN_ALPHABET)}`;
 }
 
+export function createRoomId() {
+  return `room_${createToken(18, TOKEN_ALPHABET)}`;
+}
+
 export function createLanSessionId() {
   return `lan_${createToken(20, TOKEN_ALPHABET)}`;
 }

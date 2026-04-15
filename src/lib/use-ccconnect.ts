@@ -5,10 +5,13 @@ import type {
   ConnectedTarget,
   DeviceSettingsPayload,
   DirectorySnapshotPayload,
+  HistoryFileSummary,
+  HistoryTextSummary,
   LiveSession,
   PeerConnectionState,
   PeerSummary,
   ReceivedFile,
+  RoomSummary,
   ServerEvent,
   SessionState,
   TextRecord,
@@ -39,6 +42,23 @@ function resolveWsUrl() {
 
 const WS_URL = resolveWsUrl()
 
+function resolveApiBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_SIGNALING_HTTP_URL?.trim()
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '')
+  }
+
+  const url = new URL(WS_URL, window.location.href)
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  url.pathname = ''
+  url.search = ''
+  url.hash = ''
+
+  return url.toString().replace(/\/$/, '')
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
+
 type StoredIdentity = {
   deviceId?: string
   deviceName: string
@@ -51,6 +71,7 @@ type StoredIdentity = {
 
 type IncomingTransferDraft = {
   id: string
+  historyId?: string
   sessionId: string
   fromDeviceId: string
   name: string
@@ -245,6 +266,9 @@ export function useCcconnect() {
   const [socketState, setSocketState] = useState<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle')
   const [self, setSelf] = useState<DirectorySnapshotPayload['self'] | null>(null)
   const [onlinePeers, setOnlinePeers] = useState<PeerSummary[]>([])
+  const [roomsById, setRoomsById] = useState<Record<string, RoomSummary>>({})
+  const [historyFiles, setHistoryFiles] = useState<HistoryFileSummary[]>([])
+  const [historyTexts, setHistoryTexts] = useState<HistoryTextSummary[]>([])
   const [sessionsById, setSessionsById] = useState<Record<string, LiveSession>>({})
   const [connectionStatesById, setConnectionStatesById] = useState<Record<string, PeerConnectionState>>({})
   const [textRecords, setTextRecords] = useState<TextRecord[]>([])
@@ -255,6 +279,7 @@ export function useCcconnect() {
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
   const identityRef = useRef<StoredIdentity>(readStoredIdentity())
+  const selfRef = useRef<DirectorySnapshotPayload['self'] | null>(null)
   const rtcConfigRef = useRef<RTCConfiguration | null>(null)
   const peerConnectionsRef = useRef(new Map<string, RTCPeerConnection>())
   const dataChannelsRef = useRef(new Map<string, RTCDataChannel>())
@@ -275,6 +300,14 @@ export function useCcconnect() {
     >(),
   )
   const objectUrlsRef = useRef<string[]>([])
+  const archivedHistoryIdsRef = useRef(new Set<string>())
+  const archivingHistoryIdsRef = useRef(new Set<string>())
+  const archivedTextHistoryIdsRef = useRef(new Set<string>())
+  const archivingTextHistoryIdsRef = useRef(new Set<string>())
+
+  useEffect(() => {
+    selfRef.current = self
+  }, [self])
 
   useEffect(() => {
     sessionsRef.current = sessionsById
@@ -395,6 +428,11 @@ export function useCcconnect() {
     startTransition(() => {
       setSelf(snapshot.self)
       setOnlinePeers(normalizePeerLists(snapshot))
+      setRoomsById(
+        Object.fromEntries(snapshot.rooms.map((room) => [room.roomId, room] as const)),
+      )
+      setHistoryFiles(snapshot.historyFiles)
+      setHistoryTexts(snapshot.historyTexts)
       setSessionsById((previous) => {
         const next: Record<string, LiveSession> = {}
 
@@ -419,6 +457,13 @@ export function useCcconnect() {
         return next
       })
     })
+
+    archivedHistoryIdsRef.current = new Set(
+      snapshot.historyFiles.map((file) => file.historyId),
+    )
+    archivedTextHistoryIdsRef.current = new Set(
+      snapshot.historyTexts.map((text) => text.historyId),
+    )
   }
 
   const handleChannelMessage = (sessionId: string, fromDeviceId: string, raw: string) => {
@@ -451,6 +496,7 @@ export function useCcconnect() {
       mergeSession(sessionId, { kind: 'file' })
       incomingTransfersRef.current.set(message.id, {
         id: message.id,
+        historyId: message.historyId,
         sessionId,
         fromDeviceId,
         name: message.name,
@@ -467,6 +513,7 @@ export function useCcconnect() {
           ...previous.filter((file) => file.id !== message.id),
           {
             id: message.id,
+            historyId: message.historyId,
             sessionId,
             fromDeviceId,
             name: message.name,
@@ -530,6 +577,7 @@ export function useCcconnect() {
                   completed: true,
                   receivedBytes: file.size,
                   objectUrl,
+                  historyId: draft.historyId,
                 }
               : file,
           ),
@@ -854,6 +902,7 @@ export function useCcconnect() {
           [event.payload.sessionId]: {
             ...(previous[event.payload.sessionId] ?? {}),
             sessionId: event.payload.sessionId,
+            roomId: event.payload.roomId,
             peerId: event.payload.peer.deviceId,
             state: 'connecting',
             reason: event.payload.reason,
@@ -1103,19 +1152,37 @@ export function useCcconnect() {
     })
   }, [connectionStatesById])
 
-  const createTransferItems = (files: File[], preferredSessionId?: string | null) => {
+  const createTransferItems = (
+    files: File[],
+    preferredSessionIds?: string | string[] | null,
+  ) => {
     const connected = getCurrentConnectedTargets()
     const connectingCount = Object.values(connectionStatesRef.current).filter(
       (state) => state.status === 'connecting',
     ).length
-    const preferred =
-      preferredSessionId
-        ? connected.find((target) => target.sessionId === preferredSessionId)
-        : null
-
+    const preferredIds = Array.isArray(preferredSessionIds)
+      ? preferredSessionIds
+      : preferredSessionIds
+        ? [preferredSessionIds]
+        : []
     const targetSet =
-      preferred
-        ? [preferred]
+      preferredIds.length > 0
+        ? preferredIds.map((sessionId) => {
+            const connectedTarget = connected.find((target) => target.sessionId === sessionId)
+            if (connectedTarget) {
+              return connectedTarget
+            }
+
+            const session = sessionsRef.current[sessionId]
+            return {
+              sessionId,
+              peerId: session?.peer?.deviceId ?? session?.peerId,
+              peerName: session?.peer?.deviceName ?? session?.peerId,
+              status:
+                connectionStatesRef.current[sessionId]?.status ??
+                ('closed' as const),
+            }
+          })
         : connected.length > 0
           ? connected
           : [null]
@@ -1123,18 +1190,25 @@ export function useCcconnect() {
     const nextItems: TransferItem[] = []
 
     for (const file of files) {
+      const historyId = crypto.randomUUID()
       for (const target of targetSet) {
         const id = crypto.randomUUID()
         transferFilesRef.current.set(id, file)
 
-        const status: TransferStatus = target
-          ? 'ready'
-          : connectingCount > 0
-            ? 'connecting'
-            : 'waiting_for_target'
+        const status: TransferStatus =
+          target && target.status === 'connected'
+            ? 'ready'
+            : target && target.sessionId
+              ? target.status === 'connecting'
+                ? 'connecting'
+                : 'waiting_for_target'
+              : connectingCount > 0
+                ? 'connecting'
+                : 'waiting_for_target'
 
         const item: TransferItem = {
           id,
+          historyId,
           fileName: file.name,
           fileSize: file.size,
           targetDeviceId: target?.peerId,
@@ -1194,6 +1268,103 @@ export function useCcconnect() {
       targetDeviceName: reuseTarget?.peerName ?? transfer.targetDeviceName,
     })
     debugLog('transfer retry queued', { transferId, reuseTarget: reuseTarget?.peerName })
+  }
+
+  const archiveTransferHistory = async (
+    transferId: string,
+    historyId: string,
+    sessionId: string,
+    file: File,
+  ) => {
+    if (archivedHistoryIdsRef.current.has(historyId) || archivingHistoryIdsRef.current.has(historyId)) {
+      return
+    }
+
+    const session = sessionsRef.current[sessionId]
+    const activeSelf = selfRef.current
+
+    if (!session?.roomId || !activeSelf?.deviceId) {
+      return
+    }
+
+    archivingHistoryIdsRef.current.add(historyId)
+
+    try {
+      const uploadUrl = new URL('/api/history/upload', API_BASE_URL)
+      uploadUrl.searchParams.set('roomId', session.roomId)
+      uploadUrl.searchParams.set('historyId', historyId)
+      uploadUrl.searchParams.set('sessionId', sessionId)
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': file.type || 'application/octet-stream',
+          'x-file-name': encodeURIComponent(file.name),
+          'x-file-created-at': encodeURIComponent(new Date().toISOString()),
+          'x-source-device-id': activeSelf.deviceId,
+          'x-source-device-name': encodeURIComponent(activeSelf.deviceName),
+        },
+        body: file,
+      })
+
+      if (!response.ok) {
+        throw new Error(`History upload failed with status ${response.status.toString()}`)
+      }
+
+      archivedHistoryIdsRef.current.add(historyId)
+      debugLog('history archived', { transferId, historyId, roomId: session.roomId })
+    } catch (error) {
+      debugLog('history archive failed', { transferId, historyId, error })
+    } finally {
+      archivingHistoryIdsRef.current.delete(historyId)
+    }
+  }
+
+  const archiveTextHistory = async (record: TextRecord) => {
+    if (
+      archivedTextHistoryIdsRef.current.has(record.id) ||
+      archivingTextHistoryIdsRef.current.has(record.id)
+    ) {
+      return
+    }
+
+    const session = sessionsRef.current[record.sessionId]
+    const activeSelf = selfRef.current
+
+    if (!session?.roomId || !activeSelf?.deviceId) {
+      return
+    }
+
+    archivingTextHistoryIdsRef.current.add(record.id)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/text`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          historyId: record.id,
+          roomId: session.roomId,
+          sessionId: record.sessionId,
+          sourceDeviceId: activeSelf.deviceId,
+          sourceDeviceName: activeSelf.deviceName,
+          text: record.text,
+          createdAt: record.createdAt,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`History text upload failed with status ${response.status.toString()}`)
+      }
+
+      archivedTextHistoryIdsRef.current.add(record.id)
+      debugLog('text history archived', { recordId: record.id, roomId: session.roomId })
+    } catch (error) {
+      debugLog('text history archive failed', { recordId: record.id, error })
+    } finally {
+      archivingTextHistoryIdsRef.current.delete(record.id)
+    }
   }
 
   const startTransfer = async (transferId: string, preferredSessionId?: string | null) => {
@@ -1263,6 +1434,7 @@ export function useCcconnect() {
         JSON.stringify({
           type: 'file-meta',
           id: transferId,
+          historyId: transfer.historyId,
           name: file.name,
           size: file.size,
           mimeType: file.type || undefined,
@@ -1347,6 +1519,14 @@ export function useCcconnect() {
         completedAt: ack.completed ? new Date().toISOString() : undefined,
         errorMessage: ack.completed ? undefined : '接收端未完成确认。',
       })
+      if (ack.completed) {
+        void archiveTransferHistory(
+          transferId,
+          transfer.historyId,
+          target.sessionId,
+          file,
+        )
+      }
       debugLog('state transition', {
         transferId,
         status: ack.completed ? 'completed' : 'failed',
@@ -1536,6 +1716,8 @@ export function useCcconnect() {
       })
     }
 
+    void archiveTextHistory(record)
+
     mergeSession(sessionId, { kind: 'text' })
   }
 
@@ -1547,6 +1729,7 @@ export function useCcconnect() {
 
     for (const file of files) {
       const transferId = crypto.randomUUID()
+      const historyId = crypto.randomUUID()
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       const createdAt = new Date().toISOString()
 
@@ -1554,6 +1737,7 @@ export function useCcconnect() {
         JSON.stringify({
           type: 'file-meta',
           id: transferId,
+          historyId,
           name: file.name,
           size: file.size,
           mimeType: file.type || undefined,
@@ -1594,6 +1778,9 @@ export function useCcconnect() {
     socketState,
     self,
     onlinePeers,
+    rooms: Object.values(roomsById).sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt),
+    ),
     sessions: Object.values(sessionsById).sort((left, right) =>
       right.updatedAt.localeCompare(left.updatedAt),
     ),
@@ -1602,6 +1789,8 @@ export function useCcconnect() {
     transferItems,
     textRecords,
     receivedFiles,
+    historyFiles,
+    historyTexts,
     errorMessage,
     pairByShortCode,
     requestConnect,

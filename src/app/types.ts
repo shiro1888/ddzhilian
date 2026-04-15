@@ -1,0 +1,113 @@
+import type { ReactNode } from 'react'
+import type { PeerSummary } from '../lib/ccconnect-types'
+
+export type TransferMode = 'file' | 'text'
+export type SessionStatus = 'waiting' | 'active' | 'completed'
+export type NavView = 'connect' | 'send' | 'receive' | 'text' | 'sessions'
+export type ThemeId = 'classic' | 'chat-desktop'
+export type TextMode = 'long' | 'chat'
+export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
+export type DeviceBarStatus = 'connected' | 'connectable' | 'connecting' | 'failed'
+
+export type UiSession = {
+  id: string
+  roomId: string
+  kind: TransferMode
+  source: string
+  target: string
+  summary: string
+  updatedAt: string
+  status: SessionStatus
+  expiresIn: string
+  via: string
+  canTransfer: boolean
+}
+
+export type FileConversationEntry = {
+  id: string
+  sessionId?: string
+  kind: 'outgoing' | 'incoming'
+  fromSelf: boolean
+  createdAt: string
+  fileName: string
+  fileSize: number
+  subtitle: string
+  detail: string
+  statusLabel: string
+  tone: 'pending' | 'active' | 'completed' | 'failed'
+  progress: number
+  downloadUrl?: string
+  downloadName?: string
+  action?: 'retry' | 'cancel'
+}
+
+export type ConversationNotice = {
+  id: string
+  sessionId: string
+  deviceId: string
+  createdAt: string
+  text: string
+}
+
+export type UnifiedConversationEntry =
+  | {
+      id: string
+      entryType: 'text'
+      sessionId: string
+      fromSelf: boolean
+      createdAt: string
+      text: string
+    }
+  | {
+      id: string
+      entryType: 'notice'
+      sessionId: string
+      fromSelf: false
+      createdAt: string
+      text: string
+    }
+  | {
+      id: string
+      entryType: 'file'
+      sessionId: string
+      fromSelf: boolean
+      createdAt: string
+      file: FileConversationEntry
+    }
+
+export type ThemeOption = {
+  id: ThemeId
+  label: string
+  description: string
+}
+
+export type NavItem = {
+  id: NavView
+  label: string
+  hint: string
+  icon: ReactNode
+}
+
+export type StageMeta = {
+  title: string
+  description: string
+  primaryAction: string
+  secondaryAction: string
+}
+
+export type QuickPanel = {
+  title: string
+  body: string
+}
+
+export type SessionArtifact = {
+  kind: TransferMode
+  summary: string
+}
+
+export type DeviceBarItem = {
+  peer: PeerSummary
+  deviceStatus: DeviceBarStatus
+  latestSessionId: string | null
+  previewText: string
+}

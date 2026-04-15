@@ -77,8 +77,45 @@ export interface PeerSummary {
   lastSeenAt: string;
 }
 
+export interface RoomMemberSummary {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  online: boolean;
+}
+
+export interface RoomSummary {
+  roomId: string;
+  members: RoomMemberSummary[];
+  updatedAt: string;
+}
+
+export interface HistoryFileSummary {
+  historyId: string;
+  roomId: string;
+  sessionId?: string;
+  sourceDeviceId: string;
+  sourceDeviceName: string;
+  fileName: string;
+  size: number;
+  mimeType?: string;
+  createdAt: string;
+  downloadPath: string;
+}
+
+export interface HistoryTextSummary {
+  historyId: string;
+  roomId: string;
+  sessionId?: string;
+  sourceDeviceId: string;
+  sourceDeviceName: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface SessionSummary {
   sessionId: string;
+  roomId: string;
   peerId: string;
   state: SessionState;
   reason: PairReason;
@@ -103,6 +140,9 @@ export interface DirectorySnapshotPayload {
   peers: PeerSummary[];
   lanPeers: PeerSummary[];
   accountPeers: PeerSummary[];
+  rooms: RoomSummary[];
+  historyFiles: HistoryFileSummary[];
+  historyTexts: HistoryTextSummary[];
   sessions: SessionSummary[];
   rtcConfig: {
     iceServers: Array<{
@@ -170,6 +210,7 @@ export type ServerEvent =
       type: 'session-created';
       payload: {
         sessionId: string;
+        roomId: string;
         peer: PeerSummary;
         reason: PairReason;
         transportMode: TransportMode;

@@ -7,6 +7,7 @@ import { createSessionId } from '../utils/id.js';
 
 export interface PairSession {
   sessionId: string;
+  roomId: string;
   initiatorId: string;
   responderId: string;
   state: SessionState;
@@ -20,31 +21,48 @@ function createPairKey(firstId: string, secondId: string) {
   return [firstId, secondId].sort().join(':');
 }
 
+function createRoomPairKey(roomId: string, firstId: string, secondId: string) {
+  return `${roomId}:${createPairKey(firstId, secondId)}`;
+}
+
 export class SessionRegistry {
   private readonly byId = new Map<string, PairSession>();
 
-  private readonly byPair = new Map<string, string>();
+  private readonly byRoomPair = new Map<string, string>();
 
   ensureSession(input: {
+    roomId: string;
     initiatorId: string;
     responderId: string;
     reason: PairReason;
     transportMode: TransportMode;
   }) {
-    const pairKey = createPairKey(input.initiatorId, input.responderId);
-    const existingId = this.byPair.get(pairKey);
+    const pairKey = createRoomPairKey(
+      input.roomId,
+      input.initiatorId,
+      input.responderId,
+    );
+    const existingId = this.byRoomPair.get(pairKey);
 
     if (existingId) {
       const existing = this.byId.get(existingId);
 
       if (existing && existing.state !== 'closed') {
-        return existing;
+        return {
+          session: existing,
+          created: false as const,
+        };
+      }
+
+      if (existing) {
+        this.delete(existing);
       }
     }
 
     const createdAt = new Date().toISOString();
     const session: PairSession = {
       sessionId: createSessionId(),
+      roomId: input.roomId,
       initiatorId: input.initiatorId,
       responderId: input.responderId,
       state: 'connecting',
@@ -55,9 +73,12 @@ export class SessionRegistry {
     };
 
     this.byId.set(session.sessionId, session);
-    this.byPair.set(pairKey, session.sessionId);
+    this.byRoomPair.set(pairKey, session.sessionId);
 
-    return session;
+    return {
+      session,
+      created: true as const,
+    };
   }
 
   getById(sessionId: string) {
@@ -114,6 +135,12 @@ export class SessionRegistry {
 
   private delete(session: PairSession) {
     this.byId.delete(session.sessionId);
-    this.byPair.delete(createPairKey(session.initiatorId, session.responderId));
+    this.byRoomPair.delete(
+      createRoomPairKey(
+        session.roomId,
+        session.initiatorId,
+        session.responderId,
+      ),
+    );
   }
 }

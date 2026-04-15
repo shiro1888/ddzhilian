@@ -52,8 +52,45 @@ export type PeerSummary = {
   lastSeenAt: string
 }
 
+export type RoomMemberSummary = {
+  deviceId: string
+  deviceName: string
+  platform: string
+  online: boolean
+}
+
+export type RoomSummary = {
+  roomId: string
+  members: RoomMemberSummary[]
+  updatedAt: string
+}
+
+export type HistoryFileSummary = {
+  historyId: string
+  roomId: string
+  sessionId?: string
+  sourceDeviceId: string
+  sourceDeviceName: string
+  fileName: string
+  size: number
+  mimeType?: string
+  createdAt: string
+  downloadPath: string
+}
+
+export type HistoryTextSummary = {
+  historyId: string
+  roomId: string
+  sessionId?: string
+  sourceDeviceId: string
+  sourceDeviceName: string
+  text: string
+  createdAt: string
+}
+
 export type SessionSummary = {
   sessionId: string
+  roomId: string
   peerId: string
   state: SessionState
   reason: PairReason
@@ -76,6 +113,9 @@ export type DirectorySnapshotPayload = {
   peers: PeerSummary[]
   lanPeers: PeerSummary[]
   accountPeers: PeerSummary[]
+  rooms: RoomSummary[]
+  historyFiles: HistoryFileSummary[]
+  historyTexts: HistoryTextSummary[]
   sessions: SessionSummary[]
   rtcConfig: RTCConfiguration
   publicWsUrl: string
@@ -137,6 +177,7 @@ export type ServerEvent =
       type: 'session-created'
       payload: {
         sessionId: string
+        roomId: string
         peer: PeerSummary
         reason: PairReason
         initiator: boolean
@@ -171,6 +212,7 @@ export type ChannelMessage =
   | {
       type: 'file-meta'
       id: string
+      historyId?: string
       name: string
       size: number
       mimeType?: string
@@ -217,6 +259,7 @@ export type TransferStatus =
 
 export type TransferItem = {
   id: string
+  historyId: string
   fileName: string
   fileSize: number
   targetDeviceId?: string
@@ -242,6 +285,7 @@ export type TextRecord = {
 
 export type ReceivedFile = {
   id: string
+  historyId?: string
   sessionId: string
   name: string
   size: number

@@ -38,6 +38,8 @@ CCConnect is a desktop-style cross-device transfer app for quickly sending files
 - Long text and chat conversation views
 - Session search and session detail panels
 - Theme switcher with `classic` and `chat-desktop`
+- Browser-based route navigation for `connect`, `send`, `receive`, `text`, and `sessions`
+- Component-split app shell with isolated stage views and content panels
 
 ## Backend Responsibilities
 
@@ -77,6 +79,18 @@ npm run dev
 
 This starts the Vite frontend, typically on `http://localhost:5173`.
 
+### Frontend Routes
+
+The frontend now uses `react-router-dom` with browser history:
+
+- `/connect`
+- `/send`
+- `/receive`
+- `/text`
+- `/sessions`
+
+When the `chat-desktop` theme is active, file send and receive flows are folded into the conversation workspace and will redirect to `/text`.
+
 ### Run The Backend
 
 From [`server`](C:/Users/12467/Documents/707/CCConnect/server):
@@ -104,6 +118,15 @@ npm run build
 
 ## Environment
 
+### Frontend
+
+Optional frontend environment variables:
+
+- `VITE_SIGNALING_WS_URL`: explicit WebSocket URL for the signaling server
+- `VITE_SIGNALING_HTTP_URL`: explicit HTTP base URL for history/debug requests
+
+If these are not provided, the frontend uses `ws://localhost:8787/ws` in local development and derives `/ws` from the current origin in production.
+
 Backend environment settings live in [`server/.env.example`](C:/Users/12467/Documents/707/CCConnect/server/.env.example). Copy it to `.env` inside `server/` if you want to customize the runtime.
 
 Important variables include:
@@ -113,10 +136,37 @@ Important variables include:
 - `PUBLIC_WS_URL`
 - `PING_INTERVAL_MS`
 - `SESSION_IDLE_MS`
+- `HISTORY_RETENTION_MS`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`
 - `TURN_CREDENTIAL`
+
+## Deployment Notes
+
+### Frontend Static Hosting
+
+The frontend uses `BrowserRouter`, so your web server must rewrite unknown frontend routes back to `index.html`. Without this SPA fallback, refreshing `/connect` or `/text` will return a 404 from the server instead of loading the app.
+
+Typical production setup:
+
+1. Run `npm run build`
+2. Serve the generated `dist/` directory
+3. Rewrite non-file frontend requests to `dist/index.html`
+4. Expose `/ws` to the signaling backend, or set `VITE_SIGNALING_WS_URL` and `VITE_SIGNALING_HTTP_URL`
+
+### Backend
+
+For production, build and run the signaling server from the `server/` directory:
+
+```bash
+cd server
+npm install
+npm run build
+npm run start
+```
+
+If the backend is behind `nginx`, make sure WebSocket upgrade headers and `X-Forwarded-For` are passed through.
 
 ## Design Notes
 

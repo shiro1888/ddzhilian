@@ -8,6 +8,7 @@ export interface ServerConfig {
   publicWsUrl: string;
   pingIntervalMs: number;
   sessionIdleMs: number;
+  historyRetentionMs: number;
   rtcConfig: {
     iceServers: Array<{
       urls: string | string[];
@@ -58,6 +59,7 @@ export function loadConfig(): ServerConfig {
     publicWsUrl,
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
     sessionIdleMs: readNumber('SESSION_IDLE_MS', 120_000),
+    historyRetentionMs: readNumber('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
     rtcConfig: {
       iceServers: turnUrls.length > 0
         ? [

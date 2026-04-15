@@ -1,3 +1,4 @@
+import { createReadStream } from 'node:fs';
 import { createServer } from 'node:http';
 
 import WebSocket, { WebSocketServer } from 'ws';
@@ -11,6 +12,8 @@ import {
   parseClientEvent,
 } from './protocol.js';
 import { DeviceRegistry } from './registry/device-registry.js';
+import { HistoryRegistry } from './registry/history-registry.js';
+import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
 import { buildNetworkContext } from './utils/network.js';
 
@@ -24,7 +27,45 @@ type SocketWithAddress = WebSocket & {
 
 const config = loadConfig();
 const devices = new DeviceRegistry();
+const history = new HistoryRegistry(config.historyRetentionMs);
+const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
+
+function setCorsHeaders(response: {
+  setHeader(name: string, value: string): void;
+}) {
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  response.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type,X-File-Name,X-File-Created-At,X-Source-Device-Id,X-Source-Device-Name,X-Session-Id',
+  );
+}
+
+async function readRequestBuffer(
+  request: AsyncIterable<Buffer | string>,
+) {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function decodeHeaderValue(value: string | string[] | undefined) {
+  const headerValue = Array.isArray(value) ? value[0] : value;
+  if (!headerValue) {
+    return undefined;
+  }
+
+  try {
+    return decodeURIComponent(headerValue);
+  } catch {
+    return headerValue;
+  }
+}
 
 const httpServer = createServer((request, response) => {
   if (!request.url) {
@@ -32,12 +73,170 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
-  if (request.url === '/health') {
+  setCorsHeaders(response);
+
+if (request.method === 'OPTIONS') {
+    response.writeHead(204).end();
+    return;
+  }
+
+  const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+
+  if (url.pathname === '/api/history/upload' && request.method === 'POST') {
+    const roomId = url.searchParams.get('roomId')?.trim();
+    const historyId = url.searchParams.get('historyId')?.trim();
+    const sessionId = url.searchParams.get('sessionId')?.trim() || undefined;
+    const fileName = decodeHeaderValue(request.headers['x-file-name']);
+    const createdAt =
+      decodeHeaderValue(request.headers['x-file-created-at']) ??
+      new Date().toISOString();
+    const sourceDeviceId = decodeHeaderValue(request.headers['x-source-device-id']);
+    const sourceDeviceName = decodeHeaderValue(request.headers['x-source-device-name']);
+
+    if (!roomId || !historyId || !fileName || !sourceDeviceId) {
+      response.writeHead(400, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify({
+          error: 'Missing roomId, historyId, fileName, or sourceDeviceId.',
+        }),
+      );
+      return;
+    }
+
+    if (!rooms.getById(roomId)) {
+      response.writeHead(404, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'Room not found.' }));
+      return;
+    }
+
+    void readRequestBuffer(request)
+      .then(async (data) => {
+        const device = devices.getById(sourceDeviceId);
+        const record = await history.saveFile({
+          historyId,
+          roomId,
+          sessionId,
+          sourceDeviceId,
+          sourceDeviceName:
+            sourceDeviceName ??
+            device?.deviceName ??
+            sourceDeviceId,
+          fileName,
+          mimeType: request.headers['content-type']?.toString(),
+          createdAt,
+          data,
+        });
+
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ ok: true, file: history.toSummary(record) }));
+        broadcastSnapshots();
+      })
+      .catch((error) => {
+        response.writeHead(500, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'History upload failed.',
+          }),
+        );
+      });
+    return;
+  }
+
+  if (url.pathname === '/api/history/text' && request.method === 'POST') {
+    void readRequestBuffer(request)
+      .then((buffer) => {
+        const payload = JSON.parse(buffer.toString('utf8')) as {
+          historyId?: string;
+          roomId?: string;
+          sessionId?: string;
+          sourceDeviceId?: string;
+          sourceDeviceName?: string;
+          text?: string;
+          createdAt?: string;
+        };
+
+        if (
+          !payload.historyId ||
+          !payload.roomId ||
+          !payload.sourceDeviceId ||
+          !payload.text
+        ) {
+          response.writeHead(400, { 'content-type': 'application/json' });
+          response.end(
+            JSON.stringify({
+              error: 'Missing historyId, roomId, sourceDeviceId, or text.',
+            }),
+          );
+          return;
+        }
+
+        if (!rooms.getById(payload.roomId)) {
+          response.writeHead(404, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ error: 'Room not found.' }));
+          return;
+        }
+
+        const device = devices.getById(payload.sourceDeviceId);
+        const record = history.saveText({
+          historyId: payload.historyId,
+          roomId: payload.roomId,
+          sessionId: payload.sessionId,
+          sourceDeviceId: payload.sourceDeviceId,
+          sourceDeviceName:
+            payload.sourceDeviceName ??
+            device?.deviceName ??
+            payload.sourceDeviceId,
+          text: payload.text,
+          createdAt: payload.createdAt ?? new Date().toISOString(),
+        });
+
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ ok: true, text: history.toTextSummary(record) }));
+        broadcastSnapshots();
+      })
+      .catch((error) => {
+        response.writeHead(500, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'History text upload failed.',
+          }),
+        );
+      });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/history/download/') && request.method === 'GET') {
+    const historyId = decodeURIComponent(
+      url.pathname.slice('/api/history/download/'.length),
+    );
+    const record = history.getById(historyId);
+
+    if (!record) {
+      response.writeHead(404, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'History file not found.' }));
+      return;
+    }
+
+    response.writeHead(200, {
+      'content-type': record.mimeType || 'application/octet-stream',
+      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
+      'content-length': record.size.toString(),
+    });
+    createReadStream(record.storagePath).pipe(response);
+    return;
+  }
+
+  if (url.pathname === '/health') {
     const openSessionIds = new Set<string>();
+    const openRoomIds = new Set<string>();
 
     for (const device of devices.list()) {
       for (const session of sessions.listForDevice(device.deviceId)) {
         openSessionIds.add(session.sessionId);
+      }
+
+      for (const room of rooms.listForDevice(device.deviceId)) {
+        openRoomIds.add(room.roomId);
       }
     }
 
@@ -46,6 +245,7 @@ const httpServer = createServer((request, response) => {
       JSON.stringify({
         ok: true,
         onlineDevices: devices.list().length,
+        openRooms: openRoomIds.size,
         openSessions: openSessionIds.size,
         serverTime: new Date().toISOString(),
       }),
@@ -53,7 +253,7 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
-  if (request.url === '/api/debug/state') {
+  if (url.pathname === '/api/debug/state') {
     const uniqueSessions = devices
       .list()
       .flatMap((device) => sessions.listForDevice(device.deviceId))
@@ -76,6 +276,7 @@ const httpServer = createServer((request, response) => {
         })),
         sessions: uniqueSessions.map((session) => ({
           sessionId: session.sessionId,
+          roomId: session.roomId,
           initiatorId: session.initiatorId,
           responderId: session.responderId,
           state: session.state,
@@ -83,6 +284,28 @@ const httpServer = createServer((request, response) => {
           transportMode: session.transportMode,
           updatedAt: session.updatedAt,
         })),
+        rooms: devices.list().flatMap((device) => rooms.listForDevice(device.deviceId)).filter(
+          (room, index, collection) =>
+            collection.findIndex((entry) => entry.roomId === room.roomId) === index,
+        ),
+        historyFiles: devices
+          .list()
+          .flatMap((device) => rooms.listForDevice(device.deviceId))
+          .filter(
+            (room, index, collection) =>
+              collection.findIndex((entry) => entry.roomId === room.roomId) === index,
+          )
+          .flatMap((room) => history.listForRoom(room.roomId))
+          .map((record) => history.toSummary(record)),
+        historyTexts: devices
+          .list()
+          .flatMap((device) => rooms.listForDevice(device.deviceId))
+          .filter(
+            (room, index, collection) =>
+              collection.findIndex((entry) => entry.roomId === room.roomId) === index,
+          )
+          .flatMap((room) => history.listTextsForRoom(room.roomId))
+          .map((record) => history.toTextSummary(record)),
         serverTime: new Date().toISOString(),
       }),
     );
@@ -115,6 +338,8 @@ function broadcastSnapshots() {
     const snapshot = devices.buildSnapshot(
       device.deviceId,
       sessions,
+      rooms,
+      history,
       config.rtcConfig,
       config.publicWsUrl,
     );
@@ -146,6 +371,7 @@ function emitSessionCreated(sessionId: string) {
     type: 'session-created',
     payload: {
       sessionId: session.sessionId,
+      roomId: session.roomId,
       peer: devices.toPeerSummary(initiator, responder),
       reason: session.reason,
       transportMode: session.transportMode,
@@ -157,6 +383,7 @@ function emitSessionCreated(sessionId: string) {
     type: 'session-created',
     payload: {
       sessionId: session.sessionId,
+      roomId: session.roomId,
       peer: devices.toPeerSummary(responder, initiator),
       reason: session.reason,
       transportMode: session.transportMode,
@@ -183,6 +410,7 @@ function deriveTransportMode(
 }
 
 function createSession(input: {
+  roomId: string;
   requesterId: string;
   targetId: string;
   reason: PairReason;
@@ -207,7 +435,8 @@ function createSession(input: {
     };
   }
 
-  const session = sessions.ensureSession({
+  const result = sessions.ensureSession({
+    roomId: input.roomId,
     initiatorId: input.initiatorId ?? input.requesterId,
     responderId:
       input.initiatorId === input.targetId ? input.requesterId : input.targetId,
@@ -215,12 +444,15 @@ function createSession(input: {
     transportMode: deriveTransportMode(input.requesterId, input.targetId),
   });
 
-  emitSessionCreated(session.sessionId);
-  broadcastSnapshots();
+  if (result.created) {
+    emitSessionCreated(result.session.sessionId);
+    rooms.touch(input.roomId);
+    broadcastSnapshots();
+  }
 
   return {
     ok: true as const,
-    session,
+    session: result.session,
   };
 }
 
@@ -236,6 +468,114 @@ function extractClientAddress(
   return forwardedAddress || socket._socket?.remoteAddress;
 }
 
+function connectDeviceToRoom(
+  deviceId: string,
+  roomId: string,
+  reason: PairReason,
+  existingMemberIds: string[],
+) {
+  for (const memberId of existingMemberIds) {
+    const initiatorId =
+      deviceId < memberId ? deviceId : memberId;
+
+    createSession({
+      roomId,
+      requesterId: deviceId,
+      targetId: memberId,
+      initiatorId,
+      reason,
+    });
+  }
+}
+
+function joinRoomViaTarget(input: {
+  requesterId: string;
+  targetId: string;
+  reason: PairReason;
+}) {
+  if (input.requesterId === input.targetId) {
+    return {
+      ok: false as const,
+      code: 'DEVICE_NOT_FOUND' as const,
+      message: 'A device cannot connect to itself.',
+    };
+  }
+
+  const requester = devices.getById(input.requesterId);
+  const target = devices.getById(input.targetId);
+
+  if (!requester || !target) {
+    return {
+      ok: false as const,
+      code: 'DEVICE_NOT_FOUND' as const,
+      message: 'The target device is not online.',
+    };
+  }
+
+  const preferredRoom = rooms.getPreferredJoinRoomForDevice(target.deviceId);
+
+  if (!preferredRoom) {
+    const room = rooms.createRoom({
+      memberIds: [requester.deviceId, target.deviceId],
+      reason: input.reason,
+      lanKey:
+        requester.network.lanKey &&
+        requester.network.lanKey === target.network.lanKey
+          ? requester.network.lanKey
+          : undefined,
+    });
+
+    connectDeviceToRoom(requester.deviceId, room.roomId, input.reason, [
+      target.deviceId,
+    ]);
+    broadcastSnapshots();
+
+    return {
+      ok: true as const,
+      room,
+    };
+  }
+
+  const existingMemberIds = preferredRoom.memberIds.filter(
+    (memberId) => memberId !== requester.deviceId,
+  );
+  rooms.addMember(preferredRoom.roomId, requester.deviceId);
+  connectDeviceToRoom(
+    requester.deviceId,
+    preferredRoom.roomId,
+    input.reason,
+    existingMemberIds,
+  );
+  broadcastSnapshots();
+
+  return {
+    ok: true as const,
+    room: preferredRoom,
+  };
+}
+
+function autoJoinLanRoom(deviceId: string) {
+  const device = devices.getById(deviceId);
+
+  if (!device?.discoverable || !device.network.lanKey) {
+    return;
+  }
+
+  const roomJoin = rooms.ensureLanRoom(device.deviceId, device.network.lanKey);
+  if (roomJoin.existingMemberIds.length === 0) {
+    broadcastSnapshots();
+    return;
+  }
+
+  connectDeviceToRoom(
+    device.deviceId,
+    roomJoin.room.roomId,
+    'lan-discovery',
+    roomJoin.existingMemberIds.filter((memberId) => memberId !== device.deviceId),
+  );
+  broadcastSnapshots();
+}
+
 function handleAutoConnect(deviceId: string) {
   const device = devices.getById(deviceId);
 
@@ -243,33 +583,17 @@ function handleAutoConnect(deviceId: string) {
     return;
   }
 
-  const autoTargets = new Map<string, PairReason>();
+  autoJoinLanRoom(deviceId);
 
   for (const candidate of devices.findAutoConnectTargets(deviceId)) {
-    autoTargets.set(candidate.deviceId, 'account-auto');
-  }
-
-  for (const candidate of devices.findLanAutoConnectTargets(deviceId)) {
-    if (!autoTargets.has(candidate.deviceId)) {
-      autoTargets.set(candidate.deviceId, 'lan-discovery');
-    }
-  }
-
-  for (const [candidateId, reason] of autoTargets) {
-    const candidate = devices.getById(candidateId);
-
-    if (!candidate) {
+    if (rooms.shareRoom(deviceId, candidate.deviceId)) {
       continue;
     }
 
-    const initiatorId =
-      device.deviceId < candidate.deviceId ? device.deviceId : candidate.deviceId;
-
-    createSession({
-      requesterId: device.deviceId,
+    joinRoomViaTarget({
+      requesterId: deviceId,
       targetId: candidate.deviceId,
-      initiatorId,
-      reason,
+      reason: 'account-auto',
     });
   }
 }
@@ -335,6 +659,8 @@ function handleEvent(
       const snapshot = devices.buildSnapshot(
         device.deviceId,
         sessions,
+        rooms,
+        history,
         config.rtcConfig,
         config.publicWsUrl,
       );
@@ -350,7 +676,7 @@ function handleEvent(
         const target = devices.getByPairToken(event.payload.requestedPairToken);
 
         if (target) {
-          createSession({
+          joinRoomViaTarget({
             requesterId: device.deviceId,
             targetId: target.deviceId,
             reason: 'pair-link',
@@ -385,6 +711,8 @@ function handleEvent(
       const snapshot = devices.buildSnapshot(
         activeDeviceId,
         sessions,
+        rooms,
+        history,
         config.rtcConfig,
         config.publicWsUrl,
       );
@@ -418,7 +746,7 @@ function handleEvent(
         return deviceId;
       }
 
-      const result = createSession({
+      const result = joinRoomViaTarget({
         requesterId: activeDeviceId,
         targetId: target.deviceId,
         reason: 'short-code',
@@ -442,7 +770,7 @@ function handleEvent(
         return deviceId;
       }
 
-      const result = createSession({
+      const result = joinRoomViaTarget({
         requesterId: activeDeviceId,
         targetId: target.deviceId,
         reason: 'pair-link',
@@ -456,7 +784,7 @@ function handleEvent(
     }
 
     case 'request-connect': {
-      const result = createSession({
+      const result = joinRoomViaTarget({
         requesterId: activeDeviceId,
         targetId: event.payload.targetDeviceId,
         reason: event.payload.reason ?? 'manual',
@@ -578,6 +906,7 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
     }
 
     devices.remove(currentDeviceId);
+    rooms.removeDevice(currentDeviceId);
     const closedSessions = sessions.closeSessionsForDevice(currentDeviceId);
 
     for (const session of closedSessions) {
@@ -611,6 +940,7 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
 
     isAlive = false;
     sessions.prune(config.sessionIdleMs);
+    history.prune();
     socket.ping();
   }, config.pingIntervalMs);
 
