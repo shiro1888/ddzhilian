@@ -39,6 +39,7 @@ function App() {
   const navigate = useNavigate()
   const fileInputId = useId()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [isContentRailCollapsed, setIsContentRailCollapsed] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [textMode, setTextMode] = useState<'long' | 'chat'>('long')
@@ -141,7 +142,7 @@ function App() {
         ? `${file.name} · ${formatFileSize(file.size)}`
         : text
           ? `${Math.max(1, textPreview.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${textPreview.slice(0, 18)}`
-          : `${session.peer?.deviceName ?? session.peerId} · ${session.state === 'connected' ? '可传输' : '等待连接'}`)
+          : `${session.peer?.deviceName ?? session.peerId} · Room ${session.roomId} · ${session.state === 'connected' ? '可传输' : '等待连接'}`)
 
     return {
       id: session.sessionId,
@@ -331,9 +332,6 @@ function App() {
   ).length
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
-  const selectedDeviceStatusLabel = deviceConnectionLabel(selectedDeviceStatus)
-  const selectedRoomMemberSummary =
-    selectedRoomMemberNames.length > 0 ? selectedRoomMemberNames.join('、') : '当前只有你自己'
   const connectionActionLabel =
     selectedDeviceStatus === 'connected' && selectedPeerLatestSession ? '断开当前设备' : '连接当前设备'
   const connectionActionDisabled =
@@ -617,6 +615,7 @@ function App() {
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
       navigate(pathForView(view))
+      setIsContentRailCollapsed(false)
       setIsMobileNavOpen(false)
       setIsEditingDeviceName(false)
       setLocalError(null)
@@ -662,7 +661,7 @@ function App() {
   }
 
   const handleJoinRoomById = () => {
-    const nextRoomId = joinRoomIdDraft.trim()
+    const nextRoomId = joinRoomIdDraft.trim().toUpperCase()
     if (!nextRoomId) {
       setLocalError('请输入 roomId。')
       return
@@ -952,10 +951,11 @@ function App() {
         effectiveNavView={effectiveNavView}
         visibleNavItems={visibleNavItems}
         onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
+        onToggleContentRail={() => setIsContentRailCollapsed((previous) => !previous)}
         onViewChange={handleViewChange}
       />
 
-      <main className={`pp-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}`}>
+      <main className={`pp-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}`}>
         <AppHeader
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
@@ -1022,18 +1022,11 @@ function App() {
         </section>
 
         <ContentGrid
-          currentRoomId={selectedRoomId}
-          selectedConversationName={selectedConversationName}
-          selectedDeviceName={selectedDevicePeer?.deviceName ?? null}
-          selectedDeviceStatusLabel={selectedDeviceStatusLabel}
-          selectedDeviceShortCode={selectedDevicePeer?.shortCode ?? null}
-          selectedDevicePlatform={selectedDevicePeer?.platform ?? null}
-          selectedRoomMemberSummary={selectedRoomMemberSummary}
-          connectedDeviceCount={selectedRoomConnectedTargets.length}
           roomJoinDraft={joinRoomIdDraft}
           sessionQuery={sessionQuery}
           deviceBarItems={deviceBarItems}
           effectiveSelectedPeerId={effectiveSelectedPeerId}
+          isContentRailCollapsed={isContentRailCollapsed}
           connectionActionLabel={connectionActionLabel}
           connectionActionDisabled={connectionActionDisabled}
           onSessionQueryChange={setSessionQuery}

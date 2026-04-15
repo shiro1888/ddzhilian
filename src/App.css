@@ -1061,78 +1061,9 @@
   background: color-mix(in srgb, var(--panel-bg) 92%, white);
 }
 
-.pp-connection-layer__toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pp-connection-layer__toggle-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.pp-connection-layer__toggle-copy strong,
-.pp-connection-layer__room-bar strong,
-.pp-connection-layer__card strong {
-  color: var(--ink);
-}
-
-.pp-connection-layer__toggle-copy span,
-.pp-connection-layer__room-label,
-.pp-connection-layer__card span,
-.pp-connection-layer__card small {
-  color: var(--muted);
-}
-
-.pp-connection-layer__toggle-indicator {
-  color: var(--brand);
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.pp-connection-layer__room-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 0 0 1px var(--line-soft);
-}
-
-.pp-connection-layer__room-label {
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .pp-connection-layer__body {
   display: grid;
   gap: 12px;
-}
-
-.pp-connection-layer__summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.pp-connection-layer__card {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 0 0 1px var(--line-soft);
 }
 
 .pp-connection-layer__actions {
@@ -2042,6 +1973,10 @@
   min-width: 0;
 }
 
+.pp-content-grid.is-collapsed {
+  display: none;
+}
+
 .pp-panel__head {
   display: flex;
   align-items: flex-start;
@@ -2448,6 +2383,10 @@ textarea:focus-visible,
   padding: 0 20px 0 0;
 }
 
+.pp-shell[data-theme='chat-desktop'] .pp-main.is-content-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
 .pp-shell[data-theme='chat-desktop'] .pp-header {
   grid-area: header;
   align-items: center;
@@ -2849,8 +2788,6 @@ textarea:focus-visible,
   font-size: 12px;
 }
 
-.pp-shell[data-theme='chat-desktop'] .pp-connection-layer__room-bar,
-.pp-shell[data-theme='chat-desktop'] .pp-connection-layer__card,
 .pp-shell[data-theme='chat-desktop'] .pp-connection-layer__join input {
   border: 1px solid var(--line-soft);
   box-shadow: none;
@@ -3400,10 +3337,6 @@ textarea:focus-visible,
   .pp-emoji-picker {
     left: 12px;
     width: calc(100% - 24px);
-  }
-
-  .pp-connection-layer__summary {
-    grid-template-columns: 1fr;
   }
 
   .pp-connection-layer__actions,

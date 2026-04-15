@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { DeviceBarItem } from '../types'
 import {
   deviceBarStatusLabel,
@@ -7,18 +6,11 @@ import {
 } from '../utils'
 
 type ContentGridProps = {
-  currentRoomId: string | null
-  selectedConversationName: string
-  selectedDeviceName: string | null
-  selectedDeviceStatusLabel: string
-  selectedDeviceShortCode: string | null
-  selectedDevicePlatform: string | null
-  selectedRoomMemberSummary: string
-  connectedDeviceCount: number
   roomJoinDraft: string
   sessionQuery: string
   deviceBarItems: DeviceBarItem[]
   effectiveSelectedPeerId: string | null
+  isContentRailCollapsed: boolean
   connectionActionLabel: string
   connectionActionDisabled: boolean
   onSessionQueryChange: (value: string) => void
@@ -31,18 +23,11 @@ type ContentGridProps = {
 }
 
 export function ContentGrid({
-  currentRoomId,
-  selectedConversationName,
-  selectedDeviceName,
-  selectedDeviceStatusLabel,
-  selectedDeviceShortCode,
-  selectedDevicePlatform,
-  selectedRoomMemberSummary,
-  connectedDeviceCount,
   roomJoinDraft,
   sessionQuery,
   deviceBarItems,
   effectiveSelectedPeerId,
+  isContentRailCollapsed,
   connectionActionLabel,
   connectionActionDisabled,
   onSessionQueryChange,
@@ -53,75 +38,35 @@ export function ContentGrid({
   onOpenDeviceConversation,
   onDeviceAction,
 }: ContentGridProps) {
-  const [isConnectionLayerOpen, setIsConnectionLayerOpen] = useState(true)
-
   return (
-    <section className="pp-content-grid">
+    <section className={`pp-content-grid${isContentRailCollapsed ? ' is-collapsed' : ''}`}>
       <section className="pp-panel pp-panel--devices">
-        <div className={`pp-connection-layer${isConnectionLayerOpen ? ' is-open' : ''}`}>
-          <button
-            type="button"
-            className="pp-connection-layer__toggle"
-            onClick={() => setIsConnectionLayerOpen((current) => !current)}
-          >
-            <div className="pp-connection-layer__toggle-copy">
-              <strong>设备连接层</strong>
-              <span>{currentRoomId ? `Room ID: ${currentRoomId}` : '当前未加入房间'}</span>
-            </div>
-            <span className="pp-connection-layer__toggle-indicator">
-              {isConnectionLayerOpen ? '收起' : '展开'}
-            </span>
-          </button>
-
-          {isConnectionLayerOpen && (
-            <div className="pp-connection-layer__body">
-              <div className="pp-connection-layer__summary">
-                <div className="pp-connection-layer__card">
-                  <span>当前对话</span>
-                  <strong>{selectedConversationName}</strong>
-                  <small>{selectedRoomMemberSummary}</small>
-                </div>
-                <div className="pp-connection-layer__card">
-                  <span>连接设备</span>
-                  <strong>{selectedDeviceName ?? '尚未选中设备'}</strong>
-                  <small>
-                    {selectedDevicePlatform && selectedDeviceShortCode
-                      ? `${selectedDevicePlatform} · 互传码 ${selectedDeviceShortCode}`
-                      : '先从下方设备列表选择目标'}
-                  </small>
-                </div>
-                <div className="pp-connection-layer__card">
-                  <span>连接状态</span>
-                  <strong>{selectedDeviceStatusLabel}</strong>
-                  <small>{connectedDeviceCount} 台已连接设备</small>
-                </div>
-              </div>
-
-              <div className="pp-connection-layer__actions">
-                <div className="pp-connection-layer__join">
-                  <input
-                    type="text"
-                    inputMode="text"
-                    placeholder="输入 roomId 加入已存在会话"
-                    value={roomJoinDraft}
-                    onChange={(event) => onRoomJoinDraftChange(event.target.value)}
-                  />
-                  <button type="button" className="pp-button pp-button--dark" onClick={onJoinRoom}>
-                    加入房间
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  className="pp-button pp-button--primary"
-                  onClick={onConnectionAction}
-                  disabled={connectionActionDisabled}
-                >
-                  {connectionActionLabel}
+        <div className="pp-connection-layer">
+          <div className="pp-connection-layer__body">
+            <div className="pp-connection-layer__actions">
+              <div className="pp-connection-layer__join">
+                <input
+                  type="text"
+                  inputMode="text"
+                  placeholder="输入 roomId 加入已存在会话"
+                  value={roomJoinDraft}
+                  onChange={(event) => onRoomJoinDraftChange(event.target.value.toUpperCase())}
+                />
+                <button type="button" className="pp-button pp-button--dark" onClick={onJoinRoom}>
+                  加入房间
                 </button>
               </div>
+
+              <button
+                type="button"
+                className="pp-button pp-button--primary"
+                onClick={onConnectionAction}
+                disabled={connectionActionDisabled}
+              >
+                {connectionActionLabel}
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="pp-panel__head">

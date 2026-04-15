@@ -6,6 +6,7 @@ type AppSidebarProps = {
   effectiveNavView: NavView
   visibleNavItems: typeof navItems
   onToggleMobileNav: () => void
+  onToggleContentRail: () => void
   onViewChange: (view: NavView) => void
 }
 
@@ -14,6 +15,7 @@ export function AppSidebar({
   effectiveNavView,
   visibleNavItems,
   onToggleMobileNav,
+  onToggleContentRail,
   onViewChange,
 }: AppSidebarProps) {
   return (
@@ -53,7 +55,14 @@ export function AppSidebar({
               className={effectiveNavView === item.id ? 'is-active' : ''}
               title={item.label}
               aria-label={item.label}
-              onClick={() => onViewChange(item.id)}
+              onClick={() => {
+                if (effectiveNavView === item.id) {
+                  onToggleContentRail()
+                  return
+                }
+
+                onViewChange(item.id)
+              }}
             >
               <span className="pp-nav__icon" aria-hidden="true">
                 <svg

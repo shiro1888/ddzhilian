@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const TOKEN_ALPHABET =
   'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -32,7 +33,7 @@ export function createSessionId() {
 }
 
 export function createRoomId() {
-  return `room_${createToken(18, TOKEN_ALPHABET)}`;
+  return createToken(4, ROOM_ID_ALPHABET);
 }
 
 export function createLanSessionId() {

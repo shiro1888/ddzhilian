@@ -36,8 +36,14 @@ export class RoomRegistry {
   }) {
     const members = uniqueMemberIds(input.memberIds);
     const now = new Date().toISOString();
+    let roomId = createRoomId();
+
+    while (this.byId.has(roomId)) {
+      roomId = createRoomId();
+    }
+
     const room: Room = {
-      roomId: createRoomId(),
+      roomId,
       memberIds: members,
       reason: input.reason,
       lanKey: input.lanKey,
