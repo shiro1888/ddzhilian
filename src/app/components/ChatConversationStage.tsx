@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { UnifiedConversationEntry } from '../types'
 import {
   formatChatDivider,
@@ -16,7 +16,7 @@ const quickEmojis = [
 ]
 
 const richTextFonts = [
-  { label: '默认字体', value: '' },
+  { label: '字体样式', value: '' },
   { label: '宋体', value: 'SimSun, serif' },
   { label: '黑体', value: '"Noto Sans SC", sans-serif' },
   { label: 'Jakarta', value: '"Plus Jakarta Sans", sans-serif' },
@@ -24,7 +24,7 @@ const richTextFonts = [
 ]
 
 const richTextSizes = [
-  { label: '字号', value: '' },
+  { label: '字体大小', value: '' },
   { label: '小五', value: '2' },
   { label: '五号', value: '3' },
   { label: '小四', value: '4' },
@@ -42,7 +42,7 @@ function escapeInlineHtml(value: string) {
 }
 
 const paragraphFormats = [
-  { label: '段落格式', value: '' },
+  { label: '段落', value: '' },
   { label: '正文', value: 'p' },
   { label: '标题 1', value: 'h1' },
   { label: '标题 2', value: 'h2' },
@@ -51,14 +51,174 @@ const paragraphFormats = [
   { label: '代码块', value: 'pre' },
 ]
 
-const colorPresets = [
-  '#111111',
-  '#fa5151',
-  '#07c160',
-  '#1c7ed6',
-  '#f59f00',
-  '#845ef7',
+const richTextColors = [
+  { label: '字体颜色', value: '' },
+  { label: '黑色', value: '#111111' },
+  { label: '红色', value: '#fa5151' },
+  { label: '绿色', value: '#07c160' },
+  { label: '蓝色', value: '#1c7ed6' },
+  { label: '橙色', value: '#f59f00' },
+  { label: '紫色', value: '#845ef7' },
 ]
+
+const specialCharacterPresets = [
+  '℃',
+  '°',
+  '±',
+  '×',
+  '÷',
+  '√',
+  '≈',
+  '≠',
+  '≤',
+  '≥',
+  '∞',
+  '→',
+]
+
+const formulaBetaFrameSrcDoc = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        color: #122033;
+      }
+      .shell {
+        display: grid;
+        gap: 16px;
+        min-height: 100vh;
+        padding: 18px;
+      }
+      .hero {
+        display: grid;
+        gap: 8px;
+        padding: 18px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #ffffff, #eef5ff);
+        border: 1px solid #d8e4f4;
+      }
+      .hero strong {
+        font-size: 20px;
+      }
+      .hero p,
+      .hint {
+        margin: 0;
+        color: #53657d;
+        line-height: 1.6;
+      }
+      .quick,
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .quick button,
+      .actions button {
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid #cfdae8;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #203247;
+        cursor: pointer;
+        font: inherit;
+      }
+      textarea {
+        width: 100%;
+        min-height: 240px;
+        padding: 16px;
+        border: 1px solid #cfdae8;
+        border-radius: 16px;
+        background: #ffffff;
+        color: #122033;
+        font: 16px/1.7 "Cambria Math", "Times New Roman", serif;
+        resize: vertical;
+      }
+      .actions {
+        justify-content: flex-end;
+      }
+      .actions button.primary {
+        border-color: #0f6ab4;
+        background: #0f6ab4;
+        color: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="hero">
+        <strong>公式 beta</strong>
+        <p>输入公式表达式后点击“插入公式”。这里先用 iframe 容器承载编辑区，后续可替换成真实公式编辑器页面。</p>
+      </div>
+
+      <div class="quick">
+        <button type="button" data-value="\\\\frac{a}{b}">分式</button>
+        <button type="button" data-value="x^2+y^2=z^2">平方和</button>
+        <button type="button" data-value="\\\\sqrt{a^2+b^2}">根式</button>
+        <button type="button" data-value="\\\\int_a^b f(x)\\\\,dx">积分</button>
+        <button type="button" data-value="\\\\sum_{i=1}^{n} i">求和</button>
+      </div>
+
+      <textarea id="formula-input">\\frac{a}{b}</textarea>
+      <p class="hint">支持直接输入 LaTeX 风格表达式，例如 \\frac、\\sqrt、\\sum、\\int。</p>
+
+      <div class="actions">
+        <button type="button" id="close-btn">关闭</button>
+        <button type="button" class="primary" id="insert-btn">插入公式</button>
+      </div>
+    </div>
+
+    <script>
+      const input = document.getElementById('formula-input');
+      document.querySelectorAll('[data-value]').forEach((button) => {
+        button.addEventListener('click', () => {
+          input.value = button.dataset.value || '';
+          input.focus();
+        });
+      });
+
+      document.getElementById('insert-btn').addEventListener('click', () => {
+        parent.postMessage({
+          source: 'ccconnect-formula-beta',
+          type: 'insert',
+          value: input.value
+        }, '*');
+      });
+
+      document.getElementById('close-btn').addEventListener('click', () => {
+        parent.postMessage({
+          source: 'ccconnect-formula-beta',
+          type: 'close'
+        }, '*');
+      });
+    </script>
+  </body>
+</html>`
+
+type InsertPanelType =
+  | 'special-character'
+  | 'table'
+  | 'tex'
+  | 'code'
+
+type InsertPanelState = {
+  type: InsertPanelType
+  value?: string
+  rows?: string
+  columns?: string
+}
 
 type ChatConversationStageProps = {
   isDragging: boolean
@@ -87,6 +247,32 @@ function normalizeEditorHtml(value: string) {
   return normalizedValue
 }
 
+function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
+  if (fromSelf) {
+    return '我'
+  }
+
+  const compactName = senderName.replace(/\s+/g, '').trim()
+  if (!compactName) {
+    return 'TA'
+  }
+
+  return compactName.slice(0, 2)
+}
+
+function createInsertPanelState(type: InsertPanelType): InsertPanelState {
+  switch (type) {
+    case 'special-character':
+      return { type, value: '℃' }
+    case 'table':
+      return { type, rows: '2', columns: '3' }
+    case 'tex':
+      return { type, value: '\\frac{a}{b}' }
+    case 'code':
+      return { type, value: 'const answer = 42;' }
+  }
+}
+
 export function ChatConversationStage({
   isDragging,
   unifiedConversationEntries,
@@ -106,10 +292,22 @@ export function ChatConversationStage({
   onDrop,
 }: ChatConversationStageProps) {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+  const [insertPanel, setInsertPanel] = useState<InsertPanelState | null>(null)
+  const [insertPanelError, setInsertPanelError] = useState<string | null>(null)
+  const [isFormulaBetaDialogOpen, setIsFormulaBetaDialogOpen] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
+
+  const setInsertPanelInputElement = (element: HTMLInputElement | null) => {
+    insertPanelInputRef.current = element
+  }
+
+  const setInsertPanelTextareaElement = (element: HTMLTextAreaElement | null) => {
+    insertPanelInputRef.current = element
+  }
 
   useEffect(() => {
     if (!editorRef.current) {
@@ -175,6 +373,21 @@ export function ChatConversationStage({
     }
   }, [isEmojiPickerOpen])
 
+  useEffect(() => {
+    if (!insertPanel) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      insertPanelInputRef.current?.focus()
+      insertPanelInputRef.current?.select?.()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [insertPanel])
+
   const syncDraftFromEditor = () => {
     onChatDraftChange(normalizeEditorHtml(editorRef.current?.innerHTML ?? ''))
   }
@@ -202,90 +415,144 @@ export function ChatConversationStage({
     syncDraftFromEditor()
   }
 
+  const insertText = (value: string) => {
+    restoreSelection()
+    document.execCommand('insertText', false, value)
+    syncDraftFromEditor()
+  }
+
   const insertHtml = (html: string) => {
     restoreSelection()
     document.execCommand('insertHTML', false, html)
     syncDraftFromEditor()
   }
 
+  const handleFormulaBetaMessage = useEffectEvent((payload: unknown) => {
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      !('source' in payload) ||
+      payload.source !== 'ccconnect-formula-beta' ||
+      !('type' in payload)
+    ) {
+      return
+    }
+
+    if (payload.type === 'close') {
+      setIsFormulaBetaDialogOpen(false)
+      editorRef.current?.focus()
+      return
+    }
+
+    if (payload.type === 'insert' && 'value' in payload && typeof payload.value === 'string') {
+      const value = payload.value.trim()
+      if (!value) {
+        return
+      }
+
+      insertHtml(`<code>\\(${escapeInlineHtml(value)}\\)</code>`)
+      setIsFormulaBetaDialogOpen(false)
+      editorRef.current?.focus()
+    }
+  })
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      handleFormulaBetaMessage(event.data)
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => {
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [])
+
   const handleEmojiInsert = (emoji: string) => {
-    restoreSelection()
-    document.execCommand('insertText', false, emoji)
-    syncDraftFromEditor()
+    insertText(emoji)
     setIsEmojiPickerOpen(false)
     editorRef.current?.focus()
   }
 
-  const handleInsertSpecialCharacter = () => {
-    const value = window.prompt('输入要插入的特殊字符', '℃')
-    if (!value) {
+  const openInsertPanel = (type: InsertPanelType) => {
+    setIsEmojiPickerOpen(false)
+    setIsFormulaBetaDialogOpen(false)
+    setInsertPanelError(null)
+    setInsertPanel(createInsertPanelState(type))
+  }
+
+  const openFormulaBetaDialog = () => {
+    setIsEmojiPickerOpen(false)
+    setInsertPanel(null)
+    setInsertPanelError(null)
+    setIsFormulaBetaDialogOpen(true)
+  }
+
+  const closeInsertPanel = () => {
+    setInsertPanel(null)
+    setInsertPanelError(null)
+    window.requestAnimationFrame(() => {
+      editorRef.current?.focus()
+    })
+  }
+
+  const updateInsertPanel = (patch: Partial<InsertPanelState>) => {
+    setInsertPanel((current) => (current ? { ...current, ...patch } : current))
+    setInsertPanelError(null)
+  }
+
+  const handleInsertPanelSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!insertPanel) {
       return
     }
 
-    restoreSelection()
-    document.execCommand('insertText', false, value)
-    syncDraftFromEditor()
-  }
+    switch (insertPanel.type) {
+      case 'special-character': {
+        const value = insertPanel.value?.trim() ?? ''
+        if (!value) {
+          setInsertPanelError('先输入要插入的字符。')
+          return
+        }
 
-  const handleInsertTable = () => {
-    const rows = Number.parseInt(window.prompt('表格行数', '2') ?? '', 10)
-    const columns = Number.parseInt(window.prompt('表格列数', '3') ?? '', 10)
-    if (!Number.isFinite(rows) || !Number.isFinite(columns) || rows <= 0 || columns <= 0) {
-      return
+        insertText(value)
+        closeInsertPanel()
+        return
+      }
+      case 'table': {
+        const rows = Number.parseInt(insertPanel.rows ?? '', 10)
+        const columns = Number.parseInt(insertPanel.columns ?? '', 10)
+        if (!Number.isFinite(rows) || !Number.isFinite(columns) || rows <= 0 || columns <= 0) {
+          setInsertPanelError('表格行数和列数需要是大于 0 的整数。')
+          return
+        }
+
+        const tableHtml = `<table style="width: 100%; border-collapse: collapse;"><tbody>${Array.from({ length: rows }, () => `<tr>${Array.from({ length: columns }, () => '<td style="border: 1px solid #d9d9d9; padding: 6px;">内容</td>').join('')}</tr>`).join('')}</tbody></table><p><br></p>`
+        insertHtml(tableHtml)
+        closeInsertPanel()
+        return
+      }
+      case 'tex': {
+        const value = insertPanel.value?.trim() ?? ''
+        if (!value) {
+          setInsertPanelError('先输入 TEX 公式。')
+          return
+        }
+
+        insertHtml(`<code>\\(${escapeInlineHtml(value)}\\)</code>`)
+        closeInsertPanel()
+        return
+      }
+      case 'code': {
+        const value = insertPanel.value ?? ''
+        if (!value.trim()) {
+          setInsertPanelError('先输入代码内容。')
+          return
+        }
+
+        insertHtml(`<pre><code>${escapeInlineHtml(value)}</code></pre>`)
+        closeInsertPanel()
+      }
     }
-
-    const tableHtml = `<table style="width: 100%; border-collapse: collapse;"><tbody>${Array.from({ length: rows }, () => `<tr>${Array.from({ length: columns }, () => '<td style="border: 1px solid #d9d9d9; padding: 6px;">内容</td>').join('')}</tr>`).join('')}</tbody></table><p><br></p>`
-    insertHtml(tableHtml)
-  }
-
-  const handleInsertImage = () => {
-    const url = window.prompt('输入图片 URL')
-    if (!url) {
-      return
-    }
-
-    insertHtml(`<img src="${escapeInlineHtml(url)}" alt="插入图片" style="max-width: 100%;" />`)
-  }
-
-  const handleInsertAttachment = () => {
-    const url = window.prompt('输入附件 URL')
-    if (!url) {
-      return
-    }
-
-    const label = window.prompt('输入附件名称', '附件下载') ?? '附件下载'
-    insertHtml(`<a href="${escapeInlineHtml(url)}" target="_blank" rel="noreferrer noopener">${escapeInlineHtml(label)}</a>`)
-  }
-
-  const handleInsertAudio = () => {
-    const url = window.prompt('输入音频 URL')
-    if (!url) {
-      return
-    }
-
-    insertHtml(`<audio controls src="${escapeInlineHtml(url)}"></audio>`)
-  }
-
-  const handleInsertTex = () => {
-    const value = window.prompt('输入 TEX 公式', '\\frac{a}{b}')
-    if (!value) {
-      return
-    }
-
-    insertHtml(`<code>\\(${escapeInlineHtml(value)}\\)</code>`)
-  }
-
-  const handleInsertCodeBlock = () => {
-    const code = window.prompt('输入代码内容', 'const answer = 42;')
-    if (!code) {
-      return
-    }
-
-    insertHtml(`<pre><code>${escapeInlineHtml(code)}</code></pre>`)
-  }
-
-  const handlePlaceholderInsert = (label: string) => {
-    insertHtml(`<span style="color: #666;">[${label} 待补充]</span>`)
   }
 
   return (
@@ -303,85 +570,96 @@ export function ChatConversationStage({
               const previousIso = index > 0 ? unifiedConversationEntries[index - 1].createdAt : null
               const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
 
-              return (
-                <div key={entry.id} className="pp-chatbox__entry">
-                  {entry.entryType === 'notice' ? (
+              if (entry.entryType === 'notice') {
+                return (
+                  <div key={entry.id} className="pp-chatbox__entry">
                     <div className="pp-chatbox__notice">
                       <span>{entry.text}</span>
                     </div>
-                  ) : (
-                    <>
-                      {showDivider && (
-                        <div className="pp-chatbox__divider">
-                          <span>{formatChatDivider(entry.createdAt)}</span>
+                  </div>
+                )
+              }
+
+              const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
+
+              return (
+                <div key={entry.id} className="pp-chatbox__entry">
+                  <>
+                    {showDivider && (
+                      <div className="pp-chatbox__divider">
+                        <span>{formatChatDivider(entry.createdAt)}</span>
+                      </div>
+                    )}
+
+                    <div className={`pp-chatbox__message${entry.fromSelf ? ' is-self' : ' is-peer'}`}>
+                      <div className="pp-chatbox__sender">
+                        <div className={`pp-chatbox__avatar${entry.fromSelf ? ' is-self' : ''}`}>
+                          {resolveAvatarLabel(senderName, entry.fromSelf)}
+                        </div>
+                        <span className="pp-chatbox__sender-name" title={senderName}>
+                          {senderName}
+                        </span>
+                      </div>
+
+                      {entry.entryType === 'text' ? (
+                        <div
+                          className="pp-chatbox__bubble pp-chatbox__bubble--rich"
+                          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
+                        />
+                      ) : (
+                        <div className={`pp-file-bubble is-${entry.file.tone}`}>
+                          <small className="pp-file-bubble__eyebrow">
+                            {entry.file.kind === 'outgoing' ? '我发送的文件' : '收到的文件'}
+                          </small>
+                          <strong>{entry.file.fileName}</strong>
+                          <span className="pp-file-bubble__meta">
+                            {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
+                          </span>
+                          <div className="pp-file-bubble__progress">
+                            <div
+                              className={`pp-file-bubble__bar is-${entry.file.tone}`}
+                              style={{ width: `${Math.round(entry.file.progress * 100)}%` }}
+                            />
+                          </div>
+                          <div className="pp-file-bubble__footer">
+                            <span>{entry.file.statusLabel}</span>
+                            <span>{entry.file.detail}</span>
+                          </div>
+                          {(entry.file.downloadUrl || entry.file.action) && (
+                            <div className="pp-file-bubble__actions">
+                              {entry.file.downloadUrl ? (
+                                <a
+                                  className="pp-file-bubble__action"
+                                  href={entry.file.downloadUrl}
+                                  download={entry.file.downloadName}
+                                >
+                                  下载文件
+                                </a>
+                              ) : null}
+                              {entry.file.action === 'retry' ? (
+                                <button
+                                  type="button"
+                                  className="pp-file-bubble__action"
+                                  onClick={() => onRetryTransfer(entry.file.id)}
+                                >
+                                  重试
+                                </button>
+                              ) : null}
+                              {entry.file.action === 'cancel' ? (
+                                <button
+                                  type="button"
+                                  className="pp-file-bubble__action"
+                                  onClick={() => onCancelTransfer(entry.file.id)}
+                                >
+                                  取消
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                       )}
-
-                      <div className={`pp-chatbox__message${entry.fromSelf ? ' is-self' : ' is-peer'}`}>
-                        {!entry.fromSelf && <div className="pp-chatbox__avatar">TA</div>}
-
-                        {entry.entryType === 'text' ? (
-                          <div
-                            className="pp-chatbox__bubble pp-chatbox__bubble--rich"
-                            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
-                          />
-                        ) : (
-                          <div className={`pp-file-bubble is-${entry.file.tone}`}>
-                            <small className="pp-file-bubble__eyebrow">
-                              {entry.file.kind === 'outgoing' ? '我发送的文件' : '收到的文件'}
-                            </small>
-                            <strong>{entry.file.fileName}</strong>
-                            <span className="pp-file-bubble__meta">
-                              {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
-                            </span>
-                            <div className="pp-file-bubble__progress">
-                              <div
-                                className={`pp-file-bubble__bar is-${entry.file.tone}`}
-                                style={{ width: `${Math.round(entry.file.progress * 100)}%` }}
-                              />
-                            </div>
-                            <div className="pp-file-bubble__footer">
-                              <span>{entry.file.statusLabel}</span>
-                              <span>{entry.file.detail}</span>
-                            </div>
-                            {(entry.file.downloadUrl || entry.file.action) && (
-                              <div className="pp-file-bubble__actions">
-                                {entry.file.downloadUrl ? (
-                                  <a
-                                    className="pp-file-bubble__action"
-                                    href={entry.file.downloadUrl}
-                                    download={entry.file.downloadName}
-                                  >
-                                    下载文件
-                                  </a>
-                                ) : null}
-                                {entry.file.action === 'retry' ? (
-                                  <button
-                                    type="button"
-                                    className="pp-file-bubble__action"
-                                    onClick={() => onRetryTransfer(entry.file.id)}
-                                  >
-                                    重试
-                                  </button>
-                                ) : null}
-                                {entry.file.action === 'cancel' ? (
-                                  <button
-                                    type="button"
-                                    className="pp-file-bubble__action"
-                                    onClick={() => onCancelTransfer(entry.file.id)}
-                                  >
-                                    取消
-                                  </button>
-                                ) : null}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {entry.fromSelf && <div className="pp-chatbox__avatar is-self">我</div>}
-                      </div>
-                    </>
-                  )}
+                    </div>
+                  </>
                 </div>
               )
             })
@@ -393,12 +671,6 @@ export function ChatConversationStage({
         <div className="pp-chatbox__composer">
           <div className="pp-rich-toolbar">
             <div className="pp-rich-toolbar__group">
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('removeFormat')}>
-                清除格式
-              </button>
-              <button type="button" className="pp-rich-toolbar__button is-disabled" disabled title="格式刷暂未接入">
-                格式刷
-              </button>
               <select
                 className="pp-rich-toolbar__select"
                 defaultValue=""
@@ -450,79 +722,326 @@ export function ChatConversationStage({
                   </option>
                 ))}
               </select>
+              <select
+                className="pp-rich-toolbar__select"
+                defaultValue=""
+                onMouseDown={preserveEditorFocus}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    runCommand('foreColor', event.target.value)
+                    event.target.value = ''
+                  }
+                }}
+              >
+                {richTextColors.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="pp-rich-toolbar__group">
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('bold')}>
-                加粗
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="清除格式"
+                title="清除格式"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('removeFormat')}
+              >
+                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('italic')}>
-                斜体
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                aria-label="格式刷暂未接入"
+                title="格式刷暂未接入"
+                disabled
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">Fb</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('underline')}>
-                下划线
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="加粗"
+                title="加粗"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('bold')}
+              >
+                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--bold" aria-hidden="true">B</span>
               </button>
-              {colorPresets.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className="pp-rich-toolbar__color"
-                  style={{ backgroundColor: color }}
-                  title="字体颜色"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('foreColor', color)}
-                />
-              ))}
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('indent')}>
-                缩进
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="斜体"
+                title="斜体"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('italic')}
+              >
+                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--italic" aria-hidden="true">I</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('justifyLeft')}>
-                左对齐
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="下划线"
+                title="下划线"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('underline')}
+              >
+                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--underline" aria-hidden="true">U</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('justifyCenter')}>
-                居中
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="缩进"
+                title="缩进"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('indent')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">⇥</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => runCommand('justifyRight')}>
-                右对齐
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="左对齐"
+                title="左对齐"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('justifyLeft')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">L</span>
+              </button>
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="居中"
+                title="居中"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('justifyCenter')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">C</span>
+              </button>
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="右对齐"
+                title="右对齐"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => runCommand('justifyRight')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">R</span>
               </button>
             </div>
 
             <div className="pp-rich-toolbar__group">
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertSpecialCharacter}>
-                特殊字符
+              <button
+                type="button"
+                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
+                aria-label="特殊字符"
+                title="特殊字符"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => openInsertPanel('special-character')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">Ω</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertTable}>
-                插入表格
+              <button
+                type="button"
+                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
+                aria-label="插入表格"
+                title="插入表格"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => openInsertPanel('table')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">▦</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertTex}>
-                TEX
+              <button
+                type="button"
+                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
+                aria-label="TEX 公式"
+                title="TEX 公式"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => openInsertPanel('tex')}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">∑</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={() => handlePlaceholderInsert('公式beta')}>
-                公式beta
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                aria-label="公式 beta"
+                title="公式 beta"
+                onMouseDown={preserveEditorFocus}
+                onClick={openFormulaBetaDialog}
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">β</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertImage}>
-                图片
+              <button
+                type="button"
+                className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                aria-label="画板待接入"
+                title="画板待接入"
+                disabled
+              >
+                <span className="pp-rich-toolbar__glyph" aria-hidden="true">✎</span>
               </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertAttachment}>
-                附件
-              </button>
-              <button type="button" className="pp-rich-toolbar__button is-disabled" disabled title="录音待接入">
-                录音
-              </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertAudio}>
-                音频
-              </button>
-              <button type="button" className="pp-rich-toolbar__button is-disabled" disabled title="拍照上传待接入">
-                拍照上传
-              </button>
-              <button type="button" className="pp-rich-toolbar__button is-disabled" disabled title="画板待接入">
-                画板
-              </button>
-              <button type="button" className="pp-rich-toolbar__button" onMouseDown={preserveEditorFocus} onClick={handleInsertCodeBlock}>
-                代码块
+              <button
+                type="button"
+                className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
+                aria-label="代码块"
+                title="代码块"
+                onMouseDown={preserveEditorFocus}
+                onClick={() => openInsertPanel('code')}
+              >
+                <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
               </button>
             </div>
           </div>
+
+          {isFormulaBetaDialogOpen && (
+            <div className="pp-formula-dialog" role="dialog" aria-modal="true" aria-label="公式beta">
+              <button
+                type="button"
+                className="pp-formula-dialog__backdrop"
+                aria-label="关闭公式 beta 对话框"
+                onClick={() => setIsFormulaBetaDialogOpen(false)}
+              />
+              <div className="pp-formula-dialog__panel">
+                <div className="pp-formula-dialog__titlebar">
+                  <div className="pp-formula-dialog__draghandle">
+                    <span className="pp-formula-dialog__caption">公式beta</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="pp-formula-dialog__close"
+                    aria-label="关闭对话框"
+                    title="关闭对话框"
+                    onClick={() => setIsFormulaBetaDialogOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="pp-formula-dialog__content">
+                  <iframe
+                    className="pp-formula-dialog__iframe"
+                    title="公式 beta 编辑器"
+                    srcDoc={formulaBetaFrameSrcDoc}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {insertPanel && (
+            <form className="pp-rich-insert-panel" onSubmit={handleInsertPanelSubmit}>
+              <div className="pp-rich-insert-panel__header">
+                <strong>
+                  {insertPanel.type === 'special-character' && '插入特殊字符'}
+                  {insertPanel.type === 'table' && '插入表格'}
+                  {insertPanel.type === 'tex' && '插入 TEX 公式'}
+                  {insertPanel.type === 'code' && '插入代码块'}
+                </strong>
+                <button type="button" className="pp-rich-insert-panel__dismiss" onClick={closeInsertPanel}>
+                  关闭
+                </button>
+              </div>
+
+              <div className="pp-rich-insert-panel__body">
+                {insertPanel.type === 'special-character' && (
+                  <>
+                    <label className="pp-rich-insert-panel__field">
+                      <span>字符内容</span>
+                      <input
+                        ref={setInsertPanelInputElement}
+                        className="pp-rich-insert-panel__input"
+                        value={insertPanel.value ?? ''}
+                        onChange={(event) => updateInsertPanel({ value: event.target.value })}
+                        placeholder="输入要插入的字符"
+                      />
+                    </label>
+                    <div className="pp-rich-insert-panel__chips" aria-label="常用特殊字符">
+                      {specialCharacterPresets.map((character) => (
+                        <button
+                          key={character}
+                          type="button"
+                          className="pp-rich-insert-panel__chip"
+                          onClick={() => updateInsertPanel({ value: character })}
+                        >
+                          {character}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {insertPanel.type === 'table' && (
+                  <div className="pp-rich-insert-panel__grid">
+                    <label className="pp-rich-insert-panel__field">
+                      <span>行数</span>
+                      <input
+                        ref={setInsertPanelInputElement}
+                        className="pp-rich-insert-panel__input"
+                        inputMode="numeric"
+                        value={insertPanel.rows ?? ''}
+                        onChange={(event) => updateInsertPanel({ rows: event.target.value })}
+                        placeholder="2"
+                      />
+                    </label>
+                    <label className="pp-rich-insert-panel__field">
+                      <span>列数</span>
+                      <input
+                        className="pp-rich-insert-panel__input"
+                        inputMode="numeric"
+                        value={insertPanel.columns ?? ''}
+                        onChange={(event) => updateInsertPanel({ columns: event.target.value })}
+                        placeholder="3"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {insertPanel.type === 'tex' && (
+                  <label className="pp-rich-insert-panel__field">
+                    <span>TEX 公式</span>
+                    <textarea
+                      ref={setInsertPanelTextareaElement}
+                      className="pp-rich-insert-panel__textarea"
+                      value={insertPanel.value ?? ''}
+                      onChange={(event) => updateInsertPanel({ value: event.target.value })}
+                      placeholder="\\frac{a}{b}"
+                      rows={3}
+                    />
+                  </label>
+                )}
+
+                {insertPanel.type === 'code' && (
+                  <label className="pp-rich-insert-panel__field">
+                    <span>代码内容</span>
+                    <textarea
+                      ref={setInsertPanelTextareaElement}
+                      className="pp-rich-insert-panel__textarea"
+                      value={insertPanel.value ?? ''}
+                      onChange={(event) => updateInsertPanel({ value: event.target.value })}
+                      placeholder="const answer = 42;"
+                      rows={5}
+                    />
+                  </label>
+                )}
+
+                {insertPanelError && <p className="pp-rich-insert-panel__error">{insertPanelError}</p>}
+
+                <div className="pp-rich-insert-panel__actions">
+                  <span className="pp-rich-insert-panel__hint">填写后直接插入到当前光标位置</span>
+                  <div className="pp-rich-insert-panel__action-group">
+                    <button type="button" className="pp-rich-insert-panel__ghost" onClick={closeInsertPanel}>
+                      取消
+                    </button>
+                    <button type="submit" className="pp-rich-insert-panel__primary">
+                      插入
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
 
           <div className="pp-chatbox__textarea-wrap">
             <div
@@ -551,7 +1070,11 @@ export function ChatConversationStage({
                 aria-haspopup="dialog"
                 className={`pp-chatbox__emoji-trigger${isEmojiPickerOpen ? ' is-open' : ''}`}
                 onMouseDown={preserveEditorFocus}
-                onClick={() => setIsEmojiPickerOpen((previous) => !previous)}
+                onClick={() => {
+                  setInsertPanel(null)
+                  setInsertPanelError(null)
+                  setIsEmojiPickerOpen((previous) => !previous)
+                }}
               >
                 🙂
               </button>

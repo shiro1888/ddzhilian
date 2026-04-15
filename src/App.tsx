@@ -469,6 +469,9 @@ function App() {
       entryType: 'text' as const,
       sessionId: record.sessionId,
       fromSelf: record.fromSelf,
+      senderName: record.fromSelf
+        ? selfName
+        : sessionPeerNameById.get(record.sessionId) ?? '对方设备',
       createdAt: record.createdAt,
       text: record.text,
     })),
@@ -485,6 +488,9 @@ function App() {
       entryType: 'file' as const,
       sessionId: entry.sessionId ?? '',
       fromSelf: entry.fromSelf,
+      senderName: entry.fromSelf
+        ? selfName
+        : sessionPeerNameById.get(entry.sessionId ?? '') ?? entry.subtitle ?? '对方设备',
       createdAt: entry.createdAt,
       file: entry,
     })),

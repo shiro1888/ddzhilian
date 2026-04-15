@@ -54,6 +54,7 @@ export type UnifiedConversationEntry =
       entryType: 'text'
       sessionId: string
       fromSelf: boolean
+      senderName: string
       createdAt: string
       text: string
     }
@@ -70,6 +71,7 @@ export type UnifiedConversationEntry =
       entryType: 'file'
       sessionId: string
       fromSelf: boolean
+      senderName: string
       createdAt: string
       file: FileConversationEntry
     }
