@@ -90,6 +90,16 @@ export interface RoomSummary {
   updatedAt: string;
 }
 
+export interface RoomStateSummary {
+  roomId: string;
+  pinned: boolean;
+  lastReadAt?: string;
+}
+
+export interface DevicePreferencesPayload {
+  enterToSend: boolean;
+}
+
 export interface HistoryFileSummary {
   historyId: string;
   roomId: string;
@@ -137,11 +147,13 @@ export interface DirectorySnapshotPayload {
     allowShortCode: boolean;
     platform: string;
     nativeLan?: NativeLanCapabilityPayload;
+    preferences: DevicePreferencesPayload;
   };
   peers: PeerSummary[];
   lanPeers: PeerSummary[];
   accountPeers: PeerSummary[];
   rooms: RoomSummary[];
+  roomStates: RoomStateSummary[];
   historyFiles: HistoryFileSummary[];
   historyTexts: HistoryTextSummary[];
   sessions: SessionSummary[];
@@ -166,6 +178,14 @@ export type ClientEvent =
       payload: DeviceSettingsPayload;
     }
   | {
+      type: 'update-room-state';
+      payload: { roomId: string; pinned?: boolean; lastReadAt?: string };
+    }
+  | {
+      type: 'update-preferences';
+      payload: Partial<DevicePreferencesPayload>;
+    }
+  | {
       type: 'pair-by-short-code';
       payload: { shortCode: string };
     }
@@ -179,7 +199,7 @@ export type ClientEvent =
     }
   | {
       type: 'request-connect';
-      payload: { targetDeviceId: string; reason?: PairReason };
+      payload: { targetDeviceId: string; reason?: PairReason; createNewRoom?: boolean };
     }
   | {
       type: 'signal';

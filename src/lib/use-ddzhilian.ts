@@ -3,14 +3,17 @@ import type {
   ChannelMessage,
   ClientEvent,
   ConnectedTarget,
+  DevicePreferencesPayload,
   DeviceSettingsPayload,
   DirectorySnapshotPayload,
   HistoryFileSummary,
   HistoryTextSummary,
   LiveSession,
+  PairReason,
   PeerConnectionState,
   PeerSummary,
   ReceivedFile,
+  RoomStateSummary,
   RoomSummary,
   ServerEvent,
   SessionState,
@@ -337,6 +340,8 @@ export function useDdzhilian() {
   const [localIdentity, setLocalIdentity] = useState<StoredIdentity>(() => readStoredIdentity())
   const [onlinePeers, setOnlinePeers] = useState<PeerSummary[]>([])
   const [roomsById, setRoomsById] = useState<Record<string, RoomSummary>>({})
+  const [roomStates, setRoomStates] = useState<RoomStateSummary[]>([])
+  const [preferences, setPreferences] = useState<DevicePreferencesPayload>({ enterToSend: true })
   const [historyFiles, setHistoryFiles] = useState<HistoryFileSummary[]>([])
   const [historyTexts, setHistoryTexts] = useState<HistoryTextSummary[]>([])
   const [sessionsById, setSessionsById] = useState<Record<string, LiveSession>>({})
@@ -506,6 +511,8 @@ export function useDdzhilian() {
       setRoomsById(
         Object.fromEntries(snapshot.rooms.map((room) => [room.roomId, room] as const)),
       )
+      setRoomStates(snapshot.roomStates ?? [])
+      setPreferences(snapshot.self.preferences ?? { enterToSend: true })
       setHistoryFiles(snapshot.historyFiles)
       setHistoryTexts(snapshot.historyTexts)
       setSessionsById((previous) => {
@@ -1766,13 +1773,16 @@ export function useDdzhilian() {
 
   const requestConnect = (
     targetDeviceId: string,
-    reason: 'manual' | 'lan-discovery' = 'manual',
+    options: PairReason | { reason?: PairReason; createNewRoom?: boolean } = 'manual',
   ) => {
+    const normalizedOptions = typeof options === 'string' ? { reason: options } : options
+
     sendEvent({
       type: 'request-connect',
       payload: {
         targetDeviceId,
-        reason,
+        reason: normalizedOptions.reason ?? 'manual',
+        createNewRoom: normalizedOptions.createNewRoom,
       },
     })
   }
@@ -1856,6 +1866,49 @@ export function useDdzhilian() {
         discoverable: nextIdentity.discoverable,
         allowShortCode: nextIdentity.allowShortCode,
       },
+    })
+  }
+
+  const updateRoomState = (payload: { roomId: string; pinned?: boolean; lastReadAt?: string }) => {
+    setRoomStates((current) => {
+      const existing = current.find((state) => state.roomId === payload.roomId)
+      if (existing) {
+        return current.map((state) =>
+          state.roomId === payload.roomId
+            ? {
+                ...state,
+                ...payload,
+                pinned: payload.pinned ?? state.pinned,
+              }
+            : state,
+        )
+      }
+
+      return [
+        ...current,
+        {
+          roomId: payload.roomId,
+          pinned: payload.pinned ?? false,
+          lastReadAt: payload.lastReadAt,
+        },
+      ]
+    })
+
+    sendEvent({
+      type: 'update-room-state',
+      payload,
+    })
+  }
+
+  const updatePreferences = (patch: Partial<DevicePreferencesPayload>) => {
+    setPreferences((current) => ({
+      ...current,
+      ...patch,
+    }))
+
+    sendEvent({
+      type: 'update-preferences',
+      payload: patch,
     })
   }
 
@@ -1976,6 +2029,8 @@ export function useDdzhilian() {
     rooms: Object.values(roomsById).sort((left, right) =>
       right.updatedAt.localeCompare(left.updatedAt),
     ),
+    roomStates,
+    preferences,
     sessions: Object.values(sessionsById).sort((left, right) =>
       right.updatedAt.localeCompare(left.updatedAt),
     ),
@@ -1993,6 +2048,8 @@ export function useDdzhilian() {
     disconnectSession,
     requestSnapshot,
     updateSettings,
+    updateRoomState,
+    updatePreferences,
     createTransferItems,
     retryTransfer,
     cancelTransfer,

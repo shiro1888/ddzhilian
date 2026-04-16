@@ -1,12 +1,22 @@
 import type { ReactNode } from 'react'
-import type { PeerSummary } from '../lib/ddzhilian-types'
 
 export type TransferMode = 'file' | 'text'
 export type SessionStatus = 'waiting' | 'active' | 'completed'
 export type NavView = 'connect' | 'send' | 'receive' | 'text' | 'sessions'
 export type TextMode = 'long' | 'chat'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
-export type DeviceBarStatus = 'connected' | 'connectable' | 'connecting' | 'failed'
+export type RoomListStatus = 'connected' | 'online' | 'history'
+export type SharedContentTab = 'chat' | 'media' | 'files' | 'links'
+
+export type AttachmentDraft = {
+  id: string
+  file: File
+  objectUrl: string
+  kind: 'image' | 'video' | 'file'
+  name: string
+  size: number
+  mimeType?: string
+}
 
 export type UiSession = {
   id: string
@@ -103,9 +113,15 @@ export type SessionArtifact = {
   summary: string
 }
 
-export type DeviceBarItem = {
-  peer: PeerSummary
-  deviceStatus: DeviceBarStatus
-  latestSessionId: string | null
+export type RoomListItem = {
+  roomId: string
+  title: string
   previewText: string
+  updatedAt: string
+  updatedAtLabel: string
+  memberCount: number
+  onlineCount: number
+  status: RoomListStatus
+  pinned: boolean
+  unreadCount: number
 }

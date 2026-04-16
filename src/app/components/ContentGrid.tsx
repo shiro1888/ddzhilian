@@ -1,18 +1,14 @@
-import type { DeviceBarItem } from '../types'
-import {
-  deviceBarStatusLabel,
-  deviceRelationText,
-  formatRelativeTime,
-} from '../utils'
+import type { RoomListItem } from '../types'
 
 type ContentGridProps = {
   roomJoinDraft: string
   sessionQuery: string
-  deviceBarItems: DeviceBarItem[]
-  effectiveSelectedPeerId: string | null
+  roomListItems: RoomListItem[]
+  selectedRoomId: string | null
   isContentRailCollapsed: boolean
   connectionActionLabel: string
   connectionActionDisabled: boolean
+  connectAllDisabled: boolean
   isEditingDeviceName: boolean
   deviceNameDraft: string
   selfDeviceName?: string
@@ -21,22 +17,25 @@ type ContentGridProps = {
   onDeviceNameDraftChange: (value: string) => void
   onJoinRoom: () => void
   onConnectionAction: () => void
+  onConnectAllDevices: () => void
+  onCreateNewConversation: () => void
   onShowConnect: () => void
   onBeginEditDeviceName: () => void
   onSaveDeviceName: () => void
   onCancelEditDeviceName: () => void
-  onOpenDeviceConversation: (peerId: string, latestSessionId: string | null) => void
-  onDeviceAction: (item: DeviceBarItem) => void
+  onOpenRoomConversation: (roomId: string) => void
+  onToggleRoomPinned: (roomId: string) => void
 }
 
 export function ContentGrid({
   roomJoinDraft,
   sessionQuery,
-  deviceBarItems,
-  effectiveSelectedPeerId,
+  roomListItems,
+  selectedRoomId,
   isContentRailCollapsed,
   connectionActionLabel,
   connectionActionDisabled,
+  connectAllDisabled,
   isEditingDeviceName,
   deviceNameDraft,
   selfDeviceName,
@@ -45,12 +44,14 @@ export function ContentGrid({
   onDeviceNameDraftChange,
   onJoinRoom,
   onConnectionAction,
+  onConnectAllDevices,
+  onCreateNewConversation,
   onShowConnect,
   onBeginEditDeviceName,
   onSaveDeviceName,
   onCancelEditDeviceName,
-  onOpenDeviceConversation,
-  onDeviceAction,
+  onOpenRoomConversation,
+  onToggleRoomPinned,
 }: ContentGridProps) {
   return (
     <section className={`dd-content-grid${isContentRailCollapsed ? ' is-collapsed' : ''}`}>
@@ -121,6 +122,22 @@ export function ContentGrid({
               >
                 {connectionActionLabel}
               </button>
+              <button
+                type="button"
+                className="dd-button dd-button--dark"
+                onClick={onConnectAllDevices}
+                disabled={connectAllDisabled}
+              >
+                连接全部设备
+              </button>
+              <button
+                type="button"
+                className="dd-button dd-button--dark"
+                onClick={onCreateNewConversation}
+                disabled={connectionActionDisabled}
+              >
+                创建新对话
+              </button>
             </div>
           </div>
         </div>
@@ -129,7 +146,7 @@ export function ContentGrid({
           <div className="dd-panel__search">
             <input
               type="search"
-              placeholder="搜索设备名称或互传码"
+              placeholder="搜索对话或 roomId"
               value={sessionQuery}
               onChange={(event) => onSessionQueryChange(event.target.value)}
             />
@@ -144,54 +161,57 @@ export function ContentGrid({
           </div>
         </div>
 
-        {deviceBarItems.length > 0 ? (
-          <ul className="dd-device-bar">
-            {deviceBarItems.map((item) => (
-              <li key={item.peer.deviceId}>
-                <div className={`dd-device-bar__item${effectiveSelectedPeerId === item.peer.deviceId ? ' is-selected' : ''}`}>
+        {roomListItems.length > 0 ? (
+          <ul className="dd-room-list">
+            {roomListItems.map((item) => (
+              <li key={item.roomId}>
+                <div className={`dd-room-list__item${selectedRoomId === item.roomId ? ' is-selected' : ''}`}>
                   <button
                     type="button"
-                    className="dd-device-bar__summary"
-                    onClick={() => onOpenDeviceConversation(item.peer.deviceId, item.latestSessionId)}
+                    className="dd-room-list__summary"
+                    title={`${item.memberCount} 位成员 · Room ${item.roomId}`}
+                    onClick={() => onOpenRoomConversation(item.roomId)}
                   >
-                    <span className="dd-device-bar__avatar" aria-hidden="true">
-                      {item.peer.deviceName.slice(0, 1)}
+                    <span className="dd-room-list__avatar" aria-hidden="true">
+                      {item.title.slice(0, 1)}
                     </span>
-                    <div className="dd-device-bar__body">
-                      <div className="dd-device-bar__head">
-                        <strong>{item.peer.deviceName}</strong>
-                        <small>{formatRelativeTime(item.peer.lastSeenAt)}</small>
+                    <div className="dd-room-list__body">
+                      <div className="dd-room-list__head">
+                        <strong>{item.title}</strong>
+                        <div className="dd-room-list__head-actions">
+                          {item.unreadCount > 0 && (
+                            <span className="dd-room-list__unread">{item.unreadCount}</span>
+                          )}
+                          <small>{item.updatedAtLabel}</small>
+                          {item.pinned && <span className="dd-room-list__pin-mark">★</span>}
+                        </div>
                       </div>
                       <p>{item.previewText}</p>
-                      <div className="dd-device-bar__meta">
-                        <small>{item.peer.platform} · {deviceRelationText(item.peer)}</small>
-                        <span className={`dd-peer-badge dd-peer-badge--${item.deviceStatus}`}>
-                          {deviceBarStatusLabel(item.deviceStatus)}
+                      <div className="dd-room-list__meta">
+                        <span className={`dd-peer-badge dd-peer-badge--${item.status}`}>
+                          {item.status === 'connected'
+                            ? '已连接'
+                            : item.status === 'online'
+                              ? `${item.onlineCount} 在线`
+                              : '仅历史'}
                         </span>
                       </div>
                     </div>
                   </button>
-
                   <button
                     type="button"
-                    className={`dd-device-bar__action is-${item.deviceStatus}`}
-                    onClick={() => onDeviceAction(item)}
-                    disabled={item.deviceStatus === 'connecting'}
+                    className={`dd-room-list__pin${item.pinned ? ' is-pinned' : ''}`}
+                    aria-label={item.pinned ? '取消置顶' : '置顶对话'}
+                    onClick={() => onToggleRoomPinned(item.roomId)}
                   >
-                    {item.deviceStatus === 'connected'
-                      ? '断开'
-                      : item.deviceStatus === 'connecting'
-                        ? '连接中'
-                        : item.deviceStatus === 'failed'
-                          ? '重连'
-                          : '连接'}
+                    ★
                   </button>
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <div className="dd-empty">当前没有发现设备。新发现的设备会在这里按时间竖向排列。</div>
+          <div className="dd-empty">暂无已存在对话。加入或创建会话后会显示在这里。</div>
         )}
       </section>
     </section>

@@ -1,10 +1,11 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import type { UnifiedConversationEntry } from '../types'
+import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
 import {
   formatChatDivider,
   formatFileSize,
+  linkifyPlainTextUrls,
   sanitizeRichTextHtml,
   shouldInsertDivider,
 } from '../utils'
@@ -19,11 +20,24 @@ type FloatingPanelPosition = {
   top: number
 }
 
+type ImagePreviewState = {
+  src: string
+  alt: string
+}
+
 const quickEmojis = [
   '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
   '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
   '👍', '👎', '🙏', '💪', '👋', '🤝', '🎉', '🎊', '✨', '🔥', '⭐', '🌈',
   '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
+]
+
+type SharedPanelTab = Exclude<SharedContentTab, 'chat'>
+
+const sharedPanelTabs: Array<{ id: SharedPanelTab; label: string }> = [
+  { id: 'media', label: '媒体' },
+  { id: 'files', label: '文件' },
+  { id: 'links', label: '链接' },
 ]
 
 const defaultRichTextFonts: SelectOption[] = [
@@ -71,7 +85,6 @@ const paragraphFormats: SelectOption[] = [
   { label: '标题 2', value: 'h2' },
   { label: '标题 3', value: 'h3' },
   { label: '引用', value: 'blockquote' },
-  { label: '代码块', value: 'pre' },
 ]
 
 const themeRichTextColors: SelectOption[] = [
@@ -112,163 +125,12 @@ const standardRichTextColors: SelectOption[] = [
   { label: '粉紫 #c27ba0', value: '#c27ba0' },
 ]
 
-const specialCharacterPresets = [
-  '℃',
-  '°',
-  '±',
-  '×',
-  '÷',
-  '√',
-  '≈',
-  '≠',
-  '≤',
-  '≥',
-  '∞',
-  '→',
-]
-
-const formulaBetaFrameSrcDoc = `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-      :root {
-        color-scheme: light;
-        font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-        color: #122033;
-      }
-      .shell {
-        display: grid;
-        gap: 16px;
-        min-height: 100vh;
-        padding: 18px;
-      }
-      .hero {
-        display: grid;
-        gap: 8px;
-        padding: 18px;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #ffffff, #eef5ff);
-        border: 1px solid #d8e4f4;
-      }
-      .hero strong {
-        font-size: 20px;
-      }
-      .hero p,
-      .hint {
-        margin: 0;
-        color: #53657d;
-        line-height: 1.6;
-      }
-      .quick,
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-      .quick button,
-      .actions button {
-        min-height: 34px;
-        padding: 0 12px;
-        border: 1px solid #cfdae8;
-        border-radius: 999px;
-        background: #ffffff;
-        color: #203247;
-        cursor: pointer;
-        font: inherit;
-      }
-      textarea {
-        width: 100%;
-        min-height: 240px;
-        padding: 16px;
-        border: 1px solid #cfdae8;
-        border-radius: 16px;
-        background: #ffffff;
-        color: #122033;
-        font: 16px/1.7 "Cambria Math", "Times New Roman", serif;
-        resize: vertical;
-      }
-      .actions {
-        justify-content: flex-end;
-      }
-      .actions button.primary {
-        border-color: #0f6ab4;
-        background: #0f6ab4;
-        color: #ffffff;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="shell">
-      <div class="hero">
-        <strong>公式 beta</strong>
-        <p>输入公式表达式后点击“插入公式”。这里先用 iframe 容器承载编辑区，后续可替换成真实公式编辑器页面。</p>
-      </div>
-
-      <div class="quick">
-        <button type="button" data-value="\\\\frac{a}{b}">分式</button>
-        <button type="button" data-value="x^2+y^2=z^2">平方和</button>
-        <button type="button" data-value="\\\\sqrt{a^2+b^2}">根式</button>
-        <button type="button" data-value="\\\\int_a^b f(x)\\\\,dx">积分</button>
-        <button type="button" data-value="\\\\sum_{i=1}^{n} i">求和</button>
-      </div>
-
-      <textarea id="formula-input">\\frac{a}{b}</textarea>
-      <p class="hint">支持直接输入 LaTeX 风格表达式，例如 \\frac、\\sqrt、\\sum、\\int。</p>
-
-      <div class="actions">
-        <button type="button" id="close-btn">关闭</button>
-        <button type="button" class="primary" id="insert-btn">插入公式</button>
-      </div>
-    </div>
-
-    <script>
-      const input = document.getElementById('formula-input');
-      document.querySelectorAll('[data-value]').forEach((button) => {
-        button.addEventListener('click', () => {
-          input.value = button.dataset.value || '';
-          input.focus();
-        });
-      });
-
-      document.getElementById('insert-btn').addEventListener('click', () => {
-        parent.postMessage({
-          source: 'ddzhilian-formula-beta',
-          type: 'insert',
-          value: input.value
-        }, '*');
-      });
-
-      document.getElementById('close-btn').addEventListener('click', () => {
-        parent.postMessage({
-          source: 'ddzhilian-formula-beta',
-          type: 'close'
-        }, '*');
-      });
-    </script>
-  </body>
-</html>`
-
-type InsertPanelType =
-  | 'special-character'
-  | 'table'
-  | 'tex'
-  | 'code'
+type InsertPanelType = 'link'
 
 type InsertPanelState = {
   type: InsertPanelType
   value?: string
-  rows?: string
-  columns?: string
+  text?: string
 }
 
 type ChatConversationStageProps = {
@@ -279,11 +141,27 @@ type ChatConversationStageProps = {
   fileInputId: string
   activeTransferLabel: string
   isSendDisabled: boolean
+  enterToSend: boolean
+  attachments: AttachmentDraft[]
+  sharedContentTab: SharedContentTab
+  sharedMediaEntries: FileConversationEntry[]
+  sharedFileEntries: FileConversationEntry[]
+  sharedLinkEntries: Array<{
+    id: string
+    url: string
+    label: string
+    sourceName: string
+    createdAt: string
+  }>
   onChatDraftChange: (value: string) => void
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
   onSendText: () => void
+  onAttachFiles: (files: File[]) => void
+  onRemoveAttachment: (id: string) => void
+  onEnterToSendChange: (value: boolean) => void
+  onSharedContentTabChange: (tab: SharedContentTab) => void
   onDragEnter: () => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
@@ -357,15 +235,68 @@ function legacyFontSizeForPixels(sizeInPixels: number) {
 }
 
 function createInsertPanelState(type: InsertPanelType): InsertPanelState {
-  switch (type) {
-    case 'special-character':
-      return { type, value: '℃' }
-    case 'table':
-      return { type, rows: '2', columns: '3' }
-    case 'tex':
-      return { type, value: '\\frac{a}{b}' }
-    case 'code':
-      return { type, value: 'const answer = 42;' }
+  return { type, value: 'https://', text: '' }
+}
+
+function normalizeLinkHref(value: string) {
+  const trimmedValue = value.trim()
+  if (!trimmedValue) {
+    return null
+  }
+
+  const href = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue)
+    ? trimmedValue
+    : `https://${trimmedValue}`
+
+  try {
+    const url = new URL(href)
+    if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'mailto:' || url.protocol === 'tel:') {
+      return url.toString()
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function fileExtensionFromMimeType(mimeType: string) {
+  switch (mimeType) {
+    case 'image/png':
+      return 'png'
+    case 'image/gif':
+      return 'gif'
+    case 'image/webp':
+      return 'webp'
+    case 'image/jpeg':
+    case 'image/jpg':
+      return 'jpg'
+    default:
+      return 'png'
+  }
+}
+
+function dataUrlToImageFile(value: string, index: number) {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(value)
+  if (!match) {
+    return null
+  }
+
+  try {
+    const mimeType = match[1]
+    const binary = atob(match[2])
+    const bytes = new Uint8Array(binary.length)
+    for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1) {
+      bytes[byteIndex] = binary.charCodeAt(byteIndex)
+    }
+
+    return new File(
+      [bytes],
+      `pasted-image-${index.toString()}.${fileExtensionFromMimeType(mimeType)}`,
+      { type: mimeType },
+    )
+  } catch {
+    return null
   }
 }
 
@@ -377,20 +308,31 @@ export function ChatConversationStage({
   fileInputId,
   activeTransferLabel,
   isSendDisabled,
+  enterToSend,
+  attachments,
+  sharedContentTab,
+  sharedMediaEntries,
+  sharedFileEntries,
+  sharedLinkEntries,
   onChatDraftChange,
   onFileSelection,
   onRetryTransfer,
   onCancelTransfer,
   onSendText,
+  onAttachFiles,
+  onRemoveAttachment,
+  onEnterToSendChange,
+  onSharedContentTabChange,
   onDragEnter,
   onDragOver,
   onDragLeave,
   onDrop,
 }: ChatConversationStageProps) {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+  const [isFormatToolbarOpen, setIsFormatToolbarOpen] = useState(false)
+  const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [insertPanel, setInsertPanel] = useState<InsertPanelState | null>(null)
   const [insertPanelError, setInsertPanelError] = useState<string | null>(null)
-  const [isFormulaBetaDialogOpen, setIsFormulaBetaDialogOpen] = useState(false)
   const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false)
   const [activeTextColor, setActiveTextColor] = useState<string | null>(null)
   const [activeParagraphFormat, setActiveParagraphFormat] = useState('')
@@ -398,6 +340,8 @@ export function ChatConversationStage({
   const [activeFontSize, setActiveFontSize] = useState('')
   const [fontOptions, setFontOptions] = useState<SelectOption[]>(defaultRichTextFonts)
   const [colorPalettePosition, setColorPalettePosition] = useState<FloatingPanelPosition | null>(null)
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
+  const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -405,12 +349,9 @@ export function ChatConversationStage({
   const colorPaletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const activeSharedContentTab: SharedPanelTab = sharedContentTab === 'chat' ? 'media' : sharedContentTab
 
   const setInsertPanelInputElement = (element: HTMLInputElement | null) => {
-    insertPanelInputRef.current = element
-  }
-
-  const setInsertPanelTextareaElement = (element: HTMLTextAreaElement | null) => {
     insertPanelInputRef.current = element
   }
 
@@ -622,6 +563,23 @@ export function ChatConversationStage({
     }
   }, [insertPanel])
 
+  useEffect(() => {
+    if (!imagePreview) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setImagePreview(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [imagePreview])
+
   const syncDraftFromEditor = () => {
     onChatDraftChange(normalizeEditorHtml(editorRef.current?.innerHTML ?? ''))
   }
@@ -630,17 +588,57 @@ export function ChatConversationStage({
     event.preventDefault()
   }
 
+  const closeFloatingComposerPanels = () => {
+    setIsEmojiPickerOpen(false)
+    setIsColorPaletteOpen(false)
+    setInsertPanel(null)
+    setInsertPanelError(null)
+  }
+
+  const handleFormatToolbarToggle = () => {
+    const nextIsOpen = !isFormatToolbarOpen
+    setIsFormatToolbarOpen(nextIsOpen)
+    setIsEmojiPickerOpen(false)
+
+    if (!nextIsOpen) {
+      setIsColorPaletteOpen(false)
+      setInsertPanel(null)
+      setInsertPanelError(null)
+    }
+  }
+
+  const handleSharedPanelToggle = () => {
+    const nextIsOpen = !isSharedPanelOpen
+    setIsSharedPanelOpen(nextIsOpen)
+
+    if (nextIsOpen) {
+      closeFloatingComposerPanels()
+      setIsFormatToolbarOpen(false)
+      if (sharedContentTab === 'chat') {
+        onSharedContentTabChange('media')
+      }
+    }
+  }
+
   const restoreSelection = () => {
     const selection = window.getSelection()
-    if (!selection) {
+    const editor = editorRef.current
+    if (!selection || !editor) {
       return
     }
 
-    editorRef.current?.focus()
+    editor.focus()
     selection.removeAllRanges()
     if (savedRangeRef.current) {
       selection.addRange(savedRangeRef.current)
+      return
     }
+
+    const range = document.createRange()
+    range.selectNodeContents(editor)
+    range.collapse(false)
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
   }
 
   const runCommand = (command: string, value?: string) => {
@@ -690,6 +688,102 @@ export function ChatConversationStage({
     restoreSelection()
     document.execCommand('insertHTML', false, html)
     syncDraftFromEditor()
+  }
+
+  const openImagePreview = (src: string, alt = '图片预览') => {
+    if (!src) {
+      return
+    }
+
+    setIsImagePreviewZoomed(false)
+    setImagePreview({ src, alt })
+  }
+
+  const openInlineImageFromTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLImageElement)) {
+      return false
+    }
+
+    openImagePreview(target.currentSrc || target.src, target.alt || '图片预览')
+    return true
+  }
+
+  const handleInlineImageClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!openInlineImageFromTarget(event.target)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof HTMLImageElement)) {
+        return
+      }
+
+      const owner = target.closest('.dd-chatbox__editor, .dd-chatbox__bubble--rich')
+      if (!owner) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      openImagePreview(target.currentSrc || target.src, target.alt || '图片预览')
+    }
+
+    document.addEventListener('click', handleClick, true)
+    return () => {
+      document.removeEventListener('click', handleClick, true)
+    }
+  })
+
+  const readImageFilesFromHtml = (html: string) => {
+    if (!html || typeof DOMParser === 'undefined') {
+      return []
+    }
+
+    const parser = new DOMParser()
+    const documentFragment = parser.parseFromString(html, 'text/html')
+
+    return Array.from(documentFragment.querySelectorAll('img[src]'))
+      .map((image, index) => dataUrlToImageFile(image.getAttribute('src') ?? '', index + 1))
+      .filter((file): file is File => Boolean(file))
+  }
+
+  const handleEditorPaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const imageFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file))
+    const html = event.clipboardData.getData('text/html')
+    const text = event.clipboardData.getData('text/plain')
+
+    if (imageFiles.length > 0) {
+      event.preventDefault()
+      onAttachFiles(imageFiles)
+      return
+    }
+
+    const htmlImageFiles = readImageFilesFromHtml(html)
+    if (htmlImageFiles.length > 0) {
+      event.preventDefault()
+      onAttachFiles(htmlImageFiles)
+      return
+    }
+
+    if (html || !/(https?:\/\/|www\.)/i.test(text)) {
+      return
+    }
+
+    event.preventDefault()
+    insertHtml(text.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />'))
+  }
+
+  const handleSend = () => {
+    onSendText()
   }
 
   const applyInlineStyle = (
@@ -749,73 +843,42 @@ export function ChatConversationStage({
     syncDraftFromEditor()
   }
 
-  const handleFormulaBetaMessage = useEffectEvent((payload: unknown) => {
-    if (
-      !payload ||
-      typeof payload !== 'object' ||
-      !('source' in payload) ||
-      payload.source !== 'ddzhilian-formula-beta' ||
-      !('type' in payload)
-    ) {
-      return
-    }
-
-    if (payload.type === 'close') {
-      setIsFormulaBetaDialogOpen(false)
-      editorRef.current?.focus()
-      return
-    }
-
-    if (payload.type === 'insert' && 'value' in payload && typeof payload.value === 'string') {
-      const value = payload.value.trim()
-      if (!value) {
-        return
-      }
-
-      insertHtml(`<code>\\(${escapeInlineHtml(value)}\\)</code>`)
-      setIsFormulaBetaDialogOpen(false)
-      editorRef.current?.focus()
-    }
-  })
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      handleFormulaBetaMessage(event.data)
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => {
-      window.removeEventListener('message', handleMessage)
-    }
-  }, [])
-
   const handleEmojiInsert = (emoji: string) => {
     insertText(emoji)
     setIsEmojiPickerOpen(false)
     editorRef.current?.focus()
   }
 
-  const openInsertPanel = (type: InsertPanelType) => {
-    setIsEmojiPickerOpen(false)
-    setIsFormulaBetaDialogOpen(false)
-    setIsColorPaletteOpen(false)
-    setInsertPanelError(null)
-    setInsertPanel(createInsertPanelState(type))
+  const getSelectedEditorText = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) {
+      return ''
+    }
+
+    const range = selection.getRangeAt(0)
+    if (!editorRef.current.contains(range.commonAncestorContainer)) {
+      return ''
+    }
+
+    return selection.toString().trim()
   }
 
-  const openFormulaBetaDialog = () => {
+  const openInsertPanel = (type: InsertPanelType) => {
     setIsEmojiPickerOpen(false)
     setIsColorPaletteOpen(false)
-    setInsertPanel(null)
     setInsertPanelError(null)
-    setIsFormulaBetaDialogOpen(true)
+    setInsertPanel(
+      {
+        ...createInsertPanelState(type),
+        text: getSelectedEditorText(),
+      },
+    )
   }
 
   const toggleColorPalette = () => {
     setIsEmojiPickerOpen(false)
     setInsertPanel(null)
     setInsertPanelError(null)
-    setIsFormulaBetaDialogOpen(false)
     setIsColorPaletteOpen((current) => !current)
   }
 
@@ -873,50 +936,17 @@ export function ChatConversationStage({
     }
 
     switch (insertPanel.type) {
-      case 'special-character': {
-        const value = insertPanel.value?.trim() ?? ''
-        if (!value) {
-          setInsertPanelError('先输入要插入的字符。')
+      case 'link': {
+        const href = normalizeLinkHref(insertPanel.value ?? '')
+        if (!href) {
+          setInsertPanelError('请输入有效链接，支持 http、https、mailto 或 tel。')
           return
         }
 
-        insertText(value)
+        const label = (insertPanel.text?.trim() || href).slice(0, 200)
+        insertHtml(`<a href="${escapeInlineHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeInlineHtml(label)}</a>`)
         closeInsertPanel()
         return
-      }
-      case 'table': {
-        const rows = Number.parseInt(insertPanel.rows ?? '', 10)
-        const columns = Number.parseInt(insertPanel.columns ?? '', 10)
-        if (!Number.isFinite(rows) || !Number.isFinite(columns) || rows <= 0 || columns <= 0) {
-          setInsertPanelError('表格行数和列数需要是大于 0 的整数。')
-          return
-        }
-
-        const tableHtml = `<table style="width: 100%; border-collapse: collapse;"><tbody>${Array.from({ length: rows }, () => `<tr>${Array.from({ length: columns }, () => '<td style="border: 1px solid #d9d9d9; padding: 6px;">内容</td>').join('')}</tr>`).join('')}</tbody></table><p><br></p>`
-        insertHtml(tableHtml)
-        closeInsertPanel()
-        return
-      }
-      case 'tex': {
-        const value = insertPanel.value?.trim() ?? ''
-        if (!value) {
-          setInsertPanelError('先输入 TEX 公式。')
-          return
-        }
-
-        insertHtml(`<code>\\(${escapeInlineHtml(value)}\\)</code>`)
-        closeInsertPanel()
-        return
-      }
-      case 'code': {
-        const value = insertPanel.value ?? ''
-        if (!value.trim()) {
-          setInsertPanelError('先输入代码内容。')
-          return
-        }
-
-        insertHtml(`<pre><code>${escapeInlineHtml(value)}</code></pre>`)
-        closeInsertPanel()
       }
     }
   }
@@ -930,8 +960,45 @@ export function ChatConversationStage({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div className="dd-chatbox__thread">
-          {unifiedConversationEntries.length > 0 ? (
+        <div className="dd-chatbox__topbar">
+          <button
+            type="button"
+            className={`dd-chatbox__shared-trigger${isSharedPanelOpen ? ' is-active' : ''}`}
+            aria-expanded={isSharedPanelOpen}
+            onClick={handleSharedPanelToggle}
+          >
+            {isSharedPanelOpen ? '关闭共享内容' : '共享内容'}
+          </button>
+        </div>
+
+        <div className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}>
+          {isSharedPanelOpen && (
+            <div className="dd-shared-panel__header">
+              <div className="dd-shared-panel__tabs" role="tablist" aria-label="共享内容">
+                {sharedPanelTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSharedContentTab === tab.id}
+                    className={activeSharedContentTab === tab.id ? 'is-active' : ''}
+                    onClick={() => onSharedContentTabChange(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="dd-shared-panel__close"
+                onClick={() => setIsSharedPanelOpen(false)}
+              >
+                关闭
+              </button>
+            </div>
+          )}
+
+          {!isSharedPanelOpen && unifiedConversationEntries.length > 0 ? (
             unifiedConversationEntries.map((entry, index) => {
               const previousIso = index > 0 ? unifiedConversationEntries[index - 1].createdAt : null
               const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
@@ -973,6 +1040,7 @@ export function ChatConversationStage({
                       {entry.entryType === 'text' ? (
                         <div
                           className="dd-chatbox__bubble dd-chatbox__bubble--rich"
+                          onClick={handleInlineImageClick}
                           dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
                         />
                       ) : (
@@ -985,19 +1053,18 @@ export function ChatConversationStage({
                             {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
                           </span>
                           {entry.file.previewUrl && previewKind === 'image' ? (
-                            <a
+                            <button
+                              type="button"
                               className="dd-file-bubble__preview dd-file-bubble__preview--image"
-                              href={entry.file.previewUrl}
-                              target="_blank"
-                              rel="noreferrer"
                               aria-label={`预览图片 ${entry.file.fileName}`}
+                              onClick={() => openImagePreview(entry.file.previewUrl ?? '', entry.file.fileName)}
                             >
                               <img
                                 src={entry.file.previewUrl}
                                 alt={entry.file.fileName}
                                 loading="lazy"
                               />
-                            </a>
+                            </button>
                           ) : null}
                           {entry.file.previewUrl && previewKind === 'video' ? (
                             <video
@@ -1065,12 +1132,87 @@ export function ChatConversationStage({
                 </div>
               )
             })
-          ) : (
+          ) : !isSharedPanelOpen ? (
             <div className="dd-chatbox__empty dd-chatbox__empty--files">{fileConversationEmptyState}</div>
+          ) : activeSharedContentTab === 'media' ? (
+            sharedMediaEntries.length > 0 ? (
+              <div className="dd-shared-grid">
+                {sharedMediaEntries.map((entry) => {
+                  const previewKind = resolveMediaPreviewKind(entry.mimeType, entry.fileName)
+
+                  return (
+                    <article key={entry.id} className="dd-shared-card">
+                      {entry.previewUrl && previewKind === 'image' ? (
+                        <button
+                          type="button"
+                          className="dd-shared-card__preview"
+                          onClick={() => openImagePreview(entry.previewUrl ?? '', entry.fileName)}
+                        >
+                          <img src={entry.previewUrl} alt={entry.fileName} loading="lazy" />
+                        </button>
+                      ) : entry.previewUrl && previewKind === 'video' ? (
+                        <video className="dd-shared-card__preview" src={entry.previewUrl} controls preload="metadata" />
+                      ) : (
+                        <div className="dd-shared-card__placeholder">媒体</div>
+                      )}
+                      <strong>{entry.fileName}</strong>
+                      <span>{formatFileSize(entry.fileSize)} · {entry.statusLabel}</span>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="dd-chatbox__empty dd-chatbox__empty--files">当前对话暂无媒体。</div>
+            )
+          ) : activeSharedContentTab === 'files' ? (
+            sharedFileEntries.length > 0 ? (
+              <div className="dd-shared-list">
+                {sharedFileEntries.map((entry) => (
+                  <article key={entry.id} className="dd-shared-row">
+                    <div>
+                      <strong>{entry.fileName}</strong>
+                      <span>{formatFileSize(entry.fileSize)} · {entry.statusLabel} · {entry.detail}</span>
+                    </div>
+                    <div className="dd-shared-row__actions">
+                      {entry.onDownload ? (
+                        <button type="button" onClick={entry.onDownload}>下载</button>
+                      ) : null}
+                      {entry.downloadUrl ? (
+                        <a href={entry.downloadUrl} download={entry.downloadName}>下载</a>
+                      ) : null}
+                      {entry.action === 'retry' ? (
+                        <button type="button" onClick={() => onRetryTransfer(entry.id)}>重试</button>
+                      ) : null}
+                      {entry.action === 'cancel' ? (
+                        <button type="button" onClick={() => onCancelTransfer(entry.id)}>取消</button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="dd-chatbox__empty dd-chatbox__empty--files">当前对话暂无文件。</div>
+            )
+          ) : sharedLinkEntries.length > 0 ? (
+            <div className="dd-shared-list">
+              {sharedLinkEntries.map((entry) => (
+                <article key={entry.id} className="dd-shared-row">
+                  <div>
+                    <strong>{entry.label}</strong>
+                    <span>{entry.sourceName} · {formatChatDivider(entry.createdAt)}</span>
+                  </div>
+                  <a href={entry.url} target="_blank" rel="noreferrer">打开</a>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="dd-chatbox__empty dd-chatbox__empty--files">当前对话暂无链接。</div>
           )}
         </div>
 
+        {!isSharedPanelOpen && (
         <div className="dd-chatbox__composer">
+          {isFormatToolbarOpen && (
           <div className="dd-rich-toolbar-scroll">
             <div className="dd-rich-toolbar">
               <div className="dd-rich-toolbar__group">
@@ -1138,25 +1280,6 @@ export function ChatConversationStage({
                 <button
                   type="button"
                   className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="清除格式"
-                  title="清除格式"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('removeFormat')}
-                >
-                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon is-disabled"
-                  aria-label="格式刷暂未接入"
-                  title="格式刷暂未接入"
-                  disabled
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">Fb</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="加粗"
                   title="加粗"
                   onMouseDown={preserveEditorFocus}
@@ -1186,145 +1309,20 @@ export function ChatConversationStage({
                 </button>
                 <button
                   type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="缩进"
-                  title="缩进"
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'link' ? ' is-active' : ''}`}
+                  aria-label="插入链接"
+                  title="插入链接"
                   onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('indent')}
+                  onClick={() => openInsertPanel('link')}
                 >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">⇥</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="左对齐"
-                  title="左对齐"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('justifyLeft')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">L</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="居中"
-                  title="居中"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('justifyCenter')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">C</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="右对齐"
-                  title="右对齐"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => runCommand('justifyRight')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">R</span>
-                </button>
-              </div>
-
-              <div className="dd-rich-toolbar__group">
-                <button
-                  type="button"
-                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
-                  aria-label="特殊字符"
-                  title="特殊字符"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => openInsertPanel('special-character')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">Ω</span>
-                </button>
-                <button
-                  type="button"
-                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
-                  aria-label="插入表格"
-                  title="插入表格"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => openInsertPanel('table')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">▦</span>
-                </button>
-                <button
-                  type="button"
-                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
-                  aria-label="TEX 公式"
-                  title="TEX 公式"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => openInsertPanel('tex')}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">∑</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
-                  aria-label="公式 beta"
-                  title="公式 beta"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={openFormulaBetaDialog}
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">β</span>
-                </button>
-                <button
-                  type="button"
-                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon is-disabled"
-                  aria-label="画板待接入"
-                  title="画板待接入"
-                  disabled
-                >
-                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">✎</span>
-                </button>
-                <button
-                  type="button"
-                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
-                  aria-label="代码块"
-                  title="代码块"
-                  onMouseDown={preserveEditorFocus}
-                  onClick={() => openInsertPanel('code')}
-                >
-                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">↗</span>
                 </button>
               </div>
             </div>
           </div>
-
-          {isFormulaBetaDialogOpen && (
-            <div className="dd-formula-dialog" role="dialog" aria-modal="true" aria-label="公式beta">
-              <button
-                type="button"
-                className="dd-formula-dialog__backdrop"
-                aria-label="关闭公式 beta 对话框"
-                onClick={() => setIsFormulaBetaDialogOpen(false)}
-              />
-              <div className="dd-formula-dialog__panel">
-                <div className="dd-formula-dialog__titlebar">
-                  <div className="dd-formula-dialog__draghandle">
-                    <span className="dd-formula-dialog__caption">公式beta</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="dd-formula-dialog__close"
-                    aria-label="关闭对话框"
-                    title="关闭对话框"
-                    onClick={() => setIsFormulaBetaDialogOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="dd-formula-dialog__content">
-                  <iframe
-                    className="dd-formula-dialog__iframe"
-                    title="公式 beta 编辑器"
-                    srcDoc={formulaBetaFrameSrcDoc}
-                  />
-                </div>
-              </div>
-            </div>
           )}
 
-          {isColorPaletteOpen && createPortal(
+          {isFormatToolbarOpen && isColorPaletteOpen && createPortal(
             <div
               ref={colorPaletteRef}
               className="dd-color-palette"
@@ -1391,101 +1389,37 @@ export function ChatConversationStage({
             document.body,
           )}
 
-          {insertPanel && (
+          {isFormatToolbarOpen && insertPanel && (
             <form className="dd-rich-insert-panel" onSubmit={handleInsertPanelSubmit}>
               <div className="dd-rich-insert-panel__header">
-                <strong>
-                  {insertPanel.type === 'special-character' && '插入特殊字符'}
-                  {insertPanel.type === 'table' && '插入表格'}
-                  {insertPanel.type === 'tex' && '插入 TEX 公式'}
-                  {insertPanel.type === 'code' && '插入代码块'}
-                </strong>
+                <strong>插入链接</strong>
                 <button type="button" className="dd-rich-insert-panel__dismiss" onClick={closeInsertPanel}>
                   关闭
                 </button>
               </div>
 
               <div className="dd-rich-insert-panel__body">
-                {insertPanel.type === 'special-character' && (
-                  <>
-                    <label className="dd-rich-insert-panel__field">
-                      <span>字符内容</span>
-                      <input
-                        ref={setInsertPanelInputElement}
-                        className="dd-rich-insert-panel__input"
-                        value={insertPanel.value ?? ''}
-                        onChange={(event) => updateInsertPanel({ value: event.target.value })}
-                        placeholder="输入要插入的字符"
-                      />
-                    </label>
-                    <div className="dd-rich-insert-panel__chips" aria-label="常用特殊字符">
-                      {specialCharacterPresets.map((character) => (
-                        <button
-                          key={character}
-                          type="button"
-                          className="dd-rich-insert-panel__chip"
-                          onClick={() => updateInsertPanel({ value: character })}
-                        >
-                          {character}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {insertPanel.type === 'table' && (
-                  <div className="dd-rich-insert-panel__grid">
-                    <label className="dd-rich-insert-panel__field">
-                      <span>行数</span>
-                      <input
-                        ref={setInsertPanelInputElement}
-                        className="dd-rich-insert-panel__input"
-                        inputMode="numeric"
-                        value={insertPanel.rows ?? ''}
-                        onChange={(event) => updateInsertPanel({ rows: event.target.value })}
-                        placeholder="2"
-                      />
-                    </label>
-                    <label className="dd-rich-insert-panel__field">
-                      <span>列数</span>
-                      <input
-                        className="dd-rich-insert-panel__input"
-                        inputMode="numeric"
-                        value={insertPanel.columns ?? ''}
-                        onChange={(event) => updateInsertPanel({ columns: event.target.value })}
-                        placeholder="3"
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {insertPanel.type === 'tex' && (
+                <div className="dd-rich-insert-panel__grid">
                   <label className="dd-rich-insert-panel__field">
-                    <span>TEX 公式</span>
-                    <textarea
-                      ref={setInsertPanelTextareaElement}
-                      className="dd-rich-insert-panel__textarea"
+                    <span>链接地址</span>
+                    <input
+                      ref={setInsertPanelInputElement}
+                      className="dd-rich-insert-panel__input"
                       value={insertPanel.value ?? ''}
                       onChange={(event) => updateInsertPanel({ value: event.target.value })}
-                      placeholder="\\frac{a}{b}"
-                      rows={3}
+                      placeholder="https://example.com"
                     />
                   </label>
-                )}
-
-                {insertPanel.type === 'code' && (
                   <label className="dd-rich-insert-panel__field">
-                    <span>代码内容</span>
-                    <textarea
-                      ref={setInsertPanelTextareaElement}
-                      className="dd-rich-insert-panel__textarea"
-                      value={insertPanel.value ?? ''}
-                      onChange={(event) => updateInsertPanel({ value: event.target.value })}
-                      placeholder="const answer = 42;"
-                      rows={5}
+                    <span>显示文本</span>
+                    <input
+                      className="dd-rich-insert-panel__input"
+                      value={insertPanel.text ?? ''}
+                      onChange={(event) => updateInsertPanel({ text: event.target.value })}
+                      placeholder="留空则显示链接地址"
                     />
                   </label>
-                )}
+                </div>
 
                 {insertPanelError && <p className="dd-rich-insert-panel__error">{insertPanelError}</p>}
 
@@ -1504,18 +1438,57 @@ export function ChatConversationStage({
             </form>
           )}
 
+          {attachments.length > 0 && (
+            <div className="dd-attachment-rail" aria-label="待发送附件">
+              {attachments.map((attachment) => (
+                <article key={attachment.id} className="dd-attachment-card">
+                  {attachment.kind === 'image' ? (
+                    <button
+                      type="button"
+                      className="dd-attachment-card__preview"
+                      onClick={() => openImagePreview(attachment.objectUrl, attachment.name)}
+                    >
+                      <img src={attachment.objectUrl} alt={attachment.name} />
+                    </button>
+                  ) : attachment.kind === 'video' ? (
+                    <video className="dd-attachment-card__preview" src={attachment.objectUrl} preload="metadata" />
+                  ) : (
+                    <div className="dd-attachment-card__placeholder">文件</div>
+                  )}
+                  <div className="dd-attachment-card__body">
+                    <strong>{attachment.name}</strong>
+                    <span>{formatFileSize(attachment.size)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="dd-attachment-card__remove"
+                    aria-label={`移除 ${attachment.name}`}
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                  >
+                    ×
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+
           <div className="dd-chatbox__textarea-wrap">
             <div
               ref={editorRef}
               className="dd-chatbox__editor"
               contentEditable
               suppressContentEditableWarning
-              data-placeholder="输入消息，支持富文本和 Ctrl/Cmd + Enter 发送。"
+              data-placeholder="输入消息"
+              onClick={handleInlineImageClick}
               onInput={syncDraftFromEditor}
+              onPaste={handleEditorPaste}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                if (
+                  event.key === 'Enter' &&
+                  ((enterToSend && !event.shiftKey) || event.metaKey || event.ctrlKey)
+                ) {
                   event.preventDefault()
-                  onSendText()
+                  handleSend()
                 }
               }}
             />
@@ -1539,9 +1512,28 @@ export function ChatConversationStage({
               >
                 🙂
               </button>
+              <button
+                type="button"
+                aria-label={isFormatToolbarOpen ? '收起格式工具' : '展开格式工具'}
+                aria-expanded={isFormatToolbarOpen}
+                title="格式"
+                className={`dd-chatbox__format-trigger${isFormatToolbarOpen ? ' is-open' : ''}`}
+                onMouseDown={preserveEditorFocus}
+                onClick={handleFormatToolbarToggle}
+              >
+                Aa
+              </button>
             </div>
 
             <div className="dd-chatbox__composer-actions">
+              <label className="dd-enter-toggle">
+                <input
+                  type="checkbox"
+                  checked={enterToSend}
+                  onChange={(event) => onEnterToSendChange(event.target.checked)}
+                />
+                Enter 发送
+              </label>
               <label className="dd-chatbox__file-trigger" htmlFor={fileInputId}>
                 <input id={fileInputId} className="sr-only" type="file" multiple onChange={onFileSelection} />
                 选择文件
@@ -1549,8 +1541,9 @@ export function ChatConversationStage({
               <button
                 type="button"
                 className="dd-button dd-button--primary"
-                onClick={onSendText}
+                onClick={handleSend}
                 disabled={isSendDisabled}
+                title={`当前目标：${activeTransferLabel}`}
               >
                 发送
               </button>
@@ -1583,12 +1576,47 @@ export function ChatConversationStage({
               </div>
             </div>
           )}
-
-          <div className="dd-chatbox__toolbar dd-chatbox__toolbar--meta">
-            <span className="dd-chatbox__meta-note">支持富文本、表格、附件链接、音频和代码块</span>
-            <span className="dd-chatbox__meta-note">当前目标：{activeTransferLabel}</span>
-          </div>
         </div>
+        )}
+
+        {imagePreview && (
+          <div
+            className={`dd-image-preview-dialog${isImagePreviewZoomed ? ' is-zoomed' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="图片预览"
+          >
+            <button
+              type="button"
+              className="dd-image-preview-dialog__backdrop"
+              aria-label="关闭图片预览"
+              onClick={() => setImagePreview(null)}
+            />
+            <div className="dd-image-preview-dialog__panel">
+              <div className="dd-image-preview-dialog__titlebar">
+                <span>{imagePreview.alt}</span>
+                <button
+                  type="button"
+                  className="dd-image-preview-dialog__close"
+                  aria-label="关闭图片预览"
+                  onClick={() => setImagePreview(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="dd-image-preview-dialog__body">
+                <button
+                  type="button"
+                  className="dd-image-preview-dialog__image-button"
+                  aria-label={isImagePreviewZoomed ? '缩小图片' : '放大图片'}
+                  onClick={() => setIsImagePreviewZoomed((current) => !current)}
+                >
+                  <img src={imagePreview.src} alt={imagePreview.alt} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

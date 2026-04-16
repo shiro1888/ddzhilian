@@ -18,6 +18,7 @@ import {
 import { HistoryRegistry } from './registry/history-registry.js';
 import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
+import { UiStateRegistry } from './registry/ui-state-registry.js';
 import { buildNetworkContext } from './utils/network.js';
 
 type ErrorPayload = Extract<ServerEvent, { type: 'error' }>['payload'];
@@ -33,6 +34,7 @@ const devices = new DeviceRegistry();
 const history = new HistoryRegistry(config.historyRetentionMs);
 const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
+const uiState = new UiStateRegistry();
 
 function setCorsHeaders(
   request: {
@@ -591,6 +593,7 @@ function broadcastSnapshots() {
       sessions,
       rooms,
       history,
+      uiState,
       config.rtcConfig,
       config.publicWsUrl,
     );
@@ -739,10 +742,28 @@ function connectDeviceToRoom(
   }
 }
 
+function selectPreferredRoomForConnection(requesterId: string, targetId: string) {
+  const roomById = new Map(
+    [
+      ...rooms.listForDevice(requesterId),
+      ...rooms.listForDevice(targetId),
+    ].map((room) => [room.roomId, room] as const),
+  );
+
+  return [...roomById.values()].sort((left, right) => {
+    if (right.memberIds.length !== left.memberIds.length) {
+      return right.memberIds.length - left.memberIds.length;
+    }
+
+    return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  })[0];
+}
+
 function joinRoomViaTarget(input: {
   requesterId: string;
   targetId: string;
   reason: PairReason;
+  createNewRoom?: boolean;
 }) {
   if (input.requesterId === input.targetId) {
     return {
@@ -763,7 +784,9 @@ function joinRoomViaTarget(input: {
     };
   }
 
-  const preferredRoom = rooms.getPreferredJoinRoomForDevice(target.deviceId);
+  const preferredRoom = input.createNewRoom
+    ? undefined
+    : selectPreferredRoomForConnection(requester.deviceId, target.deviceId);
 
   if (!preferredRoom) {
     const room = rooms.createRoom({
@@ -787,12 +810,18 @@ function joinRoomViaTarget(input: {
     };
   }
 
+  const requesterInRoom = preferredRoom.memberIds.includes(requester.deviceId);
+  const targetInRoom = preferredRoom.memberIds.includes(target.deviceId);
+  const joiningDeviceId = requesterInRoom && !targetInRoom
+    ? target.deviceId
+    : requester.deviceId;
   const existingMemberIds = preferredRoom.memberIds.filter(
-    (memberId) => memberId !== requester.deviceId,
+    (memberId) => memberId !== joiningDeviceId,
   );
-  rooms.addMember(preferredRoom.roomId, requester.deviceId);
+
+  rooms.addMember(preferredRoom.roomId, joiningDeviceId);
   connectDeviceToRoom(
-    requester.deviceId,
+    joiningDeviceId,
     preferredRoom.roomId,
     input.reason,
     existingMemberIds,
@@ -955,6 +984,7 @@ function handleEvent(
         sessions,
         rooms,
         history,
+        uiState,
         config.rtcConfig,
         config.publicWsUrl,
       );
@@ -1001,12 +1031,34 @@ function handleEvent(
       return deviceId;
     }
 
+    case 'update-room-state': {
+      const room = rooms.getById(event.payload.roomId);
+      if (!room || !room.memberIds.includes(activeDeviceId)) {
+        emitError(socket, {
+          code: 'ROOM_NOT_FOUND',
+          message: 'No active room matches that room ID.',
+        });
+        return deviceId;
+      }
+
+      uiState.updateRoomState(activeDeviceId, event.payload);
+      broadcastSnapshots();
+      return deviceId;
+    }
+
+    case 'update-preferences': {
+      uiState.updatePreferences(activeDeviceId, event.payload);
+      broadcastSnapshots();
+      return deviceId;
+    }
+
     case 'request-snapshot': {
       const snapshot = devices.buildSnapshot(
         activeDeviceId,
         sessions,
         rooms,
         history,
+        uiState,
         config.rtcConfig,
         config.publicWsUrl,
       );
@@ -1096,6 +1148,7 @@ function handleEvent(
         requesterId: activeDeviceId,
         targetId: event.payload.targetDeviceId,
         reason: event.payload.reason ?? 'manual',
+        createNewRoom: event.payload.createNewRoom,
       });
 
       if (!result.ok) {

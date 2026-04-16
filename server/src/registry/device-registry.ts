@@ -24,6 +24,7 @@ import {
 import { type HistoryRegistry } from './history-registry.js';
 import { type RoomRegistry } from './room-registry.js';
 import { type SessionRegistry } from './session-registry.js';
+import { type UiStateRegistry } from './ui-state-registry.js';
 
 export interface ConnectedDevice {
   socket: WebSocket;
@@ -246,6 +247,7 @@ export class DeviceRegistry {
     sessionRegistry: SessionRegistry,
     roomRegistry: RoomRegistry,
     historyRegistry: HistoryRegistry,
+    uiStateRegistry: UiStateRegistry,
     rtcConfig: DirectorySnapshotPayload['rtcConfig'],
     publicWsUrl: string,
   ): DirectorySnapshotPayload | undefined {
@@ -309,11 +311,16 @@ export class DeviceRegistry {
         allowShortCode: viewer.allowShortCode,
         platform: viewer.platform,
         nativeLan: viewer.nativeLan,
+        preferences: uiStateRegistry.getPreferences(viewer.deviceId),
       },
       peers,
       lanPeers: peers.filter((peer) => peer.relation.sameLan),
       accountPeers: peers.filter((peer) => peer.relation.sameAccount),
       rooms,
+      roomStates: uiStateRegistry.listRoomStates(
+        viewer.deviceId,
+        rooms.map((room) => room.roomId),
+      ),
       historyFiles,
       historyTexts,
       sessions,

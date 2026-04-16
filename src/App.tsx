@@ -13,21 +13,24 @@ import { SessionsStage } from './app/components/SessionsStage'
 import { TextStage } from './app/components/TextStage'
 import { DEFAULT_VIEW, pathForView, resolveViewFromPathname } from './app/routes'
 import type {
+  AttachmentDraft,
   ConversationNotice,
-  DeviceBarItem,
   NavView,
+  RoomListItem,
   SessionArtifact,
+  SharedContentTab,
   UiSession,
   UnifiedConversationEntry,
 } from './app/types'
 import {
   collapseBroadcastTextRecords,
   collectDroppedFiles,
-  deviceBarStatus,
   deviceConnectionLabel,
   extractPlainTextFromRichText,
   formatFileSize,
   formatRelativeTime,
+  hasRichTextImage,
+  removeImagesFromRichText,
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
@@ -43,6 +46,66 @@ function isPreviewableMediaType(mimeType?: string) {
   return Boolean(mimeType?.startsWith('image/') || mimeType?.startsWith('video/'))
 }
 
+function resolveMediaPreviewKind(mimeType: string | undefined, fileName: string) {
+  const normalizedMimeType = mimeType?.toLowerCase() ?? ''
+  const normalizedName = fileName.toLowerCase()
+
+  if (normalizedMimeType.startsWith('image/') || /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(normalizedName)) {
+    return 'image' as const
+  }
+
+  if (normalizedMimeType.startsWith('video/') || /\.(m4v|mov|mp4|ogv|webm)$/i.test(normalizedName)) {
+    return 'video' as const
+  }
+
+  return null
+}
+
+function resolveAttachmentKind(file: File): AttachmentDraft['kind'] {
+  if (file.type.startsWith('image/')) {
+    return 'image'
+  }
+
+  if (file.type.startsWith('video/')) {
+    return 'video'
+  }
+
+  return 'file'
+}
+
+function extractLinksFromRichText(value: string) {
+  if (!value) {
+    return []
+  }
+
+  const links: Array<{ url: string; label: string }> = []
+
+  if (typeof DOMParser !== 'undefined') {
+    const parser = new DOMParser()
+    const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+    for (const anchor of Array.from(documentFragment.querySelectorAll('a[href]'))) {
+      const url = anchor.getAttribute('href')?.trim()
+      if (url) {
+        links.push({
+          url,
+          label: anchor.textContent?.trim() || url,
+        })
+      }
+    }
+  }
+
+  const plainText = extractPlainTextFromRichText(value)
+  for (const match of plainText.matchAll(/(?:https?:\/\/|www\.)[^\s<>"']+/gi)) {
+    const rawUrl = match[0].replace(/[.,!?;:，。！？；：]+$/, '')
+    const url = rawUrl.startsWith('www.') ? `https://${rawUrl}` : rawUrl
+    if (!links.some((link) => link.url === url)) {
+      links.push({ url, label: rawUrl })
+    }
+  }
+
+  return links
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -56,6 +119,7 @@ function App() {
   const [chatDraft, setChatDraft] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [sessionQuery, setSessionQuery] = useState('')
@@ -64,6 +128,8 @@ function App() {
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
+  const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
+  const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
   const deferredQuery = useDeferredValue(sessionQuery)
   const activeView = resolveViewFromPathname(location.pathname)
   const isChatDesktopTheme = true
@@ -72,6 +138,7 @@ function App() {
     activeView === 'send' || activeView === 'receive' ? 'text' : activeView
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const hasConnectionSnapshotRef = useRef(false)
+  const attachmentDraftsRef = useRef<AttachmentDraft[]>([])
 
   const {
     socketState,
@@ -79,6 +146,8 @@ function App() {
     localIdentity,
     onlinePeers,
     rooms,
+    roomStates,
+    preferences,
     sessions,
     connectionStates,
     connectedTargets,
@@ -94,6 +163,8 @@ function App() {
     disconnectSession,
     requestSnapshot,
     updateSettings,
+    updateRoomState,
+    updatePreferences,
     createTransferItems,
     retryTransfer,
     cancelTransfer,
@@ -103,6 +174,18 @@ function App() {
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
+
+  useEffect(() => {
+    attachmentDraftsRef.current = attachmentDrafts
+  }, [attachmentDrafts])
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentDraftsRef.current) {
+        URL.revokeObjectURL(attachment.objectUrl)
+      }
+    }
+  }, [])
 
   const effectiveSelectedPeerId =
     onlinePeers.some((peer) => peer.deviceId === selectedPeerId)
@@ -123,6 +206,7 @@ function App() {
     () => new Map(rooms.map((room) => [room.roomId, room] as const)),
     [rooms],
   )
+  const roomStateById = new Map(roomStates.map((state) => [state.roomId, state] as const))
   const deviceNameById = new Map<string, string>()
   if (self) {
     deviceNameById.set(self.deviceId, self.deviceName)
@@ -189,24 +273,35 @@ function App() {
     }
   }
 
-  const filteredDevicePeers = onlinePeers.filter((peer) => {
-    const keyword = deferredQuery.trim().toLowerCase()
-    const haystack = `${peer.deviceName} ${peer.platform} ${peer.shortCode} ${peer.pairToken}`.toLowerCase()
-    return keyword.length === 0 || haystack.includes(keyword)
-  })
-
-  const selectedDevicePeer = onlinePeers.find((peer) => peer.deviceId === effectiveSelectedPeerId) ?? null
-  const selectedPeerLatestSession =
-    selectedDevicePeer ? latestSessionByPeerId.get(selectedDevicePeer.deviceId)?.uiSession ?? null : null
-  const selectedRoomId = selectedPeerLatestSession?.roomId ?? null
-  const selectedRoom = selectedRoomId ? roomById.get(selectedRoomId) ?? null : null
+  const effectiveSelectedRoomId =
+    selectedRoomId && roomById.has(selectedRoomId)
+      ? selectedRoomId
+      : (rooms[0]?.roomId ?? null)
+  const selectedRoom = effectiveSelectedRoomId ? roomById.get(effectiveSelectedRoomId) ?? null : null
   const selectedRoomMemberNames =
     selectedRoom?.members
       .filter((member) => member.deviceId !== self?.deviceId)
       .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName) ?? []
+  const selectedRoomPeerId =
+    selectedRoom?.members.find(
+      (member) => member.deviceId === selectedPeerId && member.deviceId !== self?.deviceId,
+    )?.deviceId ??
+    selectedRoom?.members.find(
+      (member) =>
+        member.deviceId !== self?.deviceId &&
+        onlinePeers.some((peer) => peer.deviceId === member.deviceId),
+    )?.deviceId ??
+    null
+  const selectedDevicePeer = selectedRoom
+    ? onlinePeers.find((peer) => peer.deviceId === selectedRoomPeerId) ?? null
+    : onlinePeers.find((peer) => peer.deviceId === effectiveSelectedPeerId) ?? null
+  const selectedConnectionPeer =
+    onlinePeers.find((peer) => peer.deviceId === selectedPeerId) ?? selectedDevicePeer
+  const selectedConnectionLatestSession =
+    selectedConnectionPeer ? latestSessionByPeerId.get(selectedConnectionPeer.deviceId)?.uiSession ?? null : null
   const selectedConversationSessions = sessions
     .filter((session) =>
-      selectedRoomId ? session.roomId === selectedRoomId : session.peerId === selectedDevicePeer?.deviceId,
+      effectiveSelectedRoomId ? session.roomId === effectiveSelectedRoomId : session.peerId === selectedDevicePeer?.deviceId,
     )
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
   const selectedConversationSessionIds = new Set(
@@ -224,14 +319,16 @@ function App() {
     }
 
     const frameId = window.requestAnimationFrame(() => {
+      setSelectedRoomId(room.roomId)
       const firstPeer = room.members.find((member) => member.deviceId !== self.deviceId)
+      const latestSession = sessions
+        .filter((session) => session.roomId === room.roomId)
+        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
+
       if (firstPeer) {
         setSelectedPeerId(firstPeer.deviceId)
-        const latestSession = sessions
-          .filter((session) => session.roomId === room.roomId && session.peerId === firstPeer.deviceId)
-          .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
-        setSelectedSessionId(latestSession?.sessionId ?? null)
       }
+      setSelectedSessionId(latestSession?.sessionId ?? null)
 
       setPendingRoomSelectionId(null)
     })
@@ -302,8 +399,10 @@ function App() {
 
   const selectedDeviceStatus =
     selectedDevicePeer ? peerStatusById.get(selectedDevicePeer.deviceId) : undefined
-  const selectedRoomConnectedTargets = selectedRoomId
-    ? connectedTargets.filter((target) => target.session.roomId === selectedRoomId)
+  const selectedConnectionStatus =
+    selectedConnectionPeer ? peerStatusById.get(selectedConnectionPeer.deviceId) : undefined
+  const selectedRoomConnectedTargets = effectiveSelectedRoomId
+    ? connectedTargets.filter((target) => target.session.roomId === effectiveSelectedRoomId)
     : selectedDevicePeer
       ? connectedTargets.filter((target) => target.peerId === selectedDevicePeer.deviceId)
       : []
@@ -312,7 +411,9 @@ function App() {
       ? selectedRoomMemberNames.length <= 3
         ? selectedRoomMemberNames.join('、')
         : `${selectedRoomMemberNames.slice(0, 3).join('、')} 等 ${selectedRoomMemberNames.length} 位成员`
-      : selectedDevicePeer?.deviceName ?? '设备对话'
+      : selectedRoom
+        ? `Room ${selectedRoom.roomId}`
+        : selectedDevicePeer?.deviceName ?? '设备对话'
     : selectedUiSession
       ? selectedUiSession.source === selfName
         ? selectedUiSession.target
@@ -328,11 +429,11 @@ function App() {
   const currentMeta = isChatConversationView
     ? {
         title: selectedConversationName,
-        description: selectedDevicePeer
-          ? selectedRoom
-            ? `${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
-            : `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
-          : '选择一个在线设备开始对话。',
+        description: selectedRoom
+          ? `${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
+          : selectedDevicePeer
+            ? `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
+            : '选择一个已有对话开始查看。',
         primaryAction: '发送',
         secondaryAction: '加入会话',
       }
@@ -344,33 +445,37 @@ function App() {
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const connectionActionLabel =
-    selectedDeviceStatus === 'connected' && selectedPeerLatestSession
+    selectedConnectionStatus === 'connected' && selectedConnectionLatestSession
       ? '断开当前设备'
-      : selectedDeviceStatus === 'failed'
+      : selectedConnectionStatus === 'failed'
         ? '重新连接当前设备'
         : '连接当前设备'
   const connectionActionDisabled =
-    !selectedDevicePeer || selectedDeviceStatus === 'connecting'
+    !selectedConnectionPeer || selectedConnectionStatus === 'connecting'
 
   const activeTransferLabel =
-    isChatDesktopTheme && selectedDevicePeer
-      ? selectedRoom
-        ? `${selectedConversationName} · ${selectedRoomConnectedTargets.length} 台已连接设备`
-        : `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
-      : activeTransferTarget?.peerName ??
-        (connectedTargets.length > 1
-          ? '所有已连接设备'
-          : onlinePeers.length > 0 && connectingTargetCount > 0
-            ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-            : onlinePeers.length > 0
-              ? '当前没有可接收文件的已连接设备'
-              : '暂无已连接设备')
+    isChatDesktopTheme && selectedRoom
+      ? `${selectedConversationName} · ${selectedRoomConnectedTargets.length} 台已连接设备`
+      : isChatDesktopTheme && selectedDevicePeer
+        ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
+        : activeTransferTarget?.peerName ??
+          (connectedTargets.length > 1
+            ? '所有已连接设备'
+            : onlinePeers.length > 0 && connectingTargetCount > 0
+              ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
+              : onlinePeers.length > 0
+                ? '当前没有可接收文件的已连接设备'
+                : '暂无已连接设备')
 
   const fileSenderEmptyState =
-    isChatDesktopTheme && selectedDevicePeer
+    isChatDesktopTheme && selectedRoom
       ? selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
+        : `还没有与 ${selectedConversationName} 建立直连。`
+      : isChatDesktopTheme && selectedDevicePeer
+        ? selectedConnectedTarget
+          ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
+          : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
       : connectedTargets.length === 0
         ? onlinePeers.length > 0 && connectingTargetCount > 0
           ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
@@ -386,23 +491,24 @@ function App() {
     ),
   )
   const visibleTransferItemsForConversation =
-    isChatDesktopTheme && selectedDevicePeer
+    isChatDesktopTheme && effectiveSelectedRoomId
       ? visibleTransferItems.filter(
           (item) =>
-            item.targetDeviceId === selectedDevicePeer.deviceId ||
-            (item.sessionId ? selectedConversationSessionIds.has(item.sessionId) : false),
+            item.sessionId ? selectedConversationSessionIds.has(item.sessionId) : false,
         )
+      : isChatDesktopTheme && selectedDevicePeer
+        ? visibleTransferItems.filter((item) => item.targetDeviceId === selectedDevicePeer.deviceId)
       : visibleTransferItems
   const receivedFilesForConversation =
-    isChatDesktopTheme && selectedDevicePeer
+    isChatDesktopTheme && effectiveSelectedRoomId
       ? receivedFiles.filter((file) => selectedConversationSessionIds.has(file.sessionId))
       : receivedFiles
   const conversationNoticesForConversation =
-    isChatDesktopTheme && selectedDevicePeer
+    isChatDesktopTheme && effectiveSelectedRoomId
       ? conversationNotices.filter((notice) => selectedConversationSessionIds.has(notice.sessionId))
       : conversationNotices
   const activeConversationRoomId = isChatDesktopTheme
-    ? selectedRoomId
+    ? effectiveSelectedRoomId
     : selectedUiSession?.roomId ?? null
   const localHistoryIds = new Set<string>()
   for (const item of visibleTransferItemsForConversation) {
@@ -446,7 +552,7 @@ function App() {
       : []
   const sortedChatRecordsForConversation = collapseBroadcastTextRecords(
     [
-      ...(isChatDesktopTheme && selectedDevicePeer
+      ...(isChatDesktopTheme && effectiveSelectedRoomId
         ? sortedChatRecords.filter((record) => selectedConversationSessionIds.has(record.sessionId))
         : selectedUiSession
           ? sortedChatRecords.filter((record) => record.sessionId === selectedUiSession.id)
@@ -610,29 +716,153 @@ function App() {
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
 
   const fileConversationEmptyState =
-    selectedDevicePeer
+    selectedRoom
       ? selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
-      : '发现到新设备后，它们会显示在这里。'
+        : `还没有与 ${selectedConversationName} 建立直连。`
+      : '选择一个已有对话后，消息和文件会显示在这里。'
+  const hasChatDraftContent =
+    extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
+    hasRichTextImage(chatDraft) ||
+    attachmentDrafts.length > 0
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const runnableTransferIds = visibleTransferItemsForConversation
     .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
     .map((item) => item.id)
-  const devicePreviewText = (peer: (typeof onlinePeers)[number]) => {
-    const latestSession = latestSessionByPeerId.get(peer.deviceId)?.uiSession
-    if (latestSession) {
-      return latestSession.kind === 'file' ? `[文件] ${latestSession.summary}` : latestSession.summary
-    }
+  const sessionRoomIdById = new Map(sessions.map((session) => [session.sessionId, session.roomId] as const))
+  const roomListItems: RoomListItem[] = rooms
+    .map((room) => {
+      const roomSessions = sessions
+        .filter((session) => session.roomId === room.roomId)
+        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+      const roomSessionIds = new Set(roomSessions.map((session) => session.sessionId))
+      const latestSession = roomSessions[0]
+      const latestUiSession = latestSession ? uiSessionById.get(latestSession.sessionId) : undefined
+      const memberNames = room.members
+        .filter((member) => member.deviceId !== self?.deviceId)
+        .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
+      const title =
+        memberNames.length === 0
+          ? `Room ${room.roomId}`
+          : memberNames.length <= 3
+            ? memberNames.join('、')
+            : `${memberNames.slice(0, 3).join('、')} 等 ${memberNames.length} 位成员`
+      const latestEvents = [
+        ...textRecords
+          .filter((record) => roomSessionIds.has(record.sessionId))
+          .map((record) => {
+            const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
+            return {
+              createdAt: record.createdAt,
+              previewText: `[文本] ${preview}`,
+            }
+          }),
+        ...historyTexts
+          .filter((record) => record.roomId === room.roomId)
+          .map((record) => {
+            const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
+            return {
+              createdAt: record.createdAt,
+              previewText: `[文本] ${preview}`,
+            }
+          }),
+        ...receivedFiles
+          .filter((file) => roomSessionIds.has(file.sessionId))
+          .map((file) => ({
+            createdAt: file.createdAt,
+            previewText: `[文件] ${file.name}`,
+          })),
+        ...visibleTransferItems
+          .filter((item) => item.sessionId && sessionRoomIdById.get(item.sessionId) === room.roomId)
+          .map((item) => ({
+            createdAt: item.createdAt,
+            previewText: `[文件] ${item.fileName}`,
+          })),
+        ...historyFiles
+          .filter((file) => file.roomId === room.roomId)
+          .map((file) => ({
+            createdAt: file.createdAt,
+            previewText: `[文件] ${file.fileName}`,
+          })),
+      ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      const latestEvent = latestEvents[0]
+      const updatedAt = latestEvent?.createdAt ?? latestSession?.updatedAt ?? room.updatedAt
+      const previewText =
+        latestEvent?.previewText ??
+        (latestUiSession
+          ? latestUiSession.kind === 'file'
+            ? `[文件] ${latestUiSession.summary}`
+            : latestUiSession.summary
+          : '暂无消息')
+      const onlineCount = room.members.filter(
+        (member) => member.deviceId !== self?.deviceId && member.online,
+      ).length
+      const connectedCount = connectedTargets.filter((target) => target.session.roomId === room.roomId).length
+      const roomState = roomStateById.get(room.roomId)
+      const lastReadTime = roomState?.lastReadAt ? new Date(roomState.lastReadAt).getTime() : null
+      const incomingEvents = [
+        ...textRecords
+          .filter((record) => roomSessionIds.has(record.sessionId) && !record.fromSelf)
+          .map((record) => record.createdAt),
+        ...historyTexts
+          .filter((record) => record.roomId === room.roomId && record.sourceDeviceId !== self?.deviceId)
+          .map((record) => record.createdAt),
+        ...receivedFiles
+          .filter((file) => roomSessionIds.has(file.sessionId))
+          .map((file) => file.createdAt),
+        ...historyFiles
+          .filter((file) => file.roomId === room.roomId && file.sourceDeviceId !== self?.deviceId)
+          .map((file) => file.createdAt),
+      ]
+      const unreadCount =
+        lastReadTime === null
+          ? 0
+          : incomingEvents.filter((createdAt) => new Date(createdAt).getTime() > lastReadTime).length
+      const status: RoomListItem['status'] =
+        connectedCount > 0 ? 'connected' : onlineCount > 0 ? 'online' : 'history'
 
-    return `${peer.platform} · 互传码 ${peer.shortCode}`
-  }
-  const deviceBarItems: DeviceBarItem[] = filteredDevicePeers.map((peer) => ({
-    peer,
-    deviceStatus: deviceBarStatus(peerStatusById.get(peer.deviceId)),
-    latestSessionId: latestSessionByPeerId.get(peer.deviceId)?.uiSession.id ?? null,
-    previewText: devicePreviewText(peer),
-  }))
+      return {
+        roomId: room.roomId,
+        title,
+        previewText,
+        updatedAt,
+        updatedAtLabel: formatRelativeTime(updatedAt),
+        memberCount: room.members.length,
+        onlineCount,
+        status,
+        pinned: roomState?.pinned ?? false,
+        unreadCount,
+      }
+    })
+    .filter((item) => {
+      const keyword = deferredQuery.trim().toLowerCase()
+      const haystack = `${item.roomId} ${item.title} ${item.previewText}`.toLowerCase()
+      return keyword.length === 0 || haystack.includes(keyword)
+    })
+    .sort((left, right) => {
+      if (left.pinned !== right.pinned) {
+        return left.pinned ? -1 : 1
+      }
+
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    })
+  const sharedMediaEntries = fileConversationEntries.filter((entry) =>
+    Boolean(resolveMediaPreviewKind(entry.mimeType, entry.fileName)),
+  )
+  const sharedFileEntries = fileConversationEntries.filter((entry) =>
+    !resolveMediaPreviewKind(entry.mimeType, entry.fileName),
+  )
+  const sharedLinkEntries = [
+    ...sortedChatRecordsForConversation.flatMap((record) =>
+      extractLinksFromRichText(record.text).map((link, index) => ({
+        id: `${record.id}-link-${index.toString()}`,
+        url: link.url,
+        label: link.label,
+        sourceName: record.fromSelf ? selfName : sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+        createdAt: record.createdAt,
+      })),
+    ),
+  ]
 
   useEffect(() => {
     const currentStatuses = Object.fromEntries(
@@ -751,6 +981,47 @@ function App() {
     }
   }
 
+  const addAttachmentFiles = (files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    const drafts = files.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      objectUrl: URL.createObjectURL(file),
+      kind: resolveAttachmentKind(file),
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || undefined,
+    }))
+
+    setAttachmentDrafts((current) => [...current, ...drafts])
+    setSharedContentTab('chat')
+    setLocalError(null)
+  }
+
+  const removeAttachment = (id: string) => {
+    setAttachmentDrafts((current) => {
+      const removed = current.find((attachment) => attachment.id === id)
+      if (removed) {
+        URL.revokeObjectURL(removed.objectUrl)
+      }
+
+      return current.filter((attachment) => attachment.id !== id)
+    })
+  }
+
+  const clearAttachments = () => {
+    setAttachmentDrafts((current) => {
+      for (const attachment of current) {
+        URL.revokeObjectURL(attachment.objectUrl)
+      }
+
+      return []
+    })
+  }
+
   const handleSendFiles = async () => {
     if (visibleTransferItemsForConversation.length === 0) {
       setLocalError('请先选择文件。')
@@ -771,7 +1042,9 @@ function App() {
   const handleSendText = async () => {
     const rawText = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
-    if (normalizedText.length === 0) {
+    const hasImageContent = hasRichTextImage(rawText)
+    const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
+    if (normalizedText.length === 0 && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
     }
@@ -794,20 +1067,34 @@ function App() {
         ? selectedRoomConnectedTargets
         : connectedTargets
 
-      for (const [index, target] of targets.entries()) {
-        await sendText(target.session.sessionId, rawText, {
-          logLocalRecord: index === 0,
-          recordId,
-          createdAt,
-        })
+      if (normalizedText.length > 0) {
+        const textPayload = hasImageContent ? removeImagesFromRichText(rawText) : rawText
+
+        for (const [index, target] of targets.entries()) {
+          await sendText(target.session.sessionId, textPayload, {
+            logLocalRecord: index === 0,
+            recordId,
+            createdAt,
+          })
+        }
+      }
+
+      if (attachmentFiles.length > 0) {
+        const created = createTransferItems(attachmentFiles, selectedConversationTransferSessionIds)
+        await startPendingTransfers(
+          created.map((item) => item.id),
+          null,
+        )
       }
 
       setSessionArtifacts((previous) => {
         const next = { ...previous }
         for (const target of targets) {
           next[target.session.sessionId] = {
-            kind: 'text',
-            summary: `${Math.max(1, normalizedText.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${normalizedText.slice(0, 18)}`,
+            kind: attachmentFiles.length > 0 && normalizedText.length === 0 ? 'file' : 'text',
+            summary: normalizedText
+              ? `${Math.max(1, normalizedText.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${normalizedText.slice(0, 18)}`
+              : '图片消息',
           }
         }
         return next
@@ -818,6 +1105,7 @@ function App() {
       } else {
         setDraftText('')
       }
+      clearAttachments()
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文本发送失败。')
@@ -863,7 +1151,11 @@ function App() {
       return
     }
 
-    handleNewFiles(nextFiles)
+    if (isChatConversationView) {
+      addAttachmentFiles(nextFiles)
+    } else {
+      handleNewFiles(nextFiles)
+    }
     event.target.value = ''
   }
 
@@ -876,7 +1168,11 @@ function App() {
       return
     }
 
-    handleNewFiles(nextFiles)
+    if (isChatConversationView) {
+      addAttachmentFiles(nextFiles)
+    } else {
+      handleNewFiles(nextFiles)
+    }
   }
 
   const handleDragEnter = () => {
@@ -897,42 +1193,78 @@ function App() {
     }
   }
 
-  const handleOpenDeviceConversation = (peerId: string, latestSessionId: string | null) => {
-    setSelectedPeerId(peerId)
-    setSelectedSessionId(latestSessionId)
+  const handleOpenRoomConversation = (roomId: string) => {
+    const room = roomById.get(roomId)
+    const firstPeer = room?.members.find(
+      (member) =>
+        member.deviceId !== self?.deviceId &&
+        onlinePeers.some((peer) => peer.deviceId === member.deviceId),
+    )
+    const latestSession = sessions
+      .filter((session) => session.roomId === roomId)
+      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
+
+    setSelectedRoomId(roomId)
+    setSelectedPeerId(firstPeer?.deviceId ?? null)
+    setSelectedSessionId(latestSession?.sessionId ?? null)
+    updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
     if (activeView === 'connect' || activeView === 'sessions') {
       handleViewChange('text')
     }
   }
 
-  const handleDeviceAction = (item: DeviceBarItem) => {
-    setSelectedPeerId(item.peer.deviceId)
-    setSelectedSessionId(item.latestSessionId)
-
-    if (item.deviceStatus === 'connected' && item.latestSessionId) {
-      disconnectSession(item.latestSessionId)
-      return
-    }
-
-    if (item.deviceStatus === 'connectable' || item.deviceStatus === 'failed') {
-      requestConnect(item.peer.deviceId)
-      if (activeView === 'connect' || activeView === 'sessions') {
-        handleViewChange('text')
-      }
-    }
+  const handleToggleRoomPinned = (roomId: string) => {
+    const current = roomStateById.get(roomId)
+    updateRoomState({
+      roomId,
+      pinned: !(current?.pinned ?? false),
+    })
   }
 
   const handleSelectedDeviceConnectionAction = () => {
-    if (!selectedDevicePeer) {
+    if (!selectedConnectionPeer) {
       return
     }
 
-    if (selectedDeviceStatus === 'connected' && selectedPeerLatestSession) {
-      disconnectSession(selectedPeerLatestSession.id)
+    if (selectedConnectionStatus === 'connected' && selectedConnectionLatestSession) {
+      disconnectSession(selectedConnectionLatestSession.id)
       return
     }
 
-    requestConnect(selectedDevicePeer.deviceId)
+    requestConnect(selectedConnectionPeer.deviceId)
+  }
+
+  const handleConnectAllDevices = () => {
+    if (onlinePeers.length === 0) {
+      setLocalError('当前没有可连接的在线设备。')
+      return
+    }
+
+    for (const peer of onlinePeers) {
+      requestConnect(peer.deviceId)
+    }
+
+    setSelectedPeerId(onlinePeers[0].deviceId)
+    setLocalError(null)
+
+    if (activeView === 'connect' || activeView === 'sessions') {
+      handleViewChange('text')
+    }
+  }
+
+  const handleCreateNewConversation = () => {
+    if (!selectedConnectionPeer) {
+      setLocalError('请先选择一个在线设备。')
+      return
+    }
+
+    requestConnect(selectedConnectionPeer.deviceId, { createNewRoom: true })
+    setSelectedPeerId(selectedConnectionPeer.deviceId)
+    setLocalError(null)
+
+    if (activeView === 'connect' || activeView === 'sessions') {
+      handleViewChange('text')
+    }
   }
 
   const chatRouteElement = (
@@ -944,7 +1276,13 @@ function App() {
         chatDraft={chatDraft}
         fileInputId={fileInputId}
         activeTransferLabel={activeTransferLabel}
-        isSendDisabled={chatDraft.trim().length === 0 || selectedRoomConnectedTargets.length === 0}
+        isSendDisabled={!hasChatDraftContent || selectedRoomConnectedTargets.length === 0}
+        enterToSend={preferences.enterToSend}
+        attachments={attachmentDrafts}
+        sharedContentTab={sharedContentTab}
+        sharedMediaEntries={sharedMediaEntries}
+        sharedFileEntries={sharedFileEntries}
+        sharedLinkEntries={sharedLinkEntries}
         onChatDraftChange={setChatDraft}
         onFileSelection={handleFileSelection}
         onRetryTransfer={retryTransfer}
@@ -952,6 +1290,10 @@ function App() {
         onSendText={() => {
           void handleSendText()
         }}
+        onAttachFiles={addAttachmentFiles}
+        onRemoveAttachment={removeAttachment}
+        onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
+        onSharedContentTabChange={setSharedContentTab}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -1035,7 +1377,7 @@ function App() {
         <AppHeader
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
-          currentRoomId={selectedRoomId}
+          currentRoomId={effectiveSelectedRoomId}
           localError={localError}
           errorMessage={errorMessage}
         />
@@ -1100,11 +1442,12 @@ function App() {
         <ContentGrid
           roomJoinDraft={joinRoomIdDraft}
           sessionQuery={sessionQuery}
-          deviceBarItems={deviceBarItems}
-          effectiveSelectedPeerId={effectiveSelectedPeerId}
+          roomListItems={roomListItems}
+          selectedRoomId={effectiveSelectedRoomId}
           isContentRailCollapsed={isContentRailCollapsed}
           connectionActionLabel={connectionActionLabel}
           connectionActionDisabled={connectionActionDisabled}
+          connectAllDisabled={onlinePeers.length === 0}
           isEditingDeviceName={isEditingDeviceName}
           deviceNameDraft={deviceNameDraft}
           selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
@@ -1113,12 +1456,14 @@ function App() {
           onDeviceNameDraftChange={setDeviceNameDraft}
           onJoinRoom={handleJoinRoomById}
           onConnectionAction={handleSelectedDeviceConnectionAction}
+          onConnectAllDevices={handleConnectAllDevices}
+          onCreateNewConversation={handleCreateNewConversation}
           onShowConnect={() => handleViewChange('connect')}
           onBeginEditDeviceName={beginEditDeviceName}
           onSaveDeviceName={saveDeviceName}
           onCancelEditDeviceName={cancelEditDeviceName}
-          onOpenDeviceConversation={handleOpenDeviceConversation}
-          onDeviceAction={handleDeviceAction}
+          onOpenRoomConversation={handleOpenRoomConversation}
+          onToggleRoomPinned={handleToggleRoomPinned}
         />
       </main>
     </div>

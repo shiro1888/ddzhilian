@@ -1,4 +1,4 @@
-import type { DeviceBarStatus, FileConversationEntry, PeerConnectionStatus } from './types'
+import type { FileConversationEntry, PeerConnectionStatus } from './types'
 
 export function transferStatusLabel(
   status:
@@ -51,53 +51,6 @@ export function transferStatusTone(
       return 'active'
     default:
       return 'pending'
-  }
-}
-
-export function deviceRelationText(peer: {
-  relation: {
-    sameAccount: boolean
-    sameLan: boolean
-    autoConnectEligible: boolean
-    discoverable: boolean
-  }
-}) {
-  if (peer.relation.sameLan) {
-    return '同网设备'
-  }
-
-  if (peer.relation.sameAccount) {
-    return '同账号设备'
-  }
-
-  return '可发现设备'
-}
-
-export function deviceBarStatus(status?: PeerConnectionStatus): DeviceBarStatus {
-  switch (status) {
-    case 'connected':
-      return 'connected'
-    case 'connecting':
-      return 'connecting'
-    case 'failed':
-      return 'failed'
-    case 'closed':
-    default:
-      return 'connectable'
-  }
-}
-
-export function deviceBarStatusLabel(status: DeviceBarStatus) {
-  switch (status) {
-    case 'connected':
-      return '已连接'
-    case 'connecting':
-      return '连接中'
-    case 'failed':
-      return '连接失败'
-    case 'connectable':
-    default:
-      return '可连接'
   }
 }
 
@@ -202,10 +155,6 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
-function normalizePlainRichText(value: string) {
-  return escapeHtml(value).replace(/\r?\n/g, '<br />')
-}
-
 function isSafeUrl(value: string, kind: 'href' | 'src') {
   const normalizedValue = value.trim()
 
@@ -218,6 +167,52 @@ function isSafeUrl(value: string, kind: 'href' | 'src') {
   }
 
   return /^(https?:|mailto:|tel:)/i.test(normalizedValue)
+}
+
+function normalizeAutolinkHref(value: string) {
+  const href = value.startsWith('www.') ? `https://${value}` : value
+
+  try {
+    const url = new URL(href)
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return url.toString()
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+export function linkifyPlainTextUrls(value: string) {
+  const urlPattern = /(?:https?:\/\/|www\.)[^\s<>"']+/gi
+  let html = ''
+  let lastIndex = 0
+
+  for (const match of value.matchAll(urlPattern)) {
+    const matchIndex = match.index ?? 0
+    const rawMatch = match[0]
+    const trailingMatch = rawMatch.match(/[.,!?;:，。！？；：]+$/)
+    const trailingText = trailingMatch?.[0] ?? ''
+    const linkText = trailingText ? rawMatch.slice(0, -trailingText.length) : rawMatch
+    const href = normalizeAutolinkHref(linkText)
+
+    if (!href) {
+      continue
+    }
+
+    html += escapeHtml(value.slice(lastIndex, matchIndex))
+    html += `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(linkText)}</a>`
+    html += escapeHtml(trailingText)
+    lastIndex = matchIndex + rawMatch.length
+  }
+
+  html += escapeHtml(value.slice(lastIndex))
+  return html
+}
+
+function normalizePlainRichText(value: string) {
+  return value.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />')
 }
 
 function sanitizeStyleAttribute(style: CSSStyleDeclaration) {
@@ -247,6 +242,39 @@ export function extractPlainTextFromRichText(value: string) {
   const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
   const text = documentFragment.body.textContent ?? ''
   return text.replace(/\u200B/g, '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+export function hasRichTextImage(value: string) {
+  if (!value) {
+    return false
+  }
+
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return /<img\b/i.test(value)
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  return Boolean(documentFragment.body.querySelector('img[src]'))
+}
+
+export function removeImagesFromRichText(value: string) {
+  if (!value || !/<img\b/i.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return value
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  if (!root) {
+    return value
+  }
+
+  for (const image of Array.from(root.querySelectorAll('img'))) {
+    image.remove()
+  }
+
+  return root.innerHTML
 }
 
 export function sanitizeRichTextHtml(value: string) {
@@ -296,9 +324,10 @@ export function sanitizeRichTextHtml(value: string) {
     'ul',
   ])
 
-  const sanitizeNode = (node: Node): string => {
+  const sanitizeNode = (node: Node, linkifyText = true): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return escapeHtml((node.textContent ?? '').replace(/\u200B/g, ''))
+      const text = (node.textContent ?? '').replace(/\u200B/g, '')
+      return linkifyText ? linkifyPlainTextUrls(text) : escapeHtml(text)
     }
 
     if (!(node instanceof HTMLElement)) {
@@ -306,7 +335,10 @@ export function sanitizeRichTextHtml(value: string) {
     }
 
     const tagName = node.tagName.toLowerCase()
-    const childrenHtml = Array.from(node.childNodes).map((childNode) => sanitizeNode(childNode)).join('')
+    const shouldLinkifyChildren = !['a', 'code', 'pre'].includes(tagName)
+    const childrenHtml = Array.from(node.childNodes)
+      .map((childNode) => sanitizeNode(childNode, shouldLinkifyChildren))
+      .join('')
 
     if (!allowedTags.has(tagName)) {
       return childrenHtml
