@@ -445,9 +445,59 @@ function App() {
   const hasRunnableTransfers = visibleTransferItemsForConversation.some((item) =>
     ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status),
   )
+  const groupedTransferItemsForConversation = [
+    ...visibleTransferItemsForConversation
+      .reduce((groups, item) => {
+        const key = item.historyId || item.id
+        const group = groups.get(key) ?? []
+        group.push(item)
+        groups.set(key, group)
+        return groups
+      }, new Map<string, typeof visibleTransferItemsForConversation>())
+      .values(),
+  ].map((items) => {
+    const primary = items[0]
+    const statuses = new Set(items.map((item) => item.status))
+    const status: typeof primary.status = statuses.has('failed')
+      ? 'failed'
+      : items.every((item) => item.status === 'completed')
+        ? 'completed'
+        : statuses.has('transferring')
+          ? 'transferring'
+          : statuses.has('ready')
+            ? 'ready'
+            : statuses.has('connecting')
+              ? 'connecting'
+              : statuses.has('waiting_for_target')
+                ? 'waiting_for_target'
+                : 'queued'
+    const targetNames = [
+      ...new Set(
+        items
+          .map((item) => item.targetDeviceName)
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ]
+
+    return {
+      ...primary,
+      status,
+      sentBytes: Math.max(...items.map((item) => item.sentBytes)),
+      acknowledgedBytes: Math.max(...items.map((item) => item.acknowledgedBytes)),
+      progress:
+        items.length > 1
+          ? Math.min(...items.map((item) => item.progress))
+          : primary.progress,
+      targetDeviceName:
+        targetNames.length > 1
+          ? `${targetNames.length} 台设备`
+          : targetNames[0] ?? primary.targetDeviceName,
+      errorMessage: items.find((item) => item.errorMessage)?.errorMessage,
+    }
+  })
 
   const fileConversationEntries = [
-    ...visibleTransferItemsForConversation.map((item) => ({
+    ...groupedTransferItemsForConversation.map((item) => ({
       id: item.id,
       sessionId: item.sessionId,
       kind: 'outgoing' as const,
