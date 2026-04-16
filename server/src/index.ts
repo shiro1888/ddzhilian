@@ -61,7 +61,11 @@ function setCorsHeaders(
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Authorization,Content-Type,X-File-Name,X-File-Created-At,X-Session-Id',
+    'Authorization,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
+  );
+  response.setHeader(
+    'Access-Control-Expose-Headers',
+    'Accept-Ranges,Content-Disposition,Content-Length,Content-Range',
   );
 
   return true;
@@ -117,6 +121,54 @@ function readBearerToken(value: string | string[] | undefined) {
 
   const match = /^Bearer\s+(.+)$/i.exec(trimmedValue);
   return match?.[1]?.trim();
+}
+
+function parseRangeHeader(value: string | string[] | undefined, size: number) {
+  const headerValue = Array.isArray(value) ? value[0] : value;
+  if (!headerValue) {
+    return undefined;
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(headerValue.trim());
+  if (!match) {
+    return null;
+  }
+
+  const [, startText, endText] = match;
+  let start: number;
+  let end: number;
+
+  if (!startText && !endText) {
+    return null;
+  }
+
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+      return null;
+    }
+
+    start = Math.max(size - suffixLength, 0);
+    end = size - 1;
+  } else {
+    start = Number(startText);
+    end = endText ? Number(endText) : size - 1;
+  }
+
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    start < 0 ||
+    end < start ||
+    start >= size
+  ) {
+    return null;
+  }
+
+  return {
+    start,
+    end: Math.min(end, size - 1),
+  };
 }
 
 function authenticateHistoryRequest(request: {
@@ -268,20 +320,19 @@ const httpServer = createServer((request, response) => {
       return;
     }
 
-    void readRequestBuffer(request)
-      .then(async (data) => {
-        const record = await history.saveFile({
-          historyId,
-          roomId,
-          sessionId,
-          sourceDeviceId: authResult.device.deviceId,
-          sourceDeviceName: authResult.device.deviceName,
-          fileName,
-          mimeType: request.headers['content-type']?.toString(),
-          createdAt,
-          data,
-        });
-
+    void history
+      .saveFileStream({
+        historyId,
+        roomId,
+        sessionId,
+        sourceDeviceId: authResult.device.deviceId,
+        sourceDeviceName: authResult.device.deviceName,
+        fileName,
+        mimeType: request.headers['content-type']?.toString(),
+        createdAt,
+        stream: request,
+      })
+      .then((record) => {
         writeJson(response, 200, { ok: true, file: history.toSummary(record) });
         broadcastSnapshots();
       })
@@ -378,9 +429,38 @@ const httpServer = createServer((request, response) => {
       return;
     }
 
-    response.writeHead(200, {
+    const range = parseRangeHeader(request.headers.range, record.size);
+    const baseHeaders = {
       'content-type': record.mimeType || 'application/octet-stream',
       'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
+      'accept-ranges': 'bytes',
+      'cache-control': 'private, max-age=3600',
+    };
+
+    if (range === null) {
+      response.writeHead(416, {
+        ...baseHeaders,
+        'content-range': `bytes */${record.size.toString()}`,
+      });
+      response.end();
+      return;
+    }
+
+    if (range) {
+      response.writeHead(206, {
+        ...baseHeaders,
+        'content-length': (range.end - range.start + 1).toString(),
+        'content-range': `bytes ${range.start.toString()}-${range.end.toString()}/${record.size.toString()}`,
+      });
+      createReadStream(record.storagePath, {
+        start: range.start,
+        end: range.end,
+      }).pipe(response);
+      return;
+    }
+
+    response.writeHead(200, {
+      ...baseHeaders,
       'content-length': record.size.toString(),
     });
     createReadStream(record.storagePath).pipe(response);

@@ -1,11 +1,10 @@
-import { startTransition, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { lazy, startTransition, Suspense, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import { navItems, viewMeta } from './app/config'
 import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'
-import { ChatConversationStage } from './app/components/ChatConversationStage'
 import { ConnectStage } from './app/components/ConnectStage'
 import { ContentGrid } from './app/components/ContentGrid'
 import { ReceiveStage } from './app/components/ReceiveStage'
@@ -33,6 +32,16 @@ import {
   transferStatusTone,
 } from './app/utils'
 import { useDdzhilian } from './lib/use-ddzhilian'
+
+const ChatConversationStage = lazy(() =>
+  import('./app/components/ChatConversationStage').then((module) => ({
+    default: module.ChatConversationStage,
+  })),
+)
+
+function isPreviewableMediaType(mimeType?: string) {
+  return Boolean(mimeType?.startsWith('image/') || mimeType?.startsWith('video/'))
+}
 
 function App() {
   const location = useLocation()
@@ -67,6 +76,7 @@ function App() {
   const {
     socketState,
     self,
+    localIdentity,
     onlinePeers,
     rooms,
     sessions,
@@ -272,7 +282,7 @@ function App() {
 
   const receivedCompletedFiles = receivedFiles.filter((file) => file.completed)
   const receivedPendingFiles = receivedFiles.filter((file) => !file.completed)
-  const selfName = self?.deviceName ?? '当前设备'
+  const selfName = self?.deviceName ?? localIdentity.deviceName
   const isChatConversationView =
     isChatDesktopTheme && (activeView === 'send' || activeView === 'receive' || activeView === 'text')
 
@@ -509,6 +519,8 @@ function App() {
       createdAt: item.createdAt,
       fileName: item.fileName,
       fileSize: item.fileSize,
+      mimeType: item.fileMimeType,
+      previewUrl: item.previewUrl,
       subtitle: item.targetDeviceName ?? activeTransferLabel,
       detail: `${formatFileSize(item.sentBytes)} / ${formatFileSize(item.fileSize)}`,
       statusLabel: transferStatusLabel(item.status),
@@ -529,6 +541,8 @@ function App() {
       createdAt: file.createdAt,
       fileName: file.name,
       fileSize: file.size,
+      mimeType: file.mimeType,
+      previewUrl: file.completed && isPreviewableMediaType(file.mimeType) ? file.objectUrl : undefined,
       subtitle: sessionPeerNameById.get(file.sessionId) ?? '对方设备',
       detail: file.completed
         ? `${formatFileSize(file.size)} · 已可下载`
@@ -547,6 +561,7 @@ function App() {
       createdAt: file.createdAt,
       fileName: file.fileName,
       fileSize: file.size,
+      mimeType: file.mimeType,
       subtitle: file.sourceDeviceId === self?.deviceId ? '已归档到当前对话' : file.sourceDeviceName,
       detail: `${formatFileSize(file.size)} · 历史文件`,
       statusLabel: '可回放',
@@ -682,7 +697,7 @@ function App() {
   }
 
   const beginEditDeviceName = () => {
-    setDeviceNameDraft(self?.deviceName ?? '')
+    setDeviceNameDraft(self?.deviceName ?? localIdentity.deviceName)
     setIsEditingDeviceName(true)
   }
 
@@ -921,28 +936,30 @@ function App() {
   }
 
   const chatRouteElement = (
-    <ChatConversationStage
-      isDragging={isDragging}
-      unifiedConversationEntries={unifiedConversationEntries}
-      fileConversationEmptyState={fileConversationEmptyState}
-      chatDraft={chatDraft}
-      fileInputId={fileInputId}
-      activeTransferLabel={activeTransferLabel}
-      isSendDisabled={chatDraft.trim().length === 0 || selectedRoomConnectedTargets.length === 0}
-      onChatDraftChange={setChatDraft}
-      onFileSelection={handleFileSelection}
-      onRetryTransfer={retryTransfer}
-      onCancelTransfer={cancelTransfer}
-      onSendText={() => {
-        void handleSendText()
-      }}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={(event) => {
-        void handleDrop(event)
-      }}
-    />
+    <Suspense fallback={<div className="dd-empty">正在加载对话...</div>}>
+      <ChatConversationStage
+        isDragging={isDragging}
+        unifiedConversationEntries={unifiedConversationEntries}
+        fileConversationEmptyState={fileConversationEmptyState}
+        chatDraft={chatDraft}
+        fileInputId={fileInputId}
+        activeTransferLabel={activeTransferLabel}
+        isSendDisabled={chatDraft.trim().length === 0 || selectedRoomConnectedTargets.length === 0}
+        onChatDraftChange={setChatDraft}
+        onFileSelection={handleFileSelection}
+        onRetryTransfer={retryTransfer}
+        onCancelTransfer={cancelTransfer}
+        onSendText={() => {
+          void handleSendText()
+        }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(event) => {
+          void handleDrop(event)
+        }}
+      />
+    </Suspense>
   )
 
   const sendRouteElement = isChatConversationView ? (
@@ -1043,7 +1060,7 @@ function App() {
                   selfPairToken={self?.pairToken}
                   isEditingDeviceName={isEditingDeviceName}
                   deviceNameDraft={deviceNameDraft}
-                  selfDeviceName={self?.deviceName}
+                  selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
                   socketState={socketState}
                   onJoinCodeChange={setJoinCode}
                   onPrimaryConnect={handlePrimaryConnect}
@@ -1088,11 +1105,18 @@ function App() {
           isContentRailCollapsed={isContentRailCollapsed}
           connectionActionLabel={connectionActionLabel}
           connectionActionDisabled={connectionActionDisabled}
+          isEditingDeviceName={isEditingDeviceName}
+          deviceNameDraft={deviceNameDraft}
+          selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
           onSessionQueryChange={setSessionQuery}
           onRoomJoinDraftChange={setJoinRoomIdDraft}
+          onDeviceNameDraftChange={setDeviceNameDraft}
           onJoinRoom={handleJoinRoomById}
           onConnectionAction={handleSelectedDeviceConnectionAction}
           onShowConnect={() => handleViewChange('connect')}
+          onBeginEditDeviceName={beginEditDeviceName}
+          onSaveDeviceName={saveDeviceName}
+          onCancelEditDeviceName={cancelEditDeviceName}
           onOpenDeviceConversation={handleOpenDeviceConversation}
           onDeviceAction={handleDeviceAction}
         />

@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { basename, join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -44,6 +45,13 @@ function sortByCreatedAt(
 
 function safeFileSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'file';
+}
+
+async function drainStream(stream: NodeJS.ReadableStream) {
+  for await (const chunk of stream) {
+    void chunk;
+    // Intentionally drain duplicate upload bodies so the HTTP connection closes cleanly.
+  }
 }
 
 export class HistoryRegistry {
@@ -139,6 +147,69 @@ export class HistoryRegistry {
     this.persist();
 
     return record;
+  }
+
+  async saveFileStream(input: {
+    historyId: string;
+    roomId: string;
+    sessionId?: string;
+    sourceDeviceId: string;
+    sourceDeviceName: string;
+    fileName: string;
+    mimeType?: string;
+    createdAt: string;
+    stream: NodeJS.ReadableStream;
+  }) {
+    this.prune();
+    const existing = this.filesById.get(input.historyId);
+    if (existing) {
+      await drainStream(input.stream);
+      return existing;
+    }
+
+    const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
+    await fs.mkdir(roomDir, { recursive: true });
+
+    const storagePath = join(
+      roomDir,
+      `${safeFileSegment(input.historyId)}-${safeFileSegment(basename(input.fileName))}`,
+    );
+    const tempPath = `${storagePath}.part-${Date.now().toString(36)}`;
+
+    try {
+      await pipeline(input.stream, createWriteStream(tempPath));
+      const stat = await fs.stat(tempPath);
+      await fs.rename(tempPath, storagePath);
+
+      const record: HistoryFileRecord = {
+        historyId: input.historyId,
+        roomId: input.roomId,
+        sessionId: input.sessionId,
+        sourceDeviceId: input.sourceDeviceId,
+        sourceDeviceName: input.sourceDeviceName,
+        fileName: input.fileName,
+        size: stat.size,
+        mimeType: input.mimeType,
+        createdAt: input.createdAt,
+        storagePath,
+      };
+
+      this.filesById.set(record.historyId, record);
+      const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
+      roomIds.add(record.historyId);
+      this.fileIdsByRoomId.set(record.roomId, roomIds);
+      this.persist();
+
+      return record;
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Ignore partial-file cleanup failures.
+      }
+
+      throw error;
+    }
   }
 
   saveText(input: HistoryTextRecord) {

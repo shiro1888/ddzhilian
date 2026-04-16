@@ -312,6 +312,27 @@ function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
   return compactName.slice(0, 2)
 }
 
+function resolveMediaPreviewKind(mimeType: string | undefined, fileName: string) {
+  const normalizedMimeType = mimeType?.toLowerCase() ?? ''
+  const normalizedName = fileName.toLowerCase()
+
+  if (
+    normalizedMimeType.startsWith('image/') ||
+    /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(normalizedName)
+  ) {
+    return 'image' as const
+  }
+
+  if (
+    normalizedMimeType.startsWith('video/') ||
+    /\.(m4v|mov|mp4|ogv|webm)$/i.test(normalizedName)
+  ) {
+    return 'video' as const
+  }
+
+  return null
+}
+
 function legacyFontSizeForPixels(sizeInPixels: number) {
   if (sizeInPixels <= 10) {
     return '1'
@@ -892,6 +913,9 @@ export function ChatConversationStage({
               }
 
               const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
+              const previewKind = entry.entryType === 'file'
+                ? resolveMediaPreviewKind(entry.file.mimeType, entry.file.fileName)
+                : null
 
               return (
                 <div key={entry.id} className="dd-chatbox__entry">
@@ -926,6 +950,30 @@ export function ChatConversationStage({
                           <span className="dd-file-bubble__meta">
                             {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
                           </span>
+                          {entry.file.previewUrl && previewKind === 'image' ? (
+                            <a
+                              className="dd-file-bubble__preview dd-file-bubble__preview--image"
+                              href={entry.file.previewUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`预览图片 ${entry.file.fileName}`}
+                            >
+                              <img
+                                src={entry.file.previewUrl}
+                                alt={entry.file.fileName}
+                                loading="lazy"
+                              />
+                            </a>
+                          ) : null}
+                          {entry.file.previewUrl && previewKind === 'video' ? (
+                            <video
+                              className="dd-file-bubble__preview dd-file-bubble__preview--video"
+                              src={entry.file.previewUrl}
+                              controls
+                              preload="metadata"
+                              aria-label={`预览视频 ${entry.file.fileName}`}
+                            />
+                          ) : null}
                           <div className="dd-file-bubble__progress">
                             <div
                               className={`dd-file-bubble__bar is-${entry.file.tone}`}

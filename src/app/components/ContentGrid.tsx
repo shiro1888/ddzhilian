@@ -13,11 +13,18 @@ type ContentGridProps = {
   isContentRailCollapsed: boolean
   connectionActionLabel: string
   connectionActionDisabled: boolean
+  isEditingDeviceName: boolean
+  deviceNameDraft: string
+  selfDeviceName?: string
   onSessionQueryChange: (value: string) => void
   onRoomJoinDraftChange: (value: string) => void
+  onDeviceNameDraftChange: (value: string) => void
   onJoinRoom: () => void
   onConnectionAction: () => void
   onShowConnect: () => void
+  onBeginEditDeviceName: () => void
+  onSaveDeviceName: () => void
+  onCancelEditDeviceName: () => void
   onOpenDeviceConversation: (peerId: string, latestSessionId: string | null) => void
   onDeviceAction: (item: DeviceBarItem) => void
 }
@@ -30,11 +37,18 @@ export function ContentGrid({
   isContentRailCollapsed,
   connectionActionLabel,
   connectionActionDisabled,
+  isEditingDeviceName,
+  deviceNameDraft,
+  selfDeviceName,
   onSessionQueryChange,
   onRoomJoinDraftChange,
+  onDeviceNameDraftChange,
   onJoinRoom,
   onConnectionAction,
   onShowConnect,
+  onBeginEditDeviceName,
+  onSaveDeviceName,
+  onCancelEditDeviceName,
   onOpenDeviceConversation,
   onDeviceAction,
 }: ContentGridProps) {
@@ -43,6 +57,48 @@ export function ContentGrid({
       <section className="dd-panel dd-panel--devices">
         <div className="dd-connection-layer">
           <div className="dd-connection-layer__body">
+            <div className={`dd-connection-layer__identity${isEditingDeviceName ? ' is-editing' : ''}`}>
+              <span>我的设备名</span>
+              {isEditingDeviceName ? (
+                <div className="dd-device-name-editor">
+                  <input
+                    type="text"
+                    value={deviceNameDraft}
+                    onChange={(event) => onDeviceNameDraftChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        onSaveDeviceName()
+                      }
+
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        onCancelEditDeviceName()
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="dd-device-name-editor__actions">
+                    <button type="button" onClick={onSaveDeviceName}>
+                      保存
+                    </button>
+                    <button type="button" className="is-ghost" onClick={onCancelEditDeviceName}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="dd-connection-layer__identity-button"
+                  onClick={onBeginEditDeviceName}
+                >
+                  <strong>{selfDeviceName ?? '正在连接...'}</strong>
+                  <small>在线身份</small>
+                </button>
+              )}
+            </div>
+
             <div className="dd-connection-layer__actions">
               <div className="dd-connection-layer__join">
                 <input

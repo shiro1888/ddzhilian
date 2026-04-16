@@ -21,9 +21,11 @@ import type {
 
 const DEFAULT_DEV_WS_URL = 'ws://localhost:8787/ws'
 const STORAGE_KEY = 'ddzhilian.identity.v1'
-const CHUNK_SIZE = 16 * 1024
-const CHANNEL_BUFFER_HIGH_WATER = 512 * 1024
-const CHANNEL_BUFFER_LOW_WATER = 128 * 1024
+const CHUNK_SIZE = 64 * 1024
+const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
+const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
+const binaryChunkEncoder = new TextEncoder()
+const binaryChunkDecoder = new TextDecoder()
 
 function resolveWsUrl() {
   const configuredUrl = import.meta.env.VITE_SIGNALING_WS_URL?.trim()
@@ -191,17 +193,6 @@ function writeStoredIdentity(value: StoredIdentity) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
-  }
-
-  return btoa(binary)
-}
-
 function base64ToUint8Array(base64: string) {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -211,6 +202,78 @@ function base64ToUint8Array(base64: string) {
   }
 
   return bytes
+}
+
+function encodeBinaryChunkMessage(
+  metadata: Extract<ChannelMessage, { type: 'file-chunk-binary' }>,
+  buffer: ArrayBuffer,
+) {
+  const header = binaryChunkEncoder.encode(JSON.stringify(metadata))
+  const body = new Uint8Array(buffer)
+  const message = new Uint8Array(4 + header.byteLength + body.byteLength)
+  const view = new DataView(message.buffer)
+
+  view.setUint32(0, header.byteLength)
+  message.set(header, 4)
+  message.set(body, 4 + header.byteLength)
+
+  return message.buffer
+}
+
+function decodeBinaryChunkMessage(buffer: ArrayBuffer) {
+  if (buffer.byteLength < 4) {
+    return null
+  }
+
+  const bytes = new Uint8Array(buffer)
+  const headerLength = new DataView(buffer).getUint32(0)
+  const bodyOffset = 4 + headerLength
+
+  if (headerLength <= 0 || bodyOffset > bytes.byteLength) {
+    return null
+  }
+
+  const metadata = JSON.parse(
+    binaryChunkDecoder.decode(bytes.slice(4, bodyOffset)),
+  ) as ChannelMessage
+
+  if (metadata.type !== 'file-chunk-binary') {
+    return null
+  }
+
+  return {
+    metadata,
+    chunk: bytes.slice(bodyOffset),
+  }
+}
+
+async function readBinaryMessageData(data: unknown) {
+  if (data instanceof ArrayBuffer) {
+    return data
+  }
+
+  if (typeof SharedArrayBuffer !== 'undefined' && data instanceof SharedArrayBuffer) {
+    const copy = new Uint8Array(data.byteLength)
+    copy.set(new Uint8Array(data))
+    return copy.buffer
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    const view = data as ArrayBufferView
+    const copy = new Uint8Array(view.byteLength)
+    copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength))
+    return copy.buffer
+  }
+
+  if (data instanceof Blob) {
+    return data.arrayBuffer()
+  }
+
+  return null
+}
+
+function isPreviewableMediaType(mimeType?: string) {
+  return Boolean(mimeType?.startsWith('image/') || mimeType?.startsWith('video/'))
 }
 
 function normalizePeerLists(snapshot: DirectorySnapshotPayload) {
@@ -271,6 +334,7 @@ function mapBrowserConnectionState(
 export function useDdzhilian() {
   const [socketState, setSocketState] = useState<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle')
   const [self, setSelf] = useState<DirectorySnapshotPayload['self'] | null>(null)
+  const [localIdentity, setLocalIdentity] = useState<StoredIdentity>(() => readStoredIdentity())
   const [onlinePeers, setOnlinePeers] = useState<PeerSummary[]>([])
   const [roomsById, setRoomsById] = useState<Record<string, RoomSummary>>({})
   const [historyFiles, setHistoryFiles] = useState<HistoryFileSummary[]>([])
@@ -284,7 +348,7 @@ export function useDdzhilian() {
 
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
-  const identityRef = useRef<StoredIdentity>(readStoredIdentity())
+  const identityRef = useRef<StoredIdentity>(localIdentity)
   const selfRef = useRef<DirectorySnapshotPayload['self'] | null>(null)
   const rtcConfigRef = useRef<RTCConfiguration | null>(null)
   const peerConnectionsRef = useRef(new Map<string, RTCPeerConnection>())
@@ -370,6 +434,7 @@ export function useDdzhilian() {
 
       connected.push({
         ...state,
+        peerName: session.peer?.deviceName ?? state.peerName,
         session,
       })
     }
@@ -427,13 +492,17 @@ export function useDdzhilian() {
 
     identityRef.current = nextIdentity
     writeStoredIdentity(nextIdentity)
+    setLocalIdentity(nextIdentity)
 
-    const peerIndex = new Map(normalizePeerLists(snapshot).map((peer) => [peer.deviceId, peer] as const))
+    const normalizedPeers = normalizePeerLists(snapshot)
+    const peerIndex = new Map(normalizedPeers.map((peer) => [peer.deviceId, peer] as const))
+    const peerNameById = new Map(normalizedPeers.map((peer) => [peer.deviceId, peer.deviceName] as const))
+    peerNameById.set(snapshot.self.deviceId, snapshot.self.deviceName)
     const snapshotIds = new Set(snapshot.sessions.map((session) => session.sessionId))
 
     startTransition(() => {
       setSelf(snapshot.self)
-      setOnlinePeers(normalizePeerLists(snapshot))
+      setOnlinePeers(normalizedPeers)
       setRoomsById(
         Object.fromEntries(snapshot.rooms.map((room) => [room.roomId, room] as const)),
       )
@@ -462,6 +531,42 @@ export function useDdzhilian() {
 
         return next
       })
+      setConnectionStatesById((previous) => {
+        let changed = false
+        const next = Object.fromEntries(
+          Object.entries(previous).map(([sessionId, state]) => {
+            const peerName = peerNameById.get(state.peerId) ?? state.peerName
+            if (peerName !== state.peerName) {
+              changed = true
+              return [sessionId, { ...state, peerName }] as const
+            }
+
+            return [sessionId, state] as const
+          }),
+        )
+
+        return changed ? next : previous
+      })
+      setTransferItems((previous) => {
+        let changed = false
+        const next = previous.map((item) => {
+          const targetDeviceName = item.targetDeviceId
+            ? peerNameById.get(item.targetDeviceId)
+            : undefined
+
+          if (!targetDeviceName || targetDeviceName === item.targetDeviceName) {
+            return item
+          }
+
+          changed = true
+          return {
+            ...item,
+            targetDeviceName,
+          }
+        })
+
+        return changed ? next : previous
+      })
     })
 
     archivedHistoryIdsRef.current = new Set(
@@ -470,6 +575,44 @@ export function useDdzhilian() {
     archivedTextHistoryIdsRef.current = new Set(
       snapshot.historyTexts.map((text) => text.historyId),
     )
+  }
+
+  const receiveFileChunk = (transferId: string, chunk: Uint8Array) => {
+    const draft = incomingTransfersRef.current.get(transferId)
+    if (!draft) {
+      return
+    }
+
+    draft.chunks.push(chunk)
+    draft.receivedBytes += chunk.byteLength
+
+    startTransition(() => {
+      setReceivedFiles((previous) =>
+        previous.map((file) =>
+          file.id === transferId
+            ? { ...file, receivedBytes: Math.min(draft.receivedBytes, file.size) }
+            : file,
+        ),
+      )
+    })
+  }
+
+  const handleBinaryChannelMessage = async (raw: unknown) => {
+    const buffer = await readBinaryMessageData(raw)
+    if (!buffer) {
+      return
+    }
+
+    try {
+      const decoded = decodeBinaryChunkMessage(buffer)
+      if (!decoded) {
+        return
+      }
+
+      receiveFileChunk(decoded.metadata.id, decoded.chunk)
+    } catch (error) {
+      debugLog('binary chunk decode failed', error)
+    }
   }
 
   const handleChannelMessage = (sessionId: string, fromDeviceId: string, raw: string) => {
@@ -535,24 +678,11 @@ export function useDdzhilian() {
     }
 
     if (message.type === 'file-chunk') {
-      const draft = incomingTransfersRef.current.get(message.id)
-      if (!draft) {
-        return
-      }
+      receiveFileChunk(message.id, base64ToUint8Array(message.data))
+      return
+    }
 
-      const chunk = base64ToUint8Array(message.data)
-      draft.chunks[message.index] = chunk
-      draft.receivedBytes += chunk.byteLength
-
-      startTransition(() => {
-        setReceivedFiles((previous) =>
-          previous.map((file) =>
-            file.id === message.id
-              ? { ...file, receivedBytes: Math.min(draft.receivedBytes, file.size) }
-              : file,
-          ),
-        )
-      })
+    if (message.type === 'file-chunk-binary') {
       return
     }
 
@@ -646,6 +776,7 @@ export function useDdzhilian() {
     reason: LiveSession['reason'],
     channel: RTCDataChannel,
   ) => {
+    channel.binaryType = 'arraybuffer'
     dataChannelsRef.current.set(sessionId, channel)
     mergeSession(sessionId, { channelState: 'opening' })
 
@@ -691,7 +822,10 @@ export function useDdzhilian() {
     channel.addEventListener('message', (event) => {
       if (typeof event.data === 'string') {
         handleChannelMessage(sessionId, peerId, event.data)
+        return
       }
+
+      void handleBinaryChannelMessage(event.data)
     })
   }
 
@@ -1056,6 +1190,7 @@ export function useDdzhilian() {
 
     connectedTargets.push({
       ...state,
+      peerName: session.peer?.deviceName ?? state.peerName,
       session,
     })
   }
@@ -1197,6 +1332,15 @@ export function useDdzhilian() {
 
     for (const file of files) {
       const historyId = crypto.randomUUID()
+      const fileMimeType = file.type || undefined
+      const previewUrl = isPreviewableMediaType(fileMimeType)
+        ? URL.createObjectURL(file)
+        : undefined
+
+      if (previewUrl) {
+        objectUrlsRef.current.push(previewUrl)
+      }
+
       for (const target of targetSet) {
         const id = crypto.randomUUID()
         transferFilesRef.current.set(id, file)
@@ -1217,6 +1361,8 @@ export function useDdzhilian() {
           historyId,
           fileName: file.name,
           fileSize: file.size,
+          fileMimeType,
+          previewUrl,
           targetDeviceId: target?.peerId,
           targetDeviceName: target?.peerName,
           sessionId: target?.sessionId,
@@ -1501,13 +1647,15 @@ export function useDdzhilian() {
         sentBytes += buffer.byteLength
 
         channel.send(
-          JSON.stringify({
-            type: 'file-chunk',
-            id: transferId,
-            index,
-            total: totalChunks,
-            data: arrayBufferToBase64(buffer),
-          } satisfies ChannelMessage),
+          encodeBinaryChunkMessage(
+            {
+              type: 'file-chunk-binary',
+              id: transferId,
+              index,
+              total: totalChunks,
+            },
+            buffer,
+          ),
         )
 
         updateTransfer(transferId, {
@@ -1685,6 +1833,7 @@ export function useDdzhilian() {
 
     identityRef.current = nextIdentity
     writeStoredIdentity(nextIdentity)
+    setLocalIdentity(nextIdentity)
 
     startTransition(() => {
       setSelf((previous) =>
@@ -1794,13 +1943,15 @@ export function useDdzhilian() {
         const buffer = await slice.arrayBuffer()
 
         channel.send(
-          JSON.stringify({
-            type: 'file-chunk',
-            id: transferId,
-            index,
-            total: totalChunks,
-            data: arrayBufferToBase64(buffer),
-          } satisfies ChannelMessage),
+          encodeBinaryChunkMessage(
+            {
+              type: 'file-chunk-binary',
+              id: transferId,
+              index,
+              total: totalChunks,
+            },
+            buffer,
+          ),
         )
 
         await waitForBufferedAmount(channel)
@@ -1820,6 +1971,7 @@ export function useDdzhilian() {
   return {
     socketState,
     self,
+    localIdentity,
     onlinePeers,
     rooms: Object.values(roomsById).sort((left, right) =>
       right.updatedAt.localeCompare(left.updatedAt),

@@ -231,6 +231,12 @@ export type ChannelMessage =
       total: number
       data: string
     }
+  | {
+      type: 'file-chunk-binary'
+      id: string
+      index: number
+      total: number
+    }
   | { type: 'file-complete'; id: string }
   | { type: 'file-ack'; id: string; receivedBytes: number; completed: boolean }
 
@@ -267,6 +273,8 @@ export type TransferItem = {
   historyId: string
   fileName: string
   fileSize: number
+  fileMimeType?: string
+  previewUrl?: string
   targetDeviceId?: string
   targetDeviceName?: string
   sessionId?: string

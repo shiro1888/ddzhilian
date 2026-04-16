@@ -30,6 +30,8 @@ export type FileConversationEntry = {
   createdAt: string
   fileName: string
   fileSize: number
+  mimeType?: string
+  previewUrl?: string
   subtitle: string
   detail: string
   statusLabel: string
