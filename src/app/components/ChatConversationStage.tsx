@@ -867,15 +867,15 @@ export function ChatConversationStage({
   }
 
   return (
-    <section className="pp-view pp-view--single pp-view--files">
+    <section className="dd-view dd-view--single dd-view--files">
       <div
-        className={`pp-chatbox pp-chatbox--files${isDragging ? ' is-dragging' : ''}`}
+        className={`dd-chatbox dd-chatbox--files${isDragging ? ' is-dragging' : ''}`}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div className="pp-chatbox__thread">
+        <div className="dd-chatbox__thread">
           {unifiedConversationEntries.length > 0 ? (
             unifiedConversationEntries.map((entry, index) => {
               const previousIso = index > 0 ? unifiedConversationEntries[index - 1].createdAt : null
@@ -883,8 +883,8 @@ export function ChatConversationStage({
 
               if (entry.entryType === 'notice') {
                 return (
-                  <div key={entry.id} className="pp-chatbox__entry">
-                    <div className="pp-chatbox__notice">
+                  <div key={entry.id} className="dd-chatbox__entry">
+                    <div className="dd-chatbox__notice">
                       <span>{entry.text}</span>
                     </div>
                   </div>
@@ -894,54 +894,54 @@ export function ChatConversationStage({
               const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
 
               return (
-                <div key={entry.id} className="pp-chatbox__entry">
+                <div key={entry.id} className="dd-chatbox__entry">
                   <>
                     {showDivider && (
-                      <div className="pp-chatbox__divider">
+                      <div className="dd-chatbox__divider">
                         <span>{formatChatDivider(entry.createdAt)}</span>
                       </div>
                     )}
 
-                    <div className={`pp-chatbox__message${entry.fromSelf ? ' is-self' : ' is-peer'}`}>
-                      <div className="pp-chatbox__sender">
-                        <div className={`pp-chatbox__avatar${entry.fromSelf ? ' is-self' : ''}`}>
+                    <div className={`dd-chatbox__message${entry.fromSelf ? ' is-self' : ' is-peer'}`}>
+                      <div className="dd-chatbox__sender">
+                        <div className={`dd-chatbox__avatar${entry.fromSelf ? ' is-self' : ''}`}>
                           {resolveAvatarLabel(senderName, entry.fromSelf)}
                         </div>
-                        <span className="pp-chatbox__sender-name" title={senderName}>
+                        <span className="dd-chatbox__sender-name" title={senderName}>
                           {senderName}
                         </span>
                       </div>
 
                       {entry.entryType === 'text' ? (
                         <div
-                          className="pp-chatbox__bubble pp-chatbox__bubble--rich"
+                          className="dd-chatbox__bubble dd-chatbox__bubble--rich"
                           dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
                         />
                       ) : (
-                        <div className={`pp-file-bubble is-${entry.file.tone}`}>
-                          <small className="pp-file-bubble__eyebrow">
+                        <div className={`dd-file-bubble is-${entry.file.tone}`}>
+                          <small className="dd-file-bubble__eyebrow">
                             {entry.file.kind === 'outgoing' ? '我发送的文件' : '收到的文件'}
                           </small>
                           <strong>{entry.file.fileName}</strong>
-                          <span className="pp-file-bubble__meta">
+                          <span className="dd-file-bubble__meta">
                             {formatFileSize(entry.file.fileSize)} · {entry.file.subtitle}
                           </span>
-                          <div className="pp-file-bubble__progress">
+                          <div className="dd-file-bubble__progress">
                             <div
-                              className={`pp-file-bubble__bar is-${entry.file.tone}`}
+                              className={`dd-file-bubble__bar is-${entry.file.tone}`}
                               style={{ width: `${Math.round(entry.file.progress * 100)}%` }}
                             />
                           </div>
-                          <div className="pp-file-bubble__footer">
+                          <div className="dd-file-bubble__footer">
                             <span>{entry.file.statusLabel}</span>
                             <span>{entry.file.detail}</span>
                           </div>
                           {(entry.file.downloadUrl || entry.file.onDownload || entry.file.action) && (
-                            <div className="pp-file-bubble__actions">
+                            <div className="dd-file-bubble__actions">
                               {entry.file.onDownload ? (
                                 <button
                                   type="button"
-                                  className="pp-file-bubble__action"
+                                  className="dd-file-bubble__action"
                                   onClick={entry.file.onDownload}
                                 >
                                   下载文件
@@ -949,7 +949,7 @@ export function ChatConversationStage({
                               ) : null}
                               {entry.file.downloadUrl ? (
                                 <a
-                                  className="pp-file-bubble__action"
+                                  className="dd-file-bubble__action"
                                   href={entry.file.downloadUrl}
                                   download={entry.file.downloadName}
                                 >
@@ -959,7 +959,7 @@ export function ChatConversationStage({
                               {entry.file.action === 'retry' ? (
                                 <button
                                   type="button"
-                                  className="pp-file-bubble__action"
+                                  className="dd-file-bubble__action"
                                   onClick={() => onRetryTransfer(entry.file.id)}
                                 >
                                   重试
@@ -968,7 +968,7 @@ export function ChatConversationStage({
                               {entry.file.action === 'cancel' ? (
                                 <button
                                   type="button"
-                                  className="pp-file-bubble__action"
+                                  className="dd-file-bubble__action"
                                   onClick={() => onCancelTransfer(entry.file.id)}
                                 >
                                   取消
@@ -984,16 +984,16 @@ export function ChatConversationStage({
               )
             })
           ) : (
-            <div className="pp-chatbox__empty pp-chatbox__empty--files">{fileConversationEmptyState}</div>
+            <div className="dd-chatbox__empty dd-chatbox__empty--files">{fileConversationEmptyState}</div>
           )}
         </div>
 
-        <div className="pp-chatbox__composer">
-          <div className="pp-rich-toolbar-scroll">
-            <div className="pp-rich-toolbar">
-              <div className="pp-rich-toolbar__group">
+        <div className="dd-chatbox__composer">
+          <div className="dd-rich-toolbar-scroll">
+            <div className="dd-rich-toolbar">
+              <div className="dd-rich-toolbar__group">
               <select
-                className="pp-rich-toolbar__select"
+                className="dd-rich-toolbar__select"
                 defaultValue=""
                 onChange={(event) => {
                   if (event.target.value) {
@@ -1009,7 +1009,7 @@ export function ChatConversationStage({
                 ))}
               </select>
               <select
-                className="pp-rich-toolbar__select"
+                className="dd-rich-toolbar__select"
                 defaultValue=""
                 onChange={(event) => {
                   if (event.target.value) {
@@ -1028,7 +1028,7 @@ export function ChatConversationStage({
                 ))}
               </select>
               <select
-                className="pp-rich-toolbar__select"
+                className="dd-rich-toolbar__select"
                 defaultValue=""
                 onChange={(event) => {
                   if (event.target.value) {
@@ -1050,26 +1050,26 @@ export function ChatConversationStage({
                   </option>
                 ))}
               </select>
-              <div className="pp-rich-toolbar__color-field">
+              <div className="dd-rich-toolbar__color-field">
                 <button
                   ref={colorPaletteTriggerRef}
                   type="button"
-                  className={`pp-rich-toolbar__button pp-rich-toolbar__color-trigger${isColorPaletteOpen ? ' is-active' : ''}`}
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__color-trigger${isColorPaletteOpen ? ' is-active' : ''}`}
                   aria-label="字体颜色"
                   aria-expanded={isColorPaletteOpen}
                   aria-haspopup="dialog"
                   title="字体颜色"
                   onMouseDown={handleColorPaletteTriggerMouseDown}
                 >
-                  <span className="pp-rich-toolbar__color-glyph" aria-hidden="true">
+                  <span className="dd-rich-toolbar__color-glyph" aria-hidden="true">
                     A
                   </span>
                   <span
-                    className="pp-rich-toolbar__color-line"
+                    className="dd-rich-toolbar__color-line"
                     style={{ backgroundColor: activeTextColor ?? '#111111' }}
                     aria-hidden="true"
                   />
-                  <span className="pp-rich-toolbar__color-caret" aria-hidden="true">
+                  <span className="dd-rich-toolbar__color-caret" aria-hidden="true">
                     ▼
                   </span>
                 </button>
@@ -1077,178 +1077,178 @@ export function ChatConversationStage({
               </div>
               </div>
 
-              <div className="pp-rich-toolbar__group">
+              <div className="dd-rich-toolbar__group">
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="清除格式"
                   title="清除格式"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('removeFormat')}
                 >
-                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
+                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--compact" aria-hidden="true">Tx</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon is-disabled"
                   aria-label="格式刷暂未接入"
                   title="格式刷暂未接入"
                   disabled
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">Fb</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">Fb</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="加粗"
                   title="加粗"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('bold')}
                 >
-                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--bold" aria-hidden="true">B</span>
+                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--bold" aria-hidden="true">B</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="斜体"
                   title="斜体"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('italic')}
                 >
-                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--italic" aria-hidden="true">I</span>
+                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--italic" aria-hidden="true">I</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="下划线"
                   title="下划线"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('underline')}
                 >
-                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--underline" aria-hidden="true">U</span>
+                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--underline" aria-hidden="true">U</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="缩进"
                   title="缩进"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('indent')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">⇥</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">⇥</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="左对齐"
                   title="左对齐"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('justifyLeft')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">L</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">L</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="居中"
                   title="居中"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('justifyCenter')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">C</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">C</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="右对齐"
                   title="右对齐"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => runCommand('justifyRight')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">R</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">R</span>
                 </button>
               </div>
 
-              <div className="pp-rich-toolbar__group">
+              <div className="dd-rich-toolbar__group">
                 <button
                   type="button"
-                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'special-character' ? ' is-active' : ''}`}
                   aria-label="特殊字符"
                   title="特殊字符"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => openInsertPanel('special-character')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">Ω</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">Ω</span>
                 </button>
                 <button
                   type="button"
-                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'table' ? ' is-active' : ''}`}
                   aria-label="插入表格"
                   title="插入表格"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => openInsertPanel('table')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">▦</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">▦</span>
                 </button>
                 <button
                   type="button"
-                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'tex' ? ' is-active' : ''}`}
                   aria-label="TEX 公式"
                   title="TEX 公式"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => openInsertPanel('tex')}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">∑</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">∑</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon"
                   aria-label="公式 beta"
                   title="公式 beta"
                   onMouseDown={preserveEditorFocus}
                   onClick={openFormulaBetaDialog}
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">β</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">β</span>
                 </button>
                 <button
                   type="button"
-                  className="pp-rich-toolbar__button pp-rich-toolbar__button--icon is-disabled"
+                  className="dd-rich-toolbar__button dd-rich-toolbar__button--icon is-disabled"
                   aria-label="画板待接入"
                   title="画板待接入"
                   disabled
                 >
-                  <span className="pp-rich-toolbar__glyph" aria-hidden="true">✎</span>
+                  <span className="dd-rich-toolbar__glyph" aria-hidden="true">✎</span>
                 </button>
                 <button
                   type="button"
-                  className={`pp-rich-toolbar__button pp-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
+                  className={`dd-rich-toolbar__button dd-rich-toolbar__button--icon${insertPanel?.type === 'code' ? ' is-active' : ''}`}
                   aria-label="代码块"
                   title="代码块"
                   onMouseDown={preserveEditorFocus}
                   onClick={() => openInsertPanel('code')}
                 >
-                  <span className="pp-rich-toolbar__glyph pp-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
+                  <span className="dd-rich-toolbar__glyph dd-rich-toolbar__glyph--code" aria-hidden="true">&lt;/&gt;</span>
                 </button>
               </div>
             </div>
           </div>
 
           {isFormulaBetaDialogOpen && (
-            <div className="pp-formula-dialog" role="dialog" aria-modal="true" aria-label="公式beta">
+            <div className="dd-formula-dialog" role="dialog" aria-modal="true" aria-label="公式beta">
               <button
                 type="button"
-                className="pp-formula-dialog__backdrop"
+                className="dd-formula-dialog__backdrop"
                 aria-label="关闭公式 beta 对话框"
                 onClick={() => setIsFormulaBetaDialogOpen(false)}
               />
-              <div className="pp-formula-dialog__panel">
-                <div className="pp-formula-dialog__titlebar">
-                  <div className="pp-formula-dialog__draghandle">
-                    <span className="pp-formula-dialog__caption">公式beta</span>
+              <div className="dd-formula-dialog__panel">
+                <div className="dd-formula-dialog__titlebar">
+                  <div className="dd-formula-dialog__draghandle">
+                    <span className="dd-formula-dialog__caption">公式beta</span>
                   </div>
                   <button
                     type="button"
-                    className="pp-formula-dialog__close"
+                    className="dd-formula-dialog__close"
                     aria-label="关闭对话框"
                     title="关闭对话框"
                     onClick={() => setIsFormulaBetaDialogOpen(false)}
@@ -1256,9 +1256,9 @@ export function ChatConversationStage({
                     ×
                   </button>
                 </div>
-                <div className="pp-formula-dialog__content">
+                <div className="dd-formula-dialog__content">
                   <iframe
-                    className="pp-formula-dialog__iframe"
+                    className="dd-formula-dialog__iframe"
                     title="公式 beta 编辑器"
                     srcDoc={formulaBetaFrameSrcDoc}
                   />
@@ -1270,7 +1270,7 @@ export function ChatConversationStage({
           {isColorPaletteOpen && createPortal(
             <div
               ref={colorPaletteRef}
-              className="pp-color-palette"
+              className="dd-color-palette"
               role="dialog"
               aria-label="字体颜色面板"
               style={
@@ -1282,29 +1282,29 @@ export function ChatConversationStage({
                   : undefined
               }
             >
-              <div className="pp-color-palette__topbar">
+              <div className="dd-color-palette__topbar">
                 <div
-                  className="pp-color-palette__preview"
+                  className="dd-color-palette__preview"
                   style={{ backgroundColor: activeTextColor ?? '#ffffff' }}
                   aria-hidden="true"
                 />
                 <button
                   type="button"
-                  className="pp-color-palette__clear"
+                  className="dd-color-palette__clear"
                   onMouseDown={handleClearTextColorMouseDown}
                 >
                   清空颜色
                 </button>
               </div>
 
-              <div className="pp-color-palette__section">
-                <span className="pp-color-palette__label">主题颜色</span>
-                <div className="pp-color-palette__grid">
+              <div className="dd-color-palette__section">
+                <span className="dd-color-palette__label">主题颜色</span>
+                <div className="dd-color-palette__grid">
                   {themeRichTextColors.map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      className="pp-color-palette__swatch"
+                      className="dd-color-palette__swatch"
                       style={{ backgroundColor: option.value }}
                       title={option.label}
                       aria-label={option.label}
@@ -1314,14 +1314,14 @@ export function ChatConversationStage({
                 </div>
               </div>
 
-              <div className="pp-color-palette__section">
-                <span className="pp-color-palette__label">标准颜色</span>
-                <div className="pp-color-palette__grid">
+              <div className="dd-color-palette__section">
+                <span className="dd-color-palette__label">标准颜色</span>
+                <div className="dd-color-palette__grid">
                   {standardRichTextColors.map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      className="pp-color-palette__swatch"
+                      className="dd-color-palette__swatch"
                       style={{ backgroundColor: option.value }}
                       title={option.label}
                       aria-label={option.label}
@@ -1335,38 +1335,38 @@ export function ChatConversationStage({
           )}
 
           {insertPanel && (
-            <form className="pp-rich-insert-panel" onSubmit={handleInsertPanelSubmit}>
-              <div className="pp-rich-insert-panel__header">
+            <form className="dd-rich-insert-panel" onSubmit={handleInsertPanelSubmit}>
+              <div className="dd-rich-insert-panel__header">
                 <strong>
                   {insertPanel.type === 'special-character' && '插入特殊字符'}
                   {insertPanel.type === 'table' && '插入表格'}
                   {insertPanel.type === 'tex' && '插入 TEX 公式'}
                   {insertPanel.type === 'code' && '插入代码块'}
                 </strong>
-                <button type="button" className="pp-rich-insert-panel__dismiss" onClick={closeInsertPanel}>
+                <button type="button" className="dd-rich-insert-panel__dismiss" onClick={closeInsertPanel}>
                   关闭
                 </button>
               </div>
 
-              <div className="pp-rich-insert-panel__body">
+              <div className="dd-rich-insert-panel__body">
                 {insertPanel.type === 'special-character' && (
                   <>
-                    <label className="pp-rich-insert-panel__field">
+                    <label className="dd-rich-insert-panel__field">
                       <span>字符内容</span>
                       <input
                         ref={setInsertPanelInputElement}
-                        className="pp-rich-insert-panel__input"
+                        className="dd-rich-insert-panel__input"
                         value={insertPanel.value ?? ''}
                         onChange={(event) => updateInsertPanel({ value: event.target.value })}
                         placeholder="输入要插入的字符"
                       />
                     </label>
-                    <div className="pp-rich-insert-panel__chips" aria-label="常用特殊字符">
+                    <div className="dd-rich-insert-panel__chips" aria-label="常用特殊字符">
                       {specialCharacterPresets.map((character) => (
                         <button
                           key={character}
                           type="button"
-                          className="pp-rich-insert-panel__chip"
+                          className="dd-rich-insert-panel__chip"
                           onClick={() => updateInsertPanel({ value: character })}
                         >
                           {character}
@@ -1377,22 +1377,22 @@ export function ChatConversationStage({
                 )}
 
                 {insertPanel.type === 'table' && (
-                  <div className="pp-rich-insert-panel__grid">
-                    <label className="pp-rich-insert-panel__field">
+                  <div className="dd-rich-insert-panel__grid">
+                    <label className="dd-rich-insert-panel__field">
                       <span>行数</span>
                       <input
                         ref={setInsertPanelInputElement}
-                        className="pp-rich-insert-panel__input"
+                        className="dd-rich-insert-panel__input"
                         inputMode="numeric"
                         value={insertPanel.rows ?? ''}
                         onChange={(event) => updateInsertPanel({ rows: event.target.value })}
                         placeholder="2"
                       />
                     </label>
-                    <label className="pp-rich-insert-panel__field">
+                    <label className="dd-rich-insert-panel__field">
                       <span>列数</span>
                       <input
-                        className="pp-rich-insert-panel__input"
+                        className="dd-rich-insert-panel__input"
                         inputMode="numeric"
                         value={insertPanel.columns ?? ''}
                         onChange={(event) => updateInsertPanel({ columns: event.target.value })}
@@ -1403,11 +1403,11 @@ export function ChatConversationStage({
                 )}
 
                 {insertPanel.type === 'tex' && (
-                  <label className="pp-rich-insert-panel__field">
+                  <label className="dd-rich-insert-panel__field">
                     <span>TEX 公式</span>
                     <textarea
                       ref={setInsertPanelTextareaElement}
-                      className="pp-rich-insert-panel__textarea"
+                      className="dd-rich-insert-panel__textarea"
                       value={insertPanel.value ?? ''}
                       onChange={(event) => updateInsertPanel({ value: event.target.value })}
                       placeholder="\\frac{a}{b}"
@@ -1417,11 +1417,11 @@ export function ChatConversationStage({
                 )}
 
                 {insertPanel.type === 'code' && (
-                  <label className="pp-rich-insert-panel__field">
+                  <label className="dd-rich-insert-panel__field">
                     <span>代码内容</span>
                     <textarea
                       ref={setInsertPanelTextareaElement}
-                      className="pp-rich-insert-panel__textarea"
+                      className="dd-rich-insert-panel__textarea"
                       value={insertPanel.value ?? ''}
                       onChange={(event) => updateInsertPanel({ value: event.target.value })}
                       placeholder="const answer = 42;"
@@ -1430,15 +1430,15 @@ export function ChatConversationStage({
                   </label>
                 )}
 
-                {insertPanelError && <p className="pp-rich-insert-panel__error">{insertPanelError}</p>}
+                {insertPanelError && <p className="dd-rich-insert-panel__error">{insertPanelError}</p>}
 
-                <div className="pp-rich-insert-panel__actions">
-                  <span className="pp-rich-insert-panel__hint">填写后直接插入到当前光标位置</span>
-                  <div className="pp-rich-insert-panel__action-group">
-                    <button type="button" className="pp-rich-insert-panel__ghost" onClick={closeInsertPanel}>
+                <div className="dd-rich-insert-panel__actions">
+                  <span className="dd-rich-insert-panel__hint">填写后直接插入到当前光标位置</span>
+                  <div className="dd-rich-insert-panel__action-group">
+                    <button type="button" className="dd-rich-insert-panel__ghost" onClick={closeInsertPanel}>
                       取消
                     </button>
-                    <button type="submit" className="pp-rich-insert-panel__primary">
+                    <button type="submit" className="dd-rich-insert-panel__primary">
                       插入
                     </button>
                   </div>
@@ -1447,10 +1447,10 @@ export function ChatConversationStage({
             </form>
           )}
 
-          <div className="pp-chatbox__textarea-wrap">
+          <div className="dd-chatbox__textarea-wrap">
             <div
               ref={editorRef}
-              className="pp-chatbox__editor"
+              className="dd-chatbox__editor"
               contentEditable
               suppressContentEditableWarning
               data-placeholder="输入消息，支持富文本和 Ctrl/Cmd + Enter 发送。"
@@ -1464,15 +1464,15 @@ export function ChatConversationStage({
             />
           </div>
 
-          <div className="pp-chatbox__composer-footer">
-            <div className="pp-chatbox__toolbar pp-chatbox__toolbar--files">
+          <div className="dd-chatbox__composer-footer">
+            <div className="dd-chatbox__toolbar dd-chatbox__toolbar--files">
               <button
                 ref={emojiTriggerRef}
                 type="button"
                 aria-label="表情"
                 aria-expanded={isEmojiPickerOpen}
                 aria-haspopup="dialog"
-                className={`pp-chatbox__emoji-trigger${isEmojiPickerOpen ? ' is-open' : ''}`}
+                className={`dd-chatbox__emoji-trigger${isEmojiPickerOpen ? ' is-open' : ''}`}
                 onMouseDown={preserveEditorFocus}
                 onClick={() => {
                   setInsertPanel(null)
@@ -1484,14 +1484,14 @@ export function ChatConversationStage({
               </button>
             </div>
 
-            <div className="pp-chatbox__composer-actions">
-              <label className="pp-chatbox__file-trigger" htmlFor={fileInputId}>
+            <div className="dd-chatbox__composer-actions">
+              <label className="dd-chatbox__file-trigger" htmlFor={fileInputId}>
                 <input id={fileInputId} className="sr-only" type="file" multiple onChange={onFileSelection} />
                 选择文件
               </label>
               <button
                 type="button"
-                className="pp-button pp-button--primary"
+                className="dd-button dd-button--primary"
                 onClick={onSendText}
                 disabled={isSendDisabled}
               >
@@ -1503,20 +1503,20 @@ export function ChatConversationStage({
           {isEmojiPickerOpen && (
             <div
               ref={emojiPickerRef}
-              className="pp-emoji-picker"
+              className="dd-emoji-picker"
               role="dialog"
               aria-label="Emoji 选择器"
             >
-              <div className="pp-emoji-picker__header">
+              <div className="dd-emoji-picker__header">
                 <strong>表情</strong>
                 <span>点击即可插入到输入框</span>
               </div>
-              <div className="pp-emoji-picker__grid">
+              <div className="dd-emoji-picker__grid">
                 {quickEmojis.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
-                    className="pp-emoji-picker__item"
+                    className="dd-emoji-picker__item"
                     onMouseDown={preserveEditorFocus}
                     onClick={() => handleEmojiInsert(emoji)}
                   >
@@ -1527,9 +1527,9 @@ export function ChatConversationStage({
             </div>
           )}
 
-          <div className="pp-chatbox__toolbar pp-chatbox__toolbar--meta">
-            <span className="pp-chatbox__meta-note">支持富文本、表格、附件链接、音频和代码块</span>
-            <span className="pp-chatbox__meta-note">当前目标：{activeTransferLabel}</span>
+          <div className="dd-chatbox__toolbar dd-chatbox__toolbar--meta">
+            <span className="dd-chatbox__meta-note">支持富文本、表格、附件链接、音频和代码块</span>
+            <span className="dd-chatbox__meta-note">当前目标：{activeTransferLabel}</span>
           </div>
         </div>
       </div>

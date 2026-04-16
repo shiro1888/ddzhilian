@@ -25,8 +25,8 @@ export function SessionsStage({
 
   return (
     <>
-      <div className="pp-stage__toolbar">
-        <div className="pp-joinbox">
+      <div className="dd-stage__toolbar">
+        <div className="dd-joinbox">
           <input
             type="text"
             inputMode="text"
@@ -34,24 +34,24 @@ export function SessionsStage({
             value={joinCode}
             onChange={(event) => onJoinCodeChange(event.target.value.toUpperCase())}
           />
-          <button type="button" className="pp-button pp-button--primary" onClick={onRequestSnapshot}>
+          <button type="button" className="dd-button dd-button--primary" onClick={onRequestSnapshot}>
             {currentMeta.primaryAction}
           </button>
-          <button type="button" className="pp-button pp-button--dark" onClick={onShowConnect}>
+          <button type="button" className="dd-button dd-button--dark" onClick={onShowConnect}>
             {currentMeta.secondaryAction}
           </button>
         </div>
       </div>
 
-      <div className="pp-stage__grid">
-        <section className="pp-composer">
-          <div className="pp-connectbox">
-            <div className="pp-receivebox__head">
+      <div className="dd-stage__grid">
+        <section className="dd-composer">
+          <div className="dd-connectbox">
+            <div className="dd-receivebox__head">
               <span>会话概览</span>
               <small>{uiSessions.length} 个会话</small>
             </div>
 
-            <div className="pp-overview">
+            <div className="dd-overview">
               <div>
                 <span>全部会话</span>
                 <strong>{uiSessions.length}</strong>
@@ -72,8 +72,8 @@ export function SessionsStage({
           </div>
         </section>
 
-        <aside className="pp-stage__side">
-          <div className="pp-detailcard">
+        <aside className="dd-stage__side">
+          <div className="dd-detailcard">
             <p>记录提示</p>
             <ul>
               <li>

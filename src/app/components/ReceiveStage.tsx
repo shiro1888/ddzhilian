@@ -19,22 +19,22 @@ export function ReceiveStage({
   onRequestSnapshot,
 }: ReceiveStageProps) {
   return (
-    <section className="pp-view pp-view--single pp-view--receive">
-      <div className="pp-receive-topbar">
-        <div className="pp-receive-topbar__actions">
+    <section className="dd-view dd-view--single dd-view--receive">
+      <div className="dd-receive-topbar">
+        <div className="dd-receive-topbar__actions">
           <span>设置</span>
-          <button type="button" className="pp-icon-button" onClick={onRequestSnapshot}>
+          <button type="button" className="dd-icon-button" onClick={onRequestSnapshot}>
             ↻
           </button>
         </div>
       </div>
 
-      <div className="pp-section-block">
-        <div className="pp-section-block__head">
+      <div className="dd-section-block">
+        <div className="dd-section-block__head">
           <h3>下载共享文件</h3>
         </div>
         {receivedCompletedFiles.length > 0 ? (
-          <ul className="pp-record-list">
+          <ul className="dd-record-list">
             {receivedCompletedFiles.map((file) => (
               <li key={file.id}>
                 <strong>{file.name}</strong>
@@ -52,16 +52,16 @@ export function ReceiveStage({
             ))}
           </ul>
         ) : (
-          <div className="pp-empty">当前暂无文件</div>
+          <div className="dd-empty">当前暂无文件</div>
         )}
       </div>
 
-      <div className="pp-section-block">
-        <div className="pp-section-block__head">
+      <div className="dd-section-block">
+        <div className="dd-section-block__head">
           <h3>自动接收的文件</h3>
         </div>
         {receivedPendingFiles.length > 0 ? (
-          <ul className="pp-record-list">
+          <ul className="dd-record-list">
             {receivedPendingFiles.map((file) => (
               <li key={file.id}>
                 <strong>{file.name}</strong>
@@ -73,14 +73,14 @@ export function ReceiveStage({
             ))}
           </ul>
         ) : (
-          <div className="pp-empty">当前暂无文件</div>
+          <div className="dd-empty">当前暂无文件</div>
         )}
       </div>
 
-      <div className="pp-section-block">
-        <div className="pp-section-block__head pp-section-block__head--inline-form">
+      <div className="dd-section-block">
+        <div className="dd-section-block__head dd-section-block__head--inline-form">
           <h3>临时缓存文件</h3>
-          <div className="pp-join-inline">
+          <div className="dd-join-inline">
             <input
               type="text"
               inputMode="text"
@@ -88,12 +88,12 @@ export function ReceiveStage({
               value={joinCode}
               onChange={(event) => onJoinCodeChange(event.target.value.toUpperCase())}
             />
-            <button type="button" className="pp-button pp-button--dark" onClick={onJoinCode}>
+            <button type="button" className="dd-button dd-button--dark" onClick={onJoinCode}>
               接收此会话
             </button>
           </div>
         </div>
-        <div className="pp-empty">当前暂无文件</div>
+        <div className="dd-empty">当前暂无文件</div>
       </div>
     </section>
   )

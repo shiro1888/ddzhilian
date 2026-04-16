@@ -47,8 +47,8 @@ export function ConnectStage({
 }: ConnectStageProps) {
   return (
     <>
-      <div className="pp-stage__toolbar">
-        <div className="pp-joinbox">
+      <div className="dd-stage__toolbar">
+        <div className="dd-joinbox">
           <input
             type="text"
             inputMode="text"
@@ -56,25 +56,25 @@ export function ConnectStage({
             value={joinCode}
             onChange={(event) => onJoinCodeChange(event.target.value.toUpperCase())}
           />
-          <button type="button" className="pp-button pp-button--primary" onClick={onPrimaryConnect}>
+          <button type="button" className="dd-button dd-button--primary" onClick={onPrimaryConnect}>
             {currentMeta.primaryAction}
           </button>
-          <button type="button" className="pp-button pp-button--dark" onClick={onRequestSnapshot}>
+          <button type="button" className="dd-button dd-button--dark" onClick={onRequestSnapshot}>
             {currentMeta.secondaryAction}
           </button>
         </div>
       </div>
 
-      <div className="pp-stage__grid">
-        <section className="pp-composer">
-          <div className="pp-connectbox">
-            <div className="pp-receivebox__head">
+      <div className="dd-stage__grid">
+        <section className="dd-composer">
+          <div className="dd-connectbox">
+            <div className="dd-receivebox__head">
               <span>在线设备</span>
               <small>{onlinePeers.length} 台设备</small>
             </div>
 
             {onlinePeers.length > 0 ? (
-              <ul className="pp-device-list pp-device-list--stage">
+              <ul className="dd-device-list dd-device-list--stage">
                 {onlinePeers.map((peer) => (
                   <li key={peer.deviceId}>
                     <button
@@ -89,7 +89,7 @@ export function ConnectStage({
                       <small>
                         {peer.relation.sameLan ? '同网设备' : peer.relation.sameAccount ? '同账号设备' : '可连接设备'}
                       </small>
-                      <small className={`pp-peer-badge pp-peer-badge--${peerStatusById.get(peer.deviceId) ?? 'online'}`}>
+                      <small className={`dd-peer-badge dd-peer-badge--${peerStatusById.get(peer.deviceId) ?? 'online'}`}>
                         {deviceConnectionLabel(peerStatusById.get(peer.deviceId))}
                       </small>
                     </button>
@@ -97,23 +97,23 @@ export function ConnectStage({
                 ))}
               </ul>
             ) : (
-              <div className="pp-empty">当前没有可见设备。可以输入互传码，或等待另一台设备上线。</div>
+              <div className="dd-empty">当前没有可见设备。可以输入互传码，或等待另一台设备上线。</div>
             )}
           </div>
         </section>
 
-        <aside className="pp-stage__side">
-          <div className="pp-codecard">
+        <aside className="dd-stage__side">
+          <div className="dd-codecard">
             <p>我的互传码</p>
             <strong>{selfShortCode ?? '------'}</strong>
             <span>{selfPairToken ? `pairToken: ${selfPairToken}` : '连接成功后会显示互传码和分享令牌。'}</span>
           </div>
 
-          <div className="pp-detailcard">
+          <div className="dd-detailcard">
             <p>连接提示</p>
             <ul>
               <li
-                className={`pp-device-name-row${isEditingDeviceName ? ' is-editing' : ''}`}
+                className={`dd-device-name-row${isEditingDeviceName ? ' is-editing' : ''}`}
                 onClick={() => {
                   if (!isEditingDeviceName) {
                     onBeginEditDeviceName()
@@ -122,7 +122,7 @@ export function ConnectStage({
               >
                 <span>设备名</span>
                 {isEditingDeviceName ? (
-                  <div className="pp-device-name-editor" onClick={(event) => event.stopPropagation()}>
+                  <div className="dd-device-name-editor" onClick={(event) => event.stopPropagation()}>
                     <input
                       type="text"
                       value={deviceNameDraft}
@@ -140,7 +140,7 @@ export function ConnectStage({
                       }}
                       autoFocus
                     />
-                    <div className="pp-device-name-editor__actions">
+                    <div className="dd-device-name-editor__actions">
                       <button type="button" onClick={onSaveDeviceName}>
                         保存
                       </button>
@@ -150,7 +150,7 @@ export function ConnectStage({
                     </div>
                   </div>
                 ) : (
-                  <div className="pp-device-name-display">
+                  <div className="dd-device-name-display">
                     <strong>{selfDeviceName ?? '正在连接…'}</strong>
                     <small>点击名称可修改</small>
                   </div>

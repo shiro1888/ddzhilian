@@ -16,17 +16,17 @@ export function AppHeader({
   errorMessage,
 }: AppHeaderProps) {
   return (
-    <header className="pp-header">
+    <header className="dd-header">
       <div>
-        <p className="pp-header__eyebrow">{isChatConversationView ? '当前对话' : '连接 · 传输 · 共享'}</p>
-        <div className="pp-header__title-row">
+        <p className="dd-header__eyebrow">{isChatConversationView ? '当前对话' : '连接 · 传输 · 共享'}</p>
+        <div className="dd-header__title-row">
           <h1>{currentMeta.title}</h1>
           {isChatConversationView && currentRoomId ? (
-            <span className="pp-header__room-chip">Room ID: {currentRoomId}</span>
+            <span className="dd-header__room-chip">Room ID: {currentRoomId}</span>
           ) : null}
         </div>
         <p>{currentMeta.description}</p>
-        {(localError || errorMessage) && <p className="pp-error-note">{localError ?? errorMessage}</p>}
+        {(localError || errorMessage) && <p className="dd-error-note">{localError ?? errorMessage}</p>}
       </div>
     </header>
   )

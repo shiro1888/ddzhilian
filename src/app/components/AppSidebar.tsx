@@ -19,26 +19,26 @@ export function AppSidebar({
   onViewChange,
 }: AppSidebarProps) {
   return (
-    <aside className={`pp-sidebar${isMobileNavOpen ? ' is-mobile-open' : ''}`}>
-      <div className="pp-brand">
-        <span className="pp-brand__mark">CC</span>
-        <div className="pp-brand__copy">
+    <aside className={`dd-sidebar${isMobileNavOpen ? ' is-mobile-open' : ''}`}>
+      <div className="dd-brand">
+        <span className="dd-brand__mark">CC</span>
+        <div className="dd-brand__copy">
           <strong>ddzhilian</strong>
           <small>V0.1.0</small>
         </div>
         <button
           type="button"
-          className="pp-sidebar__toggle"
+          className="dd-sidebar__toggle"
           aria-expanded={isMobileNavOpen}
-          aria-controls="pp-primary-nav"
+          aria-controls="dd-primary-nav"
           onClick={onToggleMobileNav}
         >
           {isMobileNavOpen ? '收起' : '菜单'}
         </button>
       </div>
 
-      <div className="pp-sidebar__menu" id="pp-primary-nav">
-        <div className="pp-sidebar__actions">
+      <div className="dd-sidebar__menu" id="dd-primary-nav">
+        <div className="dd-sidebar__actions">
           <button type="button" onClick={() => onViewChange('connect')}>
             新会话
           </button>
@@ -47,7 +47,7 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="pp-nav" aria-label="功能导航">
+        <nav className="dd-nav" aria-label="功能导航">
           {visibleNavItems.map((item) => (
             <button
               key={item.id}
@@ -64,7 +64,7 @@ export function AppSidebar({
                 onViewChange(item.id)
               }}
             >
-              <span className="pp-nav__icon" aria-hidden="true">
+              <span className="dd-nav__icon" aria-hidden="true">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -76,7 +76,7 @@ export function AppSidebar({
                   {item.icon}
                 </svg>
               </span>
-              <span className="pp-nav__copy">
+              <span className="dd-nav__copy">
                 <strong>{item.label}</strong>
                 <span>{item.hint}</span>
               </span>

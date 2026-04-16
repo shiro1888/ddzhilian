@@ -30,9 +30,9 @@ export function TextStage({
   onSendText,
 }: TextStageProps) {
   return (
-    <section className="pp-view pp-view--single pp-view--text">
-      <div className="pp-text-topbar">
-        <div className="pp-text-mode">
+    <section className="dd-view dd-view--single dd-view--text">
+      <div className="dd-text-topbar">
+        <div className="dd-text-mode">
           <button type="button" className={textMode === 'long' ? 'is-active' : ''} onClick={() => onTextModeChange('long')}>
             长文模式
           </button>
@@ -43,15 +43,15 @@ export function TextStage({
       </div>
 
       {textMode === 'long' ? (
-        <div className="pp-text-editor">
+        <div className="dd-text-editor">
           <textarea
             value={draftText}
             onChange={(event) => onDraftTextChange(event.target.value)}
             placeholder="在这里输入要发送到另一台设备的长文本。"
           />
 
-          <div className="pp-text-editor__toolbar">
-            <div className="pp-text-tools">
+          <div className="dd-text-editor__toolbar">
+            <div className="dd-text-tools">
               <button type="button">📋</button>
               <button type="button">A</button>
               <button type="button">&lt;&gt;</button>
@@ -60,11 +60,11 @@ export function TextStage({
               <button type="button">↷</button>
             </div>
 
-            <div className="pp-text-send">
+            <div className="dd-text-send">
               <span>当前目标：{activeTransferLabel}</span>
               <button
                 type="button"
-                className="pp-button pp-button--primary"
+                className="dd-button dd-button--primary"
                 onClick={onSendText}
                 disabled={draftText.trim().length === 0 || connectedTargetCount === 0}
               >
@@ -74,40 +74,40 @@ export function TextStage({
           </div>
         </div>
       ) : (
-        <div className="pp-chatbox">
-          <div className="pp-chatbox__thread">
+        <div className="dd-chatbox">
+          <div className="dd-chatbox__thread">
             {sortedChatRecords.length > 0 ? (
               sortedChatRecords.map((record, index) => {
                 const previousIso = index > 0 ? sortedChatRecords[index - 1].createdAt : null
                 const showDivider = shouldInsertDivider(previousIso, record.createdAt)
 
                 return (
-                  <div key={record.id} className="pp-chatbox__entry">
+                  <div key={record.id} className="dd-chatbox__entry">
                     {showDivider && (
-                      <div className="pp-chatbox__divider">
+                      <div className="dd-chatbox__divider">
                         <span>{formatChatDivider(record.createdAt)}</span>
                       </div>
                     )}
 
-                    <div className={`pp-chatbox__message${record.fromSelf ? ' is-self' : ' is-peer'}`}>
-                      {!record.fromSelf && <div className="pp-chatbox__avatar">TA</div>}
+                    <div className={`dd-chatbox__message${record.fromSelf ? ' is-self' : ' is-peer'}`}>
+                      {!record.fromSelf && <div className="dd-chatbox__avatar">TA</div>}
 
-                      <div className="pp-chatbox__bubble">
+                      <div className="dd-chatbox__bubble">
                         <p>{record.text}</p>
                       </div>
 
-                      {record.fromSelf && <div className="pp-chatbox__avatar is-self">我</div>}
+                      {record.fromSelf && <div className="dd-chatbox__avatar is-self">我</div>}
                     </div>
                   </div>
                 )
               })
             ) : (
-              <div className="pp-chatbox__empty">当前暂无内容</div>
+              <div className="dd-chatbox__empty">当前暂无内容</div>
             )}
           </div>
 
-          <div className="pp-chatbox__composer">
-            <div className="pp-chatbox__toolbar">
+          <div className="dd-chatbox__composer">
+            <div className="dd-chatbox__toolbar">
               <button type="button" aria-label="表情">
                 ☺
               </button>
@@ -125,7 +125,7 @@ export function TextStage({
               </button>
             </div>
 
-            <div className="pp-chatbox__input-row">
+            <div className="dd-chatbox__input-row">
               <input
                 type="text"
                 placeholder="输入消息"
@@ -140,7 +140,7 @@ export function TextStage({
               />
               <button
                 type="button"
-                className="pp-button pp-button--primary"
+                className="dd-button dd-button--primary"
                 onClick={onSendText}
                 disabled={chatDraft.trim().length === 0 || connectedTargetCount === 0}
               >
@@ -148,19 +148,19 @@ export function TextStage({
               </button>
             </div>
 
-            <p className="pp-inline-note">当前目标：{activeTransferLabel}</p>
+            <p className="dd-inline-note">当前目标：{activeTransferLabel}</p>
           </div>
         </div>
       )}
 
       {textMode === 'long' && (
-        <div className="pp-section-block">
-          <div className="pp-section-block__head">
+        <div className="dd-section-block">
+          <div className="dd-section-block__head">
             <h3>消息记录</h3>
           </div>
 
           {textRecords.length > 0 ? (
-            <ul className="pp-record-list">
+            <ul className="dd-record-list">
               {[...textRecords]
                 .reverse()
                 .slice(0, 12)
@@ -173,7 +173,7 @@ export function TextStage({
                 ))}
             </ul>
           ) : (
-            <div className="pp-empty">当前暂无内容</div>
+            <div className="dd-empty">当前暂无内容</div>
           )}
         </div>
       )}

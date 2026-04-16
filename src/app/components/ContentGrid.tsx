@@ -39,12 +39,12 @@ export function ContentGrid({
   onDeviceAction,
 }: ContentGridProps) {
   return (
-    <section className={`pp-content-grid${isContentRailCollapsed ? ' is-collapsed' : ''}`}>
-      <section className="pp-panel pp-panel--devices">
-        <div className="pp-connection-layer">
-          <div className="pp-connection-layer__body">
-            <div className="pp-connection-layer__actions">
-              <div className="pp-connection-layer__join">
+    <section className={`dd-content-grid${isContentRailCollapsed ? ' is-collapsed' : ''}`}>
+      <section className="dd-panel dd-panel--devices">
+        <div className="dd-connection-layer">
+          <div className="dd-connection-layer__body">
+            <div className="dd-connection-layer__actions">
+              <div className="dd-connection-layer__join">
                 <input
                   type="text"
                   inputMode="text"
@@ -52,14 +52,14 @@ export function ContentGrid({
                   value={roomJoinDraft}
                   onChange={(event) => onRoomJoinDraftChange(event.target.value.toUpperCase())}
                 />
-                <button type="button" className="pp-button pp-button--dark" onClick={onJoinRoom}>
+                <button type="button" className="dd-button dd-button--dark" onClick={onJoinRoom}>
                   加入房间
                 </button>
               </div>
 
               <button
                 type="button"
-                className="pp-button pp-button--primary"
+                className="dd-button dd-button--primary"
                 onClick={onConnectionAction}
                 disabled={connectionActionDisabled}
               >
@@ -69,8 +69,8 @@ export function ContentGrid({
           </div>
         </div>
 
-        <div className="pp-panel__head">
-          <div className="pp-panel__search">
+        <div className="dd-panel__head">
+          <div className="dd-panel__search">
             <input
               type="search"
               placeholder="搜索设备名称或互传码"
@@ -79,7 +79,7 @@ export function ContentGrid({
             />
             <button
               type="button"
-              className="pp-icon-button pp-icon-button--plain"
+              className="dd-icon-button dd-icon-button--plain"
               aria-label="新会话"
               onClick={onShowConnect}
             >
@@ -89,27 +89,27 @@ export function ContentGrid({
         </div>
 
         {deviceBarItems.length > 0 ? (
-          <ul className="pp-device-bar">
+          <ul className="dd-device-bar">
             {deviceBarItems.map((item) => (
               <li key={item.peer.deviceId}>
-                <div className={`pp-device-bar__item${effectiveSelectedPeerId === item.peer.deviceId ? ' is-selected' : ''}`}>
+                <div className={`dd-device-bar__item${effectiveSelectedPeerId === item.peer.deviceId ? ' is-selected' : ''}`}>
                   <button
                     type="button"
-                    className="pp-device-bar__summary"
+                    className="dd-device-bar__summary"
                     onClick={() => onOpenDeviceConversation(item.peer.deviceId, item.latestSessionId)}
                   >
-                    <span className="pp-device-bar__avatar" aria-hidden="true">
+                    <span className="dd-device-bar__avatar" aria-hidden="true">
                       {item.peer.deviceName.slice(0, 1)}
                     </span>
-                    <div className="pp-device-bar__body">
-                      <div className="pp-device-bar__head">
+                    <div className="dd-device-bar__body">
+                      <div className="dd-device-bar__head">
                         <strong>{item.peer.deviceName}</strong>
                         <small>{formatRelativeTime(item.peer.lastSeenAt)}</small>
                       </div>
                       <p>{item.previewText}</p>
-                      <div className="pp-device-bar__meta">
+                      <div className="dd-device-bar__meta">
                         <small>{item.peer.platform} · {deviceRelationText(item.peer)}</small>
-                        <span className={`pp-peer-badge pp-peer-badge--${item.deviceStatus}`}>
+                        <span className={`dd-peer-badge dd-peer-badge--${item.deviceStatus}`}>
                           {deviceBarStatusLabel(item.deviceStatus)}
                         </span>
                       </div>
@@ -118,7 +118,7 @@ export function ContentGrid({
 
                   <button
                     type="button"
-                    className={`pp-device-bar__action is-${item.deviceStatus}`}
+                    className={`dd-device-bar__action is-${item.deviceStatus}`}
                     onClick={() => onDeviceAction(item)}
                     disabled={item.deviceStatus === 'connecting'}
                   >
@@ -129,7 +129,7 @@ export function ContentGrid({
             ))}
           </ul>
         ) : (
-          <div className="pp-empty">当前没有发现设备。新发现的设备会在这里按时间竖向排列。</div>
+          <div className="dd-empty">当前没有发现设备。新发现的设备会在这里按时间竖向排列。</div>
         )}
       </section>
     </section>

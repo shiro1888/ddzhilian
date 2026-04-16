@@ -950,7 +950,7 @@ function App() {
   )
 
   return (
-    <div className="pp-shell" data-theme="chat-desktop">
+    <div className="dd-shell" data-theme="chat-desktop">
       <AppSidebar
         isMobileNavOpen={isMobileNavOpen}
         effectiveNavView={effectiveNavView}
@@ -960,7 +960,7 @@ function App() {
         onViewChange={handleViewChange}
       />
 
-      <main className={`pp-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}`}>
+      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}`}>
         <AppHeader
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
@@ -969,8 +969,8 @@ function App() {
           errorMessage={errorMessage}
         />
 
-        <section className="pp-stage">
-          <div className="pp-stage__backdrop" aria-hidden="true" />
+        <section className="dd-stage">
+          <div className="dd-stage__backdrop" aria-hidden="true" />
           <Routes>
             <Route
               path="/"

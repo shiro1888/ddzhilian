@@ -36,17 +36,17 @@ export function SendStage({
   onDrop,
 }: SendStageProps) {
   return (
-    <section className="pp-view pp-view--single pp-view--send">
+    <section className="dd-view dd-view--single dd-view--send">
       <div
-        className={`pp-bluebox${isDragging ? ' is-dragging' : ''}`}
+        className={`dd-bluebox${isDragging ? ' is-dragging' : ''}`}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         <p>选择文件，实时共享，等待已连接设备下载</p>
-        <div className="pp-bluebox__actions">
-          <label className={`pp-pill-button${isDragging ? ' is-dragging' : ''}`} htmlFor={fileInputId}>
+        <div className="dd-bluebox__actions">
+          <label className={`dd-pill-button${isDragging ? ' is-dragging' : ''}`} htmlFor={fileInputId}>
             <input id={fileInputId} className="sr-only" type="file" multiple onChange={onFileSelection} />
             共享文件
           </label>
@@ -54,15 +54,15 @@ export function SendStage({
         </div>
       </div>
 
-      <div className="pp-section-block">
-        <div className="pp-section-block__head">
+      <div className="dd-section-block">
+        <div className="dd-section-block__head">
           <div>
             <h3>推送文件到已连接设备</h3>
-            <p className="pp-inline-note">当前目标：{activeTransferLabel}</p>
+            <p className="dd-inline-note">当前目标：{activeTransferLabel}</p>
           </div>
           <button
             type="button"
-            className="pp-button pp-button--primary"
+            className="dd-button dd-button--primary"
             onClick={onSendFiles}
             disabled={!hasRunnableTransfers}
           >
@@ -71,28 +71,28 @@ export function SendStage({
         </div>
 
         {visibleTransferItems.length > 0 ? (
-          <ul className="pp-transfer-list">
+          <ul className="dd-transfer-list">
             {visibleTransferItems.map((item) => (
               <li key={item.id}>
-                <div className="pp-transfer-list__head">
+                <div className="dd-transfer-list__head">
                   <div>
                     <strong>{item.fileName}</strong>
                     <span>{formatFileSize(item.fileSize)}</span>
                   </div>
-                  <div className="pp-transfer-list__meta">
+                  <div className="dd-transfer-list__meta">
                     <span>{item.targetDeviceName ?? activeTransferLabel}</span>
                     <strong>{transferStatusLabel(item.status)}</strong>
                   </div>
                 </div>
 
-                <div className="pp-transfer-list__progress">
+                <div className="dd-transfer-list__progress">
                   <div
-                    className={`pp-transfer-list__bar pp-transfer-list__bar--${item.status}`}
+                    className={`dd-transfer-list__bar dd-transfer-list__bar--${item.status}`}
                     style={{ width: `${Math.round(item.progress * 100)}%` }}
                   />
                 </div>
 
-                <div className="pp-transfer-list__footer">
+                <div className="dd-transfer-list__footer">
                   <span>{Math.round(item.progress * 100)}%</span>
                   <span>
                     {formatFileSize(item.sentBytes)} / {formatFileSize(item.fileSize)}
@@ -111,7 +111,7 @@ export function SendStage({
             ))}
           </ul>
         ) : (
-          <div className="pp-empty">{fileSenderEmptyState}</div>
+          <div className="dd-empty">{fileSenderEmptyState}</div>
         )}
       </div>
     </section>
