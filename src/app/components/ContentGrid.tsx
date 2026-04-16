@@ -122,7 +122,13 @@ export function ContentGrid({
                     onClick={() => onDeviceAction(item)}
                     disabled={item.deviceStatus === 'connecting'}
                   >
-                    {item.deviceStatus === 'connected' ? '断开' : item.deviceStatus === 'connecting' ? '连接中' : '连接'}
+                    {item.deviceStatus === 'connected'
+                      ? '断开'
+                      : item.deviceStatus === 'connecting'
+                        ? '连接中'
+                        : item.deviceStatus === 'failed'
+                          ? '重连'
+                          : '连接'}
                   </button>
                 </div>
               </li>

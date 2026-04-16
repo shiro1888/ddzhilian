@@ -47,7 +47,7 @@ export class SessionRegistry {
     if (existingId) {
       const existing = this.byId.get(existingId);
 
-      if (existing && existing.state !== 'closed') {
+      if (existing && existing.state !== 'closed' && existing.state !== 'failed') {
         return {
           session: existing,
           created: false as const,

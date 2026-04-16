@@ -334,7 +334,11 @@ function App() {
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const connectionActionLabel =
-    selectedDeviceStatus === 'connected' && selectedPeerLatestSession ? '断开当前设备' : '连接当前设备'
+    selectedDeviceStatus === 'connected' && selectedPeerLatestSession
+      ? '断开当前设备'
+      : selectedDeviceStatus === 'failed'
+        ? '重新连接当前设备'
+        : '连接当前设备'
   const connectionActionDisabled =
     !selectedDevicePeer || selectedDeviceStatus === 'connecting'
 
