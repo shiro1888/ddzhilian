@@ -1,4 +1,4 @@
-# CCConnect Signaling Server
+# ddzhilian Signaling Server
 
 This backend owns the first-phase architecture for:
 

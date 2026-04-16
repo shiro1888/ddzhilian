@@ -242,7 +242,7 @@ const formulaBetaFrameSrcDoc = `<!doctype html>
 
       document.getElementById('insert-btn').addEventListener('click', () => {
         parent.postMessage({
-          source: 'ccconnect-formula-beta',
+          source: 'ddzhilian-formula-beta',
           type: 'insert',
           value: input.value
         }, '*');
@@ -250,7 +250,7 @@ const formulaBetaFrameSrcDoc = `<!doctype html>
 
       document.getElementById('close-btn').addEventListener('click', () => {
         parent.postMessage({
-          source: 'ccconnect-formula-beta',
+          source: 'ddzhilian-formula-beta',
           type: 'close'
         }, '*');
       });
@@ -699,7 +699,7 @@ export function ChatConversationStage({
       !payload ||
       typeof payload !== 'object' ||
       !('source' in payload) ||
-      payload.source !== 'ccconnect-formula-beta' ||
+      payload.source !== 'ddzhilian-formula-beta' ||
       !('type' in payload)
     ) {
       return

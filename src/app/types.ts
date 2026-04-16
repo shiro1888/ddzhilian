@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { PeerSummary } from '../lib/ccconnect-types'
+import type { PeerSummary } from '../lib/ddzhilian-types'
 
 export type TransferMode = 'file' | 'text'
 export type SessionStatus = 'waiting' | 'active' | 'completed'

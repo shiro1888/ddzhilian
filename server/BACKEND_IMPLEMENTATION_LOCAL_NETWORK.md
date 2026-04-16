@@ -1,12 +1,12 @@
 # Backend Implementation Plan: Local Network Mode
 
-This document describes the backend functionality required to implement a LocalSend-inspired local network mode for CCConnect.
+This document describes the backend functionality required to implement a LocalSend-inspired local network mode for ddzhilian.
 
 It is intentionally focused on backend and protocol behavior, not UI.
 
 ## Purpose
 
-CCConnect currently supports:
+ddzhilian currently supports:
 
 - remote device discovery through the deployed signaling backend
 - WebRTC signaling
@@ -20,7 +20,7 @@ To achieve a stronger local-network experience, we need a second transport lane 
 
 ## Product Outcome
 
-After this work is complete, CCConnect should support two transport families:
+After this work is complete, ddzhilian should support two transport families:
 
 ### 1. Remote Mode
 

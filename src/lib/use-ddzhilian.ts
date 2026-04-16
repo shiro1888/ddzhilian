@@ -17,10 +17,10 @@ import type {
   TextRecord,
   TransferItem,
   TransferStatus,
-} from './ccconnect-types'
+} from './ddzhilian-types'
 
 const DEFAULT_DEV_WS_URL = 'ws://localhost:8787/ws'
-const STORAGE_KEY = 'ccconnect.identity.v1'
+const STORAGE_KEY = 'ddzhilian.identity.v1'
 const CHUNK_SIZE = 16 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 512 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 128 * 1024
@@ -93,7 +93,7 @@ type SystemName = 'windows' | 'android' | 'ios' | 'ipad' | 'mac' | 'linux' | 'we
 
 function debugLog(...parts: unknown[]) {
   if (import.meta.env.DEV) {
-    console.debug('[ccconnect]', ...parts)
+    console.debug('[ddzhilian]', ...parts)
   }
 }
 
@@ -268,7 +268,7 @@ function mapBrowserConnectionState(
   return 'connecting'
 }
 
-export function useCcconnect() {
+export function useDdzhilian() {
   const [socketState, setSocketState] = useState<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle')
   const [self, setSelf] = useState<DirectorySnapshotPayload['self'] | null>(null)
   const [onlinePeers, setOnlinePeers] = useState<PeerSummary[]>([])
@@ -776,7 +776,7 @@ export function useCcconnect() {
     })
 
     if (initiator) {
-      const dataChannel = peerConnection.createDataChannel('ccconnect')
+      const dataChannel = peerConnection.createDataChannel('ddzhilian')
       registerDataChannel(sessionId, peer.deviceId, peer.deviceName, reason, dataChannel)
     }
 

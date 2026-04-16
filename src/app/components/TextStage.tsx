@@ -1,4 +1,4 @@
-import type { TextRecord } from '../../lib/ccconnect-types'
+import type { TextRecord } from '../../lib/ddzhilian-types'
 import type { TextMode } from '../types'
 import { formatChatDivider, formatRelativeTime, shouldInsertDivider } from '../utils'
 

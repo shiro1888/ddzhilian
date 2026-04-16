@@ -1179,7 +1179,7 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
 
 httpServer.listen(config.port, config.host, () => {
   console.log(
-    `CCConnect signaling server listening on http://${config.host}:${config.port.toString()}`,
+    `ddzhilian signaling server listening on http://${config.host}:${config.port.toString()}`,
   );
   console.log(`WebSocket endpoint: ${config.publicWsUrl}`);
 });

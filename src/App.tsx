@@ -32,7 +32,7 @@ import {
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
-import { useCcconnect } from './lib/use-ccconnect'
+import { useDdzhilian } from './lib/use-ddzhilian'
 
 function App() {
   const location = useLocation()
@@ -92,7 +92,7 @@ function App() {
     sendText,
     stateToUiStatus,
     reasonLabel,
-  } = useCcconnect()
+  } = useDdzhilian()
 
   const effectiveSelectedPeerId =
     onlinePeers.some((peer) => peer.deviceId === selectedPeerId)

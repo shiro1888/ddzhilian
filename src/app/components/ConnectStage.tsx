@@ -1,4 +1,4 @@
-import type { PeerSummary } from '../../lib/ccconnect-types'
+import type { PeerSummary } from '../../lib/ddzhilian-types'
 import type { PeerConnectionStatus, StageMeta } from '../types'
 import { deviceConnectionLabel } from '../utils'
 

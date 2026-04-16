@@ -1,4 +1,4 @@
-import type { ReceivedFile } from '../../lib/ccconnect-types'
+import type { ReceivedFile } from '../../lib/ddzhilian-types'
 import { formatFileSize, formatRelativeTime } from '../utils'
 
 type ReceiveStageProps = {

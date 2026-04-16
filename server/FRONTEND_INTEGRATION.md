@@ -1,6 +1,6 @@
-# CCConnect Frontend Integration
+# ddzhilian Frontend Integration
 
-This document explains how the current frontend should connect to the deployed CCConnect signaling service.
+This document explains how the current frontend should connect to the deployed ddzhilian signaling service.
 
 ## Live Endpoints
 

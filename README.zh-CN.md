@@ -1,8 +1,8 @@
-# CCConnect
+# ddzhilian
 
-[English README](C:/Users/12467/Documents/707/CCConnect/README.md)
+[English README](README.md)
 
-CCConnect 是一个面向跨设备快速传输的桌面式应用，用来在设备之间发送文件和长文本。当前仓库包含一个 React 前端原型，以及一个负责设备发现、配对、会话管理和 WebRTC 信令的服务端。
+ddzhilian 是一个面向跨设备快速传输的桌面式应用，用来在设备之间发送文件和长文本。当前仓库包含一个 React 前端原型，以及一个负责设备发现、配对、会话管理和 WebRTC 信令的服务端。
 
 ## 项目能力
 
@@ -49,7 +49,7 @@ CCConnect 是一个面向跨设备快速传输的桌面式应用，用来在设�
 
 ## 后端职责
 
-[`server/README.md`](C:/Users/12467/Documents/707/CCConnect/server/README.md) 中的信令服务负责：
+[`server/README.md`](server/README.md) 中的信令服务负责：
 
 - 设备在线状态与重连身份
 - 短码与 pair token
@@ -99,7 +99,7 @@ npm run dev
 
 ### 运行后端
 
-在 [`server`](C:/Users/12467/Documents/707/CCConnect/server) 目录执行：
+在 [`server`](server) 目录执行：
 
 ```bash
 npm run dev
@@ -133,7 +133,7 @@ npm run build
 
 如果不设置，前端在本地开发时默认使用 `ws://localhost:8787/ws`，生产环境会基于当前站点地址自动推导 `/ws`。
 
-后端环境配置位于 [`server/.env.example`](C:/Users/12467/Documents/707/CCConnect/server/.env.example)。如果你需要自定义运行参数，可以复制为 `server/.env` 再修改。
+后端环境配置位于 [`server/.env.example`](server/.env.example)。如果你需要自定义运行参数，可以复制为 `server/.env` 再修改。
 
 重要变量包括：
 
@@ -180,8 +180,8 @@ npm run start
 
 项目方向与界面行为说明见：
 
-- [`DESIGN.md`](C:/Users/12467/Documents/707/CCConnect/DESIGN.md)
-- [`DESIGN.zh-CN.md`](C:/Users/12467/Documents/707/CCConnect/DESIGN.zh-CN.md)
+- [`DESIGN.md`](DESIGN.md)
+- [`DESIGN.zh-CN.md`](DESIGN.zh-CN.md)
 
 这些文档定义了桌面对话工作区布局、克制的聊天式视觉语言，以及消息和传输交互的预期行为。
 

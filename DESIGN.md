@@ -1,8 +1,8 @@
-# CCConnect Desktop Chat Design System
+# ddzhilian Desktop Chat Design System
 
 ## 1. Visual Theme & Atmosphere
 
-CCConnect should feel like a desktop chat client in the same family as WeChat for Windows: quiet, efficient, familiar, and system-native. The interface is not trying to impress through gradients, floating cards, or dashboard spectacle. Its quality comes from restraint. Users should feel that sending a file, reading a long message, or checking a session is as lightweight as glancing at a desktop messenger.
+ddzhilian should feel like a desktop chat client in the same family as WeChat for Windows: quiet, efficient, familiar, and system-native. The interface is not trying to impress through gradients, floating cards, or dashboard spectacle. Its quality comes from restraint. Users should feel that sending a file, reading a long message, or checking a session is as lightweight as glancing at a desktop messenger.
 
 The core visual idea is a three-zone workspace:
 
@@ -70,7 +70,7 @@ This style depends on disciplined color usage. Green is not a theme washed acros
 - **Windows Fallback**: `Microsoft YaHei`
 - **Cross-platform Fallback**: `Noto Sans SC`, `Segoe UI`, `system-ui`, `sans-serif`
 
-CCConnect should use one sans-serif system for nearly everything. This is a utility product, not an editorial or brand-heavy surface. Strong hierarchy should come from size, spacing, color, and placement rather than from mixing font personalities.
+ddzhilian should use one sans-serif system for nearly everything. This is a utility product, not an editorial or brand-heavy surface. Strong hierarchy should come from size, spacing, color, and placement rather than from mixing font personalities.
 
 ### Hierarchy
 
@@ -207,7 +207,7 @@ The composer should feel integrated into the window, not boxed like a form card.
 - Progress bar height: `4px`
 - Progress fill: Action Green (`#07c160`)
 
-For CCConnect, transfer cards are functional first. Keep them short, easy to scan, and clearly distinct from plain text bubbles.
+For ddzhilian, transfer cards are functional first. Keep them short, easy to scan, and clearly distinct from plain text bubbles.
 
 ### Session Status Chips
 - Height: `24px`
@@ -319,9 +319,9 @@ This design should not rely on shadow stacks for hierarchy. Depth comes from par
 - Keep outgoing and incoming bubble distinction strong at every width.
 - Maintain minimum tap targets of `36px` even in compact layouts.
 
-## 9. CCConnect-Specific Recommendations
+## 9. ddzhilian-Specific Recommendations
 
-Because CCConnect is not only a chat client but also a device-to-device transfer tool, the WeChat-like shell should be adapted for operational clarity:
+Because ddzhilian is not only a chat client but also a device-to-device transfer tool, the WeChat-like shell should be adapted for operational clarity:
 
 - File transfer states should appear inline in the chat stream, not hidden in a separate dashboard by default.
 - Device presence, session code, and transfer progress should use compact chips and rows, not large hero modules.

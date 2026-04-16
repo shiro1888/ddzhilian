@@ -1,8 +1,8 @@
-# CCConnect
+# ddzhilian
 
-[中文说明](C:/Users/12467/Documents/707/CCConnect/README.zh-CN.md)
+[中文说明](README.zh-CN.md)
 
-CCConnect is a desktop-style cross-device transfer app for quickly sending files and long text between devices. The current repository includes a React frontend prototype and a signaling server for device discovery, pairing, session management, and WebRTC signaling.
+ddzhilian is a desktop-style cross-device transfer app for quickly sending files and long text between devices. The current repository includes a React frontend prototype and a signaling server for device discovery, pairing, session management, and WebRTC signaling.
 
 ## What It Does
 
@@ -49,7 +49,7 @@ CCConnect is a desktop-style cross-device transfer app for quickly sending files
 
 ## Backend Responsibilities
 
-The signaling server in [`server/README.md`](C:/Users/12467/Documents/707/CCConnect/server/README.md) handles:
+The signaling server in [`server/README.md`](server/README.md) handles:
 
 - device presence and reconnect identity
 - short codes and pair tokens
@@ -99,7 +99,7 @@ The app now ships with only the chat-desktop experience. File send and receive f
 
 ### Run The Backend
 
-From [`server`](C:/Users/12467/Documents/707/CCConnect/server):
+From [`server`](server):
 
 ```bash
 npm run dev
@@ -133,7 +133,7 @@ Optional frontend environment variables:
 
 If these are not provided, the frontend uses `ws://localhost:8787/ws` in local development and derives `/ws` from the current origin in production.
 
-Backend environment settings live in [`server/.env.example`](C:/Users/12467/Documents/707/CCConnect/server/.env.example). Copy it to `.env` inside `server/` if you want to customize the runtime.
+Backend environment settings live in [`server/.env.example`](server/.env.example). Copy it to `.env` inside `server/` if you want to customize the runtime.
 
 Important variables include:
 
@@ -180,8 +180,8 @@ If the backend is behind `nginx`, make sure WebSocket upgrade headers and `X-For
 
 The product direction and UI behavior are documented in:
 
-- [`DESIGN.md`](C:/Users/12467/Documents/707/CCConnect/DESIGN.md)
-- [`DESIGN.zh-CN.md`](C:/Users/12467/Documents/707/CCConnect/DESIGN.zh-CN.md)
+- [`DESIGN.md`](DESIGN.md)
+- [`DESIGN.zh-CN.md`](DESIGN.zh-CN.md)
 
 These files define the desktop chat workspace layout, the restrained WeChat-like visual language, and the interaction expectations for transfer and messaging flows.
 

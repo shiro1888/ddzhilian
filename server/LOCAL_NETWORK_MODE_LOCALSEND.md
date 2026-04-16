@@ -1,6 +1,6 @@
 # Local Network Mode Requirement
 
-This document defines a LocalSend-inspired LAN mode for CCConnect.
+This document defines a LocalSend-inspired LAN mode for ddzhilian.
 
 ## Goal
 
@@ -39,7 +39,7 @@ Therefore:
 
 ## Required Product Decision
 
-CCConnect must support two transport families:
+ddzhilian must support two transport families:
 
 ### 1. LAN Native Mode
 
@@ -196,7 +196,7 @@ Because browser tabs cannot behave like a full LAN daemon, a browser fallback is
 
 ### Browser Fallback Rules
 
-- browser clients may discover devices through the remote CCConnect backend
+- browser clients may discover devices through the remote ddzhilian backend
 - browser clients may receive a local download URL from a native device
 - browser clients may open a download page and fetch files from a LAN-native sender
 
@@ -325,7 +325,7 @@ The LocalSend-style LAN mode is complete only if all of the following are true:
 
 ## Implementation Guidance
 
-To make this practical for CCConnect, the recommended rollout order is:
+To make this practical for ddzhilian, the recommended rollout order is:
 
 1. Define LAN mode protocol and trust model
 2. Build a local helper or native app transport service
@@ -343,4 +343,4 @@ This requirement does not ask for:
 - browser-only multicast support
 - full LocalSend protocol compatibility
 
-The goal is a CCConnect LAN mode inspired by LocalSend, not a byte-for-byte clone.
+The goal is a ddzhilian LAN mode inspired by LocalSend, not a byte-for-byte clone.

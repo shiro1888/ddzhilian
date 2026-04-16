@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent } from 'react'
-import type { TransferItem } from '../../lib/ccconnect-types'
+import type { TransferItem } from '../../lib/ddzhilian-types'
 import { formatFileSize, transferStatusLabel } from '../utils'
 
 type SendStageProps = {

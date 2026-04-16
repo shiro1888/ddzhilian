@@ -23,7 +23,7 @@ export function AppSidebar({
       <div className="pp-brand">
         <span className="pp-brand__mark">CC</span>
         <div className="pp-brand__copy">
-          <strong>CCConnect</strong>
+          <strong>ddzhilian</strong>
           <small>V0.1.0</small>
         </div>
         <button
