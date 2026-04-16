@@ -393,6 +393,9 @@ export function ChatConversationStage({
   const [isFormulaBetaDialogOpen, setIsFormulaBetaDialogOpen] = useState(false)
   const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false)
   const [activeTextColor, setActiveTextColor] = useState<string | null>(null)
+  const [activeParagraphFormat, setActiveParagraphFormat] = useState('')
+  const [activeFontFamily, setActiveFontFamily] = useState('')
+  const [activeFontSize, setActiveFontSize] = useState('')
   const [fontOptions, setFontOptions] = useState<SelectOption[]>(defaultRichTextFonts)
   const [colorPalettePosition, setColorPalettePosition] = useState<FloatingPanelPosition | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
@@ -644,6 +647,37 @@ export function ChatConversationStage({
     restoreSelection()
     document.execCommand(command, false, value)
     syncDraftFromEditor()
+  }
+
+  const handleParagraphFormatChange = (value: string) => {
+    setActiveParagraphFormat(value)
+    if (value) {
+      runCommand('formatBlock', value)
+    }
+  }
+
+  const handleFontFamilyChange = (value: string) => {
+    setActiveFontFamily(value)
+    if (value) {
+      applyInlineStyle(
+        [['font-family', value]],
+        { command: 'fontName', value },
+      )
+    }
+  }
+
+  const handleFontSizeChange = (value: string) => {
+    setActiveFontSize(value)
+    if (value) {
+      const fontSize = Number.parseInt(value, 10)
+      applyInlineStyle(
+        [['font-size', `${fontSize.toString()}px`]],
+        {
+          command: 'fontSize',
+          value: legacyFontSizeForPixels(fontSize),
+        },
+      )
+    }
   }
 
   const insertText = (value: string) => {
@@ -1042,13 +1076,8 @@ export function ChatConversationStage({
               <div className="dd-rich-toolbar__group">
               <select
                 className="dd-rich-toolbar__select"
-                defaultValue=""
-                onChange={(event) => {
-                  if (event.target.value) {
-                    runCommand('formatBlock', event.target.value)
-                    event.target.value = ''
-                  }
-                }}
+                value={activeParagraphFormat}
+                onChange={(event) => handleParagraphFormatChange(event.target.value)}
               >
                 {paragraphFormats.map((option) => (
                   <option key={option.label} value={option.value}>
@@ -1058,16 +1087,8 @@ export function ChatConversationStage({
               </select>
               <select
                 className="dd-rich-toolbar__select"
-                defaultValue=""
-                onChange={(event) => {
-                  if (event.target.value) {
-                    applyInlineStyle(
-                      [['font-family', event.target.value]],
-                      { command: 'fontName', value: event.target.value },
-                    )
-                    event.target.value = ''
-                  }
-                }}
+                value={activeFontFamily}
+                onChange={(event) => handleFontFamilyChange(event.target.value)}
               >
                 {fontOptions.map((option) => (
                   <option key={option.label} value={option.value}>
@@ -1077,20 +1098,8 @@ export function ChatConversationStage({
               </select>
               <select
                 className="dd-rich-toolbar__select"
-                defaultValue=""
-                onChange={(event) => {
-                  if (event.target.value) {
-                    const fontSize = Number.parseInt(event.target.value, 10)
-                    applyInlineStyle(
-                      [['font-size', `${fontSize.toString()}px`]],
-                      {
-                        command: 'fontSize',
-                        value: legacyFontSizeForPixels(fontSize),
-                      },
-                    )
-                    event.target.value = ''
-                  }
-                }}
+                value={activeFontSize}
+                onChange={(event) => handleFontSizeChange(event.target.value)}
               >
                 {richTextSizes.map((option) => (
                   <option key={option.label} value={option.value}>

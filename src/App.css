@@ -1148,10 +1148,12 @@
 }
 
 .dd-chatbox__message.is-self .dd-file-bubble {
+  order: 1;
   background: color-mix(in srgb, var(--bubble-self) 84%, white);
 }
 
 .dd-chatbox__message.is-peer .dd-file-bubble {
+  order: 2;
   background: var(--bubble-peer);
 }
 
@@ -2496,7 +2498,7 @@ textarea:focus-visible,
 .dd-shell[data-theme='chat-desktop'] .dd-content-grid {
   grid-area: content;
   grid-template-columns: 1fr;
-  align-content: start;
+  align-content: stretch;
   gap: 16px;
   min-height: 100svh;
   margin-top: 0;
@@ -2511,11 +2513,13 @@ textarea:focus-visible,
   background: transparent;
   box-shadow: none;
   min-width: 0;
+  min-height: 0;
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-panel--devices {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-panel__head {
@@ -2567,11 +2571,13 @@ textarea:focus-visible,
 
 .dd-shell[data-theme='chat-desktop'] .dd-device-bar {
   gap: 4px;
-  max-height: calc(100svh - 156px);
-  padding-right: 0;
+  min-height: 0;
+  max-height: none;
+  padding-right: 6px;
   padding-bottom: 8px;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-device-bar__summary {
@@ -2949,10 +2955,12 @@ textarea:focus-visible,
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-chatbox__message.is-self .dd-file-bubble {
+  order: 1;
   background: var(--bubble-self);
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-chatbox__message.is-peer .dd-file-bubble {
+  order: 2;
   background: #ffffff;
 }
 
