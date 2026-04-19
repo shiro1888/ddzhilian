@@ -343,6 +343,7 @@ export function ChatConversationStage({
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
+  const conversationThreadRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const colorPaletteRef = useRef<HTMLDivElement | null>(null)
@@ -355,6 +356,9 @@ export function ChatConversationStage({
     insertPanelInputRef.current = element
   }
 
+  const latestConversationEntryId =
+    unifiedConversationEntries[unifiedConversationEntries.length - 1]?.id ?? ''
+
   useEffect(() => {
     if (!editorRef.current) {
       return
@@ -365,6 +369,28 @@ export function ChatConversationStage({
       editorRef.current.innerHTML = nextHtml
     }
   }, [chatDraft])
+
+  useEffect(() => {
+    if (isSharedPanelOpen || !latestConversationEntryId) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const thread = conversationThreadRef.current
+      if (!thread) {
+        return
+      }
+
+      thread.scrollTo({
+        top: thread.scrollHeight,
+        behavior: 'smooth',
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [isSharedPanelOpen, latestConversationEntryId])
 
   useEffect(() => {
     let isCancelled = false
@@ -971,7 +997,7 @@ export function ChatConversationStage({
           </button>
         </div>
 
-        <div className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}>
+        <div ref={conversationThreadRef} className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}>
           {isSharedPanelOpen && (
             <div className="dd-shared-panel__header">
               <div className="dd-shared-panel__tabs" role="tablist" aria-label="共享内容">

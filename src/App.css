@@ -1164,6 +1164,37 @@
   margin-top: 8px;
 }
 
+.dd-chatbox__bubble--rich pre,
+.dd-chatbox__editor pre {
+  padding: 12px 14px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: #1b1b1b;
+  color: #f4f4f4;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.dd-chatbox__bubble--rich code,
+.dd-chatbox__editor code {
+  padding: 0.12em 0.36em;
+  border-radius: 5px;
+  background: #1b1b1b;
+  color: #f4f4f4;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.dd-chatbox__bubble--rich pre code,
+.dd-chatbox__editor pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
 .dd-chatbox__bubble--rich img {
   width: 160px !important;
   max-width: 100%;
@@ -2942,7 +2973,7 @@ textarea:focus-visible,
   border-radius: 12px;
   background: var(--stage-bg);
   box-shadow: none;
-  border: 1px solid var(--line);
+  border: 0;
   min-height: 0;
 }
 
@@ -3152,6 +3183,32 @@ textarea:focus-visible,
 .dd-shell[data-theme='chat-desktop'] .dd-connection-layer__join input {
   border: 1px solid var(--line-soft);
   box-shadow: none;
+}
+
+@media (min-width: 1025px) {
+  .dd-shell[data-theme='chat-desktop'] .dd-content-grid .dd-connection-layer__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-content-grid .dd-connection-layer__join {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    flex: none;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-content-grid .dd-connection-layer__actions > .dd-button {
+    width: 100%;
+    min-width: 0;
+    padding: 0 10px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-content-grid .dd-connection-layer__actions > .dd-button:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .dd-shell[data-theme='chat-desktop'] .dd-chatbox__thread {
@@ -3555,9 +3612,22 @@ textarea:focus-visible,
     padding-right: 14px;
   }
 
+  .dd-shell[data-theme='chat-desktop'] .dd-main {
+    padding-top: 10px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-header {
+    min-height: auto;
+    padding: 6px 0 8px;
+  }
+
   .dd-header h1 {
     font-size: clamp(2.15rem, 11vw, 2.6rem);
     line-height: 0.98;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-header h1 {
+    margin-top: 2px;
   }
 
   .dd-stage,
@@ -3566,6 +3636,59 @@ textarea:focus-visible,
   .dd-detailcard,
   .dd-connectbox {
     padding: 14px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-stage {
+    padding: 14px;
+    border: 0;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__thread {
+    padding: 16px 12px 12px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__empty--files {
+    min-height: 260px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__composer-footer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'tools enter'
+      'file send';
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__toolbar--files {
+    grid-area: tools;
+    align-self: center;
+    justify-self: start;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__composer-actions {
+    display: contents;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-enter-toggle {
+    grid-area: enter;
+    justify-content: flex-end;
+    justify-self: end;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__file-trigger,
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__composer .dd-button {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__file-trigger {
+    grid-area: file;
+  }
+
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__composer .dd-button {
+    grid-area: send;
   }
 
   .dd-stage__toolbar,
@@ -3740,6 +3863,15 @@ textarea:focus-visible,
   .dd-connection-layer__join {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .dd-connection-layer__join {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .dd-connection-layer__join input {
+    flex: 0 0 auto;
   }
 
   .dd-emoji-picker__grid {
