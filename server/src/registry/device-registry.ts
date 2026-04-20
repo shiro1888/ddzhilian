@@ -269,7 +269,8 @@ export class DeviceRegistry {
 
     const peers = this.listVisiblePeersFor(viewerId, roomRegistry);
     const publicHttpBaseUrl = derivePublicHttpBaseUrl(publicWsUrl);
-    const rooms = roomRegistry.listForDevice(viewerId).map<RoomSummary>((room) => ({
+    const visibleRooms = roomRegistry.listForDevice(viewerId);
+    const rooms = visibleRooms.map<RoomSummary>((room) => ({
       roomId: room.roomId,
       members: room.memberIds
         .map((memberId) => this.byId.get(memberId))
@@ -283,16 +284,22 @@ export class DeviceRegistry {
       isPublic: room.isPublic,
       updatedAt: room.updatedAt,
     }));
-    const historyFiles = roomRegistry
-      .listForDevice(viewerId)
-      .flatMap((room) => historyRegistry.listForRoom(room.roomId))
+    const historyFiles = visibleRooms
+      .flatMap((room) =>
+        historyRegistry
+          .listForRoom(room.roomId)
+          .map((record) => ({ record, isPublic: room.isPublic || record.isPublic })),
+      )
       .map<HistoryFileSummary>((record) =>
-        historyRegistry.toSummary(record, publicHttpBaseUrl),
+        historyRegistry.toSummary(record.record, publicHttpBaseUrl, record.isPublic),
       );
-    const historyTexts = roomRegistry
-      .listForDevice(viewerId)
-      .flatMap((room) => historyRegistry.listTextsForRoom(room.roomId))
-      .map<HistoryTextSummary>((record) => historyRegistry.toTextSummary(record));
+    const historyTexts = visibleRooms
+      .flatMap((room) =>
+        historyRegistry
+          .listTextsForRoom(room.roomId)
+          .map((record) => ({ record, isPublic: room.isPublic || record.isPublic })),
+      )
+      .map<HistoryTextSummary>((record) => historyRegistry.toTextSummary(record.record, record.isPublic));
     const sessions = sessionRegistry.listForDevice(viewerId).map<SessionSummary>(
       (session) => ({
         sessionId: session.sessionId,

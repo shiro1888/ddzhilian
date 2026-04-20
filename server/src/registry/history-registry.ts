@@ -17,6 +17,7 @@ export interface HistoryFileRecord {
   historyId: string;
   roomId: string;
   sessionId?: string;
+  isPublic: boolean;
   sourceDeviceId: string;
   sourceDeviceName: string;
   fileName: string;
@@ -30,6 +31,7 @@ export interface HistoryTextRecord {
   historyId: string;
   roomId: string;
   sessionId?: string;
+  isPublic: boolean;
   sourceDeviceId: string;
   sourceDeviceName: string;
   text: string;
@@ -98,6 +100,18 @@ export class HistoryRegistry {
     return this.filesById.get(historyId);
   }
 
+  getLatestPublicRoomId() {
+    this.prune();
+    const publicRecords = [
+      ...this.filesById.values(),
+      ...this.textsById.values(),
+    ].filter((record) => record.isPublic);
+
+    return publicRecords
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0]
+      ?.roomId;
+  }
+
   listTextsForRoom(roomId: string) {
     this.prune();
     const ids = this.textIdsByRoomId.get(roomId);
@@ -115,6 +129,7 @@ export class HistoryRegistry {
     historyId: string;
     roomId: string;
     sessionId?: string;
+    isPublic: boolean;
     sourceDeviceId: string;
     sourceDeviceName: string;
     fileName: string;
@@ -141,6 +156,7 @@ export class HistoryRegistry {
       historyId: input.historyId,
       roomId: input.roomId,
       sessionId: input.sessionId,
+      isPublic: input.isPublic,
       sourceDeviceId: input.sourceDeviceId,
       sourceDeviceName: input.sourceDeviceName,
       fileName: input.fileName,
@@ -164,6 +180,7 @@ export class HistoryRegistry {
     historyId: string;
     roomId: string;
     sessionId?: string;
+    isPublic: boolean;
     sourceDeviceId: string;
     sourceDeviceName: string;
     fileName: string;
@@ -194,6 +211,7 @@ export class HistoryRegistry {
         historyId: input.historyId,
         roomId: input.roomId,
         sessionId: input.sessionId,
+        isPublic: input.isPublic,
         sourceDeviceId: input.sourceDeviceId,
         sourceDeviceName: input.sourceDeviceName,
         fileName: input.fileName,
@@ -233,6 +251,7 @@ export class HistoryRegistry {
       historyId: input.historyId,
       roomId: input.roomId,
       sessionId: input.sessionId,
+      isPublic: input.isPublic,
       sourceDeviceId: input.sourceDeviceId,
       sourceDeviceName: input.sourceDeviceName,
       text: input.text,
@@ -252,6 +271,7 @@ export class HistoryRegistry {
     historyId: string;
     roomId: string;
     sessionId?: string;
+    isPublic: boolean;
     sourceDeviceId: string;
     sourceDeviceName: string;
     fileName: string;
@@ -316,6 +336,7 @@ export class HistoryRegistry {
       historyId: input.historyId,
       roomId: input.roomId,
       sessionId: input.sessionId,
+      isPublic: input.isPublic,
       sourceDeviceId: input.sourceDeviceId,
       sourceDeviceName: input.sourceDeviceName,
       fileName: input.fileName,
@@ -376,12 +397,13 @@ export class HistoryRegistry {
     }
   }
 
-  toSummary(record: HistoryFileRecord, publicBaseUrl?: string): HistoryFileSummary {
+  toSummary(record: HistoryFileRecord, publicBaseUrl?: string, isPublic = record.isPublic): HistoryFileSummary {
     const downloadPath = `/api/history/download/${encodeURIComponent(record.historyId)}`;
     return {
       historyId: record.historyId,
       roomId: record.roomId,
       sessionId: record.sessionId,
+      isPublic,
       sourceDeviceId: record.sourceDeviceId,
       sourceDeviceName: record.sourceDeviceName,
       fileName: record.fileName,
@@ -394,11 +416,12 @@ export class HistoryRegistry {
     };
   }
 
-  toTextSummary(record: HistoryTextRecord): HistoryTextSummary {
+  toTextSummary(record: HistoryTextRecord, isPublic = record.isPublic): HistoryTextSummary {
     return {
       historyId: record.historyId,
       roomId: record.roomId,
       sessionId: record.sessionId,
+      isPublic,
       sourceDeviceId: record.sourceDeviceId,
       sourceDeviceName: record.sourceDeviceName,
       text: record.text,
@@ -417,14 +440,20 @@ export class HistoryRegistry {
       const texts = parsed.texts ?? [];
 
       for (const record of files) {
-        this.filesById.set(record.historyId, record);
+        this.filesById.set(record.historyId, {
+          ...record,
+          isPublic: record.isPublic ?? false,
+        });
         const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
         roomIds.add(record.historyId);
         this.fileIdsByRoomId.set(record.roomId, roomIds);
       }
 
       for (const record of texts) {
-        this.textsById.set(record.historyId, record);
+        this.textsById.set(record.historyId, {
+          ...record,
+          isPublic: record.isPublic ?? false,
+        });
         const roomIds = this.textIdsByRoomId.get(record.roomId) ?? new Set<string>();
         roomIds.add(record.historyId);
         this.textIdsByRoomId.set(record.roomId, roomIds);

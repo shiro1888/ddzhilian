@@ -280,6 +280,18 @@ function authorizeRoomMember(
   };
 }
 
+function isPublicHistoryRoom(roomId: string) {
+  return rooms.getById(roomId)?.isPublic ?? false;
+}
+
+function isPublicHistoryRecord(record: { roomId: string; isPublic: boolean }) {
+  return record.isPublic || isPublicHistoryRoom(record.roomId);
+}
+
+function getRestoredPublicRoomId() {
+  return history.getLatestPublicRoomId();
+}
+
 function authorizeSessionMember(
   device: ConnectedDevice,
   roomId: string,
@@ -383,6 +395,7 @@ const httpServer = createServer((request, response) => {
             historyId,
             roomId,
             sessionId,
+            isPublic: roomAccess.room.isPublic,
             sourceDeviceId: authResult.device.deviceId,
             sourceDeviceName: authResult.device.deviceName,
             fileName,
@@ -425,6 +438,7 @@ const httpServer = createServer((request, response) => {
         historyId,
         roomId,
         sessionId,
+        isPublic: roomAccess.room.isPublic,
         sourceDeviceId: authResult.device.deviceId,
         sourceDeviceName: authResult.device.deviceName,
         fileName,
@@ -490,6 +504,7 @@ const httpServer = createServer((request, response) => {
           historyId: payload.historyId,
           roomId: payload.roomId,
           sessionId: payload.sessionId,
+          isPublic: roomAccess.room.isPublic,
           sourceDeviceId: authResult.device.deviceId,
           sourceDeviceName: authResult.device.deviceName,
           text: payload.text,
@@ -511,22 +526,25 @@ const httpServer = createServer((request, response) => {
     const historyId = decodeURIComponent(
       url.pathname.slice('/api/history/download/'.length),
     );
-    const authResult = authenticateHistoryRequest(request);
-    if (!authResult.ok) {
-      writeJson(response, authResult.statusCode, { error: authResult.message });
+    const record = history.getById(historyId);
+
+    if (!record) {
+      writeJson(response, 404, { error: 'History file not found.' });
       return;
     }
 
-    const record = history.getById(historyId);
+    const isPublicRecord = isPublicHistoryRecord(record);
+    if (!isPublicRecord) {
+      const authResult = authenticateHistoryRequest(request);
+      if (!authResult.ok) {
+        writeJson(response, authResult.statusCode, { error: authResult.message });
+        return;
+      }
 
-    if (
-      !record ||
-      !rooms
-        .getById(record.roomId)
-        ?.memberIds.includes(authResult.device.deviceId)
-    ) {
-      writeJson(response, 404, { error: 'History file not found.' });
-      return;
+      if (!rooms.getById(record.roomId)?.memberIds.includes(authResult.device.deviceId)) {
+        writeJson(response, 404, { error: 'History file not found.' });
+        return;
+      }
     }
 
     const range = parseRangeHeader(request.headers.range, record.size);
@@ -534,7 +552,7 @@ const httpServer = createServer((request, response) => {
       'content-type': record.mimeType || 'application/octet-stream',
       'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
       'accept-ranges': 'bytes',
-      'cache-control': 'private, max-age=3600',
+      'cache-control': isPublicRecord ? 'public, max-age=3600' : 'private, max-age=3600',
     };
 
     if (range === null) {
@@ -1033,7 +1051,7 @@ function createPublicRoom(deviceId: string) {
     };
   }
 
-  const { room } = rooms.ensurePublicRoom(device.deviceId);
+  const { room } = rooms.ensurePublicRoom(device.deviceId, getRestoredPublicRoomId());
 
   broadcastSnapshots();
 
@@ -1145,7 +1163,7 @@ function handleEvent(
         buildNetworkContext(socket.clientAddress ?? socket._socket?.remoteAddress),
       );
       cancelPendingRoomExit(device.deviceId);
-      rooms.ensurePublicRoom(device.deviceId);
+      rooms.ensurePublicRoom(device.deviceId, getRestoredPublicRoomId());
 
       const snapshot = devices.buildSnapshot(
         device.deviceId,

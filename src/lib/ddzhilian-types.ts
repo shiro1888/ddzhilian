@@ -80,6 +80,7 @@ export type HistoryFileSummary = {
   historyId: string
   roomId: string
   sessionId?: string
+  isPublic: boolean
   sourceDeviceId: string
   sourceDeviceName: string
   fileName: string
@@ -93,6 +94,7 @@ export type HistoryTextSummary = {
   historyId: string
   roomId: string
   sessionId?: string
+  isPublic: boolean
   sourceDeviceId: string
   sourceDeviceName: string
   text: string

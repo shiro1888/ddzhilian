@@ -37,10 +37,11 @@ export class RoomRegistry {
     reason: PairReason;
     isPublic?: boolean;
     lanKey?: string;
+    roomId?: string;
   }) {
     const members = uniqueMemberIds(input.memberIds);
     const now = new Date().toISOString();
-    let roomId = createRoomId();
+    let roomId = input.roomId || createRoomId();
 
     while (this.byId.has(roomId)) {
       roomId = createRoomId();
@@ -137,7 +138,7 @@ export class RoomRegistry {
     };
   }
 
-  ensurePublicRoom(deviceId: string) {
+  ensurePublicRoom(deviceId: string, preferredRoomId?: string) {
     const existing = this.publicRoomId
       ? this.byId.get(this.publicRoomId)
       : undefined;
@@ -156,6 +157,7 @@ export class RoomRegistry {
       memberIds: [deviceId],
       reason: 'manual',
       isPublic: true,
+      roomId: preferredRoomId,
     });
 
     this.publicRoomId = room.roomId;

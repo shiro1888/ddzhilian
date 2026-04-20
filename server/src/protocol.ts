@@ -105,6 +105,7 @@ export interface HistoryFileSummary {
   historyId: string;
   roomId: string;
   sessionId?: string;
+  isPublic: boolean;
   sourceDeviceId: string;
   sourceDeviceName: string;
   fileName: string;
@@ -118,6 +119,7 @@ export interface HistoryTextSummary {
   historyId: string;
   roomId: string;
   sessionId?: string;
+  isPublic: boolean;
   sourceDeviceId: string;
   sourceDeviceName: string;
   text: string;

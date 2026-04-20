@@ -2141,6 +2141,7 @@ export function useDdzhilian() {
       const summary = payload.text ?? {
         historyId,
         roomId,
+        isPublic: true,
         sourceDeviceId: activeSelf.deviceId,
         sourceDeviceName: activeSelf.deviceName,
         text,
@@ -2353,6 +2354,7 @@ export function useDdzhilian() {
         const summary = uploadedSummary ?? {
           historyId,
           roomId,
+          isPublic: true,
           sourceDeviceId: activeSelf.deviceId,
           sourceDeviceName: activeSelf.deviceName,
           fileName: file.name,
