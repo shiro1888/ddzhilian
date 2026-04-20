@@ -327,6 +327,7 @@ export type TextRecord = {
   id: string
   sessionId: string
   fromSelf: boolean
+  senderName?: string
   text: string
   createdAt: string
 }

@@ -591,6 +591,7 @@ function App() {
               selectedConversationSessions[0]?.sessionId ??
               '',
             fromSelf: record.sourceDeviceId === self?.deviceId,
+            senderName: record.sourceDeviceName,
             text: record.text,
             createdAt: record.createdAt,
           }))
@@ -735,7 +736,7 @@ function App() {
       fromSelf: record.fromSelf,
       senderName: record.fromSelf
         ? selfName
-        : sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+        : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
       createdAt: record.createdAt,
       text: record.text,
     })),
