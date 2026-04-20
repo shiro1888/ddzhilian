@@ -1104,11 +1104,18 @@ export function ChatConversationStage({
                       </div>
 
                       {entry.entryType === 'text' ? (
-                        <div
-                          className="dd-chatbox__bubble dd-chatbox__bubble--rich"
-                          onClick={handleRichBubbleClick}
-                          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
-                        />
+                        <div className="dd-chatbox__text-stack">
+                          <div
+                            className="dd-chatbox__bubble dd-chatbox__bubble--rich"
+                            onClick={handleRichBubbleClick}
+                            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
+                          />
+                          {entry.fromSelf && entry.status && (
+                            <span className={`dd-chatbox__text-status is-${entry.status}`}>
+                              {entry.status === 'sending' ? '发送中...' : '发送失败'}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <div className={`dd-file-bubble is-${entry.file.tone}`}>
                           <small className="dd-file-bubble__eyebrow">

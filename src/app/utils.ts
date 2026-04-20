@@ -109,19 +109,31 @@ export function shouldInsertDivider(previousIso: string | null, currentIso: stri
   return currentTime - previousTime > 15 * 60 * 1000
 }
 
-export function collapseBroadcastTextRecords<T extends { fromSelf: boolean; text: string; createdAt: string }>(
+export function collapseBroadcastTextRecords<T extends {
+  id: string
+  fromSelf: boolean
+  senderName?: string
+  text: string
+  createdAt: string
+}>(
   records: T[],
 ) {
   const collapsed: T[] = []
 
   for (const record of records) {
     const previous = collapsed[collapsed.length - 1]
+    const sameSender =
+      previous &&
+      previous.fromSelf === record.fromSelf &&
+      (previous.fromSelf ||
+        (previous.senderName &&
+          record.senderName &&
+          previous.senderName === record.senderName))
     const isDuplicateBroadcast =
       previous &&
-      previous.fromSelf &&
-      record.fromSelf &&
       previous.text === record.text &&
-      Math.abs(new Date(record.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5_000
+      Math.abs(new Date(record.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5_000 &&
+      (previous.id === record.id || sameSender)
 
     if (!isDuplicateBroadcast) {
       collapsed.push(record)
@@ -184,6 +196,62 @@ function normalizeAutolinkHref(value: string) {
   return null
 }
 
+function isAppleMusicUrl(value: string) {
+  try {
+    const url = new URL(value)
+    const normalizedHost = url.hostname.replace(/^www\./i, '').toLowerCase()
+    if (normalizedHost !== 'music.apple.com' && normalizedHost !== 'embed.music.apple.com') {
+      return false
+    }
+
+    const segments = url.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) {
+      return false
+    }
+
+    const pageKind = segments[1]?.toLowerCase()
+    return ['album', 'playlist', 'song', 'station', 'music-video'].includes(pageKind)
+  } catch {
+    return false
+  }
+}
+
+function appleMusicTitleFromUrl(value: string) {
+  try {
+    const url = new URL(value)
+    const segments = url.pathname.split('/').filter(Boolean)
+    const rawTitle = segments[2]
+    if (!rawTitle) {
+      return 'Apple Music'
+    }
+
+    return decodeURIComponent(rawTitle)
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  } catch {
+    return 'Apple Music'
+  }
+}
+
+function renderAppleMusicCard(href: string) {
+  if (!isAppleMusicUrl(href)) {
+    return ''
+  }
+
+  const title = appleMusicTitleFromUrl(href)
+  return [
+    '<div class="dd-music-card dd-music-card--apple">',
+    '<div class="dd-music-card__art" aria-hidden="true">♪</div>',
+    '<div class="dd-music-card__body">',
+    '<span class="dd-music-card__service">Apple Music</span>',
+    `<strong class="dd-music-card__title">${escapeHtml(title)}</strong>`,
+    '<span class="dd-music-card__meta">音乐链接</span>',
+    '</div>',
+    `<a class="dd-music-card__link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">打开</a>`,
+    '</div>',
+  ].join('')
+}
+
 export function linkifyPlainTextUrls(value: string) {
   const urlPattern = /(?:https?:\/\/|www\.)[^\s<>"']+/gi
   let html = ''
@@ -202,7 +270,8 @@ export function linkifyPlainTextUrls(value: string) {
     }
 
     html += escapeHtml(value.slice(lastIndex, matchIndex))
-    html += `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(linkText)}</a>`
+    html += renderAppleMusicCard(href) ||
+      `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(linkText)}</a>`
     html += escapeHtml(trailingText)
     lastIndex = matchIndex + rawMatch.length
   }
@@ -690,6 +759,11 @@ export function sanitizeRichTextHtml(value: string) {
     if (tagName === 'a') {
       const href = node.getAttribute('href')?.trim() ?? ''
       if (isSafeUrl(href, 'href')) {
+        const appleMusicCard = renderAppleMusicCard(href)
+        if (appleMusicCard) {
+          return appleMusicCard
+        }
+
         attributes.push(`href="${escapeHtml(href)}"`)
         attributes.push('target="_blank"')
         attributes.push('rel="noreferrer noopener"')

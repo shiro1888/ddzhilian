@@ -586,12 +586,14 @@ function App() {
           )
           .map((record) => ({
             id: record.historyId,
+            roomId: record.roomId,
             sessionId:
               record.sessionId ??
               selectedConversationSessions[0]?.sessionId ??
               '',
             fromSelf: record.sourceDeviceId === self?.deviceId,
             senderName: record.sourceDeviceName,
+            status: undefined,
             text: record.text,
             createdAt: record.createdAt,
           }))
@@ -599,7 +601,11 @@ function App() {
   const sortedChatRecordsForConversation = collapseBroadcastTextRecords(
     [
       ...(isChatDesktopTheme && effectiveSelectedRoomId
-        ? sortedChatRecords.filter((record) => selectedConversationSessionIds.has(record.sessionId))
+        ? sortedChatRecords.filter(
+            (record) =>
+              record.roomId === effectiveSelectedRoomId ||
+              selectedConversationSessionIds.has(record.sessionId),
+          )
         : selectedUiSession
           ? sortedChatRecords.filter((record) => record.sessionId === selectedUiSession.id)
           : sortedChatRecords),
@@ -737,6 +743,7 @@ function App() {
       senderName: record.fromSelf
         ? selfName
         : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+      status: record.status,
       createdAt: record.createdAt,
       text: record.text,
     })),

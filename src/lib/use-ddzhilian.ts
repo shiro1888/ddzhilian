@@ -28,6 +28,7 @@ const CHUNK_SIZE = 64 * 1024
 const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
+const TEXT_SEND_STATUS_MIN_MS = 900
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
@@ -656,11 +657,12 @@ export function useDdzhilian() {
       startTransition(() => {
         setTextRecords((previous) => [
           ...previous,
-          {
-            id: message.id,
-            sessionId,
-            fromSelf: false,
-            text: message.text,
+            {
+              id: message.id,
+              sessionId,
+              roomId: sessionsRef.current[sessionId]?.roomId,
+              fromSelf: false,
+              text: message.text,
             createdAt: message.createdAt,
           },
         ])
@@ -1570,6 +1572,25 @@ export function useDdzhilian() {
     }
   }
 
+  const updateTextRecordStatus = (recordId: string, status: TextRecord['status']) => {
+    startTransition(() => {
+      setTextRecords((previous) =>
+        previous.map((record) =>
+          record.id === recordId
+            ? { ...record, status }
+            : record,
+        ),
+      )
+    })
+  }
+
+  const clearTextRecordStatusLater = (recordId: string, startedAt: number) => {
+    const delay = Math.max(0, TEXT_SEND_STATUS_MIN_MS - (Date.now() - startedAt))
+    window.setTimeout(() => {
+      updateTextRecordStatus(recordId, undefined)
+    }, delay)
+  }
+
   const archiveTextHistory = async (record: TextRecord) => {
     if (
       archivedTextHistoryIdsRef.current.has(record.id) ||
@@ -2071,10 +2092,13 @@ export function useDdzhilian() {
     const record: TextRecord = {
       id: options?.recordId ?? crypto.randomUUID(),
       sessionId,
+      roomId: sessionsRef.current[sessionId]?.roomId,
       fromSelf: true,
+      status: 'sending',
       text,
       createdAt: options?.createdAt ?? new Date().toISOString(),
     }
+    const startedAt = Date.now()
 
     channel.send(
       JSON.stringify({
@@ -2089,6 +2113,7 @@ export function useDdzhilian() {
       startTransition(() => {
         setTextRecords((previous) => [...previous, record])
       })
+      clearTextRecordStatusLater(record.id, startedAt)
     }
 
     void archiveTextHistory(record)
@@ -2117,6 +2142,30 @@ export function useDdzhilian() {
     }
 
     archivingTextHistoryIdsRef.current.add(historyId)
+    const startedAt = Date.now()
+    startTransition(() => {
+      setTextRecords((previous) =>
+        previous.some((record) => record.id === historyId)
+          ? previous.map((record) =>
+              record.id === historyId
+                ? { ...record, status: 'sending' as const }
+                : record,
+            )
+          : [
+              ...previous,
+              {
+                id: historyId,
+                sessionId: '',
+                roomId,
+                fromSelf: true,
+                senderName: activeSelf.deviceName,
+                status: 'sending' as const,
+                text,
+                createdAt,
+              },
+            ],
+      )
+    })
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/history/text`, {
@@ -2156,7 +2205,19 @@ export function useDdzhilian() {
             : [...previous, summary],
         )
       })
+      clearTextRecordStatusLater(historyId, startedAt)
       debugLog('room text archived', { historyId, roomId })
+    } catch (error) {
+      startTransition(() => {
+        setTextRecords((previous) =>
+          previous.map((record) =>
+            record.id === historyId
+              ? { ...record, status: 'failed' as const }
+              : record,
+          ),
+        )
+      })
+      throw error
     } finally {
       archivingTextHistoryIdsRef.current.delete(historyId)
     }

@@ -68,6 +68,7 @@ export type UnifiedConversationEntry =
       sessionId: string
       fromSelf: boolean
       senderName: string
+      status?: 'sending' | 'failed'
       createdAt: string
       text: string
     }

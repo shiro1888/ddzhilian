@@ -326,8 +326,10 @@ export type TransferItem = {
 export type TextRecord = {
   id: string
   sessionId: string
+  roomId?: string
   fromSelf: boolean
   senderName?: string
+  status?: 'sending' | 'failed'
   text: string
   createdAt: string
 }
