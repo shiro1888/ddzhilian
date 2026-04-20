@@ -1191,8 +1191,112 @@
   align-items: flex-start;
 }
 
-.dd-chatbox__text-stack .dd-chatbox__bubble {
+.dd-chatbox__text-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   max-width: 100%;
+}
+
+.dd-chatbox__message .dd-chatbox__text-row .dd-chatbox__bubble {
+  order: 0;
+  min-width: 0;
+  max-width: calc(100% - 32px);
+}
+
+.dd-chatbox__message .dd-chatbox__text-row .dd-chatbox__copy {
+  order: 1;
+}
+
+.dd-chatbox__copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.dd-chatbox__copy svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.dd-chatbox__text-row:hover .dd-chatbox__copy,
+.dd-chatbox__text-row:focus-within .dd-chatbox__copy {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.dd-chatbox__copy:hover,
+.dd-chatbox__copy:focus-visible,
+.dd-chatbox__copy.is-copied {
+  border-color: color-mix(in srgb, var(--brand) 32%, transparent);
+  background: color-mix(in srgb, var(--brand) 8%, white);
+  color: var(--brand);
+}
+
+.dd-message-menu {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  min-width: 148px;
+  padding: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(17, 17, 17, 0.14);
+}
+
+.dd-message-menu button {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.dd-message-menu button:hover,
+.dd-message-menu button:focus-visible {
+  background: var(--panel-muted-soft);
+  outline: none;
+}
+
+.dd-message-menu button.is-danger {
+  color: var(--danger);
+}
+
+.dd-message-menu button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 .dd-chatbox__text-status {
@@ -1231,6 +1335,22 @@
 
 .dd-chatbox__bubble--rich :where(p, blockquote, pre, ul, ol, table, h1, h2, h3) + :where(p, blockquote, pre, ul, ol, table, h1, h2, h3) {
   margin-top: 8px;
+}
+
+.dd-chatbox__bubble--rich blockquote,
+.dd-chatbox__editor blockquote {
+  display: grid;
+  gap: 4px;
+  padding: 2px 0 2px 9px;
+  border-left: 2px solid var(--brand);
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.dd-chatbox__bubble--rich blockquote strong,
+.dd-chatbox__editor blockquote strong {
+  color: var(--ink-soft);
 }
 
 .dd-chatbox__bubble--rich pre,
@@ -1398,15 +1518,20 @@
 
 .dd-music-card {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: min(72vw, 360px);
   max-width: 100%;
   padding: 10px;
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background: #ffffff;
+}
+
+.dd-music-card__summary {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
 }
 
 .dd-music-card__art {
@@ -1446,6 +1571,22 @@
 .dd-music-card__meta {
   color: var(--muted);
   font-size: 0.74rem;
+}
+
+.dd-music-card__lyrics {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand) 7%, white);
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dd-music-card__lyrics span {
+  overflow-wrap: anywhere;
 }
 
 .dd-music-card__link {
@@ -2124,6 +2265,44 @@
   padding-bottom: 2px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+}
+
+.dd-chatbox__quote-preview {
+  padding: 8px 8px 2px;
+  border-left: 2px solid var(--brand);
+}
+
+.dd-chatbox__quote-preview-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dd-chatbox__quote-preview-body span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-chatbox__quote-preview-body button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
 }
 
 .dd-attachment-card {
@@ -3832,6 +4011,7 @@ textarea:focus-visible,
   }
 
   .dd-shell[data-theme='chat-desktop'] .dd-rich-insert-panel,
+  .dd-shell[data-theme='chat-desktop'] .dd-chatbox__quote-preview,
   .dd-shell[data-theme='chat-desktop'] .dd-attachment-rail {
     grid-column: 1 / -1;
   }

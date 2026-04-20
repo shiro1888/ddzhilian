@@ -32,6 +32,12 @@ const TEXT_SEND_STATUS_MIN_MS = 900
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 function resolveWsUrl() {
   const configuredUrl = import.meta.env.VITE_SIGNALING_WS_URL?.trim()
   if (configuredUrl) {
@@ -69,6 +75,15 @@ const API_BASE_URL = resolveApiBaseUrl()
 function buildHistoryAuthHeaders(self: DirectorySnapshotPayload['self']) {
   return {
     authorization: `Bearer ${self.historyAuthToken}`,
+  }
+}
+
+async function readResponseError(response: Response) {
+  try {
+    const payload = await response.json() as { error?: string; message?: string }
+    return payload.error ?? payload.message ?? response.statusText
+  } catch {
+    return response.statusText
   }
 }
 
@@ -364,6 +379,8 @@ export function useDdzhilian() {
   const sessionsRef = useRef<Record<string, LiveSession>>({})
   const connectionStatesRef = useRef<Record<string, PeerConnectionState>>({})
   const transferItemsRef = useRef<TransferItem[]>([])
+  const textRecordsRef = useRef<TextRecord[]>([])
+  const historyTextsRef = useRef<HistoryTextSummary[]>([])
   const incomingTransfersRef = useRef(new Map<string, IncomingTransferDraft>())
   const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>())
   const transferFilesRef = useRef(new Map<string, File>())
@@ -407,6 +424,14 @@ export function useDdzhilian() {
   useEffect(() => {
     transferItemsRef.current = transferItems
   }, [transferItems])
+
+  useEffect(() => {
+    textRecordsRef.current = textRecords
+  }, [textRecords])
+
+  useEffect(() => {
+    historyTextsRef.current = historyTexts
+  }, [historyTexts])
 
   const sendEvent = (event: ClientEvent) => {
     const socket = socketRef.current
@@ -649,6 +674,14 @@ export function useDdzhilian() {
     try {
       message = JSON.parse(raw) as ChannelMessage
     } catch {
+      return
+    }
+
+    if (message.type === 'text-recall') {
+      startTransition(() => {
+        setTextRecords((previous) => previous.filter((record) => record.id !== message.id))
+        setHistoryTexts((previous) => previous.filter((record) => record.historyId !== message.id))
+      })
       return
     }
 
@@ -2168,10 +2201,10 @@ export function useDdzhilian() {
     })
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history/text`, {
+      const postRoomText = (requestSelf: DirectorySnapshotPayload['self']) => fetch(`${API_BASE_URL}/api/history/text`, {
         method: 'POST',
         headers: {
-          ...buildHistoryAuthHeaders(activeSelf),
+          ...buildHistoryAuthHeaders(requestSelf),
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -2181,9 +2214,21 @@ export function useDdzhilian() {
           createdAt,
         }),
       })
+      let response = await postRoomText(activeSelf)
+
+      if (response.status === 401 || response.status === 403) {
+        requestSnapshot()
+        await delay(1_200)
+
+        const refreshedSelf = selfRef.current
+        if (refreshedSelf?.historyAuthToken && refreshedSelf.historyAuthToken !== activeSelf.historyAuthToken) {
+          response = await postRoomText(refreshedSelf)
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(`History text upload failed with status ${response.status.toString()}`)
+        const responseError = await readResponseError(response)
+        throw new Error(`消息发送失败：${response.status.toString()} ${responseError || '服务拒绝了这条消息。'}`)
       }
 
       const payload = await response.json() as { text?: HistoryTextSummary }
@@ -2221,6 +2266,66 @@ export function useDdzhilian() {
     } finally {
       archivingTextHistoryIdsRef.current.delete(historyId)
     }
+  }
+
+  const recallText = async (recordId: string) => {
+    const activeSelf = selfRef.current
+    const localRecord = textRecordsRef.current.find((record) => record.id === recordId)
+    const historyRecord = historyTextsRef.current.find((record) => record.historyId === recordId)
+
+    if (localRecord && !localRecord.fromSelf) {
+      throw new Error('只能撤回自己发送的消息。')
+    }
+
+    if (historyRecord && historyRecord.sourceDeviceId !== activeSelf?.deviceId) {
+      throw new Error('只能撤回自己发送的消息。')
+    }
+
+    const roomId = localRecord?.roomId ?? historyRecord?.roomId
+    const directSessionId = localRecord?.sessionId || historyRecord?.sessionId
+    const recallMessage: ChannelMessage = {
+      type: 'text-recall',
+      id: recordId,
+      createdAt: new Date().toISOString(),
+    }
+    const targetSessionIds = new Set<string>()
+
+    if (roomId) {
+      for (const session of Object.values(sessionsRef.current)) {
+        if (session.roomId === roomId) {
+          targetSessionIds.add(session.sessionId)
+        }
+      }
+    }
+
+    if (directSessionId) {
+      targetSessionIds.add(directSessionId)
+    }
+
+    for (const sessionId of targetSessionIds) {
+      const channel = dataChannelsRef.current.get(sessionId)
+      if (channel?.readyState === 'open') {
+        channel.send(JSON.stringify(recallMessage))
+      }
+    }
+
+    if (activeSelf?.historyAuthToken) {
+      const response = await fetch(`${API_BASE_URL}/api/history/text/${encodeURIComponent(recordId)}`, {
+        method: 'DELETE',
+        headers: buildHistoryAuthHeaders(activeSelf),
+      })
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`History text recall failed with status ${response.status.toString()}`)
+      }
+    }
+
+    archivedTextHistoryIdsRef.current.delete(recordId)
+    archivingTextHistoryIdsRef.current.delete(recordId)
+    startTransition(() => {
+      setTextRecords((previous) => previous.filter((record) => record.id !== recordId))
+      setHistoryTexts((previous) => previous.filter((record) => record.historyId !== recordId))
+    })
   }
 
   const uploadRoomFileChunk = async (input: {
@@ -2538,6 +2643,7 @@ export function useDdzhilian() {
     downloadHistoryFile,
     startPendingTransfers,
     sendText,
+    recallText,
     sendRoomText,
     sendRoomFiles,
     sendFiles,

@@ -29,7 +29,7 @@ import {
   formatFileSize,
   formatRelativeTime,
   hasRichTextImage,
-  removeImagesFromRichText,
+  renderImageFilesAsInlineHtml,
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
@@ -183,6 +183,7 @@ function App() {
     downloadHistoryFile,
     startPendingTransfers,
     sendText,
+    recallText,
     sendRoomText,
     sendRoomFiles,
     stateToUiStatus,
@@ -780,7 +781,9 @@ function App() {
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft) ||
     attachmentDrafts.length > 0
-  const hasChatTextDraft = extractPlainTextFromRichText(chatDraft).trim().length > 0
+  const hasChatTextDraft =
+    extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
+    hasRichTextImage(chatDraft)
   const canSendRoomTextWithoutConnection =
     isChatDesktopTheme &&
     Boolean(selectedRoom?.isPublic) &&
@@ -1056,7 +1059,26 @@ function App() {
       return
     }
 
-    const drafts = files.map((file) => ({
+    const inlineImageFiles = files.filter((file) => file.type.startsWith('image/'))
+    const attachmentFiles = files.filter((file) => !file.type.startsWith('image/'))
+
+    if (inlineImageFiles.length > 0) {
+      void renderImageFilesAsInlineHtml(inlineImageFiles).then((imageHtml) => {
+        if (!imageHtml) {
+          return
+        }
+
+        setChatDraft((current) => current ? `${current}<br />${imageHtml}` : imageHtml)
+        setSharedContentTab('chat')
+        setLocalError(null)
+      })
+    }
+
+    if (attachmentFiles.length === 0) {
+      return
+    }
+
+    const drafts = attachmentFiles.map((file) => ({
       id: crypto.randomUUID(),
       file,
       objectUrl: URL.createObjectURL(file),
@@ -1109,12 +1131,14 @@ function App() {
     }
   }
 
-  const handleSendText = async () => {
-    const rawText = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
+  const handleSendText = async (quoteHtml = '') => {
+    const draftSource = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
+    const rawText = quoteHtml ? `${quoteHtml}${draftSource}` : draftSource
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
     const hasImageContent = hasRichTextImage(rawText)
+    const hasTextPayload = normalizedText.length > 0 || hasImageContent
     const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
-    if (normalizedText.length === 0 && attachmentFiles.length === 0) {
+    if (!hasTextPayload && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
     }
@@ -1129,7 +1153,7 @@ function App() {
 
       if (
         selectedRoomConnectedTargets.length === 0 &&
-        !(isPublicRoom && (normalizedText.length > 0 || attachmentFiles.length > 0))
+        !(isPublicRoom && (hasTextPayload || attachmentFiles.length > 0))
       ) {
         setLocalError('先与当前选中的设备建立连接，再发送消息。')
         return
@@ -1147,8 +1171,8 @@ function App() {
         ? selectedRoomConnectedTargets
         : connectedTargets
 
-      if (normalizedText.length > 0) {
-        const textPayload = hasImageContent ? removeImagesFromRichText(rawText) : rawText
+      if (hasTextPayload) {
+        const textPayload = rawText
 
         if (isPublicRoom && selectedRoom) {
           await sendRoomText(selectedRoom.roomId, textPayload, {
@@ -1188,10 +1212,10 @@ function App() {
         const next = { ...previous }
         for (const target of targets) {
           next[target.session.sessionId] = {
-            kind: attachmentFiles.length > 0 && normalizedText.length === 0 ? 'file' : 'text',
+            kind: attachmentFiles.length > 0 && !hasTextPayload ? 'file' : 'text',
             summary: normalizedText
               ? `${Math.max(1, normalizedText.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${normalizedText.slice(0, 18)}`
-              : '图片消息',
+              : hasImageContent ? '图片消息' : '文件消息',
           }
         }
         return next
@@ -1206,6 +1230,18 @@ function App() {
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文本发送失败。')
+    }
+  }
+
+  const handleRecallText = async (entryId: string) => {
+    const recordId = entryId.startsWith('text-') ? entryId.slice('text-'.length) : entryId
+
+    try {
+      await recallText(recordId)
+      setLocalError(null)
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '消息撤回失败。')
+      throw error
     }
   }
 
@@ -1428,10 +1464,10 @@ function App() {
         onFileSelection={handleFileSelection}
         onRetryTransfer={retryTransfer}
         onCancelTransfer={cancelTransfer}
-        onSendText={() => {
-          void handleSendText()
+        onSendText={(quoteHtml) => {
+          void handleSendText(quoteHtml)
         }}
-        onAttachFiles={addAttachmentFiles}
+        onRecallText={handleRecallText}
         onRemoveAttachment={removeAttachment}
         onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
         onSharedPanelOpenChange={handleSharedPanelOpenChange}

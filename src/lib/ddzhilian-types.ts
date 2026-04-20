@@ -247,6 +247,7 @@ export type ServerEvent =
 
 export type ChannelMessage =
   | { type: 'text'; id: string; text: string; createdAt: string }
+  | { type: 'text-recall'; id: string; createdAt: string }
   | {
       type: 'file-meta'
       id: string

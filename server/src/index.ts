@@ -267,6 +267,14 @@ function authorizeRoomMember(
   }
 
   if (!room.memberIds.includes(device.deviceId)) {
+    if (room.isPublic) {
+      rooms.addMember(room.roomId, device.deviceId);
+      return {
+        ok: true as const,
+        room,
+      };
+    }
+
     return {
       ok: false as const,
       statusCode: 403,
@@ -519,6 +527,41 @@ const httpServer = createServer((request, response) => {
           error: error instanceof Error ? error.message : 'History text upload failed.',
         });
       });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/history/text/') && request.method === 'DELETE') {
+    const historyId = decodeURIComponent(
+      url.pathname.slice('/api/history/text/'.length),
+    );
+    const authResult = authenticateHistoryRequest(request);
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return;
+    }
+
+    const record = history.getTextById(historyId);
+    if (!record) {
+      writeJson(response, 200, { ok: true, deleted: false });
+      return;
+    }
+
+    if (record.sourceDeviceId !== authResult.device.deviceId) {
+      writeJson(response, 403, { error: 'Only the source device can recall this text.' });
+      return;
+    }
+
+    const roomAccess = authorizeRoomMember(authResult.device, record.roomId);
+    if (!roomAccess.ok) {
+      writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+      return;
+    }
+
+    const deleted = history.deleteText(historyId);
+    writeJson(response, 200, { ok: true, deleted });
+    if (deleted) {
+      broadcastSnapshots();
+    }
     return;
   }
 

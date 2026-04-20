@@ -3,9 +3,13 @@ import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as R
 import { createPortal } from 'react-dom'
 import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
 import {
+  extractPlainTextFromRichText,
   formatChatDivider,
   formatFileSize,
   linkifyPlainTextUrls,
+  readImageFileAsDataUrl,
+  renderAppleMusicLyricShare,
+  renderInlineImageHtml,
   sanitizeRichTextHtml,
   shouldInsertDivider,
 } from '../utils'
@@ -23,6 +27,20 @@ type FloatingPanelPosition = {
 type ImagePreviewState = {
   src: string
   alt: string
+}
+
+type MessageContextMenuState = {
+  entryId: string
+  text: string
+  senderName: string
+  fromSelf: boolean
+  left: number
+  top: number
+}
+
+type QuoteDraftState = {
+  senderName: string
+  text: string
 }
 
 const quickEmojis = [
@@ -158,8 +176,8 @@ type ChatConversationStageProps = {
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
-  onSendText: () => void
-  onAttachFiles: (files: File[]) => void
+  onSendText: (quoteHtml?: string) => void
+  onRecallText: (entryId: string) => Promise<void> | void
   onRemoveAttachment: (id: string) => void
   onEnterToSendChange: (value: boolean) => void
   onSharedPanelOpenChange: (value: boolean) => void
@@ -262,46 +280,6 @@ function normalizeLinkHref(value: string) {
   return null
 }
 
-function fileExtensionFromMimeType(mimeType: string) {
-  switch (mimeType) {
-    case 'image/png':
-      return 'png'
-    case 'image/gif':
-      return 'gif'
-    case 'image/webp':
-      return 'webp'
-    case 'image/jpeg':
-    case 'image/jpg':
-      return 'jpg'
-    default:
-      return 'png'
-  }
-}
-
-function dataUrlToImageFile(value: string, index: number) {
-  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(value)
-  if (!match) {
-    return null
-  }
-
-  try {
-    const mimeType = match[1]
-    const binary = atob(match[2])
-    const bytes = new Uint8Array(binary.length)
-    for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1) {
-      bytes[byteIndex] = binary.charCodeAt(byteIndex)
-    }
-
-    return new File(
-      [bytes],
-      `pasted-image-${index.toString()}.${fileExtensionFromMimeType(mimeType)}`,
-      { type: mimeType },
-    )
-  } catch {
-    return null
-  }
-}
-
 export function ChatConversationStage({
   isDragging,
   unifiedConversationEntries,
@@ -322,7 +300,7 @@ export function ChatConversationStage({
   onRetryTransfer,
   onCancelTransfer,
   onSendText,
-  onAttachFiles,
+  onRecallText,
   onRemoveAttachment,
   onEnterToSendChange,
   onSharedPanelOpenChange,
@@ -345,6 +323,9 @@ export function ChatConversationStage({
   const [colorPalettePosition, setColorPalettePosition] = useState<FloatingPanelPosition | null>(null)
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
+  const [messageContextMenu, setMessageContextMenu] = useState<MessageContextMenuState | null>(null)
+  const [quoteDraft, setQuoteDraft] = useState<QuoteDraftState | null>(null)
+  const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
   const editorRef = useRef<HTMLDivElement | null>(null)
   const conversationThreadRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
@@ -621,6 +602,41 @@ export function ChatConversationStage({
     }
   }, [imagePreview])
 
+  useEffect(() => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const closeMessageContextMenu = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.dd-message-menu')) {
+        return
+      }
+
+      setMessageContextMenu(null)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMessageContextMenu(null)
+      }
+    }
+
+    const handleScroll = () => {
+      setMessageContextMenu(null)
+    }
+
+    window.addEventListener('pointerdown', closeMessageContextMenu)
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('scroll', handleScroll, true)
+
+    return () => {
+      window.removeEventListener('pointerdown', closeMessageContextMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [messageContextMenu])
+
   const syncDraftFromEditor = () => {
     onChatDraftChange(normalizeEditorHtml(editorRef.current?.innerHTML ?? ''))
   }
@@ -760,6 +776,109 @@ export function ChatConversationStage({
     }, 1600)
   }
 
+  const markMessageCopyButton = (button: HTMLButtonElement) => {
+    button.classList.add('is-copied')
+    button.setAttribute('title', '已复制')
+    button.setAttribute('aria-label', '已复制')
+
+    window.setTimeout(() => {
+      button.classList.remove('is-copied')
+      button.setAttribute('title', '复制')
+      button.setAttribute('aria-label', '复制消息')
+    }, 1600)
+  }
+
+  const handleMessageCopyClick = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    value: string,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const button = event.currentTarget
+    const copyText = extractPlainTextFromRichText(value) || value
+    if (!copyText) {
+      return
+    }
+
+    void copyTextToClipboard(copyText).then(() => markMessageCopyButton(button))
+  }
+
+  const openMessageContextMenu = (
+    event: ReactMouseEvent<HTMLDivElement>,
+    entry: Extract<UnifiedConversationEntry, { entryType: 'text' }>,
+    senderName: string,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const menuWidth = 148
+    const menuHeight = 156
+    const margin = 8
+    setMessageContextMenu({
+      entryId: entry.id,
+      text: entry.text,
+      senderName,
+      fromSelf: entry.fromSelf,
+      left: Math.min(event.clientX, window.innerWidth - menuWidth - margin),
+      top: Math.min(event.clientY, window.innerHeight - menuHeight - margin),
+    })
+  }
+
+  const copyContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const copyText = extractPlainTextFromRichText(messageContextMenu.text) || messageContextMenu.text
+    if (copyText) {
+      void copyTextToClipboard(copyText)
+    }
+    setMessageContextMenu(null)
+  }
+
+  const quoteContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const quoteText = extractPlainTextFromRichText(messageContextMenu.text) || messageContextMenu.text
+    if (quoteText) {
+      setQuoteDraft({
+        senderName: messageContextMenu.senderName,
+        text: quoteText,
+      })
+      editorRef.current?.focus()
+    }
+    setMessageContextMenu(null)
+  }
+
+  const deleteContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const deletedEntryId = messageContextMenu.entryId
+    setHiddenTextEntryIds((current) => {
+      const next = new Set(current)
+      next.add(deletedEntryId)
+      return next
+    })
+    setMessageContextMenu(null)
+  }
+
+  const recallContextMessage = () => {
+    if (!messageContextMenu?.fromSelf) {
+      return
+    }
+
+    const recalledEntryId = messageContextMenu.entryId
+    setMessageContextMenu(null)
+    void Promise.resolve(onRecallText(recalledEntryId)).catch(() => {
+      // The parent surface reports the recall failure.
+    })
+  }
+
   const handleInlineImageClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!openInlineImageFromTarget(event.target)) {
       return
@@ -817,17 +936,30 @@ export function ChatConversationStage({
     }
   })
 
-  const readImageFilesFromHtml = (html: string) => {
+  const readImageHtmlFromClipboardHtml = (html: string) => {
     if (!html || typeof DOMParser === 'undefined') {
-      return []
+      return ''
     }
 
     const parser = new DOMParser()
     const documentFragment = parser.parseFromString(html, 'text/html')
 
     return Array.from(documentFragment.querySelectorAll('img[src]'))
-      .map((image, index) => dataUrlToImageFile(image.getAttribute('src') ?? '', index + 1))
-      .filter((file): file is File => Boolean(file))
+      .map((image) => renderInlineImageHtml(
+        image.getAttribute('src') ?? '',
+        image.getAttribute('alt') ?? '图片',
+      ))
+      .join('')
+  }
+
+  const insertImageFilesAsInlineImages = async (files: File[]) => {
+    const imageHtml = (await Promise.all(
+      files.map(async (file) => renderInlineImageHtml(await readImageFileAsDataUrl(file), file.name)),
+    )).join('')
+
+    if (imageHtml) {
+      insertHtml(imageHtml)
+    }
   }
 
   const handleEditorPaste = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -840,14 +972,14 @@ export function ChatConversationStage({
 
     if (imageFiles.length > 0) {
       event.preventDefault()
-      onAttachFiles(imageFiles)
+      void insertImageFilesAsInlineImages(imageFiles)
       return
     }
 
-    const htmlImageFiles = readImageFilesFromHtml(html)
-    if (htmlImageFiles.length > 0) {
+    const htmlImageHtml = readImageHtmlFromClipboardHtml(html)
+    if (htmlImageHtml) {
       event.preventDefault()
-      onAttachFiles(htmlImageFiles)
+      insertHtml(htmlImageHtml)
       return
     }
 
@@ -860,7 +992,17 @@ export function ChatConversationStage({
   }
 
   const handleSend = () => {
-    onSendText()
+    const quoteHtml = quoteDraft
+      ? [
+          '<blockquote class="dd-chatbox__quote">',
+          `<strong>${escapeInlineHtml(quoteDraft.senderName)}：</strong>`,
+          escapeInlineHtml(quoteDraft.text),
+          '</blockquote>',
+        ].join('')
+      : undefined
+
+    onSendText(quoteHtml)
+    setQuoteDraft(null)
   }
 
   const applyInlineStyle = (
@@ -1083,6 +1225,13 @@ export function ChatConversationStage({
               const previewKind = entry.entryType === 'file'
                 ? resolveMediaPreviewKind(entry.file.mimeType, entry.file.fileName)
                 : null
+              const textHtml = entry.entryType === 'text'
+                ? renderAppleMusicLyricShare(entry.text) || sanitizeRichTextHtml(entry.text)
+                : ''
+
+              if (entry.entryType === 'text' && hiddenTextEntryIds.has(entry.id)) {
+                return null
+              }
 
               return (
                 <div key={entry.id} className="dd-chatbox__entry">
@@ -1105,11 +1254,26 @@ export function ChatConversationStage({
 
                       {entry.entryType === 'text' ? (
                         <div className="dd-chatbox__text-stack">
-                          <div
-                            className="dd-chatbox__bubble dd-chatbox__bubble--rich"
-                            onClick={handleRichBubbleClick}
-                            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
-                          />
+                          <div className="dd-chatbox__text-row">
+                            <div
+                              className="dd-chatbox__bubble dd-chatbox__bubble--rich"
+                              onClick={handleRichBubbleClick}
+                              onContextMenu={(event) => openMessageContextMenu(event, entry, senderName)}
+                              dangerouslySetInnerHTML={{ __html: textHtml }}
+                            />
+                            <button
+                              type="button"
+                              className="dd-chatbox__copy"
+                              aria-label="复制消息"
+                              title="复制"
+                              onClick={(event) => handleMessageCopyClick(event, entry.text)}
+                            >
+                              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                                <path d="M7 7.5h8v9H7z" />
+                                <path d="M5 12.5H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1" />
+                              </svg>
+                            </button>
+                          </div>
                           {entry.fromSelf && entry.status && (
                             <span className={`dd-chatbox__text-status is-${entry.status}`}>
                               {entry.status === 'sending' ? '发送中...' : '发送失败'}
@@ -1545,6 +1709,22 @@ export function ChatConversationStage({
             </div>
           )}
 
+          {quoteDraft && (
+            <div className="dd-chatbox__quote-preview">
+              <div className="dd-chatbox__quote-preview-body">
+                <span>{quoteDraft.senderName}: {quoteDraft.text}</span>
+                <button
+                  type="button"
+                  aria-label="取消引用"
+                  title="取消引用"
+                  onClick={() => setQuoteDraft(null)}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="dd-chatbox__textarea-wrap">
             <div
               ref={editorRef}
@@ -1689,6 +1869,38 @@ export function ChatConversationStage({
               </div>
             </div>
           </div>
+        )}
+
+        {messageContextMenu && createPortal(
+          <div
+            className="dd-message-menu"
+            role="menu"
+            aria-label="消息操作"
+            style={{
+              left: `${messageContextMenu.left.toString()}px`,
+              top: `${messageContextMenu.top.toString()}px`,
+            }}
+          >
+            <button type="button" role="menuitem" onClick={copyContextMessage}>
+              复制
+            </button>
+            <button type="button" role="menuitem" onClick={quoteContextMessage}>
+              引用
+            </button>
+            <button type="button" role="menuitem" className="is-danger" onClick={deleteContextMessage}>
+              删除
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!messageContextMenu.fromSelf}
+              title={messageContextMenu.fromSelf ? '撤回这条消息' : '只能撤回自己发送的消息'}
+              onClick={recallContextMessage}
+            >
+              撤回
+            </button>
+          </div>,
+          document.body,
         )}
       </div>
     </section>

@@ -125,6 +125,11 @@ export class HistoryRegistry {
       .sort(sortByCreatedAt);
   }
 
+  getTextById(historyId: string) {
+    this.prune();
+    return this.textsById.get(historyId);
+  }
+
   async saveFile(input: {
     historyId: string;
     roomId: string;
@@ -265,6 +270,23 @@ export class HistoryRegistry {
     this.persist();
 
     return record;
+  }
+
+  deleteText(historyId: string) {
+    this.prune();
+    const record = this.textsById.get(historyId);
+    if (!record) {
+      return false;
+    }
+
+    this.textsById.delete(historyId);
+    const roomIds = this.textIdsByRoomId.get(record.roomId);
+    roomIds?.delete(historyId);
+    if (roomIds && roomIds.size === 0) {
+      this.textIdsByRoomId.delete(record.roomId);
+    }
+    this.persist();
+    return true;
   }
 
   async saveFileChunk(input: {

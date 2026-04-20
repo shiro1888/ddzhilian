@@ -167,6 +167,34 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
+export function renderInlineImageHtml(src: string, alt = '') {
+  return `<img src="${escapeHtml(src)}"${alt ? ` alt="${escapeHtml(alt)}"` : ''} />`
+}
+
+export function readImageFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('图片读取失败。'))
+    })
+    reader.addEventListener('error', () => reject(new Error('图片读取失败。')))
+    reader.readAsDataURL(file)
+  })
+}
+
+export async function renderImageFilesAsInlineHtml(files: File[]) {
+  const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+  const sources = await Promise.all(imageFiles.map((file) => readImageFileAsDataUrl(file)))
+  return sources
+    .map((src, index) => renderInlineImageHtml(src, imageFiles[index]?.name ?? '图片'))
+    .join('')
+}
+
 function isSafeUrl(value: string, kind: 'href' | 'src') {
   const normalizedValue = value.trim()
 
@@ -233,23 +261,90 @@ function appleMusicTitleFromUrl(value: string) {
   }
 }
 
-function renderAppleMusicCard(href: string) {
+function renderAppleMusicCard(href: string, lyricText = '') {
   if (!isAppleMusicUrl(href)) {
     return ''
   }
 
   const title = appleMusicTitleFromUrl(href)
+  const lyricLines = lyricText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
   return [
-    '<div class="dd-music-card dd-music-card--apple">',
+    `<div class="dd-music-card dd-music-card--apple${lyricLines.length > 0 ? ' dd-music-card--lyrics' : ''}">`,
+    '<div class="dd-music-card__summary">',
     '<div class="dd-music-card__art" aria-hidden="true">♪</div>',
     '<div class="dd-music-card__body">',
     '<span class="dd-music-card__service">Apple Music</span>',
     `<strong class="dd-music-card__title">${escapeHtml(title)}</strong>`,
-    '<span class="dd-music-card__meta">音乐链接</span>',
+    `<span class="dd-music-card__meta">${lyricLines.length > 0 ? '歌词分享' : '音乐链接'}</span>`,
     '</div>',
     `<a class="dd-music-card__link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">打开</a>`,
     '</div>',
+    lyricLines.length > 0
+      ? `<blockquote class="dd-music-card__lyrics">${lyricLines.map((line) => `<span>${escapeHtml(line)}</span>`).join('')}</blockquote>`
+      : '',
+    '</div>',
   ].join('')
+}
+
+function splitAutolinkMatch(value: string) {
+  const trailingMatch = value.match(/[.,!?;:，。！？；：]+$/)
+  const trailingText = trailingMatch?.[0] ?? ''
+  const linkText = trailingText ? value.slice(0, -trailingText.length) : value
+  return {
+    trailingText,
+    linkText,
+    href: normalizeAutolinkHref(linkText),
+  }
+}
+
+export function renderAppleMusicLyricShare(value: string) {
+  const normalizedValue = extractAppleMusicShareText(value)
+  const urlPattern = /(?:https?:\/\/|www\.)[^\s<>"']+/gi
+  const match = Array.from(normalizedValue.matchAll(urlPattern))
+    .map((entry) => {
+      const rawMatch = entry[0]
+      const link = splitAutolinkMatch(rawMatch)
+      return {
+        index: entry.index ?? 0,
+        rawMatch,
+        ...link,
+      }
+    })
+    .find((entry) => entry.href && isAppleMusicUrl(entry.href))
+
+  if (!match?.href) {
+    return ''
+  }
+
+  const textWithoutLink = [
+    normalizedValue.slice(0, match.index),
+    normalizedValue.slice(match.index + match.rawMatch.length),
+  ].join('\n')
+    .replace(/\u200B/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  if (!textWithoutLink || !/\r?\n/.test(textWithoutLink)) {
+    return ''
+  }
+
+  return renderAppleMusicCard(match.href, textWithoutLink)
+}
+
+function extractAppleMusicShareText(value: string) {
+  if (!/[<>]/.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return value
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  return root ? extractTextWithLineBreaks(root) : value
 }
 
 export function linkifyPlainTextUrls(value: string) {
@@ -260,10 +355,7 @@ export function linkifyPlainTextUrls(value: string) {
   for (const match of value.matchAll(urlPattern)) {
     const matchIndex = match.index ?? 0
     const rawMatch = match[0]
-    const trailingMatch = rawMatch.match(/[.,!?;:，。！？；：]+$/)
-    const trailingText = trailingMatch?.[0] ?? ''
-    const linkText = trailingText ? rawMatch.slice(0, -trailingText.length) : rawMatch
-    const href = normalizeAutolinkHref(linkText)
+    const { trailingText, linkText, href } = splitAutolinkMatch(rawMatch)
 
     if (!href) {
       continue
@@ -281,6 +373,16 @@ export function linkifyPlainTextUrls(value: string) {
 }
 
 function normalizePlainRichText(value: string) {
+  const appleMusicLyricShare = renderAppleMusicLyricShare(value)
+  if (appleMusicLyricShare) {
+    return appleMusicLyricShare
+  }
+
+  const codeText = normalizeCodeText(value)
+  if (shouldRenderCodeTextAsBlock(codeText)) {
+    return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+  }
+
   return value.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />')
 }
 
@@ -351,6 +453,14 @@ function detectCodeLanguage(value: string, explicitLanguage = '') {
 
   if (/\b(?:interface|type)\s+\w+|:\s*(?:string|number|boolean|unknown|ReactNode)\b|<[A-Z][\w.]*/.test(trimmedValue)) {
     return 'ts'
+  }
+
+  if (
+    /^\s*#.*python/m.test(trimmedValue) ||
+    /^\s*(?:from\s+\w+(?:\.\w+)*\s+import\s+|import\s+\w+(?:\.\w+)*(?:\s+as\s+\w+)?\s*$|def\s+\w+\s*\(|print\s*\()/m.test(trimmedValue) ||
+    /\blambda\b|\.DataFrame\s*\(/.test(trimmedValue)
+  ) {
+    return 'python'
   }
 
   if (/\b(?:import|export|const|let|var|function|return|class|await|async)\b/.test(trimmedValue)) {
@@ -555,7 +665,7 @@ function highlightCodeHtml(value: string, language: string) {
     return highlightCCode(value)
   }
 
-  if (['js', 'javascript', 'ts', 'typescript', 'json'].includes(language)) {
+  if (['js', 'javascript', 'ts', 'typescript', 'json', 'python', 'py'].includes(language)) {
     return highlightScriptCode(value)
   }
 
@@ -581,16 +691,22 @@ function shouldRenderAsCodeBlock(value: string, root: Element) {
   }
 
   const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+  return shouldRenderCodeTextAsBlock(
+    codeText,
+    root.querySelectorAll('span[class], span[style], font[color]').length,
+  )
+}
+
+function shouldRenderCodeTextAsBlock(codeText: string, styledSpanCount = 0) {
   const lines = codeText.split('\n').map((line) => line.trimEnd()).filter(Boolean)
   const hasLineBreak = lines.length > 1
   if (!hasLineBreak) {
     return false
   }
 
-  const styledSpanCount = root.querySelectorAll('span[class], span[style], font[color]').length
   const hasMarkupCode = /<\/?[a-z][\w.:-]*(?:\s+[^<>]*)?>/i.test(codeText)
   const hasCodeKeyword = /^\s*#\s*(?:include|define|ifdef|ifndef|endif|if|elif|else|pragma|undef|error)\b/m.test(codeText)
-    || /\b(?:import|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|struct|typedef|enum|union|int|char|float|double|void)\b/.test(codeText)
+    || /\b(?:import|from|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|struct|typedef|enum|union|int|char|float|double|void|print|lambda|def)\b/.test(codeText)
   const hasCodePunctuation = /[{}()[\];=<>]/.test(codeText)
   const hasIndentedLine = lines.some((line) => /^(?: {2,}|\t)/.test(line))
 
@@ -644,25 +760,6 @@ export function hasRichTextImage(value: string) {
   return Boolean(documentFragment.body.querySelector('img[src]'))
 }
 
-export function removeImagesFromRichText(value: string) {
-  if (!value || !/<img\b/i.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-    return value
-  }
-
-  const parser = new DOMParser()
-  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
-  const root = documentFragment.body.firstElementChild
-  if (!root) {
-    return value
-  }
-
-  for (const image of Array.from(root.querySelectorAll('img'))) {
-    image.remove()
-  }
-
-  return root.innerHTML
-}
-
 export function sanitizeRichTextHtml(value: string) {
   if (!value) {
     return ''
@@ -677,6 +774,11 @@ export function sanitizeRichTextHtml(value: string) {
   const root = documentFragment.body.firstElementChild
   if (!root) {
     return normalizePlainRichText(value)
+  }
+
+  const appleMusicLyricShare = renderAppleMusicLyricShare(extractTextWithLineBreaks(root))
+  if (appleMusicLyricShare) {
+    return appleMusicLyricShare
   }
 
   if (shouldRenderAsCodeBlock(value, root)) {
