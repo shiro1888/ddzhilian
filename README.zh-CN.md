@@ -60,6 +60,17 @@ ddzhilian 是一个面向跨设备快速传输的桌面式应用，用来在设�
 
 服务端不会长期保存文件内容。它的核心职责是帮助设备彼此发现、建立连接并进入传输会话。
 
+### 历史文件清理
+
+公共 room 和普通 room 的历史文件使用同一套临时存储规则：
+
+- 文件保存在服务端 `server/data/history/files/<roomId>/...`，索引保存在 `server/data/history/index.json`。
+- `HISTORY_RETENTION_MS` 控制文件历史保留时长，默认 `21600000` 毫秒，也就是 6 小时。
+- `HISTORY_MAX_BYTES` 控制单个 room 的历史文件总容量，默认 10 GiB。
+- 当文件超过保留时长，或单个 room 文件总量超过容量上限时，服务端会从最旧文件开始删除，并同步更新索引。
+- 清理会在服务启动、查询/保存历史文件、上传文件，以及服务端定期维护时触发。
+- 文本历史不受 `HISTORY_RETENTION_MS` 自动过期规则影响；用户撤回文本时会通过历史文本删除接口移除。
+
 ## 快速开始
 
 ### 环境要求
@@ -143,6 +154,7 @@ npm run build
 - `PING_INTERVAL_MS`
 - `SESSION_IDLE_MS`
 - `HISTORY_RETENTION_MS`
+- `HISTORY_MAX_BYTES`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`

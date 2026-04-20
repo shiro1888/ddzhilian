@@ -64,6 +64,19 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `TURN_CREDENTIAL`: optional TURN credential
 - `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
 
+## History File Cleanup
+
+History files are stored under `server/data/history/files/<roomId>/...`; the durable metadata index is `server/data/history/index.json`.
+
+Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
+
+- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 6 hours.
+- `HISTORY_MAX_BYTES` caps historical file storage per room. The default is 10 GiB.
+- When a room exceeds the byte cap, cleanup removes the oldest files first until the room is under the limit.
+- File cleanup deletes both the metadata entry and the stored file on disk.
+- Cleanup runs on server startup, history listing, file save/upload paths, and the periodic maintenance loop.
+- Text history is persisted independently of file cleanup. Text is removed only through explicit actions such as message recall.
+
 ## Endpoints
 
 - `GET /health`

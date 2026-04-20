@@ -60,6 +60,17 @@ The signaling server in [`server/README.md`](server/README.md) handles:
 
 The server does not need to carry file payloads permanently. Its main role is to help devices find each other and establish a transfer session.
 
+### History File Cleanup
+
+Public rooms and regular rooms use the same temporary history-file cleanup rules:
+
+- Files are stored under `server/data/history/files/<roomId>/...`, with metadata indexed in `server/data/history/index.json`.
+- `HISTORY_RETENTION_MS` controls the file-history retention window. The default is `21600000` ms, or 6 hours.
+- `HISTORY_MAX_BYTES` controls the total historical file storage per room. The default is 10 GiB.
+- When files exceed the retention window, or when a room exceeds the storage cap, the server removes the oldest files first and updates the index.
+- Cleanup runs on server startup, when listing or saving history files, during uploads, and during regular server maintenance.
+- Text history is not expired by `HISTORY_RETENTION_MS`; recalled text messages are removed through the history-text delete endpoint.
+
 ## Getting Started
 
 ### Requirements
@@ -143,6 +154,7 @@ Important variables include:
 - `PING_INTERVAL_MS`
 - `SESSION_IDLE_MS`
 - `HISTORY_RETENTION_MS`
+- `HISTORY_MAX_BYTES`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`
