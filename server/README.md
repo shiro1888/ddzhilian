@@ -57,6 +57,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
 - `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
+- `HISTORY_RETENTION_MS`: file history retention window, default 6 hours; text history is persisted
 - `TURN_URL`: optional single TURN server URL
 - `TURN_URLS`: optional comma-separated TURN server URLs
 - `TURN_USERNAME`: optional TURN username

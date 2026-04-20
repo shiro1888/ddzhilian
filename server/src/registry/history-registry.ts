@@ -377,21 +377,6 @@ export class HistoryRegistry {
       changed = this.pruneRoomCapacity(roomId) || changed;
     }
 
-    for (const record of [...this.textsById.values()]) {
-      if (now - Date.parse(record.createdAt) <= this.retentionMs) {
-        continue;
-      }
-
-      this.textsById.delete(record.historyId);
-      const roomIds = this.textIdsByRoomId.get(record.roomId);
-      roomIds?.delete(record.historyId);
-      if (roomIds && roomIds.size === 0) {
-        this.textIdsByRoomId.delete(record.roomId);
-      }
-
-      changed = true;
-    }
-
     if (changed) {
       this.persist();
     }
