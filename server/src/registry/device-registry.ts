@@ -238,6 +238,16 @@ export class DeviceRegistry {
     return device;
   }
 
+  removeSocket(deviceId: string, socket: WebSocket) {
+    const device = this.byId.get(deviceId);
+
+    if (!device || device.socket !== socket) {
+      return undefined;
+    }
+
+    return this.remove(deviceId);
+  }
+
   list() {
     return [...this.byId.values()];
   }
@@ -270,6 +280,7 @@ export class DeviceRegistry {
           platform: member.platform,
           online: true,
         })),
+      isPublic: room.isPublic,
       updatedAt: room.updatedAt,
     }));
     const historyFiles = roomRegistry

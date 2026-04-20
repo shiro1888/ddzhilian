@@ -215,6 +215,323 @@ function normalizePlainRichText(value: string) {
   return value.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />')
 }
 
+function extractTextWithLineBreaks(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? ''
+  }
+
+  if (!(node instanceof HTMLElement)) {
+    return ''
+  }
+
+  const tagName = node.tagName.toLowerCase()
+  if (tagName === 'br') {
+    return '\n'
+  }
+
+  const childText = Array.from(node.childNodes).map(extractTextWithLineBreaks).join('')
+  if (['div', 'p', 'li', 'tr', 'pre'].includes(tagName)) {
+    return `${childText}\n`
+  }
+
+  return childText
+}
+
+function normalizeCodeText(value: string) {
+  return value
+    .replace(/\u200B/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function normalizeLanguageLabel(value: string) {
+  const normalizedValue = value.trim().replace(/^(language|lang)-/i, '').toLowerCase()
+  return /^[\w#+.-]{1,24}$/.test(normalizedValue) ? normalizedValue : ''
+}
+
+function detectCodeLanguage(value: string, explicitLanguage = '') {
+  const normalizedExplicitLanguage = normalizeLanguageLabel(explicitLanguage)
+  if (normalizedExplicitLanguage) {
+    return normalizedExplicitLanguage
+  }
+
+  const trimmedValue = value.trim()
+  const firstLine = trimmedValue.split('\n').find(Boolean)?.trim() ?? ''
+
+  if (/^<[/!]?[a-z][\w.:-]*(?:\s|>|$)/i.test(firstLine)) {
+    return /\bclassName=|[{][\w\s.[\]'"`]+[}]|<\/?[A-Z]/.test(trimmedValue) ? 'tsx' : 'html'
+  }
+
+  if (/^\s*[{[]/.test(trimmedValue)) {
+    try {
+      JSON.parse(trimmedValue)
+      return 'json'
+    } catch {
+      // Continue with other lightweight heuristics.
+    }
+  }
+
+  if (
+    /^\s*#\s*(?:include|define|ifdef|ifndef|endif|if|elif|else|pragma|undef|error)\b/m.test(trimmedValue) ||
+    /\b(?:struct|typedef|enum|union)\s+\w+|\b(?:int|char|float|double|void|long|short|unsigned|signed)\s+\w+\s*(?:[;=,(]|\[)/.test(trimmedValue)
+  ) {
+    return /\b(?:namespace|template|class)\b|std::|#\s*include\s*<iostream>/.test(trimmedValue) ? 'cpp' : 'c'
+  }
+
+  if (/\b(?:interface|type)\s+\w+|:\s*(?:string|number|boolean|unknown|ReactNode)\b|<[A-Z][\w.]*/.test(trimmedValue)) {
+    return 'ts'
+  }
+
+  if (/\b(?:import|export|const|let|var|function|return|class|await|async)\b/.test(trimmedValue)) {
+    return /\bclassName=|<[A-Z][\w.]*|:\s*(?:string|number|boolean|unknown)\b/.test(trimmedValue) ? 'ts' : 'js'
+  }
+
+  if (/^[.#]?[\w-]+\s*{[\s\S]*:\s*[^;]+;?[\s\S]*}$/m.test(trimmedValue)) {
+    return 'css'
+  }
+
+  if (/^(?:npm|pnpm|yarn|git|cd|mkdir|rm|cp|mv|curl|ssh)\b/.test(firstLine)) {
+    return 'shell'
+  }
+
+  return 'code'
+}
+
+function renderHighlightedSegments(
+  value: string,
+  pattern: RegExp,
+  resolveClassName: (token: string) => string,
+) {
+  let html = ''
+  let lastIndex = 0
+
+  pattern.lastIndex = 0
+  for (const match of value.matchAll(pattern)) {
+    const token = match[0]
+    const index = match.index ?? 0
+    if (index < lastIndex) {
+      continue
+    }
+
+    html += escapeHtml(value.slice(lastIndex, index))
+
+    const className = resolveClassName(token)
+    html += className
+      ? `<span class="${className}">${escapeHtml(token)}</span>`
+      : escapeHtml(token)
+
+    lastIndex = index + token.length
+  }
+
+  html += escapeHtml(value.slice(lastIndex))
+  return html
+}
+
+function highlightMarkupCode(value: string) {
+  const pattern = /<!--[\s\S]*?-->|<\/?[A-Za-z][\w.:-]*|\/?>|[A-Za-z_:][\w:.-]*(?==)|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:import|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b|[{}()[\];=]/g
+
+  return renderHighlightedSegments(value, pattern, (token) => {
+    if (token.startsWith('<!--')) {
+      return 'dd-token dd-token--comment'
+    }
+
+    if (token.startsWith('<') || token === '>' || token === '/>') {
+      return 'dd-token dd-token--tag'
+    }
+
+    if (token.startsWith('"') || token.startsWith("'")) {
+      return 'dd-token dd-token--string'
+    }
+
+    if (/^\d/.test(token)) {
+      return 'dd-token dd-token--number'
+    }
+
+    if (/^[{}()[\];=]$/.test(token)) {
+      return 'dd-token dd-token--punctuation'
+    }
+
+    if (/^(?:import|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|true|false|null|undefined)$/.test(token)) {
+      return 'dd-token dd-token--keyword'
+    }
+
+    return 'dd-token dd-token--attr'
+  })
+}
+
+function highlightCssCode(value: string) {
+  const pattern = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#[\da-f]{3,8}\b|@[a-z-]+|[A-Za-z-]+(?=\s*:)|\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms)?\b|[{}:;(),]/gi
+
+  return renderHighlightedSegments(value, pattern, (token) => {
+    if (token.startsWith('/*')) {
+      return 'dd-token dd-token--comment'
+    }
+
+    if (token.startsWith('"') || token.startsWith("'")) {
+      return 'dd-token dd-token--string'
+    }
+
+    if (token.startsWith('#')) {
+      return 'dd-token dd-token--number'
+    }
+
+    if (token.startsWith('@')) {
+      return 'dd-token dd-token--keyword'
+    }
+
+    if (/^\d/.test(token)) {
+      return 'dd-token dd-token--number'
+    }
+
+    if (/^[{}:;(),]$/.test(token)) {
+      return 'dd-token dd-token--punctuation'
+    }
+
+    return 'dd-token dd-token--property'
+  })
+}
+
+function highlightShellCode(value: string) {
+  const pattern = /#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\$[A-Za-z_][\w]*|\b(?:npm|pnpm|yarn|git|cd|mkdir|rm|cp|mv|curl|ssh|node|npx)\b|--?[A-Za-z][\w-]*/g
+
+  return renderHighlightedSegments(value, pattern, (token) => {
+    if (token.startsWith('#')) {
+      return 'dd-token dd-token--comment'
+    }
+
+    if (token.startsWith('"') || token.startsWith("'")) {
+      return 'dd-token dd-token--string'
+    }
+
+    if (token.startsWith('$')) {
+      return 'dd-token dd-token--property'
+    }
+
+    if (token.startsWith('-')) {
+      return 'dd-token dd-token--attr'
+    }
+
+    return 'dd-token dd-token--keyword'
+  })
+}
+
+function highlightCCode(value: string) {
+  const pattern = /^\s*#\s*\w+.*|\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:auto|break|case|char|class|const|continue|default|delete|do|double|else|enum|extern|float|for|goto|if|inline|int|long|namespace|new|private|protected|public|register|restrict|return|short|signed|sizeof|static|struct|switch|template|this|typedef|typename|union|unsigned|using|void|volatile|while)\b|\b\d+(?:\.\d+)?\b|[{}()[\];=<>:.,*&+-]/gm
+
+  return renderHighlightedSegments(value, pattern, (token) => {
+    if (token.trimStart().startsWith('#')) {
+      return 'dd-token dd-token--keyword'
+    }
+
+    if (token.startsWith('//') || token.startsWith('/*')) {
+      return 'dd-token dd-token--comment'
+    }
+
+    if (token.startsWith('"') || token.startsWith("'")) {
+      return 'dd-token dd-token--string'
+    }
+
+    if (/^\d/.test(token)) {
+      return 'dd-token dd-token--number'
+    }
+
+    if (/^[{}()[\];=<>:.,*&+-]$/.test(token)) {
+      return 'dd-token dd-token--punctuation'
+    }
+
+    return 'dd-token dd-token--keyword'
+  })
+}
+
+function highlightScriptCode(value: string) {
+  const pattern = /\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:import|from|export|default|const|let|var|function|return|class|extends|interface|type|if|else|for|while|switch|case|break|continue|try|catch|finally|await|async|new|this|true|false|null|undefined|typeof|in|of)\b|\b\d+(?:\.\d+)?\b|[{}()[\];=<>:.,]/g
+
+  return renderHighlightedSegments(value, pattern, (token) => {
+    if (token.startsWith('//') || token.startsWith('/*')) {
+      return 'dd-token dd-token--comment'
+    }
+
+    if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) {
+      return 'dd-token dd-token--string'
+    }
+
+    if (/^\d/.test(token)) {
+      return 'dd-token dd-token--number'
+    }
+
+    if (/^[{}()[\];=<>:.,]$/.test(token)) {
+      return 'dd-token dd-token--punctuation'
+    }
+
+    return 'dd-token dd-token--keyword'
+  })
+}
+
+function highlightCodeHtml(value: string, language: string) {
+  if (['html', 'xml', 'tsx', 'jsx', 'vue', 'svelte'].includes(language)) {
+    return highlightMarkupCode(value)
+  }
+
+  if (language === 'css') {
+    return highlightCssCode(value)
+  }
+
+  if (language === 'shell' || language === 'bash' || language === 'sh') {
+    return highlightShellCode(value)
+  }
+
+  if (language === 'c' || language === 'cpp') {
+    return highlightCCode(value)
+  }
+
+  if (['js', 'javascript', 'ts', 'typescript', 'json'].includes(language)) {
+    return highlightScriptCode(value)
+  }
+
+  return escapeHtml(value)
+}
+
+function renderCodeBlockHtml(codeText: string, language: string) {
+  const languageLabel = detectCodeLanguage(codeText, language)
+  return [
+    `<pre class="dd-code-block" data-language="${escapeHtml(languageLabel)}">`,
+    '<div class="dd-code-block__header">',
+    `<span class="dd-code-block__language">${escapeHtml(languageLabel)}</span>`,
+    '<button type="button" class="dd-code-copy">复制</button>',
+    '</div>',
+    `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
+    '</pre>',
+  ].join('')
+}
+
+function shouldRenderAsCodeBlock(value: string, root: Element) {
+  if (/<pre\b/i.test(value)) {
+    return false
+  }
+
+  const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+  const lines = codeText.split('\n').map((line) => line.trimEnd()).filter(Boolean)
+  const hasLineBreak = lines.length > 1
+  if (!hasLineBreak) {
+    return false
+  }
+
+  const styledSpanCount = root.querySelectorAll('span[class], span[style], font[color]').length
+  const hasMarkupCode = /<\/?[a-z][\w.:-]*(?:\s+[^<>]*)?>/i.test(codeText)
+  const hasCodeKeyword = /^\s*#\s*(?:include|define|ifdef|ifndef|endif|if|elif|else|pragma|undef|error)\b/m.test(codeText)
+    || /\b(?:import|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|struct|typedef|enum|union|int|char|float|double|void)\b/.test(codeText)
+  const hasCodePunctuation = /[{}()[\];=<>]/.test(codeText)
+  const hasIndentedLine = lines.some((line) => /^(?: {2,}|\t)/.test(line))
+
+  return (
+    hasMarkupCode ||
+    (styledSpanCount >= 2 && hasCodePunctuation) ||
+    (lines.length >= 3 && hasCodePunctuation && (hasCodeKeyword || hasIndentedLine))
+  )
+}
+
 function sanitizeStyleAttribute(style: CSSStyleDeclaration) {
   const declarations: string[] = []
   const allowedProperties = ['color', 'font-family', 'font-size', 'text-align', 'text-indent', 'margin-left']
@@ -293,6 +610,11 @@ export function sanitizeRichTextHtml(value: string) {
     return normalizePlainRichText(value)
   }
 
+  if (shouldRenderAsCodeBlock(value, root)) {
+    const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+    return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+  }
+
   const allowedTags = new Set([
     'a',
     'audio',
@@ -342,6 +664,15 @@ export function sanitizeRichTextHtml(value: string) {
 
     if (!allowedTags.has(tagName)) {
       return childrenHtml
+    }
+
+    if (tagName === 'pre') {
+      const classLanguage = Array.from(node.classList)
+        .find((className) => /^(language|lang)-[\w#+.-]+$/i.test(className))
+        ?.replace(/^(language|lang)-/i, '')
+      const explicitLanguage = node.getAttribute('data-language')?.trim() || classLanguage || ''
+      const codeText = normalizeCodeText(extractTextWithLineBreaks(node))
+      return renderCodeBlockHtml(codeText, explicitLanguage)
     }
 
     const attributes: string[] = []

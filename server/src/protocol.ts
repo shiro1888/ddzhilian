@@ -87,6 +87,7 @@ export interface RoomMemberSummary {
 export interface RoomSummary {
   roomId: string;
   members: RoomMemberSummary[];
+  isPublic: boolean;
   updatedAt: string;
 }
 
@@ -198,6 +199,10 @@ export type ClientEvent =
       payload: { roomId: string };
     }
   | {
+      type: 'create-public-room';
+      payload?: undefined;
+    }
+  | {
       type: 'request-connect';
       payload: { targetDeviceId: string; reason?: PairReason; createNewRoom?: boolean };
     }
@@ -256,6 +261,12 @@ export type ServerEvent =
         sessionId: string;
         peerId: string;
         state: SessionState;
+      };
+    }
+  | {
+      type: 'public-room-created';
+      payload: {
+        roomId: string;
       };
     }
   | {

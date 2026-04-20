@@ -25,6 +25,7 @@ import type {
 const DEFAULT_DEV_WS_URL = 'ws://localhost:8787/ws'
 const STORAGE_KEY = 'ddzhilian.identity.v1'
 const CHUNK_SIZE = 64 * 1024
+const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
 const binaryChunkEncoder = new TextEncoder()
@@ -350,6 +351,7 @@ export function useDdzhilian() {
   const [receivedFiles, setReceivedFiles] = useState<ReceivedFile[]>([])
   const [transferItems, setTransferItems] = useState<TransferItem[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [lastCreatedPublicRoomId, setLastCreatedPublicRoomId] = useState<string | null>(null)
 
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
@@ -370,6 +372,15 @@ export function useDdzhilian() {
       {
         resolve: (value: ChannelMessage & { type: 'file-ack' }) => void
         reject: (reason?: unknown) => void
+        timeoutId: number
+      }
+    >(),
+  )
+  const transferResumeWaitersRef = useRef(
+    new Map<
+      string,
+      {
+        resolve: (value: ChannelMessage & { type: 'file-resume' }) => void
         timeoutId: number
       }
     >(),
@@ -584,9 +595,18 @@ export function useDdzhilian() {
     )
   }
 
-  const receiveFileChunk = (transferId: string, chunk: Uint8Array) => {
+  const receiveFileChunk = (transferId: string, index: number, chunk: Uint8Array) => {
     const draft = incomingTransfersRef.current.get(transferId)
     if (!draft) {
+      return
+    }
+
+    if (index < draft.chunks.length) {
+      return
+    }
+
+    if (index > draft.chunks.length) {
+      debugLog('skip out-of-order file chunk', { transferId, index, expected: draft.chunks.length })
       return
     }
 
@@ -616,7 +636,7 @@ export function useDdzhilian() {
         return
       }
 
-      receiveFileChunk(decoded.metadata.id, decoded.chunk)
+      receiveFileChunk(decoded.metadata.id, decoded.metadata.index, decoded.chunk)
     } catch (error) {
       debugLog('binary chunk decode failed', error)
     }
@@ -650,42 +670,70 @@ export function useDdzhilian() {
 
     if (message.type === 'file-meta') {
       mergeSession(sessionId, { kind: 'file' })
-      incomingTransfersRef.current.set(message.id, {
-        id: message.id,
-        historyId: message.historyId,
-        sessionId,
-        fromDeviceId,
-        name: message.name,
-        size: message.size,
-        mimeType: message.mimeType,
-        chunkSize: message.chunkSize,
-        createdAt: message.createdAt,
-        receivedBytes: 0,
-        chunks: [],
-      })
+      const existingDraft = incomingTransfersRef.current.get(message.id)
+      const draft =
+        existingDraft &&
+        existingDraft.size === message.size &&
+        existingDraft.chunkSize === message.chunkSize
+          ? {
+              ...existingDraft,
+              sessionId,
+              fromDeviceId,
+            }
+          : {
+              id: message.id,
+              historyId: message.historyId,
+              sessionId,
+              fromDeviceId,
+              name: message.name,
+              size: message.size,
+              mimeType: message.mimeType,
+              chunkSize: message.chunkSize,
+              createdAt: message.createdAt,
+              receivedBytes: 0,
+              chunks: [],
+            }
+
+      incomingTransfersRef.current.set(message.id, draft)
 
       startTransition(() => {
-        setReceivedFiles((previous) => [
-          ...previous.filter((file) => file.id !== message.id),
-          {
-            id: message.id,
-            historyId: message.historyId,
-            sessionId,
-            fromDeviceId,
-            name: message.name,
-            size: message.size,
-            mimeType: message.mimeType,
-            createdAt: message.createdAt,
-            receivedBytes: 0,
-            completed: false,
-          },
-        ])
+        setReceivedFiles((previous) => {
+          const existingFile = previous.find((file) => file.id === message.id)
+          return [
+            ...previous.filter((file) => file.id !== message.id),
+            {
+              id: message.id,
+              historyId: message.historyId,
+              sessionId,
+              fromDeviceId,
+              name: message.name,
+              size: message.size,
+              mimeType: message.mimeType,
+              createdAt: message.createdAt,
+              receivedBytes: existingFile?.completed ? message.size : draft.receivedBytes,
+              completed: existingFile?.completed ?? false,
+              objectUrl: existingFile?.objectUrl,
+            },
+          ]
+        })
       })
+
+      const channel = dataChannelsRef.current.get(sessionId)
+      if (channel && channel.readyState === 'open') {
+        channel.send(
+          JSON.stringify({
+            type: 'file-resume',
+            id: message.id,
+            receivedBytes: draft.receivedBytes,
+            nextIndex: draft.chunks.length,
+          } satisfies ChannelMessage),
+        )
+      }
       return
     }
 
     if (message.type === 'file-chunk') {
-      receiveFileChunk(message.id, base64ToUint8Array(message.data))
+      receiveFileChunk(message.id, message.index, base64ToUint8Array(message.data))
       return
     }
 
@@ -696,6 +744,21 @@ export function useDdzhilian() {
     if (message.type === 'file-complete') {
       const draft = incomingTransfersRef.current.get(message.id)
       if (!draft) {
+        return
+      }
+
+      if (draft.receivedBytes < draft.size) {
+        const channel = dataChannelsRef.current.get(sessionId)
+        if (channel && channel.readyState === 'open') {
+          channel.send(
+            JSON.stringify({
+              type: 'file-ack',
+              id: message.id,
+              receivedBytes: draft.receivedBytes,
+              completed: false,
+            } satisfies ChannelMessage),
+          )
+        }
         return
       }
 
@@ -737,6 +800,16 @@ export function useDdzhilian() {
             completed: true,
           } satisfies ChannelMessage),
         )
+      }
+      return
+    }
+
+    if (message.type === 'file-resume') {
+      const waiter = transferResumeWaitersRef.current.get(message.id)
+      if (waiter) {
+        window.clearTimeout(waiter.timeoutId)
+        transferResumeWaitersRef.current.delete(message.id)
+        waiter.resolve(message)
       }
       return
     }
@@ -1108,6 +1181,11 @@ export function useDdzhilian() {
       return
     }
 
+    if (event.type === 'public-room-created') {
+      setLastCreatedPublicRoomId(event.payload.roomId)
+      return
+    }
+
     if (event.type === 'error') {
       setErrorMessage(event.payload.message)
     }
@@ -1408,6 +1486,20 @@ export function useDdzhilian() {
       return
     }
 
+    if (transfer.roomId && !transfer.sessionId) {
+      const file = transferFilesRef.current.get(transferId)
+      if (!file) {
+        updateTransfer(transferId, {
+          status: 'failed',
+          errorMessage: '本地文件句柄已丢失，无法继续传输。',
+        })
+        return
+      }
+
+      void sendRoomFiles(transfer.roomId, [{ id: transfer.historyId, file }])
+      return
+    }
+
     const connected = getCurrentConnectedTargets()
     const reuseTarget =
       transfer.sessionId
@@ -1617,25 +1709,31 @@ export function useDdzhilian() {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       const createdAt = new Date().toISOString()
 
-      channel.send(
-        JSON.stringify({
-          type: 'file-meta',
-          id: transferId,
-          historyId: transfer.historyId,
-          name: file.name,
-          size: file.size,
-          mimeType: file.type || undefined,
-          chunkSize: CHUNK_SIZE,
-          createdAt,
-        } satisfies ChannelMessage),
+      const resume = await waitForTransferResume(
+        transferId,
+        () => {
+          channel.send(
+            JSON.stringify({
+              type: 'file-meta',
+              id: transferId,
+              historyId: transfer.historyId,
+              name: file.name,
+              size: file.size,
+              mimeType: file.type || undefined,
+              chunkSize: CHUNK_SIZE,
+              createdAt,
+            } satisfies ChannelMessage),
+          )
+        },
       )
+      const startIndex = Math.min(Math.max(resume.nextIndex, 0), totalChunks)
+      let sentBytes = Math.min(startIndex * CHUNK_SIZE, file.size)
 
-      let sentBytes = 0
       updateTransfer(transferId, {
         status: 'transferring',
-        progress: 0,
-        sentBytes: 0,
-        acknowledgedBytes: 0,
+        progress: file.size > 0 ? sentBytes / file.size : 0,
+        sentBytes,
+        acknowledgedBytes: Math.min(resume.receivedBytes, file.size),
         startedAt: new Date().toISOString(),
         sessionId: target.sessionId,
         targetDeviceId: target.peerId,
@@ -1643,7 +1741,7 @@ export function useDdzhilian() {
       })
       debugLog('state transition', { transferId, status: 'transferring' })
 
-      for (let index = 0; index < totalChunks; index += 1) {
+      for (let index = startIndex; index < totalChunks; index += 1) {
         const currentTransfer = transferItemsRef.current.find((item) => item.id === transferId)
         if (currentTransfer?.status === 'cancelled') {
           throw new Error('传输已取消。')
@@ -1768,6 +1866,13 @@ export function useDdzhilian() {
       payload: {
         roomId: roomId.trim(),
       },
+    })
+  }
+
+  const createPublicRoom = () => {
+    sendEvent({
+      type: 'create-public-room',
+      payload: undefined,
     })
   }
 
@@ -1928,6 +2033,31 @@ export function useDdzhilian() {
     })
   }
 
+  const waitForTransferResume = async (
+    transferId: string,
+    sendMetadata: () => void,
+  ) => {
+    const resumePromise = new Promise<ChannelMessage & { type: 'file-resume' }>((resolve) => {
+      const timeoutId = window.setTimeout(() => {
+        transferResumeWaitersRef.current.delete(transferId)
+        resolve({
+          type: 'file-resume',
+          id: transferId,
+          receivedBytes: 0,
+          nextIndex: 0,
+        })
+      }, 5_000)
+
+      transferResumeWaitersRef.current.set(transferId, {
+        resolve,
+        timeoutId,
+      })
+    })
+
+    sendMetadata()
+    return resumePromise
+  }
+
   const sendText = async (
     sessionId: string,
     text: string,
@@ -1964,6 +2094,293 @@ export function useDdzhilian() {
     void archiveTextHistory(record)
 
     mergeSession(sessionId, { kind: 'text' })
+  }
+
+  const sendRoomText = async (
+    roomId: string,
+    text: string,
+    options?: { recordId?: string; createdAt?: string },
+  ) => {
+    const activeSelf = selfRef.current
+    const historyId = options?.recordId ?? crypto.randomUUID()
+    const createdAt = options?.createdAt ?? new Date().toISOString()
+
+    if (!activeSelf?.deviceId || !activeSelf.historyAuthToken) {
+      throw new Error('当前设备尚未完成历史记录授权。')
+    }
+
+    if (
+      archivedTextHistoryIdsRef.current.has(historyId) ||
+      archivingTextHistoryIdsRef.current.has(historyId)
+    ) {
+      return
+    }
+
+    archivingTextHistoryIdsRef.current.add(historyId)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/text`, {
+        method: 'POST',
+        headers: {
+          ...buildHistoryAuthHeaders(activeSelf),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          historyId,
+          roomId,
+          text,
+          createdAt,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`History text upload failed with status ${response.status.toString()}`)
+      }
+
+      const payload = await response.json() as { text?: HistoryTextSummary }
+      const summary = payload.text ?? {
+        historyId,
+        roomId,
+        sourceDeviceId: activeSelf.deviceId,
+        sourceDeviceName: activeSelf.deviceName,
+        text,
+        createdAt,
+      }
+
+      archivedTextHistoryIdsRef.current.add(historyId)
+      startTransition(() => {
+        setHistoryTexts((previous) =>
+          previous.some((record) => record.historyId === historyId)
+            ? previous
+            : [...previous, summary],
+        )
+      })
+      debugLog('room text archived', { historyId, roomId })
+    } finally {
+      archivingTextHistoryIdsRef.current.delete(historyId)
+    }
+  }
+
+  const uploadRoomFileChunk = async (input: {
+    roomId: string
+    historyId: string
+    file: File
+    activeSelf: DirectorySnapshotPayload['self']
+    createdAt: string
+    start?: number
+    end?: number
+  }): Promise<
+    | { complete: false; offset: number }
+    | { complete: true; offset: number; file: HistoryFileSummary }
+  > => {
+    const uploadUrl = new URL('/api/history/upload', API_BASE_URL)
+    uploadUrl.searchParams.set('roomId', input.roomId)
+    uploadUrl.searchParams.set('historyId', input.historyId)
+
+    const headers: Record<string, string> = {
+      ...buildHistoryAuthHeaders(input.activeSelf),
+      'content-type': input.file.type || 'application/octet-stream',
+      'x-file-name': encodeURIComponent(input.file.name),
+      'x-file-created-at': encodeURIComponent(input.createdAt),
+    }
+    const body =
+      input.start === undefined || input.end === undefined
+        ? input.file
+        : input.file.slice(input.start, input.end)
+
+    if (input.start !== undefined && input.end !== undefined) {
+      headers['content-range'] = `bytes ${input.start.toString()}-${(input.end - 1).toString()}/${input.file.size.toString()}`
+    }
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers,
+      body,
+    })
+    const payload = await response.json().catch(() => ({})) as {
+      offset?: number
+      complete?: boolean
+      file?: HistoryFileSummary
+    }
+
+    if (response.status === 409 && typeof payload.offset === 'number') {
+      return {
+        complete: false,
+        offset: Math.min(Math.max(payload.offset, 0), input.file.size),
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(`History upload failed with status ${response.status.toString()}`)
+    }
+
+    if (payload.file) {
+      return {
+        complete: true,
+        offset: payload.offset ?? payload.file.size,
+        file: payload.file,
+      }
+    }
+
+    return {
+      complete: false,
+      offset: Math.min(Math.max(payload.offset ?? input.end ?? input.file.size, 0), input.file.size),
+    }
+  }
+
+  const sendRoomFiles = async (roomId: string, files: Array<{ id: string; file: File }>) => {
+    const activeSelf = selfRef.current
+
+    if (!activeSelf?.deviceId || !activeSelf.historyAuthToken) {
+      throw new Error('当前设备尚未完成历史记录授权。')
+    }
+
+    for (const item of files) {
+      const historyId = item.id
+      const file = item.file
+      const createdAt = new Date().toISOString()
+
+      if (archivedHistoryIdsRef.current.has(historyId) || archivingHistoryIdsRef.current.has(historyId)) {
+        continue
+      }
+
+      const existingTransfer = transferItemsRef.current.find((transfer) => transfer.id === historyId)
+      const previewUrl = existingTransfer?.previewUrl ?? (
+        isPreviewableMediaType(file.type || undefined)
+          ? URL.createObjectURL(file)
+          : undefined
+      )
+
+      if (previewUrl && !existingTransfer?.previewUrl) {
+        objectUrlsRef.current.push(previewUrl)
+      }
+
+      const transferItem: TransferItem = {
+        ...(existingTransfer ?? {
+          id: historyId,
+          historyId,
+          fileName: file.name,
+          fileSize: file.size,
+          fileMimeType: file.type || undefined,
+          previewUrl,
+          progress: 0,
+          sentBytes: 0,
+          acknowledgedBytes: 0,
+          createdAt,
+        }),
+        roomId,
+        targetDeviceName: '服务器中转',
+        status: 'transferring',
+        errorMessage: undefined,
+        startedAt: existingTransfer?.startedAt ?? createdAt,
+      }
+
+      transferFilesRef.current.set(historyId, file)
+      transferItemsRef.current = [
+        transferItem,
+        ...transferItemsRef.current.filter((transfer) => transfer.id !== historyId),
+      ]
+      startTransition(() => {
+        setTransferItems((previous) => [
+          transferItem,
+          ...previous.filter((transfer) => transfer.id !== historyId),
+        ])
+      })
+
+      archivingHistoryIdsRef.current.add(historyId)
+
+      try {
+        let offset = 0
+        let uploadedSummary: HistoryFileSummary | undefined
+
+        if (file.size === 0) {
+          const next = await uploadRoomFileChunk({
+            roomId,
+            historyId,
+            file,
+            activeSelf,
+            createdAt,
+          })
+          if (next.complete) {
+            uploadedSummary = next.file
+          }
+          updateTransfer(historyId, {
+            status: next.complete ? 'completed' : 'transferring',
+            sentBytes: next.offset,
+            acknowledgedBytes: next.offset,
+            progress: 1,
+            completedAt: next.complete ? new Date().toISOString() : undefined,
+          })
+        } else {
+          while (offset < file.size) {
+            const end = Math.min(offset + SERVER_UPLOAD_CHUNK_SIZE, file.size)
+            const next = await uploadRoomFileChunk({
+              roomId,
+              historyId,
+              file,
+              activeSelf,
+              createdAt,
+              start: offset,
+              end,
+            })
+
+            if (next.complete) {
+              uploadedSummary = next.file
+              updateTransfer(historyId, {
+                status: 'completed',
+                sentBytes: next.offset,
+                acknowledgedBytes: next.offset,
+                progress: 1,
+                completedAt: new Date().toISOString(),
+              })
+              break
+            }
+
+            if (next.offset <= offset) {
+              throw new Error('服务器没有接受新的文件分片。')
+            }
+
+            offset = next.offset
+            updateTransfer(historyId, {
+              status: 'transferring',
+              sentBytes: offset,
+              acknowledgedBytes: offset,
+              progress: file.size > 0 ? offset / file.size : 1,
+            })
+          }
+        }
+
+        const summary = uploadedSummary ?? {
+          historyId,
+          roomId,
+          sourceDeviceId: activeSelf.deviceId,
+          sourceDeviceName: activeSelf.deviceName,
+          fileName: file.name,
+          size: file.size,
+          mimeType: file.type || undefined,
+          createdAt,
+          downloadPath: `/api/history/download/${encodeURIComponent(historyId)}`,
+        }
+
+        archivedHistoryIdsRef.current.add(historyId)
+        startTransition(() => {
+          setHistoryFiles((previous) =>
+            previous.some((record) => record.historyId === historyId)
+              ? previous
+              : [...previous, summary],
+          )
+        })
+        debugLog('room file archived', { historyId, roomId, fileName: file.name })
+      } catch (error) {
+        updateTransfer(historyId, {
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : '服务器中转上传失败。',
+        })
+        throw error
+      } finally {
+        archivingHistoryIdsRef.current.delete(historyId)
+      }
+    }
   }
 
   const sendFiles = async (sessionId: string, files: File[]) => {
@@ -2042,8 +2459,10 @@ export function useDdzhilian() {
     historyFiles,
     historyTexts,
     errorMessage,
+    lastCreatedPublicRoomId,
     pairByShortCode,
     joinRoom,
+    createPublicRoom,
     requestConnect,
     disconnectSession,
     requestSnapshot,
@@ -2056,6 +2475,8 @@ export function useDdzhilian() {
     downloadHistoryFile,
     startPendingTransfers,
     sendText,
+    sendRoomText,
+    sendRoomFiles,
     sendFiles,
     stateToUiStatus,
     reasonLabel,

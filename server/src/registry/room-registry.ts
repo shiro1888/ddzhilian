@@ -5,6 +5,7 @@ export interface Room {
   roomId: string;
   memberIds: string[];
   reason: PairReason;
+  isPublic: boolean;
   lanKey?: string;
   createdAt: string;
   updatedAt: string;
@@ -29,9 +30,12 @@ export class RoomRegistry {
 
   private readonly byLanKey = new Map<string, string>();
 
+  private publicRoomId: string | undefined;
+
   createRoom(input: {
     memberIds: string[];
     reason: PairReason;
+    isPublic?: boolean;
     lanKey?: string;
   }) {
     const members = uniqueMemberIds(input.memberIds);
@@ -46,6 +50,7 @@ export class RoomRegistry {
       roomId,
       memberIds: members,
       reason: input.reason,
+      isPublic: input.isPublic ?? false,
       lanKey: input.lanKey,
       createdAt: now,
       updatedAt: now,
@@ -124,6 +129,36 @@ export class RoomRegistry {
       reason: 'lan-discovery',
       lanKey,
     });
+
+    return {
+      room,
+      added: true,
+      existingMemberIds: [] as string[],
+    };
+  }
+
+  ensurePublicRoom(deviceId: string) {
+    const existing = this.publicRoomId
+      ? this.byId.get(this.publicRoomId)
+      : undefined;
+
+    if (existing) {
+      const existingMemberIds = [...existing.memberIds];
+      const added = this.addMember(existing.roomId, deviceId);
+      return {
+        room: this.byId.get(existing.roomId)!,
+        added,
+        existingMemberIds,
+      };
+    }
+
+    const room = this.createRoom({
+      memberIds: [deviceId],
+      reason: 'manual',
+      isPublic: true,
+    });
+
+    this.publicRoomId = room.roomId;
 
     return {
       room,
@@ -212,6 +247,10 @@ export class RoomRegistry {
 
   private deleteRoom(room: Room) {
     this.byId.delete(room.roomId);
+
+    if (room.isPublic && this.publicRoomId === room.roomId) {
+      this.publicRoomId = undefined;
+    }
 
     if (room.lanKey && this.byLanKey.get(room.lanKey) === room.roomId) {
       this.byLanKey.delete(room.lanKey);

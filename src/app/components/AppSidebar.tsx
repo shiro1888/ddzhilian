@@ -42,8 +42,8 @@ export function AppSidebar({
           <button type="button" onClick={() => onViewChange('connect')}>
             新会话
           </button>
-          <button type="button" className="is-secondary" onClick={() => onViewChange('sessions')}>
-            会话记录
+          <button type="button" className="is-secondary" onClick={() => onViewChange('text')}>
+            对话
           </button>
         </div>
 

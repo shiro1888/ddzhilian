@@ -62,6 +62,7 @@ export type RoomMemberSummary = {
 export type RoomSummary = {
   roomId: string
   members: RoomMemberSummary[]
+  isPublic: boolean
   updatedAt: string
 }
 
@@ -165,6 +166,10 @@ export type ClientEvent =
       payload: { roomId: string }
     }
   | {
+      type: 'create-public-room'
+      payload?: undefined
+    }
+  | {
       type: 'request-connect'
       payload: { targetDeviceId: string; reason?: PairReason; createNewRoom?: boolean }
     }
@@ -225,6 +230,12 @@ export type ServerEvent =
       }
     }
   | {
+      type: 'public-room-created'
+      payload: {
+        roomId: string
+      }
+    }
+  | {
       type: 'error'
       payload: {
         code: string
@@ -257,6 +268,7 @@ export type ChannelMessage =
       index: number
       total: number
     }
+  | { type: 'file-resume'; id: string; receivedBytes: number; nextIndex: number }
   | { type: 'file-complete'; id: string }
   | { type: 'file-ack'; id: string; receivedBytes: number; completed: boolean }
 
@@ -298,6 +310,7 @@ export type TransferItem = {
   targetDeviceId?: string
   targetDeviceName?: string
   sessionId?: string
+  roomId?: string
   status: TransferStatus
   progress: number
   sentBytes: number

@@ -17,7 +17,9 @@ export interface ServerConfig {
   debugStateApiToken?: string;
   pingIntervalMs: number;
   sessionIdleMs: number;
+  roomExitGraceMs: number;
   historyRetentionMs: number;
+  historyMaxBytes: number;
   rtcConfig: {
     iceServers: Array<{
       urls: string | string[];
@@ -106,7 +108,9 @@ export function loadConfig(): ServerConfig {
     debugStateApiToken: process.env.DEBUG_STATE_API_TOKEN?.trim() || undefined,
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
     sessionIdleMs: readNumber('SESSION_IDLE_MS', 120_000),
+    roomExitGraceMs: readNumber('ROOM_EXIT_GRACE_MS', 30 * 60 * 1000),
     historyRetentionMs: readNumber('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
+    historyMaxBytes: readNumber('HISTORY_MAX_BYTES', 10 * 1024 * 1024 * 1024),
     rtcConfig: {
       iceServers: turnUrls.length > 0
         ? [

@@ -56,10 +56,12 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `DEBUG_STATE_API_TOKEN`: bearer token required when `/api/debug/state` is enabled
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
+- `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
 - `TURN_URL`: optional single TURN server URL
 - `TURN_URLS`: optional comma-separated TURN server URLs
 - `TURN_USERNAME`: optional TURN username
 - `TURN_CREDENTIAL`: optional TURN credential
+- `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
 
 ## Endpoints
 
@@ -73,6 +75,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `update-settings`
 - `pair-by-short-code`
 - `pair-by-token`
+- `create-public-room`
 - `request-connect`
 - `signal`
 - `session-state`

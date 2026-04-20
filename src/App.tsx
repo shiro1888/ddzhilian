@@ -1,4 +1,4 @@
-import { lazy, startTransition, Suspense, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { lazy, startTransition, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
@@ -9,7 +9,6 @@ import { ConnectStage } from './app/components/ConnectStage'
 import { ContentGrid } from './app/components/ContentGrid'
 import { ReceiveStage } from './app/components/ReceiveStage'
 import { SendStage } from './app/components/SendStage'
-import { SessionsStage } from './app/components/SessionsStage'
 import { TextStage } from './app/components/TextStage'
 import { DEFAULT_VIEW, pathForView, resolveViewFromPathname } from './app/routes'
 import type {
@@ -106,6 +105,16 @@ function extractLinksFromRichText(value: string) {
   return links
 }
 
+function readRoomIdFromSearch(search: string) {
+  return new URLSearchParams(search).get('room')?.trim().toUpperCase() || null
+}
+
+function buildPublicRoomUrl(roomId: string) {
+  const url = new URL(pathForView('text'), window.location.origin)
+  url.searchParams.set('room', roomId)
+  return url.toString()
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -122,23 +131,24 @@ function App() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
-  const [sessionQuery, setSessionQuery] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
+  const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
-  const deferredQuery = useDeferredValue(sessionQuery)
   const activeView = resolveViewFromPathname(location.pathname)
   const isChatDesktopTheme = true
-  const visibleNavItems = navItems.filter((item) => item.id !== 'send' && item.id !== 'receive')
+  const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions'].includes(item.id))
   const effectiveNavView: NavView =
-    activeView === 'send' || activeView === 'receive' ? 'text' : activeView
+    activeView === 'send' || activeView === 'receive' || activeView === 'sessions' ? 'text' : activeView
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const hasConnectionSnapshotRef = useRef(false)
   const attachmentDraftsRef = useRef<AttachmentDraft[]>([])
+  const joinedRoomLinkRef = useRef<string | null>(null)
+  const handledPublicRoomRef = useRef<string | null>(null)
 
   const {
     socketState,
@@ -157,8 +167,10 @@ function App() {
     historyFiles,
     historyTexts,
     errorMessage,
+    lastCreatedPublicRoomId,
     pairByShortCode,
     joinRoom,
+    createPublicRoom,
     requestConnect,
     disconnectSession,
     requestSnapshot,
@@ -171,6 +183,8 @@ function App() {
     downloadHistoryFile,
     startPendingTransfers,
     sendText,
+    sendRoomText,
+    sendRoomFiles,
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
@@ -186,6 +200,37 @@ function App() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    const roomId = readRoomIdFromSearch(location.search)
+    if (!roomId || !self || joinedRoomLinkRef.current === roomId) {
+      return
+    }
+
+    joinedRoomLinkRef.current = roomId
+    joinRoom(roomId)
+    setPendingRoomSelectionId(roomId)
+    setLocalError(null)
+
+    if (activeView !== 'text') {
+      navigate(`${pathForView('text')}${location.search}`, { replace: true })
+    }
+  }, [activeView, joinRoom, location.search, navigate, self])
+
+  useEffect(() => {
+    if (!lastCreatedPublicRoomId || handledPublicRoomRef.current === lastCreatedPublicRoomId) {
+      return
+    }
+
+    handledPublicRoomRef.current = lastCreatedPublicRoomId
+    setPendingRoomSelectionId(lastCreatedPublicRoomId)
+    setSelectedRoomId(lastCreatedPublicRoomId)
+    setLocalError('已进入公共对话，可复制入口链接分享。')
+
+    if (activeView !== 'text') {
+      navigate(pathForView('text'))
+    }
+  }, [activeView, lastCreatedPublicRoomId, navigate])
 
   const effectiveSelectedPeerId =
     onlinePeers.some((peer) => peer.deviceId === selectedPeerId)
@@ -339,9 +384,6 @@ function App() {
   }, [pendingRoomSelectionId, roomById, self, sessions])
 
   const filteredSessions = uiSessions.filter((session) => {
-    const keyword = deferredQuery.trim().toLowerCase()
-    const haystack = `${session.id} ${session.source} ${session.target} ${session.summary}`.toLowerCase()
-
     if (activeView === 'receive' && session.kind !== 'file') {
       return false
     }
@@ -354,7 +396,7 @@ function App() {
       return false
     }
 
-    return keyword.length === 0 || haystack.includes(keyword)
+    return true
   })
 
   const effectiveSelectedSessionId =
@@ -407,7 +449,9 @@ function App() {
       ? connectedTargets.filter((target) => target.peerId === selectedDevicePeer.deviceId)
       : []
   const selectedConversationTitle = isChatDesktopTheme
-    ? selectedRoom && selectedRoomMemberNames.length > 0
+    ? selectedRoom?.isPublic
+      ? '公共对话'
+      : selectedRoom && selectedRoomMemberNames.length > 0
       ? selectedRoomMemberNames.length <= 3
         ? selectedRoomMemberNames.join('、')
         : `${selectedRoomMemberNames.slice(0, 3).join('、')} 等 ${selectedRoomMemberNames.length} 位成员`
@@ -430,7 +474,7 @@ function App() {
     ? {
         title: selectedConversationName,
         description: selectedRoom
-          ? `${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
+          ? `${selectedRoom.isPublic ? '公共对话 · ' : ''}${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
           : selectedDevicePeer
             ? `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
             : '选择一个已有对话开始查看。',
@@ -494,7 +538,8 @@ function App() {
     isChatDesktopTheme && effectiveSelectedRoomId
       ? visibleTransferItems.filter(
           (item) =>
-            item.sessionId ? selectedConversationSessionIds.has(item.sessionId) : false,
+            item.roomId === effectiveSelectedRoomId ||
+            (item.sessionId ? selectedConversationSessionIds.has(item.sessionId) : false),
         )
       : isChatDesktopTheme && selectedDevicePeer
         ? visibleTransferItems.filter((item) => item.targetDeviceId === selectedDevicePeer.deviceId)
@@ -717,7 +762,9 @@ function App() {
 
   const fileConversationEmptyState =
     selectedRoom
-      ? selectedConnectedTarget
+      ? selectedRoom.isPublic
+        ? '公共对话的文件会通过服务器中转保存。'
+        : selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
         : `还没有与 ${selectedConversationName} 建立直连。`
       : '选择一个已有对话后，消息和文件会显示在这里。'
@@ -725,6 +772,16 @@ function App() {
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft) ||
     attachmentDrafts.length > 0
+  const hasChatTextDraft = extractPlainTextFromRichText(chatDraft).trim().length > 0
+  const canSendRoomTextWithoutConnection =
+    isChatDesktopTheme &&
+    Boolean(selectedRoom?.isPublic) &&
+    hasChatTextDraft &&
+    attachmentDrafts.length === 0
+  const canSendPublicRoomContent =
+    isChatDesktopTheme &&
+    Boolean(selectedRoom?.isPublic) &&
+    (hasChatTextDraft || attachmentDrafts.length > 0)
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const runnableTransferIds = visibleTransferItemsForConversation
     .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
@@ -742,7 +799,9 @@ function App() {
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
       const title =
-        memberNames.length === 0
+        room.isPublic
+          ? '公共对话'
+          : memberNames.length === 0
           ? `Room ${room.roomId}`
           : memberNames.length <= 3
             ? memberNames.join('、')
@@ -793,10 +852,13 @@ function App() {
           ? latestUiSession.kind === 'file'
             ? `[文件] ${latestUiSession.summary}`
             : latestUiSession.summary
-          : '暂无消息')
+          : room.isPublic
+            ? '公共对话，可通过链接加入'
+            : '暂无消息')
       const onlineCount = room.members.filter(
         (member) => member.deviceId !== self?.deviceId && member.online,
       ).length
+      const hasSelf = room.members.some((member) => member.deviceId === self?.deviceId)
       const connectedCount = connectedTargets.filter((target) => target.session.roomId === room.roomId).length
       const roomState = roomStateById.get(room.roomId)
       const lastReadTime = roomState?.lastReadAt ? new Date(roomState.lastReadAt).getTime() : null
@@ -819,7 +881,7 @@ function App() {
           ? 0
           : incomingEvents.filter((createdAt) => new Date(createdAt).getTime() > lastReadTime).length
       const status: RoomListItem['status'] =
-        connectedCount > 0 ? 'connected' : onlineCount > 0 ? 'online' : 'history'
+        connectedCount > 0 ? 'connected' : onlineCount > 0 || hasSelf ? 'online' : 'history'
 
       return {
         roomId: room.roomId,
@@ -827,6 +889,7 @@ function App() {
         previewText,
         updatedAt,
         updatedAtLabel: formatRelativeTime(updatedAt),
+        isPublic: room.isPublic,
         memberCount: room.members.length,
         onlineCount,
         status,
@@ -834,12 +897,11 @@ function App() {
         unreadCount,
       }
     })
-    .filter((item) => {
-      const keyword = deferredQuery.trim().toLowerCase()
-      const haystack = `${item.roomId} ${item.title} ${item.previewText}`.toLowerCase()
-      return keyword.length === 0 || haystack.includes(keyword)
-    })
     .sort((left, right) => {
+      if (left.isPublic !== right.isPublic) {
+        return left.isPublic ? -1 : 1
+      }
+
       if (left.pinned !== right.pinned) {
         return left.pinned ? -1 : 1
       }
@@ -911,7 +973,7 @@ function App() {
   }, [connectionStates])
 
   useEffect(() => {
-    if (activeView === 'send' || activeView === 'receive') {
+    if (activeView === 'send' || activeView === 'receive' || activeView === 'sessions') {
       navigate(pathForView('text'), { replace: true })
     }
   }, [activeView, navigate])
@@ -1049,8 +1111,18 @@ function App() {
       return
     }
 
+    const isPublicRoom = isChatDesktopTheme && Boolean(selectedRoom?.isPublic)
+
     if (isChatDesktopTheme) {
-      if (selectedRoomConnectedTargets.length === 0) {
+      if (!isPublicRoom && attachmentFiles.length > 0 && selectedRoomConnectedTargets.length === 0) {
+        setLocalError('先有其他设备加入当前对话，再发送文件。')
+        return
+      }
+
+      if (
+        selectedRoomConnectedTargets.length === 0 &&
+        !(isPublicRoom && (normalizedText.length > 0 || attachmentFiles.length > 0))
+      ) {
         setLocalError('先与当前选中的设备建立连接，再发送消息。')
         return
       }
@@ -1070,21 +1142,38 @@ function App() {
       if (normalizedText.length > 0) {
         const textPayload = hasImageContent ? removeImagesFromRichText(rawText) : rawText
 
-        for (const [index, target] of targets.entries()) {
-          await sendText(target.session.sessionId, textPayload, {
-            logLocalRecord: index === 0,
+        if (isPublicRoom && selectedRoom) {
+          await sendRoomText(selectedRoom.roomId, textPayload, {
             recordId,
             createdAt,
           })
+        } else {
+          for (const [index, target] of targets.entries()) {
+            await sendText(target.session.sessionId, textPayload, {
+              logLocalRecord: index === 0,
+              recordId,
+              createdAt,
+            })
+          }
         }
       }
 
       if (attachmentFiles.length > 0) {
-        const created = createTransferItems(attachmentFiles, selectedConversationTransferSessionIds)
-        await startPendingTransfers(
-          created.map((item) => item.id),
-          null,
-        )
+        if (isPublicRoom && selectedRoom) {
+          await sendRoomFiles(
+            selectedRoom.roomId,
+            attachmentDrafts.map((attachment) => ({
+              id: attachment.id,
+              file: attachment.file,
+            })),
+          )
+        } else {
+          const created = createTransferItems(attachmentFiles, selectedConversationTransferSessionIds)
+          await startPendingTransfers(
+            created.map((item) => item.id),
+            null,
+          )
+        }
       }
 
       setSessionArtifacts((previous) => {
@@ -1267,6 +1356,46 @@ function App() {
     }
   }
 
+  const handleCreatePublicRoom = () => {
+    if (!self) {
+      setLocalError('服务连接完成后才能进入公共对话。')
+      return
+    }
+
+    createPublicRoom()
+    setLocalError(null)
+
+    if (activeView === 'connect' || activeView === 'sessions') {
+      handleViewChange('text')
+    }
+  }
+
+  const handleCopyPublicRoomLink = (roomId: string) => {
+    const url = buildPublicRoomUrl(roomId)
+
+    if (!navigator.clipboard) {
+      setLocalError(`公共对话入口链接：${url}`)
+      return
+    }
+
+    void navigator.clipboard.writeText(url).then(
+      () => {
+        setLocalError('公共对话入口链接已复制。')
+      },
+      () => {
+        setLocalError(`公共对话入口链接：${url}`)
+      },
+    )
+  }
+
+  const handleSharedPanelOpenChange = (nextIsOpen: boolean) => {
+    setIsSharedPanelOpen(nextIsOpen)
+
+    if (nextIsOpen && sharedContentTab === 'chat') {
+      setSharedContentTab('media')
+    }
+  }
+
   const chatRouteElement = (
     <Suspense fallback={<div className="dd-empty">正在加载对话...</div>}>
       <ChatConversationStage
@@ -1276,9 +1405,13 @@ function App() {
         chatDraft={chatDraft}
         fileInputId={fileInputId}
         activeTransferLabel={activeTransferLabel}
-        isSendDisabled={!hasChatDraftContent || selectedRoomConnectedTargets.length === 0}
+        isSendDisabled={
+          !hasChatDraftContent ||
+          (selectedRoomConnectedTargets.length === 0 && !canSendRoomTextWithoutConnection && !canSendPublicRoomContent)
+        }
         enterToSend={preferences.enterToSend}
         attachments={attachmentDrafts}
+        isSharedPanelOpen={isSharedPanelOpen}
         sharedContentTab={sharedContentTab}
         sharedMediaEntries={sharedMediaEntries}
         sharedFileEntries={sharedFileEntries}
@@ -1293,6 +1426,7 @@ function App() {
         onAttachFiles={addAttachmentFiles}
         onRemoveAttachment={removeAttachment}
         onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
+        onSharedPanelOpenChange={handleSharedPanelOpenChange}
         onSharedContentTabChange={setSharedContentTab}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -1378,8 +1512,14 @@ function App() {
           isChatConversationView={isChatConversationView}
           currentMeta={currentMeta}
           currentRoomId={effectiveSelectedRoomId}
+          isSharedPanelOpen={isSharedPanelOpen}
           localError={localError}
           errorMessage={errorMessage}
+          onToggleSharedPanel={
+            isChatConversationView
+              ? () => handleSharedPanelOpenChange(!isSharedPanelOpen)
+              : undefined
+          }
         />
 
         <section className="dd-stage">
@@ -1418,20 +1558,7 @@ function App() {
             <Route path="/send" element={sendRouteElement} />
             <Route path="/receive" element={receiveRouteElement} />
             <Route path="/text" element={textRouteElement} />
-            <Route
-              path="/sessions"
-              element={
-                <SessionsStage
-                  joinCode={joinCode}
-                  currentMeta={currentMeta}
-                  uiSessions={uiSessions}
-                  selectedUiSession={selectedUiSession}
-                  onJoinCodeChange={setJoinCode}
-                  onRequestSnapshot={requestSnapshot}
-                  onShowConnect={() => handleViewChange('connect')}
-                />
-              }
-            />
+            <Route path="/sessions" element={<Navigate to={pathForView('text')} replace />} />
             <Route
               path="*"
               element={<Navigate to={pathForView(DEFAULT_VIEW)} replace />}
@@ -1441,7 +1568,6 @@ function App() {
 
         <ContentGrid
           roomJoinDraft={joinRoomIdDraft}
-          sessionQuery={sessionQuery}
           roomListItems={roomListItems}
           selectedRoomId={effectiveSelectedRoomId}
           isContentRailCollapsed={isContentRailCollapsed}
@@ -1451,14 +1577,14 @@ function App() {
           isEditingDeviceName={isEditingDeviceName}
           deviceNameDraft={deviceNameDraft}
           selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
-          onSessionQueryChange={setSessionQuery}
           onRoomJoinDraftChange={setJoinRoomIdDraft}
           onDeviceNameDraftChange={setDeviceNameDraft}
           onJoinRoom={handleJoinRoomById}
           onConnectionAction={handleSelectedDeviceConnectionAction}
           onConnectAllDevices={handleConnectAllDevices}
           onCreateNewConversation={handleCreateNewConversation}
-          onShowConnect={() => handleViewChange('connect')}
+          onCreatePublicRoom={handleCreatePublicRoom}
+          onCopyPublicRoomLink={handleCopyPublicRoomLink}
           onBeginEditDeviceName={beginEditDeviceName}
           onSaveDeviceName={saveDeviceName}
           onCancelEditDeviceName={cancelEditDeviceName}

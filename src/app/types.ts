@@ -119,6 +119,7 @@ export type RoomListItem = {
   previewText: string
   updatedAt: string
   updatedAtLabel: string
+  isPublic: boolean
   memberCount: number
   onlineCount: number
   status: RoomListStatus

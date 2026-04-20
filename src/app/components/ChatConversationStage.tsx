@@ -143,6 +143,7 @@ type ChatConversationStageProps = {
   isSendDisabled: boolean
   enterToSend: boolean
   attachments: AttachmentDraft[]
+  isSharedPanelOpen: boolean
   sharedContentTab: SharedContentTab
   sharedMediaEntries: FileConversationEntry[]
   sharedFileEntries: FileConversationEntry[]
@@ -161,6 +162,7 @@ type ChatConversationStageProps = {
   onAttachFiles: (files: File[]) => void
   onRemoveAttachment: (id: string) => void
   onEnterToSendChange: (value: boolean) => void
+  onSharedPanelOpenChange: (value: boolean) => void
   onSharedContentTabChange: (tab: SharedContentTab) => void
   onDragEnter: () => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
@@ -310,6 +312,7 @@ export function ChatConversationStage({
   isSendDisabled,
   enterToSend,
   attachments,
+  isSharedPanelOpen,
   sharedContentTab,
   sharedMediaEntries,
   sharedFileEntries,
@@ -322,6 +325,7 @@ export function ChatConversationStage({
   onAttachFiles,
   onRemoveAttachment,
   onEnterToSendChange,
+  onSharedPanelOpenChange,
   onSharedContentTabChange,
   onDragEnter,
   onDragOver,
@@ -330,7 +334,6 @@ export function ChatConversationStage({
 }: ChatConversationStageProps) {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isFormatToolbarOpen, setIsFormatToolbarOpen] = useState(false)
-  const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [insertPanel, setInsertPanel] = useState<InsertPanelState | null>(null)
   const [insertPanelError, setInsertPanelError] = useState<string | null>(null)
   const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false)
@@ -391,6 +394,18 @@ export function ChatConversationStage({
       window.cancelAnimationFrame(frameId)
     }
   }, [isSharedPanelOpen, latestConversationEntryId])
+
+  useEffect(() => {
+    if (!isSharedPanelOpen) {
+      return
+    }
+
+    setIsEmojiPickerOpen(false)
+    setIsColorPaletteOpen(false)
+    setInsertPanel(null)
+    setInsertPanelError(null)
+    setIsFormatToolbarOpen(false)
+  }, [isSharedPanelOpen])
 
   useEffect(() => {
     let isCancelled = false
@@ -614,13 +629,6 @@ export function ChatConversationStage({
     event.preventDefault()
   }
 
-  const closeFloatingComposerPanels = () => {
-    setIsEmojiPickerOpen(false)
-    setIsColorPaletteOpen(false)
-    setInsertPanel(null)
-    setInsertPanelError(null)
-  }
-
   const handleFormatToolbarToggle = () => {
     const nextIsOpen = !isFormatToolbarOpen
     setIsFormatToolbarOpen(nextIsOpen)
@@ -630,19 +638,6 @@ export function ChatConversationStage({
       setIsColorPaletteOpen(false)
       setInsertPanel(null)
       setInsertPanelError(null)
-    }
-  }
-
-  const handleSharedPanelToggle = () => {
-    const nextIsOpen = !isSharedPanelOpen
-    setIsSharedPanelOpen(nextIsOpen)
-
-    if (nextIsOpen) {
-      closeFloatingComposerPanels()
-      setIsFormatToolbarOpen(false)
-      if (sharedContentTab === 'chat') {
-        onSharedContentTabChange('media')
-      }
     }
   }
 
@@ -734,8 +729,64 @@ export function ChatConversationStage({
     return true
   }
 
+  const copyTextToClipboard = async (value: string) => {
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(value)
+        return
+      } catch {
+        // Fall back to a temporary textarea when clipboard permissions are unavailable.
+      }
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = value
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    textarea.setAttribute('readonly', '')
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    textarea.remove()
+  }
+
+  const markCodeCopyButton = (button: HTMLButtonElement) => {
+    button.classList.add('is-copied')
+    button.textContent = '已复制'
+
+    window.setTimeout(() => {
+      button.classList.remove('is-copied')
+      button.textContent = '复制'
+    }, 1600)
+  }
+
   const handleInlineImageClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!openInlineImageFromTarget(event.target)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const handleRichBubbleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target
+
+    if (target instanceof HTMLElement) {
+      const copyButton = target.closest<HTMLButtonElement>('.dd-code-copy')
+      if (copyButton && event.currentTarget.contains(copyButton)) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
+        if (codeText) {
+          void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
+        }
+        return
+      }
+    }
+
+    if (!openInlineImageFromTarget(target)) {
       return
     }
 
@@ -986,17 +1037,6 @@ export function ChatConversationStage({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div className="dd-chatbox__topbar">
-          <button
-            type="button"
-            className={`dd-chatbox__shared-trigger${isSharedPanelOpen ? ' is-active' : ''}`}
-            aria-expanded={isSharedPanelOpen}
-            onClick={handleSharedPanelToggle}
-          >
-            {isSharedPanelOpen ? '关闭共享内容' : '共享内容'}
-          </button>
-        </div>
-
         <div ref={conversationThreadRef} className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}>
           {isSharedPanelOpen && (
             <div className="dd-shared-panel__header">
@@ -1017,7 +1057,7 @@ export function ChatConversationStage({
               <button
                 type="button"
                 className="dd-shared-panel__close"
-                onClick={() => setIsSharedPanelOpen(false)}
+                onClick={() => onSharedPanelOpenChange(false)}
               >
                 关闭
               </button>
@@ -1066,7 +1106,7 @@ export function ChatConversationStage({
                       {entry.entryType === 'text' ? (
                         <div
                           className="dd-chatbox__bubble dd-chatbox__bubble--rich"
-                          onClick={handleInlineImageClick}
+                          onClick={handleRichBubbleClick}
                           dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
                         />
                       ) : (
@@ -1137,7 +1177,7 @@ export function ChatConversationStage({
                                   className="dd-file-bubble__action"
                                   onClick={() => onRetryTransfer(entry.file.id)}
                                 >
-                                  重试
+                                  继续传输
                                 </button>
                               ) : null}
                               {entry.file.action === 'cancel' ? (
@@ -1207,7 +1247,7 @@ export function ChatConversationStage({
                         <a href={entry.downloadUrl} download={entry.downloadName}>下载</a>
                       ) : null}
                       {entry.action === 'retry' ? (
-                        <button type="button" onClick={() => onRetryTransfer(entry.id)}>重试</button>
+                        <button type="button" onClick={() => onRetryTransfer(entry.id)}>继续传输</button>
                       ) : null}
                       {entry.action === 'cancel' ? (
                         <button type="button" onClick={() => onCancelTransfer(entry.id)}>取消</button>

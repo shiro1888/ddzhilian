@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, createWriteStream, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -47,6 +47,14 @@ function safeFileSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'file';
 }
 
+function buildStoragePath(roomId: string, historyId: string, fileName: string) {
+  return join(
+    FILES_ROOT,
+    safeFileSegment(roomId),
+    `${safeFileSegment(historyId)}-${safeFileSegment(basename(fileName))}`,
+  );
+}
+
 async function drainStream(stream: NodeJS.ReadableStream) {
   for await (const chunk of stream) {
     void chunk;
@@ -55,7 +63,10 @@ async function drainStream(stream: NodeJS.ReadableStream) {
 }
 
 export class HistoryRegistry {
-  constructor(private readonly retentionMs: number) {
+  constructor(
+    private readonly retentionMs: number,
+    private readonly maxBytes: number,
+  ) {
     mkdirSync(FILES_ROOT, { recursive: true });
     this.load();
     this.prune();
@@ -117,13 +128,12 @@ export class HistoryRegistry {
       return existing;
     }
 
+    this.assertWithinMaxBytes(input.data.byteLength);
+
     const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
     await fs.mkdir(roomDir, { recursive: true });
 
-    const storagePath = join(
-      roomDir,
-      `${safeFileSegment(input.historyId)}-${safeFileSegment(basename(input.fileName))}`,
-    );
+    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
 
     await fs.writeFile(storagePath, input.data);
 
@@ -144,6 +154,7 @@ export class HistoryRegistry {
     const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
     roomIds.add(record.historyId);
     this.fileIdsByRoomId.set(record.roomId, roomIds);
+    this.pruneRoomCapacity(record.roomId);
     this.persist();
 
     return record;
@@ -170,15 +181,13 @@ export class HistoryRegistry {
     const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
     await fs.mkdir(roomDir, { recursive: true });
 
-    const storagePath = join(
-      roomDir,
-      `${safeFileSegment(input.historyId)}-${safeFileSegment(basename(input.fileName))}`,
-    );
+    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
     const tempPath = `${storagePath}.part-${Date.now().toString(36)}`;
 
     try {
       await pipeline(input.stream, createWriteStream(tempPath));
       const stat = await fs.stat(tempPath);
+      this.assertWithinMaxBytes(stat.size);
       await fs.rename(tempPath, storagePath);
 
       const record: HistoryFileRecord = {
@@ -198,6 +207,7 @@ export class HistoryRegistry {
       const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
       roomIds.add(record.historyId);
       this.fileIdsByRoomId.set(record.roomId, roomIds);
+      this.pruneRoomCapacity(record.roomId);
       this.persist();
 
       return record;
@@ -238,6 +248,98 @@ export class HistoryRegistry {
     return record;
   }
 
+  async saveFileChunk(input: {
+    historyId: string;
+    roomId: string;
+    sessionId?: string;
+    sourceDeviceId: string;
+    sourceDeviceName: string;
+    fileName: string;
+    mimeType?: string;
+    createdAt: string;
+    start: number;
+    end: number;
+    total: number;
+    data: Buffer;
+  }) {
+    this.prune();
+    const existing = this.filesById.get(input.historyId);
+    if (existing) {
+      return {
+        complete: true as const,
+        accepted: true as const,
+        offset: existing.size,
+        record: existing,
+      };
+    }
+
+    this.assertWithinMaxBytes(input.total);
+
+    const expectedSize = input.end - input.start + 1;
+    if (input.data.byteLength !== expectedSize) {
+      throw new Error('Chunk size does not match Content-Range.');
+    }
+
+    const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
+    await fs.mkdir(roomDir, { recursive: true });
+
+    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
+    const tempPath = `${storagePath}.part`;
+    const currentOffset = await this.readPartialSize(tempPath);
+
+    if (input.start !== currentOffset) {
+      return {
+        complete: false as const,
+        accepted: false as const,
+        offset: currentOffset,
+      };
+    }
+
+    appendFileSync(tempPath, input.data);
+    const nextOffset = currentOffset + input.data.byteLength;
+
+    if (nextOffset < input.total) {
+      return {
+        complete: false as const,
+        accepted: true as const,
+        offset: nextOffset,
+      };
+    }
+
+    if (nextOffset !== input.total) {
+      throw new Error('Chunk upload exceeded declared file size.');
+    }
+
+    await fs.rename(tempPath, storagePath);
+
+    const record: HistoryFileRecord = {
+      historyId: input.historyId,
+      roomId: input.roomId,
+      sessionId: input.sessionId,
+      sourceDeviceId: input.sourceDeviceId,
+      sourceDeviceName: input.sourceDeviceName,
+      fileName: input.fileName,
+      size: input.total,
+      mimeType: input.mimeType,
+      createdAt: input.createdAt,
+      storagePath,
+    };
+
+    this.filesById.set(record.historyId, record);
+    const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
+    roomIds.add(record.historyId);
+    this.fileIdsByRoomId.set(record.roomId, roomIds);
+    this.pruneRoomCapacity(record.roomId);
+    this.persist();
+
+    return {
+      complete: true as const,
+      accepted: true as const,
+      offset: record.size,
+      record,
+    };
+  }
+
   prune(now = Date.now()) {
     let changed = false;
 
@@ -246,20 +348,12 @@ export class HistoryRegistry {
         continue;
       }
 
-      this.filesById.delete(record.historyId);
-      const roomIds = this.fileIdsByRoomId.get(record.roomId);
-      roomIds?.delete(record.historyId);
-      if (roomIds && roomIds.size === 0) {
-        this.fileIdsByRoomId.delete(record.roomId);
-      }
-
-      try {
-        unlinkSync(record.storagePath);
-      } catch {
-        // Ignore missing files during cleanup.
-      }
-
+      this.removeFileRecord(record);
       changed = true;
+    }
+
+    for (const roomId of [...this.fileIdsByRoomId.keys()]) {
+      changed = this.pruneRoomCapacity(roomId) || changed;
     }
 
     for (const record of [...this.textsById.values()]) {
@@ -349,5 +443,69 @@ export class HistoryRegistry {
       JSON.stringify({ files, texts }, null, 2),
       'utf8',
     );
+  }
+
+  private assertWithinMaxBytes(size: number) {
+    if (this.maxBytes > 0 && size > this.maxBytes) {
+      throw new Error('File exceeds history storage limit.');
+    }
+  }
+
+  private pruneRoomCapacity(roomId: string) {
+    if (this.maxBytes <= 0) {
+      return false;
+    }
+
+    const records = this.listFileRecordsForRoom(roomId);
+    let totalSize = records.reduce((total, record) => total + record.size, 0);
+    let changed = false;
+
+    for (const record of records) {
+      if (totalSize <= this.maxBytes) {
+        break;
+      }
+
+      this.removeFileRecord(record);
+      totalSize -= record.size;
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  private listFileRecordsForRoom(roomId: string) {
+    const ids = this.fileIdsByRoomId.get(roomId);
+    if (!ids) {
+      return [];
+    }
+
+    return [...ids]
+      .map((historyId) => this.filesById.get(historyId))
+      .filter((record): record is HistoryFileRecord => Boolean(record))
+      .sort(sortByCreatedAt);
+  }
+
+  private async readPartialSize(tempPath: string) {
+    try {
+      const stat = await fs.stat(tempPath);
+      return stat.size;
+    } catch {
+      return 0;
+    }
+  }
+
+  private removeFileRecord(record: HistoryFileRecord) {
+    this.filesById.delete(record.historyId);
+    const roomIds = this.fileIdsByRoomId.get(record.roomId);
+    roomIds?.delete(record.historyId);
+    if (roomIds && roomIds.size === 0) {
+      this.fileIdsByRoomId.delete(record.roomId);
+    }
+
+    try {
+      unlinkSync(record.storagePath);
+    } catch {
+      // Ignore missing files during cleanup.
+    }
   }
 }

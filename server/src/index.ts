@@ -31,10 +31,23 @@ type SocketWithAddress = WebSocket & {
 
 const config = loadConfig();
 const devices = new DeviceRegistry();
-const history = new HistoryRegistry(config.historyRetentionMs);
+const history = new HistoryRegistry(config.historyRetentionMs, config.historyMaxBytes);
 const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
 const uiState = new UiStateRegistry();
+const pendingRoomExitTimers = new Map<string, NodeJS.Timeout>();
+
+function isLoopbackOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function setCorsHeaders(
   request: {
@@ -54,7 +67,7 @@ function setCorsHeaders(
     return true;
   }
 
-  if (!config.allowedOrigins.includes(origin)) {
+  if (!config.allowedOrigins.includes(origin) && !isLoopbackOrigin(origin)) {
     return false;
   }
 
@@ -63,7 +76,7 @@ function setCorsHeaders(
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Authorization,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
+    'Authorization,Content-Range,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
   );
   response.setHeader(
     'Access-Control-Expose-Headers',
@@ -170,6 +183,41 @@ function parseRangeHeader(value: string | string[] | undefined, size: number) {
   return {
     start,
     end: Math.min(end, size - 1),
+  };
+}
+
+function parseContentRangeHeader(value: string | string[] | undefined) {
+  const headerValue = Array.isArray(value) ? value[0] : value;
+  if (!headerValue) {
+    return undefined;
+  }
+
+  const match = /^bytes\s+(\d+)-(\d+)\/(\d+)$/i.exec(headerValue.trim());
+  if (!match) {
+    return null;
+  }
+
+  const [, startText, endText, totalText] = match;
+  const start = Number(startText);
+  const end = Number(endText);
+  const total = Number(totalText);
+
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    !Number.isSafeInteger(total) ||
+    start < 0 ||
+    end < start ||
+    total <= 0 ||
+    end >= total
+  ) {
+    return null;
+  }
+
+  return {
+    start,
+    end,
+    total,
   };
 }
 
@@ -291,6 +339,7 @@ const httpServer = createServer((request, response) => {
     const createdAt =
       decodeHeaderValue(request.headers['x-file-created-at']) ??
       new Date().toISOString();
+    const contentRange = parseContentRangeHeader(request.headers['content-range']);
     if (!roomId || !historyId || !fileName) {
       writeJson(response, 400, {
         error: 'Missing roomId, historyId, or fileName.',
@@ -319,6 +368,55 @@ const httpServer = createServer((request, response) => {
       writeJson(response, sessionAccess.statusCode, {
         error: sessionAccess.message,
       });
+      return;
+    }
+
+    if (contentRange === null) {
+      writeJson(response, 400, { error: 'Invalid Content-Range header.' });
+      return;
+    }
+
+    if (contentRange) {
+      void readRequestBuffer(request)
+        .then((buffer) =>
+          history.saveFileChunk({
+            historyId,
+            roomId,
+            sessionId,
+            sourceDeviceId: authResult.device.deviceId,
+            sourceDeviceName: authResult.device.deviceName,
+            fileName,
+            mimeType: request.headers['content-type']?.toString(),
+            createdAt,
+            start: contentRange.start,
+            end: contentRange.end,
+            total: contentRange.total,
+            data: buffer,
+          }),
+        )
+        .then((result) => {
+          if (!result.complete) {
+            writeJson(response, result.accepted ? 200 : 409, {
+              ok: result.accepted,
+              offset: result.offset,
+              complete: false,
+            });
+            return;
+          }
+
+          writeJson(response, 200, {
+            ok: true,
+            offset: result.offset,
+            complete: true,
+            file: history.toSummary(result.record),
+          });
+          broadcastSnapshots();
+        })
+        .catch((error) => {
+          writeJson(response, 500, {
+            error: error instanceof Error ? error.message : 'History chunk upload failed.',
+          });
+        });
       return;
     }
 
@@ -607,6 +705,34 @@ function broadcastSnapshots() {
   }
 }
 
+function cancelPendingRoomExit(deviceId: string) {
+  const timer = pendingRoomExitTimers.get(deviceId);
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
+  pendingRoomExitTimers.delete(deviceId);
+}
+
+function scheduleRoomExit(deviceId: string) {
+  cancelPendingRoomExit(deviceId);
+
+  if (config.roomExitGraceMs <= 0) {
+    rooms.removeDevice(deviceId);
+    broadcastSnapshots();
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    pendingRoomExitTimers.delete(deviceId);
+    rooms.removeDevice(deviceId);
+    broadcastSnapshots();
+  }, config.roomExitGraceMs);
+
+  pendingRoomExitTimers.set(deviceId, timer);
+}
+
 function emitSessionCreated(sessionId: string) {
   const session = sessions.getById(sessionId);
 
@@ -742,12 +868,29 @@ function connectDeviceToRoom(
   }
 }
 
+function connectDeviceToExistingRooms(deviceId: string) {
+  for (const room of rooms.listForDevice(deviceId)) {
+    if (room.isPublic) {
+      continue;
+    }
+
+    connectDeviceToRoom(
+      deviceId,
+      room.roomId,
+      room.reason,
+      room.memberIds.filter((memberId) => memberId !== deviceId),
+    );
+  }
+}
+
 function selectPreferredRoomForConnection(requesterId: string, targetId: string) {
   const roomById = new Map(
     [
       ...rooms.listForDevice(requesterId),
       ...rooms.listForDevice(targetId),
-    ].map((room) => [room.roomId, room] as const),
+    ]
+      .filter((room) => !room.isPublic)
+      .map((room) => [room.roomId, room] as const),
   );
 
   return [...roomById.values()].sort((left, right) => {
@@ -863,12 +1006,35 @@ function joinRoomById(input: {
   );
 
   rooms.addMember(room.roomId, requester.deviceId);
-  connectDeviceToRoom(
-    requester.deviceId,
-    room.roomId,
-    input.reason,
-    existingMemberIds,
-  );
+  if (!room.isPublic) {
+    connectDeviceToRoom(
+      requester.deviceId,
+      room.roomId,
+      input.reason,
+      existingMemberIds,
+    );
+  }
+  broadcastSnapshots();
+
+  return {
+    ok: true as const,
+    room,
+  };
+}
+
+function createPublicRoom(deviceId: string) {
+  const device = devices.getById(deviceId);
+
+  if (!device) {
+    return {
+      ok: false as const,
+      code: 'DEVICE_NOT_FOUND' as const,
+      message: 'The current device is no longer registered.',
+    };
+  }
+
+  const { room } = rooms.ensurePublicRoom(device.deviceId);
+
   broadcastSnapshots();
 
   return {
@@ -978,6 +1144,8 @@ function handleEvent(
         event.payload,
         buildNetworkContext(socket.clientAddress ?? socket._socket?.remoteAddress),
       );
+      cancelPendingRoomExit(device.deviceId);
+      rooms.ensurePublicRoom(device.deviceId);
 
       const snapshot = devices.buildSnapshot(
         device.deviceId,
@@ -1007,6 +1175,8 @@ function handleEvent(
           });
         }
       }
+
+      connectDeviceToExistingRooms(device.deviceId);
 
       handleAutoConnect(device.deviceId);
       broadcastSnapshots();
@@ -1143,6 +1313,24 @@ function handleEvent(
       return deviceId;
     }
 
+    case 'create-public-room': {
+      const result = createPublicRoom(activeDeviceId);
+
+      if (!result.ok) {
+        emitError(socket, result);
+        return deviceId;
+      }
+
+      send(socket, {
+        type: 'public-room-created',
+        payload: {
+          roomId: result.room.roomId,
+        },
+      });
+
+      return deviceId;
+    }
+
     case 'request-connect': {
       const result = joinRoomViaTarget({
         requesterId: activeDeviceId,
@@ -1266,8 +1454,12 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
       return;
     }
 
-    devices.remove(currentDeviceId);
-    rooms.removeDevice(currentDeviceId);
+    const removedDevice = devices.removeSocket(currentDeviceId, socket);
+    if (!removedDevice) {
+      return;
+    }
+
+    scheduleRoomExit(currentDeviceId);
     const closedSessions = sessions.closeSessionsForDevice(currentDeviceId);
 
     for (const session of closedSessions) {
