@@ -6,6 +6,7 @@ import {
   formatChatDivider,
   formatFileSize,
   linkifyPlainTextUrls,
+  sanitizeBotReplyHtml,
   sanitizeRichTextHtml,
   shouldInsertDivider,
 } from '../utils'
@@ -1165,6 +1166,7 @@ export function ChatConversationStage({
               }
 
               const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
+              const isBotMessage = entry.entryType === 'text' && entry.sourceDeviceId === 'bot_cloudflare_ai'
               const previewKind = entry.entryType === 'file'
                 ? resolveMediaPreviewKind(entry.file.mimeType, entry.file.fileName)
                 : null
@@ -1193,7 +1195,11 @@ export function ChatConversationStage({
                           <div
                             className="dd-chatbox__bubble dd-chatbox__bubble--rich"
                             onClick={handleRichBubbleClick}
-                            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(entry.text) }}
+                            dangerouslySetInnerHTML={{
+                              __html: isBotMessage
+                                ? sanitizeBotReplyHtml(entry.text)
+                                : sanitizeRichTextHtml(entry.text),
+                            }}
                           />
                           {entry.fromSelf && entry.status && (
                             <span className={`dd-chatbox__text-status is-${entry.status}`}>

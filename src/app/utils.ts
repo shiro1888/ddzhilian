@@ -847,6 +847,48 @@ export function sanitizeRichTextHtml(value: string) {
   return Array.from(root.childNodes).map((node) => sanitizeNode(node)).join('')
 }
 
+export function sanitizeBotReplyHtml(value: string) {
+  if (!value || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return normalizePlainRichText(value)
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  if (!root) {
+    return normalizePlainRichText(value)
+  }
+
+  const sanitizeNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return escapeHtml((node.textContent ?? '').replace(/\u200B/g, ''))
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return ''
+    }
+
+    const childrenHtml = Array.from(node.childNodes).map(sanitizeNode).join('')
+    const tagName = node.tagName.toLowerCase()
+
+    if (tagName === 'br') {
+      return '<br />'
+    }
+
+    if (tagName === 'strong') {
+      return `<strong>${childrenHtml}</strong>`
+    }
+
+    if (tagName === 'p') {
+      return `<p>${childrenHtml}</p>`
+    }
+
+    return childrenHtml
+  }
+
+  return Array.from(root.childNodes).map(sanitizeNode).join('')
+}
+
 type DataTransferItemWithEntry = DataTransferItem & {
   webkitGetAsEntry?: () => FileSystemEntry | null
 }

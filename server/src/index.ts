@@ -70,6 +70,8 @@ const cloudflareAiQuota = new CloudflareAiQuota(
   fileURLToPath(new URL('../data/cloudflare-ai-quota.json', import.meta.url)),
 );
 const aiRequestMaxBytes = 64 * 1024;
+const aiPromptMaxBytes = 32 * 1024;
+const aiResponseMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 
@@ -434,6 +436,25 @@ function normalizeCreatedAt(value: unknown) {
   return Number.isFinite(parsedTime) ? new Date(parsedTime).toISOString() : new Date().toISOString();
 }
 
+function enforceAiTextLimit(value: string, maxChars: number) {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  return `${value.slice(0, maxChars)}\n\n[内容过长，已截断]`;
+}
+
+function getAiSystemPrompt() {
+  return [
+    'You are an isolated chat assistant inside ddzhilian.',
+    'You cannot access this website source code, files, database, server environment variables, user devices, network services, or admin tools.',
+    'You cannot execute code, make HTTP requests, change site configuration, or perform actions outside generating this text response.',
+    'Do not ask users for passwords, API tokens, private keys, cookies, or other secrets.',
+    'If a user asks you to operate the website, read secrets, bypass permissions, or perform security-sensitive actions, refuse briefly and explain that you can only provide text guidance.',
+    'Keep answers concise and useful.',
+  ].join(' ');
+}
+
 function writeAiQuotaExhausted(response: ServerResponse) {
   writeJson(response, 429, {
     error: 'Cloudflare AI 免费额度已用尽，已停止请求以避免产生费用。',
@@ -486,7 +507,10 @@ function saveAiBotHistoryText(input: {
     isPublic: roomAccess.room.isPublic,
     sourceDeviceId: aiBotDeviceId,
     sourceDeviceName: aiBotDeviceName,
-    text: buildAiBotReplyText(input.replyToName, input.responseText),
+    text: buildAiBotReplyText(
+      input.replyToName,
+      enforceAiTextLimit(input.responseText, aiResponseMaxChars),
+    ),
     createdAt: input.createdAt ?? new Date().toISOString(),
   });
 
@@ -590,6 +614,13 @@ async function handleAiChatRequest(
     return;
   }
 
+  if (Buffer.byteLength(prompt, 'utf8') > aiPromptMaxBytes) {
+    writeJson(response, 413, {
+      error: 'Prompt exceeds the AI request byte limit.',
+    });
+    return;
+  }
+
   if (prompt.length > maxPromptChars) {
     writeJson(response, 413, {
       error: `Prompt exceeds the ${maxPromptChars.toString()} character limit.`,
@@ -627,7 +658,7 @@ async function handleAiChatRequest(
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant. Keep answers concise and useful.',
+            content: getAiSystemPrompt(),
           },
           {
             role: 'user',

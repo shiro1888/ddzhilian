@@ -782,6 +782,9 @@ function App() {
       id: `text-${record.id}`,
       entryType: 'text' as const,
       sessionId: record.sessionId,
+      sourceDeviceId: record.senderName === 'bot' && !record.fromSelf
+        ? 'bot_cloudflare_ai'
+        : undefined,
       fromSelf: record.fromSelf,
       senderName: record.fromSelf
         ? selfName

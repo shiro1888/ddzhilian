@@ -66,6 +66,7 @@ export type UnifiedConversationEntry =
       id: string
       entryType: 'text'
       sessionId: string
+      sourceDeviceId?: string
       fromSelf: boolean
       senderName: string
       status?: 'sending' | 'failed'
