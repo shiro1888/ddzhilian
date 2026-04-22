@@ -33,6 +33,7 @@ import {
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
+import type { AiQuotaStatus } from './lib/ddzhilian-types'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -115,6 +116,19 @@ function buildPublicRoomUrl(roomId: string) {
   return url.toString()
 }
 
+function parseAiBotPrompt(value: string) {
+  const match = /^@bot(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
+  if (!match) {
+    return null
+  }
+
+  return match[1].trim()
+}
+
+function isAiQuotaPrompt(value: string) {
+  return /(余额|额度|quota|balance)/i.test(value.trim())
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -132,10 +146,12 @@ function App() {
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
+  const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
   const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
   const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
@@ -184,10 +200,37 @@ function App() {
     startPendingTransfers,
     sendText,
     sendRoomText,
+    askCloudflareAi,
+    getCloudflareAiQuota,
     sendRoomFiles,
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
+
+  useEffect(() => {
+    if (!self?.historyAuthToken) {
+      setAiQuotaStatus(null)
+      return
+    }
+
+    let isCancelled = false
+
+    void getCloudflareAiQuota()
+      .then((status) => {
+        if (!isCancelled) {
+          setAiQuotaStatus(status)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setAiQuotaStatus(null)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [getCloudflareAiQuota, self?.historyAuthToken])
 
   useEffect(() => {
     attachmentDraftsRef.current = attachmentDrafts
@@ -790,6 +833,9 @@ function App() {
     isChatDesktopTheme &&
     Boolean(selectedRoom?.isPublic) &&
     (hasChatTextDraft || attachmentDrafts.length > 0)
+  const aiQuotaLabel = aiQuotaStatus
+    ? `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
+    : 'AI 额度加载中'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const runnableTransferIds = visibleTransferItemsForConversation
     .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
@@ -1114,8 +1160,14 @@ function App() {
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
     const hasImageContent = hasRichTextImage(rawText)
     const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
+    const aiBotPrompt = parseAiBotPrompt(normalizedText)
     if (normalizedText.length === 0 && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
+      return
+    }
+
+    if (aiBotPrompt !== null && aiBotPrompt.length === 0) {
+      setLocalError('请输入要问 @bot 的问题。')
       return
     }
 
@@ -1204,6 +1256,37 @@ function App() {
       }
       clearAttachments()
       setLocalError(null)
+
+      if (aiBotPrompt !== null) {
+        setIsAiGenerating(true)
+        try {
+          const isQuotaPrompt = isAiQuotaPrompt(aiBotPrompt)
+          const botRoomId =
+            isChatDesktopTheme
+              ? effectiveSelectedRoomId
+              : selectedUiSession?.roomId ?? null
+
+          if (!botRoomId) {
+            throw new Error('当前对话尚未建立房间，无法同步 bot 回复。')
+          }
+
+          const answer = await askCloudflareAi(aiBotPrompt, {
+            roomId: botRoomId,
+            replyToName: self?.deviceName ?? localIdentity.deviceName,
+            kind: isQuotaPrompt ? 'quota' : 'chat',
+            historyId: crypto.randomUUID(),
+            createdAt: new Date().toISOString(),
+          })
+
+          if (answer.quota) {
+            setAiQuotaStatus(answer.quota)
+          }
+        } catch (error) {
+          setLocalError(error instanceof Error ? error.message : 'Cloudflare AI 请求失败。')
+        } finally {
+          setIsAiGenerating(false)
+        }
+      }
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文本发送失败。')
     }
@@ -1417,6 +1500,8 @@ function App() {
           !hasChatDraftContent ||
           (selectedRoomConnectedTargets.length === 0 && !canSendRoomTextWithoutConnection && !canSendPublicRoomContent)
         }
+        isAiGenerating={isAiGenerating}
+        aiQuotaLabel={aiQuotaLabel}
         enterToSend={preferences.enterToSend}
         attachments={attachmentDrafts}
         isSharedPanelOpen={isSharedPanelOpen}

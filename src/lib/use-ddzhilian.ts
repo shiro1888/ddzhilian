@@ -1,5 +1,7 @@
-import { startTransition, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type {
+  AiChatResponse,
+  AiQuotaStatus,
   ChannelMessage,
   ClientEvent,
   ConnectedTarget,
@@ -70,6 +72,13 @@ function buildHistoryAuthHeaders(self: DirectorySnapshotPayload['self']) {
   return {
     authorization: `Bearer ${self.historyAuthToken}`,
   }
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallback
 }
 
 type StoredIdentity = {
@@ -2223,6 +2232,88 @@ export function useDdzhilian() {
     }
   }
 
+  const askCloudflareAi = async (
+    prompt: string,
+    options?: {
+      roomId?: string
+      replyToName?: string
+      kind?: 'chat' | 'quota'
+      historyId?: string
+      createdAt?: string
+    },
+  ): Promise<AiChatResponse> => {
+    const activeSelf = selfRef.current
+    const normalizedPrompt = prompt.trim()
+
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 请求授权。')
+    }
+
+    if (!normalizedPrompt) {
+      throw new Error('请输入要交给 AI 的内容。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+      method: 'POST',
+      headers: {
+        ...buildHistoryAuthHeaders(activeSelf),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: normalizedPrompt,
+        roomId: options?.roomId,
+        replyToName: options?.replyToName,
+        kind: options?.kind,
+        historyId: options?.historyId,
+        createdAt: options?.createdAt,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(
+          response,
+          `Cloudflare AI request failed with status ${response.status.toString()}`,
+        ),
+      )
+    }
+
+    const payload = await response.json() as Partial<AiChatResponse>
+    if (typeof payload.response !== 'string' || !payload.response.trim()) {
+      throw new Error('Cloudflare AI 返回了空结果。')
+    }
+
+    return {
+      response: payload.response,
+      model: typeof payload.model === 'string' ? payload.model : '',
+      quota: payload.quota,
+      historyText: payload.historyText,
+    }
+  }
+
+  const getCloudflareAiQuota = useCallback(async (): Promise<AiQuotaStatus> => {
+    const activeSelf = selfRef.current
+
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 请求授权。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/quota`, {
+      headers: buildHistoryAuthHeaders(activeSelf),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(
+          response,
+          `Cloudflare AI quota request failed with status ${response.status.toString()}`,
+        ),
+      )
+    }
+
+    return response.json() as Promise<AiQuotaStatus>
+  }, [])
+
   const uploadRoomFileChunk = async (input: {
     roomId: string
     historyId: string
@@ -2539,6 +2630,8 @@ export function useDdzhilian() {
     startPendingTransfers,
     sendText,
     sendRoomText,
+    askCloudflareAi,
+    getCloudflareAiQuota,
     sendRoomFiles,
     sendFiles,
     stateToUiStatus,

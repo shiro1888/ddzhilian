@@ -334,6 +334,22 @@ export type TextRecord = {
   createdAt: string
 }
 
+export type AiChatResponse = {
+  response: string
+  model: string
+  quota?: AiQuotaStatus
+  historyText?: HistoryTextSummary
+}
+
+export type AiQuotaStatus = {
+  date: string
+  usedNeurons: number
+  dailyNeuronBudget: number
+  remainingNeurons: number
+  freeOnly?: boolean
+  model?: string
+}
+
 export type ReceivedFile = {
   id: string
   historyId?: string

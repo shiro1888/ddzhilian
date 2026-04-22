@@ -27,6 +27,17 @@ export interface ServerConfig {
       credential?: string;
     }>;
   };
+  cloudflareAi: {
+    accountId?: string;
+    apiToken?: string;
+    model: string;
+    maxPromptChars: number;
+    maxOutputTokens: number;
+    freeOnly: boolean;
+    dailyNeuronBudget: number;
+    estimatedInputNeuronsPerMillionTokens: number;
+    estimatedOutputNeuronsPerMillionTokens: number;
+  };
 }
 
 function readNumber(name: string, fallback: number) {
@@ -122,6 +133,25 @@ export function loadConfig(): ServerConfig {
             },
           ]
         : defaultIceServers,
+    },
+    cloudflareAi: {
+      accountId: process.env.CLOUDFLARE_AI_ACCOUNT_ID?.trim() || undefined,
+      apiToken: process.env.CLOUDFLARE_AI_API_TOKEN?.trim() || undefined,
+      model:
+        process.env.CLOUDFLARE_AI_MODEL?.trim() ||
+        '@cf/qwen/qwen3-30b-a3b-fp8',
+      maxPromptChars: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_PROMPT_CHARS', 8000)),
+      maxOutputTokens: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_OUTPUT_TOKENS', 1000)),
+      freeOnly: process.env.CLOUDFLARE_AI_FREE_ONLY !== 'false',
+      dailyNeuronBudget: Math.max(0, readNumber('CLOUDFLARE_AI_DAILY_NEURON_BUDGET', 10_000)),
+      estimatedInputNeuronsPerMillionTokens: Math.max(
+        1,
+        readNumber('CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS', 4625),
+      ),
+      estimatedOutputNeuronsPerMillionTokens: Math.max(
+        1,
+        readNumber('CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS', 30475),
+      ),
     },
   };
 }

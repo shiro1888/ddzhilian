@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer } from 'ws';
 
@@ -19,9 +21,37 @@ import { HistoryRegistry } from './registry/history-registry.js';
 import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
 import { UiStateRegistry } from './registry/ui-state-registry.js';
+import {
+  type AiQuotaReservation,
+  CloudflareAiQuota,
+} from './utils/cloudflare-ai-quota.js';
 import { buildNetworkContext } from './utils/network.js';
 
 type ErrorPayload = Extract<ServerEvent, { type: 'error' }>['payload'];
+type CloudflareAiRunResponse = {
+  result?: unknown;
+  success?: boolean;
+  errors?: Array<{
+    message?: string;
+  }>;
+};
+type CloudflareAiResultObject = {
+  response?: unknown;
+  text?: unknown;
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+  }>;
+};
+type AiChatRequestPayload = {
+  prompt?: unknown;
+  roomId?: unknown;
+  historyId?: unknown;
+  createdAt?: unknown;
+  replyToName?: unknown;
+  kind?: unknown;
+};
 type SocketWithAddress = WebSocket & {
   clientAddress?: string;
   _socket?: {
@@ -36,6 +66,18 @@ const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
 const uiState = new UiStateRegistry();
 const pendingRoomExitTimers = new Map<string, NodeJS.Timeout>();
+const cloudflareAiQuota = new CloudflareAiQuota(
+  fileURLToPath(new URL('../data/cloudflare-ai-quota.json', import.meta.url)),
+);
+const aiRequestMaxBytes = 64 * 1024;
+const aiBotDeviceId = 'bot_cloudflare_ai';
+const aiBotDeviceName = 'bot';
+
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super('Request body is too large.');
+  }
+}
 
 function isLoopbackOrigin(origin: string) {
   try {
@@ -88,11 +130,20 @@ function setCorsHeaders(
 
 async function readRequestBuffer(
   request: AsyncIterable<Buffer | string>,
+  options?: { maxBytes?: number },
 ) {
   const chunks: Buffer[] = [];
+  let receivedBytes = 0;
 
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    receivedBytes += buffer.byteLength;
+
+    if (options?.maxBytes && receivedBytes > options.maxBytes) {
+      throw new RequestBodyTooLargeError();
+    }
+
+    chunks.push(buffer);
   }
 
   return Buffer.concat(chunks);
@@ -252,6 +303,406 @@ function authenticateHistoryRequest(request: {
   };
 }
 
+function extractCloudflareAiText(payload: CloudflareAiRunResponse) {
+  if (typeof payload.result === 'string') {
+    return payload.result.trim();
+  }
+
+  if (!payload.result || typeof payload.result !== 'object') {
+    return '';
+  }
+
+  const result = payload.result as CloudflareAiResultObject;
+  const response = result.response;
+  if (typeof response === 'string') {
+    return response.trim();
+  }
+
+  const text = result.text;
+  if (typeof text === 'string') {
+    return text.trim();
+  }
+
+  const choiceContent = result.choices?.[0]?.message?.content;
+  if (typeof choiceContent === 'string') {
+    return choiceContent.trim();
+  }
+
+  return '';
+}
+
+function formatCloudflareAiError(payload: CloudflareAiRunResponse) {
+  return payload.errors
+    ?.map((error) => error.message?.trim())
+    .filter((message): message is string => Boolean(message))
+    .join('; ');
+}
+
+function isCloudflareAiQuotaError(
+  statusCode: number,
+  payload: CloudflareAiRunResponse | null,
+) {
+  const message = payload ? formatCloudflareAiError(payload)?.toLowerCase() : '';
+  return (
+    statusCode === 429 ||
+    Boolean(message && /\b(quota|allocation|limit|exceed|neuron|billing)\b/.test(message))
+  );
+}
+
+function estimatePromptTokens(prompt: string) {
+  // Char count is a conservative tokenizer-free estimate for mixed Chinese/English prompts.
+  return Math.max(1, prompt.length);
+}
+
+function estimateCloudflareAiNeurons(prompt: string) {
+  const {
+    maxOutputTokens,
+    estimatedInputNeuronsPerMillionTokens,
+    estimatedOutputNeuronsPerMillionTokens,
+  } = config.cloudflareAi;
+  const inputNeurons =
+    (estimatePromptTokens(prompt) * estimatedInputNeuronsPerMillionTokens) /
+    1_000_000;
+  const outputNeurons =
+    (maxOutputTokens * estimatedOutputNeuronsPerMillionTokens) / 1_000_000;
+
+  return Math.max(1, Math.ceil(inputNeurons + outputNeurons));
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function plainTextToRichText(value: string) {
+  return value
+    .trim()
+    .split(/\n{2,}/)
+    .map((paragraph) =>
+      paragraph
+        .split(/\r?\n/)
+        .map((line) => escapeHtml(line))
+        .join('<br />'),
+    )
+    .map((paragraph) => `<p>${paragraph || '<br />'}</p>`)
+    .join('');
+}
+
+function buildAiBotReplyText(senderName: string, response: string) {
+  const lines = response.trim().split(/\r?\n/);
+  const [firstLine = '', ...remainingLines] = lines;
+  const mention = `<strong>@${escapeHtml(senderName)}</strong>`;
+  const firstParagraph = `<p>${mention}${firstLine ? ` ${escapeHtml(firstLine)}` : ''}</p>`;
+  const remainingText = remainingLines.join('\n').trim();
+
+  return remainingText
+    ? `${firstParagraph}${plainTextToRichText(remainingText)}`
+    : firstParagraph;
+}
+
+function formatAiQuotaStatus(input: {
+  remainingNeurons: number;
+  dailyNeuronBudget: number;
+  usedNeurons: number;
+}) {
+  return `今日 AI 免费额度剩余 ${input.remainingNeurons.toLocaleString()} / ${input.dailyNeuronBudget.toLocaleString()} Neurons，已使用 ${input.usedNeurons.toLocaleString()}。`;
+}
+
+function normalizeBotTextValue(value: unknown, fallback: string) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized.slice(0, 80) || fallback;
+}
+
+function normalizeOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeCreatedAt(value: unknown) {
+  if (typeof value !== 'string') {
+    return new Date().toISOString();
+  }
+
+  const parsedTime = Date.parse(value);
+  return Number.isFinite(parsedTime) ? new Date(parsedTime).toISOString() : new Date().toISOString();
+}
+
+function writeAiQuotaExhausted(response: ServerResponse) {
+  writeJson(response, 429, {
+    error: 'Cloudflare AI 免费额度已用尽，已停止请求以避免产生费用。',
+  });
+}
+
+function handleAiQuotaRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const {
+    model,
+    freeOnly,
+    dailyNeuronBudget,
+  } = config.cloudflareAi;
+
+  writeJson(response, 200, {
+    ...cloudflareAiQuota.getStatus(dailyNeuronBudget),
+    freeOnly,
+    model,
+  });
+}
+
+function saveAiBotHistoryText(input: {
+  requester: ConnectedDevice;
+  roomId: string;
+  historyId?: string;
+  createdAt?: string;
+  replyToName: string;
+  responseText: string;
+}) {
+  const roomAccess = authorizeRoomMember(input.requester, input.roomId);
+  if (!roomAccess.ok) {
+    return {
+      ok: false as const,
+      statusCode: roomAccess.statusCode,
+      message: roomAccess.message,
+    };
+  }
+
+  const record = history.saveText({
+    historyId: input.historyId ?? randomUUID(),
+    roomId: input.roomId,
+    isPublic: roomAccess.room.isPublic,
+    sourceDeviceId: aiBotDeviceId,
+    sourceDeviceName: aiBotDeviceName,
+    text: buildAiBotReplyText(input.replyToName, input.responseText),
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  });
+
+  broadcastSnapshots();
+
+  return {
+    ok: true as const,
+    text: history.toTextSummary(record),
+  };
+}
+
+async function handleAiChatRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const {
+    accountId,
+    apiToken,
+    model,
+    maxPromptChars,
+    maxOutputTokens,
+    freeOnly,
+    dailyNeuronBudget,
+  } = config.cloudflareAi;
+  if (!accountId || !apiToken) {
+    writeJson(response, 503, {
+      error: 'Cloudflare AI is not configured on this server.',
+    });
+    return;
+  }
+
+  let payload: AiChatRequestPayload;
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: aiRequestMaxBytes });
+    payload = JSON.parse(buffer.toString('utf8')) as AiChatRequestPayload;
+  } catch (error) {
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error:
+        error instanceof RequestBodyTooLargeError
+          ? 'AI request body is too large.'
+          : 'Invalid AI request JSON.',
+    });
+    return;
+  }
+
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+  const roomId = normalizeOptionalString(payload.roomId);
+  const replyToName = normalizeBotTextValue(payload.replyToName, authResult.device.deviceName);
+  const historyId = normalizeOptionalString(payload.historyId) ?? randomUUID();
+  const createdAt = normalizeCreatedAt(payload.createdAt);
+  const kind = payload.kind === 'quota' ? 'quota' : 'chat';
+
+  if (roomId) {
+    const roomAccess = authorizeRoomMember(authResult.device, roomId);
+    if (!roomAccess.ok) {
+      writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+      return;
+    }
+  }
+
+  if (kind === 'quota') {
+    const quota = cloudflareAiQuota.getStatus(dailyNeuronBudget);
+    const quotaText = formatAiQuotaStatus(quota);
+    const saved = roomId
+      ? saveAiBotHistoryText({
+          requester: authResult.device,
+          roomId,
+          historyId,
+          createdAt,
+          replyToName,
+          responseText: quotaText,
+        })
+      : undefined;
+
+    if (saved && !saved.ok) {
+      writeJson(response, saved.statusCode, { error: saved.message });
+      return;
+    }
+
+    writeJson(response, 200, {
+      response: quotaText,
+      model,
+      quota: {
+        ...quota,
+        freeOnly,
+        model,
+      },
+      historyText: saved?.ok ? saved.text : undefined,
+    });
+    return;
+  }
+
+  if (!prompt) {
+    writeJson(response, 400, { error: 'Missing prompt.' });
+    return;
+  }
+
+  if (prompt.length > maxPromptChars) {
+    writeJson(response, 413, {
+      error: `Prompt exceeds the ${maxPromptChars.toString()} character limit.`,
+    });
+    return;
+  }
+
+  let quotaReservation: AiQuotaReservation | undefined;
+  if (freeOnly) {
+    const quota = cloudflareAiQuota.reserve(
+      estimateCloudflareAiNeurons(prompt),
+      dailyNeuronBudget,
+    );
+
+    if (!quota.ok) {
+      writeAiQuotaExhausted(response);
+      return;
+    }
+
+    quotaReservation = quota.reservation;
+  }
+
+  const endpoint = new URL(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
+  );
+
+  try {
+    const aiResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant. Keep answers concise and useful.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: maxOutputTokens,
+      }),
+    });
+
+    const aiPayload = await aiResponse.json().catch(() => null) as
+      | CloudflareAiRunResponse
+      | null;
+
+    if (!aiResponse.ok || !aiPayload || aiPayload.success === false) {
+      console.error('Cloudflare AI request failed', {
+        status: aiResponse.status,
+        model,
+        message: aiPayload ? formatCloudflareAiError(aiPayload) : undefined,
+      });
+      if (quotaReservation) {
+        if (isCloudflareAiQuotaError(aiResponse.status, aiPayload)) {
+          cloudflareAiQuota.markExhausted(dailyNeuronBudget);
+          writeAiQuotaExhausted(response);
+          return;
+        }
+
+        cloudflareAiQuota.release(quotaReservation);
+      }
+
+      writeJson(response, 502, { error: 'Cloudflare AI request failed.' });
+      return;
+    }
+
+    const answer = extractCloudflareAiText(aiPayload);
+    if (!answer) {
+      writeJson(response, 502, { error: 'Cloudflare AI returned an empty response.' });
+      return;
+    }
+
+    const saved = roomId
+      ? saveAiBotHistoryText({
+          requester: authResult.device,
+          roomId,
+          historyId,
+          createdAt,
+          replyToName,
+          responseText: answer,
+        })
+      : undefined;
+
+    if (saved && !saved.ok) {
+      writeJson(response, saved.statusCode, { error: saved.message });
+      return;
+    }
+
+    writeJson(response, 200, {
+      response: answer,
+      model,
+      quota: cloudflareAiQuota.getStatus(dailyNeuronBudget),
+      historyText: saved?.ok ? saved.text : undefined,
+    });
+  } catch (error) {
+    if (quotaReservation) {
+      cloudflareAiQuota.release(quotaReservation);
+    }
+
+    console.error('Cloudflare AI request errored', {
+      model,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 502, { error: 'Cloudflare AI request failed.' });
+  }
+}
+
 function authorizeRoomMember(
   device: ConnectedDevice,
   roomId: string,
@@ -342,6 +793,16 @@ const httpServer = createServer((request, response) => {
   }
 
   const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+
+  if (url.pathname === '/api/ai/quota' && request.method === 'GET') {
+    handleAiQuotaRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/ai/chat' && request.method === 'POST') {
+    void handleAiChatRequest(request, response);
+    return;
+  }
 
   if (url.pathname === '/api/history/upload' && request.method === 'POST') {
     const roomId = url.searchParams.get('roomId')?.trim();
