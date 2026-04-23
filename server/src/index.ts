@@ -41,6 +41,8 @@ type CloudflareAiResultObject = {
   choices?: Array<{
     message?: {
       content?: unknown;
+      reasoning_content?: unknown;
+      reasoning?: unknown;
     };
   }>;
 };
@@ -332,6 +334,16 @@ function extractCloudflareAiText(payload: CloudflareAiRunResponse) {
   const choiceContent = result.choices?.[0]?.message?.content;
   if (typeof choiceContent === 'string') {
     return choiceContent.trim();
+  }
+
+  const choiceReasoningContent = result.choices?.[0]?.message?.reasoning_content;
+  if (typeof choiceReasoningContent === 'string') {
+    return choiceReasoningContent.trim();
+  }
+
+  const choiceReasoning = result.choices?.[0]?.message?.reasoning;
+  if (typeof choiceReasoning === 'string') {
+    return choiceReasoning.trim();
   }
 
   return '';

@@ -141,7 +141,7 @@ export function loadConfig(): ServerConfig {
       apiToken: process.env.CLOUDFLARE_AI_API_TOKEN?.trim() || undefined,
       model:
         process.env.CLOUDFLARE_AI_MODEL?.trim() ||
-        '@cf/qwen/qwen3-30b-a3b-fp8',
+        '@cf/zai-org/glm-4.7-flash',
       maxPromptChars: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_PROMPT_CHARS', 8000)),
       maxOutputTokens: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_OUTPUT_TOKENS', 1000)),
       freeOnly: process.env.CLOUDFLARE_AI_FREE_ONLY !== 'false',

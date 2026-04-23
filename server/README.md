@@ -65,7 +65,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
 - `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
 - `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
-- `CLOUDFLARE_AI_MODEL`: Workers AI model name, default `@cf/qwen/qwen3-30b-a3b-fp8`
+- `CLOUDFLARE_AI_MODEL`: Workers AI model name, default `@cf/zai-org/glm-4.7-flash`
 - `CLOUDFLARE_AI_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/chat`, default `8000`
 - `CLOUDFLARE_AI_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
 - `CLOUDFLARE_AI_FREE_ONLY`: when not set to `false`, the server stops AI requests at the local free-tier budget
