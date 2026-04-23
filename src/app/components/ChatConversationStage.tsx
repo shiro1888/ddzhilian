@@ -374,10 +374,40 @@ export function ChatConversationStage({
   const colorPaletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const pendingBotMentionCaretRef = useRef(false)
   const activeSharedContentTab: SharedPanelTab = sharedContentTab === 'chat' ? 'media' : sharedContentTab
 
   const setInsertPanelInputElement = (element: HTMLInputElement | null) => {
     insertPanelInputRef.current = element
+  }
+
+  function placeCaretAfterLastBotMention() {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    const mention = editor?.querySelector<HTMLElement>('.dd-chatbox__mention[data-mention="bot"]:last-of-type')
+
+    if (!editor || !selection || !mention) {
+      return
+    }
+
+    let caretNode = mention.nextSibling
+    if (!caretNode || caretNode.nodeType !== Node.TEXT_NODE) {
+      caretNode = document.createTextNode(' ')
+      mention.after(caretNode)
+    }
+
+    const textNode = caretNode as Text
+    if (!textNode.data.includes(' ')) {
+      textNode.data = `${textNode.data} `
+    }
+
+    editor.focus()
+    const range = document.createRange()
+    range.setStart(textNode, textNode.data.length)
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
   }
 
   const latestConversationEntryId =
@@ -391,6 +421,13 @@ export function ChatConversationStage({
     const nextHtml = chatDraft || ''
     if (editorRef.current.innerHTML !== nextHtml) {
       editorRef.current.innerHTML = nextHtml
+    }
+
+    if (pendingBotMentionCaretRef.current) {
+      pendingBotMentionCaretRef.current = false
+      window.requestAnimationFrame(() => {
+        placeCaretAfterLastBotMention()
+      })
     }
   }, [chatDraft])
 
@@ -1145,7 +1182,7 @@ export function ChatConversationStage({
     mention.dataset.mention = 'bot'
     mention.textContent = '@bot'
 
-    const caretAnchor = document.createTextNode('\u200B ')
+    const caretAnchor = document.createTextNode(' ')
     const insertionSelection = window.getSelection()
     const range = insertionSelection?.rangeCount ? insertionSelection.getRangeAt(0) : document.createRange()
 
@@ -1161,7 +1198,11 @@ export function ChatConversationStage({
     insertionSelection.removeAllRanges()
     insertionSelection.addRange(range)
     savedRangeRef.current = range.cloneRange()
+    pendingBotMentionCaretRef.current = true
     syncDraftFromEditor()
+    window.requestAnimationFrame(() => {
+      placeCaretAfterLastBotMention()
+    })
   }
 
   const handleBotMentionSelect = () => {
