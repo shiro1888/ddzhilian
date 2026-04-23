@@ -42,6 +42,7 @@ type MessageContextMenuState = {
 type QuoteDraftState = {
   senderName: string
   text: string
+  html: string
 }
 
 const quickEmojis = [
@@ -95,6 +96,40 @@ function escapeInlineHtml(value: string) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
+}
+
+function getRichTextPreviewText(value: string) {
+  const text = extractPlainTextFromRichText(value)
+  if (text) {
+    return text
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    const parser = new DOMParser()
+    const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+    const image = documentFragment.body.querySelector('img[src]')
+    if (image) {
+      return image.getAttribute('alt')?.trim() || '图片'
+    }
+  }
+
+  return ''
+}
+
+function getSingleRichTextImageSource(value: string) {
+  if (typeof DOMParser === 'undefined') {
+    return null
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const images = Array.from(documentFragment.body.querySelectorAll('img[src]'))
+  const text = extractPlainTextFromRichText(value)
+  if (images.length !== 1 || text) {
+    return null
+  }
+
+  return images[0].getAttribute('src')?.trim() || null
 }
 
 function renderPlainTextForEditor(value: string) {
@@ -887,6 +922,45 @@ export function ChatConversationStage({
     textarea.remove()
   }
 
+  const copyRichTextToClipboard = async (value: string) => {
+    const sanitizedHtml = sanitizeRichTextHtml(value)
+    const plainText = getRichTextPreviewText(value)
+    const singleImageSource = getSingleRichTextImageSource(value)
+
+    if (singleImageSource && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+      try {
+        const response = await fetch(singleImageSource)
+        const imageBlob = await response.blob()
+        if (imageBlob.type.startsWith('image/')) {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              [imageBlob.type]: imageBlob,
+            }),
+          ])
+          return
+        }
+      } catch {
+        // Fall through to HTML/plain-text clipboard formats when image blobs are unavailable.
+      }
+    }
+
+    if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && sanitizedHtml) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([sanitizedHtml], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' }),
+          }),
+        ])
+        return
+      } catch {
+        // Fall back to text-only clipboard behavior below.
+      }
+    }
+
+    await copyTextToClipboard(plainText || sanitizedHtml || value)
+  }
+
   const markCodeCopyButton = (button: HTMLButtonElement) => {
     button.classList.add('is-copied')
     button.textContent = '已复制'
@@ -917,12 +991,11 @@ export function ChatConversationStage({
     event.stopPropagation()
 
     const button = event.currentTarget
-    const copyText = extractPlainTextFromRichText(value) || value
-    if (!copyText) {
+    if (!value) {
       return
     }
 
-    void copyTextToClipboard(copyText).then(() => markMessageCopyButton(button))
+    void copyRichTextToClipboard(value).then(() => markMessageCopyButton(button))
   }
 
   const openMessageContextMenu = (
@@ -951,9 +1024,8 @@ export function ChatConversationStage({
       return
     }
 
-    const copyText = extractPlainTextFromRichText(messageContextMenu.text) || messageContextMenu.text
-    if (copyText) {
-      void copyTextToClipboard(copyText)
+    if (messageContextMenu.text) {
+      void copyRichTextToClipboard(messageContextMenu.text)
     }
     setMessageContextMenu(null)
   }
@@ -963,11 +1035,13 @@ export function ChatConversationStage({
       return
     }
 
-    const quoteText = extractPlainTextFromRichText(messageContextMenu.text) || messageContextMenu.text
+    const quoteText = getRichTextPreviewText(messageContextMenu.text)
+    const quoteHtml = sanitizeRichTextHtml(messageContextMenu.text)
     if (quoteText) {
       setQuoteDraft({
         senderName: messageContextMenu.senderName,
         text: quoteText,
+        html: quoteHtml,
       })
       editorRef.current?.focus()
     }
@@ -1123,7 +1197,7 @@ export function ChatConversationStage({
       ? [
           '<blockquote class="dd-chatbox__quote">',
           `<strong>${escapeInlineHtml(quoteDraft.senderName)}：</strong>`,
-          escapeInlineHtml(quoteDraft.text),
+          quoteDraft.html,
           '</blockquote>',
         ].join('')
       : undefined

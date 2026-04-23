@@ -2,94 +2,57 @@
 
 [中文说明](README.zh-CN.md)
 
-ddzhilian is a desktop-style cross-device transfer app for quickly sending files and long text between devices. The current repository includes a React frontend prototype and a signaling server for device discovery, pairing, session management, and WebRTC signaling.
+ddzhilian is a lightweight cross-device transfer and chat workspace. It brings device discovery, short-code pairing, file transfer, long-text sharing, public rooms, and history management into a desktop-style chat interface for quickly moving content between computers, phones, and browser clients.
 
-## What It Does
+This repository contains:
 
-- Discover nearby or eligible devices from the same account
-- Pair devices with a short transfer code
-- Send files through transfer sessions with progress states
-- Exchange long text or chat-style messages between devices
-- View active and historical sessions in a chat-inspired desktop UI
-- Use a single chat-desktop workspace tuned for device-to-device messaging and transfer
+- a Next.js, React, and TypeScript frontend
+- a Node.js, TypeScript, and `ws` signaling backend
+- pairing, session, and relay coordination for WebRTC data channels
+- baseline documentation and configuration for static hosting, nginx proxying, and self-hosted deployment
+
+## Core Capabilities
+
+- Device discovery: show eligible devices from the same account or local network context.
+- Short-code pairing: connect devices quickly with a short transfer code.
+- Chat workspace: use a desktop-chat interface for messages, files, and session state.
+- File transfer: support drag-and-drop selection, progress state, receive queues, and completed history.
+- Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
+- Public rooms: support public room entry links and room-scoped history.
+- History management: persist text history and clean temporary file history by retention and size limits.
+- Realtime signaling: coordinate presence, pairing, and WebRTC setup through WebSocket signaling.
+
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js static export, React 19, TypeScript, react-router-dom |
+| Backend | Node.js, TypeScript, ws |
+| Realtime | WebSocket signaling + WebRTC data channels |
+| Checks | ESLint, TypeScript, Next.js build |
+| Deployment | Static frontend + Node.js signaling service + nginx reverse proxy |
 
 ## Repository Layout
 
 ```text
 .
-|-- src/                   # React frontend
+|-- src/                   # Frontend source
+|-- app/                   # Next.js app entry and static export entry
 |-- public/                # Static assets
 |-- server/                # WebSocket signaling backend
-|-- DESIGN.md              # Product and visual system notes
-|-- DESIGN.zh-CN.md        # Chinese design document
-|-- package.json           # Frontend scripts
-`-- server/package.json    # Backend scripts
+|-- deploy/                # Self-hosted deployment configuration
+|-- scripts/               # Build, compression, and preview scripts
+|-- DESIGN.md              # English design notes
+|-- DESIGN.zh-CN.md        # Chinese design notes
+|-- package.json           # Frontend scripts and dependencies
+`-- server/package.json    # Backend scripts and dependencies
 ```
-
-## Tech Stack
-
-- Frontend: Next.js static export, React 19, TypeScript
-- Backend: Node.js, TypeScript, `ws`
-- Transport model: WebSocket signaling plus WebRTC-oriented session flow
-
-## Frontend Features
-
-- Device list with connection status and quick actions
-- File sending flow with drag-and-drop support
-- Receive queue and completed transfer history
-- Long text and chat conversation views
-- Session search and session detail panels
-- Single chat-desktop interface with routed workspace views
-- Browser-based route navigation for `connect`, `send`, `receive`, `text`, and `sessions`
-- Component-split app shell with isolated stage views and content panels
-- Floating emoji picker with direct insertion into the chat composer
-- Rich chat composer toolbar inspired by classroom editors
-- Text formatting, color palette, table insertion, TEX/code block insertion, and link-style attachment insertion
-- Chat messages render common Markdown syntax, including headings, emphasis, blockquotes, lists, links, images, inline code, and fenced code blocks
-- Google Fonts based UI typography
-
-### Markdown Message Rendering
-
-Chat messages detect common Markdown syntax in plain-text content and render it as controlled rich HTML. The supported subset includes:
-
-- `#`, `##`, and `###` headings
-- `**bold**`, `*italic*`, and `~~strikethrough~~`
-- `>` blockquotes
-- `-` / `*` / `+` unordered lists and `1.` / `1)` ordered lists
-- `` `inline code` `` and triple-backtick fenced code blocks
-- `[links](https://example.com)` and `![images](https://example.com/image.png)`
-
-Messages that already contain HTML or pasted rich text still use the existing allowlist sanitizer, so rich-text paste behavior, code-paste handling, and the safety boundary remain intact.
-
-## Backend Responsibilities
-
-The signaling server in [`server/README.md`](server/README.md) handles:
-
-- device presence and reconnect identity
-- short codes and pair tokens
-- same-account auto-connect
-- LAN-based peer discovery heuristics
-- session lifecycle coordination
-- signaling relay for peer-to-peer transfer
-
-The server does not need to carry file payloads permanently. Its main role is to help devices find each other and establish a transfer session.
-
-### History File Cleanup
-
-Public rooms and regular rooms use the same temporary history-file cleanup rules:
-
-- Files are stored under `server/data/history/files/<roomId>/...`, with metadata indexed in `server/data/history/index.json`.
-- `HISTORY_RETENTION_MS` controls the file-history retention window. The default is `21600000` ms, or 6 hours.
-- `HISTORY_MAX_BYTES` controls the total historical file storage per room. The default is 10 GiB.
-- When files exceed the retention window, or when a room exceeds the storage cap, the server removes the oldest files first and updates the index.
-- Cleanup runs on server startup, when listing or saving history files, during uploads, and during regular server maintenance.
-- Text history is not expired by `HISTORY_RETENTION_MS`; recalled text messages are removed through the history-text delete endpoint.
 
 ## Getting Started
 
 ### Requirements
 
-- Node.js 20+ recommended
+- Node.js 20 or newer
 - npm
 
 ### Install Dependencies
@@ -100,7 +63,7 @@ cd server
 npm install
 ```
 
-### Run The Frontend
+### Start The Frontend
 
 From the repository root:
 
@@ -108,11 +71,22 @@ From the repository root:
 npm run dev
 ```
 
-This starts the Next.js frontend, typically on `http://localhost:3000`.
+The default local URL is usually `http://localhost:3000`.
 
-### Frontend Routes
+### Start The Backend
 
-The frontend uses `react-router-dom` with browser history:
+From `server/`:
+
+```bash
+cd server
+npm run dev
+```
+
+The signaling server listens on `http://0.0.0.0:8787` by default and exposes WebSocket signaling at `/ws`.
+
+## Frontend Routes
+
+The frontend uses browser history routes. Main routes include:
 
 - `/connect`
 - `/send`
@@ -120,47 +94,66 @@ The frontend uses `react-router-dom` with browser history:
 - `/text`
 - `/sessions`
 
-The app now ships with only the chat-desktop experience. File send and receive flows are folded into the conversation workspace and redirect to `/text`.
+The current product shape centers on the chat-desktop experience. File sending and receiving flows fold back into the conversation workspace.
 
-### Run The Backend
+## Messages And Markdown
 
-From [`server`](server):
+Chat messages support plain text, pasted rich text, and common Markdown rendering.
 
-```bash
-npm run dev
-```
+Plain-text messages detect this Markdown subset:
 
-By default, the signaling server runs on `http://0.0.0.0:8787` and exposes a WebSocket endpoint at `/ws`.
+- `#`, `##`, and `###` headings
+- `**bold**`, `*italic*`, and `~~strikethrough~~`
+- `>` blockquotes
+- `-` / `*` / `+` unordered lists
+- `1.` / `1)` ordered lists
+- `` `inline code` ``
+- triple-backtick fenced code blocks
+- `[links](https://example.com)`
+- `![images](https://example.com/image.png)`
 
-## Build
+Messages that already contain HTML or externally pasted rich text continue through the existing allowlist sanitizer, preserving rich-text paste behavior, code-paste handling, and the security boundary.
+
+## Backend Responsibilities
+
+The backend coordinates connections instead of acting as permanent file storage. It handles:
+
+- device presence and reconnect identity
+- short codes and pair tokens
+- same-account auto-connect
+- LAN-based discovery heuristics
+- room and session lifecycles
+- WebRTC signaling relay
+- history text and history file metadata
+- Cloudflare AI proxy requests
+
+See [server/README.md](server/README.md) for backend protocol details.
+
+## History Cleanup
+
+Public rooms and regular rooms share the same temporary file-history rules:
+
+- Files are stored under `server/data/history/files/<roomId>/...`.
+- Metadata is stored in `server/data/history/index.json`.
+- `HISTORY_RETENTION_MS` controls file-history retention. The default is 6 hours.
+- `HISTORY_MAX_BYTES` controls the per-room historical file cap. The default is 10 GiB.
+- Cleanup runs during startup, history reads, history writes, uploads, and scheduled maintenance.
+- Text history is not automatically expired by `HISTORY_RETENTION_MS`; recalled text is removed through the history-text delete endpoint.
+
+## Environment Variables
 
 ### Frontend
 
-```bash
-npm run build
-```
+Optional variables:
+
+- `VITE_SIGNALING_WS_URL`: explicit WebSocket URL for the signaling server.
+- `VITE_SIGNALING_HTTP_URL`: explicit HTTP base URL for history or debug requests.
+
+When these are not set, local development uses `ws://localhost:8787/ws`, and production derives `/ws` from the current site origin.
 
 ### Backend
 
-```bash
-cd server
-npm run build
-```
-
-## Environment
-
-### Frontend
-
-Optional frontend environment variables:
-
-- `VITE_SIGNALING_WS_URL`: explicit WebSocket URL for the signaling server
-- `VITE_SIGNALING_HTTP_URL`: explicit HTTP base URL for history/debug requests
-
-If these are not provided, the frontend uses `ws://localhost:8787/ws` in local development and derives `/ws` from the current origin in production.
-
-Backend environment settings live in [`server/.env.example`](server/.env.example). Copy it to `.env` inside `server/` if you want to customize the runtime.
-
-Important variables include:
+The backend environment template lives in [server/.env.example](server/.env.example). Common variables include:
 
 - `PORT`
 - `HOST`
@@ -179,24 +172,48 @@ Important variables include:
 - `TURN_USERNAME`
 - `TURN_CREDENTIAL`
 
-## Deployment Notes
+Do not commit real secrets, tokens, or passwords to the repository.
 
-### Frontend Static Hosting
+## Build And Check
 
-The frontend is built by Next.js as a static export while preserving the existing browser-side workspace routes. Your web server should still rewrite unknown frontend routes back to `index.html` as a fallback.
+### Frontend
 
-Typical production setup:
+```bash
+npm run lint
+npm run build
+```
 
-1. Run `npm run build`
-2. Serve the generated `out/` directory
-3. Rewrite non-file frontend requests to `out/index.html`
-4. Expose `/ws` to the signaling backend, or set `VITE_SIGNALING_WS_URL` and `VITE_SIGNALING_HTTP_URL`
-
-Current production frontend is served from `https://ddzhilian.com`.
+`npm run build` runs the production Next.js build and outputs the static frontend.
 
 ### Backend
 
-For production, build and run the signaling server from the `server/` directory:
+```bash
+cd server
+npm run build
+```
+
+Backend output is written to `server/dist/`.
+
+## Deployment
+
+### Frontend Static Hosting
+
+Typical flow:
+
+1. Run `npm run build` from the repository root.
+2. Deploy the generated `out/` directory.
+3. Rewrite unknown frontend routes to `out/index.html`.
+4. Proxy `/ws` to the signaling backend, or set explicit frontend signaling URLs.
+
+For compressed frontend artifacts, run:
+
+```bash
+npm run build:compressed
+```
+
+### Self-Hosted Backend
+
+For production, build and run from `server/`:
 
 ```bash
 cd server
@@ -205,36 +222,39 @@ npm run build
 npm run start
 ```
 
-If the backend is behind `nginx`, make sure WebSocket upgrade headers and `X-Forwarded-For` are passed through.
+If the backend sits behind nginx, make sure WebSocket Upgrade headers and `X-Forwarded-For` are forwarded correctly.
 
-## Design Notes
-
-The product direction and UI behavior are documented in:
-
-- [`DESIGN.md`](DESIGN.md)
-- [`DESIGN.zh-CN.md`](DESIGN.zh-CN.md)
-
-These files define the desktop chat workspace layout, the restrained WeChat-like visual language, and the interaction expectations for transfer and messaging flows.
-
-## Current Status
-
-This repository is currently positioned as an MVP/prototype:
-
-- the frontend already demonstrates the main interaction model
-- the backend covers signaling and discovery responsibilities
-- WebRTC and transfer workflow integration are structured for continued iteration
+Self-hosted deployment configuration lives under `deploy/`.
 
 ## Scripts
 
 Root:
 
-- `npm run dev` - start the frontend development server
-- `npm run build` - type-check and export the Next.js frontend to `out/`
-- `npm run lint` - run ESLint
-- `npm run preview` - preview the built frontend
+- `npm run dev`: start the frontend development server.
+- `npm run build`: build the static frontend.
+- `npm run build:compressed`: build and compress frontend artifacts.
+- `npm run lint`: run ESLint.
+- `npm run preview`: preview the frontend build output.
 
-Server:
+`server/`:
 
-- `npm run dev` - start the backend in watch mode
-- `npm run build` - compile the backend
-- `npm run start` - run the compiled backend from `dist`
+- `npm run dev`: start the backend in watch mode.
+- `npm run build`: compile backend TypeScript.
+- `npm run start`: run `dist/index.js`.
+
+## Design Documents
+
+Product direction, layout, and interaction principles are documented in:
+
+- [DESIGN.md](DESIGN.md)
+- [DESIGN.zh-CN.md](DESIGN.zh-CN.md)
+
+These documents define the desktop chat workspace, restrained chat-style visual language, and interaction constraints for messaging and transfer flows.
+
+## Current Status
+
+The project is still under active iteration:
+
+- The frontend covers the main chat, text, file, and history interactions.
+- The backend covers signaling, discovery, room/session flow, and history APIs.
+- WebRTC quality, cross-network TURN behavior, and production deployment health still need to be verified against the actual server environment.
