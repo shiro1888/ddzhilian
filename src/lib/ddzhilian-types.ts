@@ -63,6 +63,8 @@ export type RoomSummary = {
   roomId: string
   members: RoomMemberSummary[]
   isPublic: boolean
+  historyTextCount: number
+  historyTextLatestAt?: string
   updatedAt: string
 }
 
@@ -333,6 +335,22 @@ export type TextRecord = {
   status?: 'sending' | 'failed'
   text: string
   createdAt: string
+}
+
+export type AiChatResponse = {
+  response: string
+  model: string
+  quota?: AiQuotaStatus
+  historyText?: HistoryTextSummary
+}
+
+export type AiQuotaStatus = {
+  date: string
+  usedNeurons: number
+  dailyNeuronBudget: number
+  remainingNeurons: number
+  freeOnly?: boolean
+  model?: string
 }
 
 export type ReceivedFile = {

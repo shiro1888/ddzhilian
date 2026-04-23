@@ -1,5 +1,7 @@
-import { startTransition, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type {
+  AiChatResponse,
+  AiQuotaStatus,
   ChannelMessage,
   ClientEvent,
   ConnectedTarget,
@@ -85,6 +87,34 @@ async function readResponseError(response: Response) {
   } catch {
     return response.statusText
   }
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallback
+}
+
+type HistoryDownloadProgress = {
+  receivedBytes: number
+  totalBytes: number
+  progress: number
+}
+
+function saveBlobAsDownload(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = fileName
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl)
+  }, 60_000)
 }
 
 type StoredIdentity = {
@@ -381,6 +411,8 @@ export function useDdzhilian() {
   const transferItemsRef = useRef<TransferItem[]>([])
   const textRecordsRef = useRef<TextRecord[]>([])
   const historyTextsRef = useRef<HistoryTextSummary[]>([])
+  const historyTextRefreshKeyRef = useRef('')
+  const historyTextRefreshRequestRef = useRef('')
   const incomingTransfersRef = useRef(new Map<string, IncomingTransferDraft>())
   const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>())
   const transferFilesRef = useRef(new Map<string, File>())
@@ -518,6 +550,74 @@ export function useDdzhilian() {
     })
   }
 
+  const refreshHistoryTextsForRooms = async (
+    requestSelf: DirectorySnapshotPayload['self'],
+    rooms: RoomSummary[],
+  ) => {
+    const roomKey = rooms
+      .map((room) => `${room.roomId}:${room.historyTextCount}:${room.historyTextLatestAt ?? ''}`)
+      .sort()
+      .join('|')
+    const refreshKey = `${requestSelf.historyAuthToken}:${roomKey}`
+
+    if (
+      historyTextRefreshKeyRef.current === refreshKey ||
+      historyTextRefreshRequestRef.current === refreshKey
+    ) {
+      return
+    }
+
+    const roomsWithText = rooms.filter((room) => room.historyTextCount > 0)
+
+    if (roomsWithText.length === 0) {
+      historyTextRefreshKeyRef.current = refreshKey
+      startTransition(() => {
+        setHistoryTexts([])
+      })
+      archivedTextHistoryIdsRef.current = new Set()
+      return
+    }
+
+    historyTextRefreshRequestRef.current = refreshKey
+
+    try {
+      const results = await Promise.all(
+        roomsWithText.map(async (room) => {
+          const url = new URL('/api/history/text', API_BASE_URL)
+          url.searchParams.set('roomId', room.roomId)
+
+          const response = await fetch(url, {
+            headers: buildHistoryAuthHeaders(requestSelf),
+          })
+
+          if (!response.ok) {
+            throw new Error(`历史文本拉取失败：${response.status.toString()} ${await readResponseError(response)}`)
+          }
+
+          const payload = await response.json() as { texts?: HistoryTextSummary[] }
+          return payload.texts ?? []
+        }),
+      )
+      const nextHistoryTexts = results
+        .flat()
+        .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
+
+      historyTextRefreshKeyRef.current = refreshKey
+      archivedTextHistoryIdsRef.current = new Set(
+        nextHistoryTexts.map((record) => record.historyId),
+      )
+      startTransition(() => {
+        setHistoryTexts(nextHistoryTexts)
+      })
+    } catch (error) {
+      debugLog('history text refresh failed', error)
+    } finally {
+      if (historyTextRefreshRequestRef.current === refreshKey) {
+        historyTextRefreshRequestRef.current = ''
+      }
+    }
+  }
+
   const applySnapshot = (snapshot: DirectorySnapshotPayload) => {
     rtcConfigRef.current = snapshot.rtcConfig
 
@@ -542,6 +642,8 @@ export function useDdzhilian() {
     peerNameById.set(snapshot.self.deviceId, snapshot.self.deviceName)
     const snapshotIds = new Set(snapshot.sessions.map((session) => session.sessionId))
 
+    void refreshHistoryTextsForRooms(snapshot.self, snapshot.rooms)
+
     startTransition(() => {
       setSelf(snapshot.self)
       setOnlinePeers(normalizedPeers)
@@ -551,7 +653,9 @@ export function useDdzhilian() {
       setRoomStates(snapshot.roomStates ?? [])
       setPreferences(snapshot.self.preferences ?? { enterToSend: true })
       setHistoryFiles(snapshot.historyFiles)
-      setHistoryTexts(snapshot.historyTexts)
+      if (snapshot.historyTexts.length > 0) {
+        setHistoryTexts(snapshot.historyTexts)
+      }
       setSessionsById((previous) => {
         const next: Record<string, LiveSession> = {}
 
@@ -616,9 +720,11 @@ export function useDdzhilian() {
     archivedHistoryIdsRef.current = new Set(
       snapshot.historyFiles.map((file) => file.historyId),
     )
-    archivedTextHistoryIdsRef.current = new Set(
-      snapshot.historyTexts.map((text) => text.historyId),
-    )
+    if (snapshot.historyTexts.length > 0) {
+      archivedTextHistoryIdsRef.current = new Set(
+        snapshot.historyTexts.map((text) => text.historyId),
+      )
+    }
   }
 
   const receiveFileChunk = (transferId: string, index: number, chunk: Uint8Array) => {
@@ -1670,7 +1776,10 @@ export function useDdzhilian() {
     }
   }
 
-  const downloadHistoryFile = async (file: HistoryFileSummary) => {
+  const downloadHistoryFile = async (
+    file: HistoryFileSummary,
+    onProgress?: (progress: HistoryDownloadProgress) => void,
+  ) => {
     const activeSelf = selfRef.current
 
     if (!activeSelf?.historyAuthToken) {
@@ -1685,19 +1794,67 @@ export function useDdzhilian() {
       throw new Error(`History download failed with status ${response.status.toString()}`)
     }
 
-    const blob = await response.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = file.fileName
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    const contentLength = Number(response.headers.get('content-length'))
+    const totalBytes = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : file.size
+    const contentType = response.headers.get('content-type') ?? file.mimeType ?? 'application/octet-stream'
 
-    window.setTimeout(() => {
-      URL.revokeObjectURL(objectUrl)
-    }, 60_000)
+    if (!response.body) {
+      const blob = await response.blob()
+      onProgress?.({
+        receivedBytes: blob.size,
+        totalBytes: totalBytes > 0 ? totalBytes : blob.size,
+        progress: 1,
+      })
+      saveBlobAsDownload(blob, file.fileName)
+      return
+    }
+
+    const reader = response.body.getReader()
+    const chunks: ArrayBuffer[] = []
+    let receivedBytes = 0
+    let lastReportedPercent = -1
+    const reportProgress = (force = false) => {
+      const progress = totalBytes > 0 ? Math.min(receivedBytes / totalBytes, 1) : 0
+      const percent = Math.round(progress * 100)
+
+      if (!force && percent === lastReportedPercent) {
+        return
+      }
+
+      lastReportedPercent = percent
+      onProgress?.({
+        receivedBytes,
+        totalBytes: totalBytes > 0 ? totalBytes : receivedBytes,
+        progress,
+      })
+    }
+
+    reportProgress(true)
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          break
+        }
+
+        const chunk = new Uint8Array(value.byteLength)
+        chunk.set(value)
+        chunks.push(chunk.buffer)
+        receivedBytes += value.byteLength
+        reportProgress()
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    const blob = new Blob(chunks, { type: contentType })
+    onProgress?.({
+      receivedBytes: blob.size,
+      totalBytes: totalBytes > 0 ? totalBytes : blob.size,
+      progress: 1,
+    })
+    saveBlobAsDownload(blob, file.fileName)
   }
 
   const startTransfer = async (transferId: string, preferredSessionId?: string | null) => {
@@ -2328,6 +2485,88 @@ export function useDdzhilian() {
     })
   }
 
+  const askCloudflareAi = async (
+    prompt: string,
+    options?: {
+      roomId?: string
+      replyToName?: string
+      kind?: 'chat' | 'quota'
+      historyId?: string
+      createdAt?: string
+    },
+  ): Promise<AiChatResponse> => {
+    const activeSelf = selfRef.current
+    const normalizedPrompt = prompt.trim()
+
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 请求授权。')
+    }
+
+    if (!normalizedPrompt) {
+      throw new Error('请输入要交给 AI 的内容。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+      method: 'POST',
+      headers: {
+        ...buildHistoryAuthHeaders(activeSelf),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: normalizedPrompt,
+        roomId: options?.roomId,
+        replyToName: options?.replyToName,
+        kind: options?.kind,
+        historyId: options?.historyId,
+        createdAt: options?.createdAt,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(
+          response,
+          `Cloudflare AI request failed with status ${response.status.toString()}`,
+        ),
+      )
+    }
+
+    const payload = await response.json() as Partial<AiChatResponse>
+    if (typeof payload.response !== 'string' || !payload.response.trim()) {
+      throw new Error('Cloudflare AI 返回了空结果。')
+    }
+
+    return {
+      response: payload.response,
+      model: typeof payload.model === 'string' ? payload.model : '',
+      quota: payload.quota,
+      historyText: payload.historyText,
+    }
+  }
+
+  const getCloudflareAiQuota = useCallback(async (): Promise<AiQuotaStatus> => {
+    const activeSelf = selfRef.current
+
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 请求授权。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/quota`, {
+      headers: buildHistoryAuthHeaders(activeSelf),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(
+          response,
+          `Cloudflare AI quota request failed with status ${response.status.toString()}`,
+        ),
+      )
+    }
+
+    return response.json() as Promise<AiQuotaStatus>
+  }, [])
+
   const uploadRoomFileChunk = async (input: {
     roomId: string
     historyId: string
@@ -2645,6 +2884,8 @@ export function useDdzhilian() {
     sendText,
     recallText,
     sendRoomText,
+    askCloudflareAi,
+    getCloudflareAiQuota,
     sendRoomFiles,
     sendFiles,
     stateToUiStatus,

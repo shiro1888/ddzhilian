@@ -5,7 +5,6 @@ import {
   type DeviceSettingsPayload,
   type DirectorySnapshotPayload,
   type HistoryFileSummary,
-  type HistoryTextSummary,
   type NativeLanCapabilityPayload,
   type PeerSummary,
   type RoomSummary,
@@ -270,20 +269,26 @@ export class DeviceRegistry {
     const peers = this.listVisiblePeersFor(viewerId, roomRegistry);
     const publicHttpBaseUrl = derivePublicHttpBaseUrl(publicWsUrl);
     const visibleRooms = roomRegistry.listForDevice(viewerId);
-    const rooms = visibleRooms.map<RoomSummary>((room) => ({
-      roomId: room.roomId,
-      members: room.memberIds
-        .map((memberId) => this.byId.get(memberId))
-        .filter((member): member is ConnectedDevice => Boolean(member))
-        .map((member) => ({
-          deviceId: member.deviceId,
-          deviceName: member.deviceName,
-          platform: member.platform,
-          online: true,
-        })),
-      isPublic: room.isPublic,
-      updatedAt: room.updatedAt,
-    }));
+    const rooms = visibleRooms.map<RoomSummary>((room) => {
+      const textStats = historyRegistry.getTextStatsForRoom(room.roomId);
+
+      return {
+        roomId: room.roomId,
+        members: room.memberIds
+          .map((memberId) => this.byId.get(memberId))
+          .filter((member): member is ConnectedDevice => Boolean(member))
+          .map((member) => ({
+            deviceId: member.deviceId,
+            deviceName: member.deviceName,
+            platform: member.platform,
+            online: true,
+          })),
+        isPublic: room.isPublic,
+        historyTextCount: textStats.count,
+        historyTextLatestAt: textStats.latestAt,
+        updatedAt: room.updatedAt,
+      };
+    });
     const historyFiles = visibleRooms
       .flatMap((room) =>
         historyRegistry
@@ -293,13 +298,6 @@ export class DeviceRegistry {
       .map<HistoryFileSummary>((record) =>
         historyRegistry.toSummary(record.record, publicHttpBaseUrl, record.isPublic),
       );
-    const historyTexts = visibleRooms
-      .flatMap((room) =>
-        historyRegistry
-          .listTextsForRoom(room.roomId)
-          .map((record) => ({ record, isPublic: room.isPublic || record.isPublic })),
-      )
-      .map<HistoryTextSummary>((record) => historyRegistry.toTextSummary(record.record, record.isPublic));
     const sessions = sessionRegistry.listForDevice(viewerId).map<SessionSummary>(
       (session) => ({
         sessionId: session.sessionId,
@@ -340,7 +338,7 @@ export class DeviceRegistry {
         rooms.map((room) => room.roomId),
       ),
       historyFiles,
-      historyTexts,
+      historyTexts: [],
       sessions,
       rtcConfig,
       publicWsUrl,

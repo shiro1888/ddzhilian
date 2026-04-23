@@ -68,6 +68,7 @@ export class HistoryRegistry {
   constructor(
     private readonly retentionMs: number,
     private readonly maxBytes: number,
+    private readonly textRetentionMs: number,
   ) {
     mkdirSync(FILES_ROOT, { recursive: true });
     this.load();
@@ -114,20 +115,23 @@ export class HistoryRegistry {
 
   listTextsForRoom(roomId: string) {
     this.prune();
-    const ids = this.textIdsByRoomId.get(roomId);
-    if (!ids) {
-      return [];
-    }
-
-    return [...ids]
-      .map((historyId) => this.textsById.get(historyId))
-      .filter((record): record is HistoryTextRecord => Boolean(record))
-      .sort(sortByCreatedAt);
+    return this.listTextRecordsForRoom(roomId);
   }
 
   getTextById(historyId: string) {
     this.prune();
     return this.textsById.get(historyId);
+  }
+
+  getTextStatsForRoom(roomId: string) {
+    this.prune();
+    const records = this.listTextRecordsForRoom(roomId);
+    const latest = records.at(-1);
+
+    return {
+      count: records.length,
+      latestAt: latest?.createdAt,
+    };
   }
 
   async saveFile(input: {
@@ -399,6 +403,17 @@ export class HistoryRegistry {
       changed = this.pruneRoomCapacity(roomId) || changed;
     }
 
+    if (this.textRetentionMs > 0) {
+      for (const record of [...this.textsById.values()]) {
+        if (now - Date.parse(record.createdAt) <= this.textRetentionMs) {
+          continue;
+        }
+
+        this.removeTextRecord(record);
+        changed = true;
+      }
+    }
+
     if (changed) {
       this.persist();
     }
@@ -521,6 +536,18 @@ export class HistoryRegistry {
       .sort(sortByCreatedAt);
   }
 
+  private listTextRecordsForRoom(roomId: string) {
+    const ids = this.textIdsByRoomId.get(roomId);
+    if (!ids) {
+      return [];
+    }
+
+    return [...ids]
+      .map((historyId) => this.textsById.get(historyId))
+      .filter((record): record is HistoryTextRecord => Boolean(record))
+      .sort(sortByCreatedAt);
+  }
+
   private async readPartialSize(tempPath: string) {
     try {
       const stat = await fs.stat(tempPath);
@@ -542,6 +569,15 @@ export class HistoryRegistry {
       unlinkSync(record.storagePath);
     } catch {
       // Ignore missing files during cleanup.
+    }
+  }
+
+  private removeTextRecord(record: HistoryTextRecord) {
+    this.textsById.delete(record.historyId);
+    const roomIds = this.textIdsByRoomId.get(record.roomId);
+    roomIds?.delete(record.historyId);
+    if (roomIds && roomIds.size === 0) {
+      this.textIdsByRoomId.delete(record.roomId);
     }
   }
 }

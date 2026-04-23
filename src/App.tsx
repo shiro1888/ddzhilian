@@ -33,6 +33,7 @@ import {
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
+import type { AiQuotaStatus } from './lib/ddzhilian-types'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -70,6 +71,12 @@ function resolveAttachmentKind(file: File): AttachmentDraft['kind'] {
   }
 
   return 'file'
+}
+
+type HistoryDownloadProgressState = {
+  receivedBytes: number
+  totalBytes: number
+  progress: number
 }
 
 function extractLinksFromRichText(value: string) {
@@ -115,6 +122,19 @@ function buildPublicRoomUrl(roomId: string) {
   return url.toString()
 }
 
+function parseAiBotPrompt(value: string) {
+  const match = /^@bot(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
+  if (!match) {
+    return null
+  }
+
+  return match[1].trim()
+}
+
+function isAiQuotaPrompt(value: string) {
+  return /(余额|额度|quota|balance)/i.test(value.trim())
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -132,11 +152,16 @@ function App() {
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
+  const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
   const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
+  const [historyDownloadProgressById, setHistoryDownloadProgressById] = useState<
+    Record<string, HistoryDownloadProgressState>
+  >({})
   const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
   const activeView = resolveViewFromPathname(location.pathname)
@@ -185,10 +210,37 @@ function App() {
     sendText,
     recallText,
     sendRoomText,
+    askCloudflareAi,
+    getCloudflareAiQuota,
     sendRoomFiles,
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
+
+  useEffect(() => {
+    if (!self?.historyAuthToken) {
+      setAiQuotaStatus(null)
+      return
+    }
+
+    let isCancelled = false
+
+    void getCloudflareAiQuota()
+      .then((status) => {
+        if (!isCancelled) {
+          setAiQuotaStatus(status)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setAiQuotaStatus(null)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [getCloudflareAiQuota, self?.historyAuthToken])
 
   useEffect(() => {
     attachmentDraftsRef.current = attachmentDrafts
@@ -516,7 +568,7 @@ function App() {
     isChatDesktopTheme && selectedRoom
       ? selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedConversationName} 建立直连。`
+        : `还没有与 ${selectedConversationName} 建立直连，也可以先把文件保存到当前对话。`
       : isChatDesktopTheme && selectedDevicePeer
         ? selectedConnectedTarget
           ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
@@ -669,6 +721,56 @@ function App() {
     }
   })
 
+  const handleHistoryFileDownload = (file: (typeof historyFiles)[number]) => {
+    setHistoryDownloadProgressById((current) => ({
+      ...current,
+      [file.historyId]: {
+        receivedBytes: 0,
+        totalBytes: file.size,
+        progress: 0,
+      },
+    }))
+
+    void downloadHistoryFile(file, (progress) => {
+      setHistoryDownloadProgressById((current) => ({
+        ...current,
+        [file.historyId]: progress,
+      }))
+    }).then(
+      () => {
+        setLocalError(null)
+        setHistoryDownloadProgressById((current) => ({
+          ...current,
+          [file.historyId]: {
+            receivedBytes: file.size,
+            totalBytes: file.size,
+            progress: 1,
+          },
+        }))
+        window.setTimeout(() => {
+          setHistoryDownloadProgressById((current) => {
+            const progress = current[file.historyId]
+            if (!progress || progress.progress < 1) {
+              return current
+            }
+
+            const next = { ...current }
+            delete next[file.historyId]
+            return next
+          })
+        }, 1200)
+      },
+      (error) => {
+        setHistoryDownloadProgressById((current) => {
+          const next = { ...current }
+          delete next[file.historyId]
+          return next
+        })
+        setLocalError(error instanceof Error ? error.message : '历史文件下载失败。')
+      },
+    )
+  }
+
   const fileConversationEntries = [
     ...groupedTransferItemsForConversation.map((item) => ({
       id: item.id,
@@ -712,27 +814,30 @@ function App() {
       downloadUrl: file.objectUrl,
       downloadName: file.name,
     })),
-    ...historyFilesForConversation.map((file) => ({
-      id: `history-${file.historyId}`,
-      sessionId: file.sessionId,
-      kind: file.sourceDeviceId === self?.deviceId ? ('outgoing' as const) : ('incoming' as const),
-      fromSelf: file.sourceDeviceId === self?.deviceId,
-      createdAt: file.createdAt,
-      fileName: file.fileName,
-      fileSize: file.size,
-      mimeType: file.mimeType,
-      subtitle: file.sourceDeviceId === self?.deviceId ? '已归档到当前对话' : file.sourceDeviceName,
-      detail: `${formatFileSize(file.size)} · 历史文件`,
-      statusLabel: '可回放',
-      tone: 'completed' as const,
-      progress: 1,
-      downloadName: file.fileName,
-      onDownload: () => {
-        void downloadHistoryFile(file).catch((error) => {
-          setLocalError(error instanceof Error ? error.message : '历史文件下载失败。')
-        })
-      },
-    })),
+    ...historyFilesForConversation.map((file) => {
+      const downloadProgress = historyDownloadProgressById[file.historyId]
+
+      return {
+        id: `history-${file.historyId}`,
+        sessionId: file.sessionId,
+        kind: file.sourceDeviceId === self?.deviceId ? ('outgoing' as const) : ('incoming' as const),
+        fromSelf: file.sourceDeviceId === self?.deviceId,
+        createdAt: file.createdAt,
+        fileName: file.fileName,
+        fileSize: file.size,
+        mimeType: file.mimeType,
+        subtitle: file.sourceDeviceId === self?.deviceId ? '已归档到当前对话' : file.sourceDeviceName,
+        detail: downloadProgress
+          ? `${formatFileSize(downloadProgress.receivedBytes)} / ${formatFileSize(downloadProgress.totalBytes)}`
+          : `${formatFileSize(file.size)} · 历史文件`,
+        statusLabel: downloadProgress ? '下载中' : '可回放',
+        tone: downloadProgress ? ('active' as const) : ('completed' as const),
+        progress: downloadProgress ? downloadProgress.progress : 1,
+        downloadName: file.fileName,
+        onDownload: () => handleHistoryFileDownload(file),
+        isDownloadDisabled: Boolean(downloadProgress),
+      }
+    }),
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
 
   const unifiedConversationEntries: UnifiedConversationEntry[] = [
@@ -740,6 +845,9 @@ function App() {
       id: `text-${record.id}`,
       entryType: 'text' as const,
       sessionId: record.sessionId,
+      sourceDeviceId: record.senderName === 'bot' && !record.fromSelf
+        ? 'bot_cloudflare_ai'
+        : undefined,
       fromSelf: record.fromSelf,
       senderName: record.fromSelf
         ? selfName
@@ -775,7 +883,7 @@ function App() {
         ? '公共对话的文件会通过服务器中转保存。'
         : selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedConversationName} 建立直连。`
+        : `还没有与 ${selectedConversationName} 建立直连，发送的文件会先保存到当前对话。`
       : '选择一个已有对话后，消息和文件会显示在这里。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
@@ -784,15 +892,13 @@ function App() {
   const hasChatTextDraft =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft)
-  const canSendRoomTextWithoutConnection =
+  const canSendRoomContentWithoutConnection =
     isChatDesktopTheme &&
-    Boolean(selectedRoom?.isPublic) &&
-    hasChatTextDraft &&
-    attachmentDrafts.length === 0
-  const canSendPublicRoomContent =
-    isChatDesktopTheme &&
-    Boolean(selectedRoom?.isPublic) &&
+    Boolean(selectedRoom) &&
     (hasChatTextDraft || attachmentDrafts.length > 0)
+  const aiQuotaLabel = aiQuotaStatus
+    ? `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
+    : 'AI 额度加载中'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const runnableTransferIds = visibleTransferItemsForConversation
     .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
@@ -1138,23 +1244,25 @@ function App() {
     const hasImageContent = hasRichTextImage(rawText)
     const hasTextPayload = normalizedText.length > 0 || hasImageContent
     const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
+    const aiBotPrompt = parseAiBotPrompt(normalizedText)
     if (!hasTextPayload && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
     }
 
+    if (aiBotPrompt !== null && aiBotPrompt.length === 0) {
+      setLocalError('请输入要问 @bot 的问题。')
+      return
+    }
+
     const isPublicRoom = isChatDesktopTheme && Boolean(selectedRoom?.isPublic)
+    const shouldSendRoomContentThroughHistory =
+      isChatDesktopTheme &&
+      Boolean(selectedRoom) &&
+      (isPublicRoom || selectedRoomConnectedTargets.length === 0)
 
     if (isChatDesktopTheme) {
-      if (!isPublicRoom && attachmentFiles.length > 0 && selectedRoomConnectedTargets.length === 0) {
-        setLocalError('先有其他设备加入当前对话，再发送文件。')
-        return
-      }
-
-      if (
-        selectedRoomConnectedTargets.length === 0 &&
-        !(isPublicRoom && (hasTextPayload || attachmentFiles.length > 0))
-      ) {
+      if (selectedRoomConnectedTargets.length === 0 && !shouldSendRoomContentThroughHistory) {
         setLocalError('先与当前选中的设备建立连接，再发送消息。')
         return
       }
@@ -1174,7 +1282,7 @@ function App() {
       if (hasTextPayload) {
         const textPayload = rawText
 
-        if (isPublicRoom && selectedRoom) {
+        if (shouldSendRoomContentThroughHistory && selectedRoom) {
           await sendRoomText(selectedRoom.roomId, textPayload, {
             recordId,
             createdAt,
@@ -1191,7 +1299,7 @@ function App() {
       }
 
       if (attachmentFiles.length > 0) {
-        if (isPublicRoom && selectedRoom) {
+        if (shouldSendRoomContentThroughHistory && selectedRoom) {
           await sendRoomFiles(
             selectedRoom.roomId,
             attachmentDrafts.map((attachment) => ({
@@ -1228,6 +1336,37 @@ function App() {
       }
       clearAttachments()
       setLocalError(null)
+
+      if (aiBotPrompt !== null) {
+        setIsAiGenerating(true)
+        try {
+          const isQuotaPrompt = isAiQuotaPrompt(aiBotPrompt)
+          const botRoomId =
+            isChatDesktopTheme
+              ? effectiveSelectedRoomId
+              : selectedUiSession?.roomId ?? null
+
+          if (!botRoomId) {
+            throw new Error('当前对话尚未建立房间，无法同步 bot 回复。')
+          }
+
+          const answer = await askCloudflareAi(aiBotPrompt, {
+            roomId: botRoomId,
+            replyToName: self?.deviceName ?? localIdentity.deviceName,
+            kind: isQuotaPrompt ? 'quota' : 'chat',
+            historyId: crypto.randomUUID(),
+            createdAt: new Date().toISOString(),
+          })
+
+          if (answer.quota) {
+            setAiQuotaStatus(answer.quota)
+          }
+        } catch (error) {
+          setLocalError(error instanceof Error ? error.message : 'Cloudflare AI 请求失败。')
+        } finally {
+          setIsAiGenerating(false)
+        }
+      }
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文本发送失败。')
     }
@@ -1451,8 +1590,10 @@ function App() {
         activeTransferLabel={activeTransferLabel}
         isSendDisabled={
           !hasChatDraftContent ||
-          (selectedRoomConnectedTargets.length === 0 && !canSendRoomTextWithoutConnection && !canSendPublicRoomContent)
+          (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
         }
+        isAiGenerating={isAiGenerating}
+        aiQuotaLabel={aiQuotaLabel}
         enterToSend={preferences.enterToSend}
         attachments={attachmentDrafts}
         isSharedPanelOpen={isSharedPanelOpen}

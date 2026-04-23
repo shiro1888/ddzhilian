@@ -88,6 +88,8 @@ export interface RoomSummary {
   roomId: string;
   members: RoomMemberSummary[];
   isPublic: boolean;
+  historyTextCount: number;
+  historyTextLatestAt?: string;
   updatedAt: string;
 }
 

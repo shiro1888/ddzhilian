@@ -62,15 +62,28 @@ export function ReceiveStage({
         </div>
         {receivedPendingFiles.length > 0 ? (
           <ul className="dd-record-list">
-            {receivedPendingFiles.map((file) => (
-              <li key={file.id}>
-                <strong>{file.name}</strong>
-                <span>
-                  {file.receivedBytes} / {file.size} bytes
-                </span>
-                <small>{formatRelativeTime(file.createdAt)}</small>
-              </li>
-            ))}
+            {receivedPendingFiles.map((file) => {
+              const progress = file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0
+
+              return (
+                <li key={file.id}>
+                  <strong>{file.name}</strong>
+                  <span>
+                    {formatFileSize(file.receivedBytes)} / {formatFileSize(file.size)}
+                  </span>
+                  <div
+                    className="dd-record-list__progress"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(progress * 100)}
+                  >
+                    <div style={{ width: `${Math.round(progress * 100)}%` }} />
+                  </div>
+                  <small>{formatRelativeTime(file.createdAt)}</small>
+                </li>
+              )
+            })}
           </ul>
         ) : (
           <div className="dd-empty">当前暂无文件</div>

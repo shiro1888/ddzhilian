@@ -458,7 +458,11 @@ function detectCodeLanguage(value: string, explicitLanguage = '') {
   if (
     /^\s*#.*python/m.test(trimmedValue) ||
     /^\s*(?:from\s+\w+(?:\.\w+)*\s+import\s+|import\s+\w+(?:\.\w+)*(?:\s+as\s+\w+)?\s*$|def\s+\w+\s*\(|print\s*\()/m.test(trimmedValue) ||
-    /\blambda\b|\.DataFrame\s*\(/.test(trimmedValue)
+    /\blambda\b|\.DataFrame\s*\(/.test(trimmedValue) ||
+    (
+      /^\s*#\s*\S/m.test(trimmedValue) &&
+      /^\s*[A-Za-z_]\w*\s*=\s*[^=\n]+/m.test(trimmedValue)
+    )
   ) {
     return 'python'
   }
@@ -709,10 +713,16 @@ function shouldRenderCodeTextAsBlock(codeText: string, styledSpanCount = 0) {
     || /\b(?:import|from|export|const|let|var|function|return|class|interface|type|if|else|for|while|await|async|struct|typedef|enum|union|int|char|float|double|void|print|lambda|def)\b/.test(codeText)
   const hasCodePunctuation = /[{}()[\];=<>]/.test(codeText)
   const hasIndentedLine = lines.some((line) => /^(?: {2,}|\t)/.test(line))
+  const hasCommentLine = lines.some((line) => /^(?:#|\/\/|\/\*)/.test(line.trimStart()))
+  const hasAssignmentLine = lines.some((line) =>
+    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(line.trimStart()),
+  )
+  const hasCallExpression = /\b[A-Za-z_$][\w$]*\s*\([^)\n]*\)/.test(codeText)
 
   return (
     hasMarkupCode ||
     (styledSpanCount >= 2 && hasCodePunctuation) ||
+    (lines.length >= 2 && hasCodePunctuation && hasAssignmentLine && (hasCallExpression || hasCommentLine)) ||
     (lines.length >= 3 && hasCodePunctuation && (hasCodeKeyword || hasIndentedLine))
   )
 }
@@ -947,6 +957,48 @@ export function sanitizeRichTextHtml(value: string) {
   }
 
   return Array.from(root.childNodes).map((node) => sanitizeNode(node)).join('')
+}
+
+export function sanitizeBotReplyHtml(value: string) {
+  if (!value || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return normalizePlainRichText(value)
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  if (!root) {
+    return normalizePlainRichText(value)
+  }
+
+  const sanitizeNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return escapeHtml((node.textContent ?? '').replace(/\u200B/g, ''))
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return ''
+    }
+
+    const childrenHtml = Array.from(node.childNodes).map(sanitizeNode).join('')
+    const tagName = node.tagName.toLowerCase()
+
+    if (tagName === 'br') {
+      return '<br />'
+    }
+
+    if (tagName === 'strong') {
+      return `<strong>${childrenHtml}</strong>`
+    }
+
+    if (tagName === 'p') {
+      return `<p>${childrenHtml}</p>`
+    }
+
+    return childrenHtml
+  }
+
+  return Array.from(root.childNodes).map(sanitizeNode).join('')
 }
 
 type DataTransferItemWithEntry = DataTransferItem & {

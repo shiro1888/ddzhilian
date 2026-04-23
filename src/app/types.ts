@@ -50,6 +50,7 @@ export type FileConversationEntry = {
   downloadUrl?: string
   downloadName?: string
   onDownload?: () => void
+  isDownloadDisabled?: boolean
   action?: 'retry' | 'cancel'
 }
 
@@ -66,6 +67,7 @@ export type UnifiedConversationEntry =
       id: string
       entryType: 'text'
       sessionId: string
+      sourceDeviceId?: string
       fromSelf: boolean
       senderName: string
       status?: 'sending' | 'failed'

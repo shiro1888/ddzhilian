@@ -10,6 +10,7 @@ import {
   readImageFileAsDataUrl,
   renderAppleMusicLyricShare,
   renderInlineImageHtml,
+  sanitizeBotReplyHtml,
   sanitizeRichTextHtml,
   shouldInsertDivider,
 } from '../utils'
@@ -96,6 +97,39 @@ function escapeInlineHtml(value: string) {
     .replaceAll('"', '&quot;')
 }
 
+function renderPlainTextForEditor(value: string) {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) =>
+      escapeInlineHtml(line)
+        .replace(/\t/g, '&nbsp;&nbsp;')
+        .replace(/^ +/, (spaces) => '&nbsp;'.repeat(spaces.length)),
+    )
+    .join('<br />')
+}
+
+function shouldPasteCodeLikePlainText(value: string) {
+  const lines = value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (lines.length < 2) {
+    return false
+  }
+
+  const hasCommentLine = lines.some((line) => /^(?:#|\/\/|\/\*)/.test(line))
+  const hasAssignmentLine = lines.some((line) =>
+    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(line),
+  )
+  const hasCallExpression = /\b[A-Za-z_$][\w$]*\s*\([^)\n]*\)/.test(value)
+  const hasCodePunctuation = /[{}()[\];=<>]/.test(value)
+
+  return hasCodePunctuation && (hasAssignmentLine || hasCallExpression || hasCommentLine)
+}
+
 const paragraphFormats: SelectOption[] = [
   { label: '段落', value: '' },
   { label: '正文', value: 'p' },
@@ -159,6 +193,8 @@ type ChatConversationStageProps = {
   fileInputId: string
   activeTransferLabel: string
   isSendDisabled: boolean
+  isAiGenerating: boolean
+  aiQuotaLabel: string
   enterToSend: boolean
   attachments: AttachmentDraft[]
   isSharedPanelOpen: boolean
@@ -288,6 +324,8 @@ export function ChatConversationStage({
   fileInputId,
   activeTransferLabel,
   isSendDisabled,
+  isAiGenerating,
+  aiQuotaLabel,
   enterToSend,
   attachments,
   isSharedPanelOpen,
@@ -326,10 +364,12 @@ export function ChatConversationStage({
   const [messageContextMenu, setMessageContextMenu] = useState<MessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<QuoteDraftState | null>(null)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
+  const [isBotMentionOpen, setIsBotMentionOpen] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const conversationThreadRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const botMentionRef = useRef<HTMLDivElement | null>(null)
   const colorPaletteRef = useRef<HTMLDivElement | null>(null)
   const colorPaletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
@@ -377,15 +417,56 @@ export function ChatConversationStage({
   }, [isSharedPanelOpen, latestConversationEntryId])
 
   useEffect(() => {
+    if (!isBotMentionOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (botMentionRef.current?.contains(target) || editorRef.current?.contains(target)) {
+        return
+      }
+
+      setIsBotMentionOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsBotMentionOpen(false)
+        editorRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isBotMentionOpen])
+
+  useEffect(() => {
     if (!isSharedPanelOpen) {
       return
     }
 
-    setIsEmojiPickerOpen(false)
-    setIsColorPaletteOpen(false)
-    setInsertPanel(null)
-    setInsertPanelError(null)
-    setIsFormatToolbarOpen(false)
+    const frameId = window.requestAnimationFrame(() => {
+      setIsEmojiPickerOpen(false)
+      setIsColorPaletteOpen(false)
+      setInsertPanel(null)
+      setInsertPanelError(null)
+      setIsFormatToolbarOpen(false)
+      setIsBotMentionOpen(false)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
   }, [isSharedPanelOpen])
 
   useEffect(() => {
@@ -639,6 +720,24 @@ export function ChatConversationStage({
 
   const syncDraftFromEditor = () => {
     onChatDraftChange(normalizeEditorHtml(editorRef.current?.innerHTML ?? ''))
+    const plainText = editorRef.current?.innerText.replace(/\u00a0/g, ' ') ?? ''
+    setIsBotMentionOpen(/(^|\s)@$/.test(plainText))
+  }
+
+  const focusEditorEnd = () => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection) {
+      return
+    }
+
+    editor.focus()
+    const range = document.createRange()
+    range.selectNodeContents(editor)
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
   }
 
   const preserveEditorFocus = (event: ReactMouseEvent<HTMLElement>) => {
@@ -649,6 +748,7 @@ export function ChatConversationStage({
     const nextIsOpen = !isFormatToolbarOpen
     setIsFormatToolbarOpen(nextIsOpen)
     setIsEmojiPickerOpen(false)
+    setIsBotMentionOpen(false)
 
     if (!nextIsOpen) {
       setIsColorPaletteOpen(false)
@@ -983,6 +1083,12 @@ export function ChatConversationStage({
       return
     }
 
+    if (text && shouldPasteCodeLikePlainText(text)) {
+      event.preventDefault()
+      insertHtml(renderPlainTextForEditor(text))
+      return
+    }
+
     if (html || !/(https?:\/\/|www\.)/i.test(text)) {
       return
     }
@@ -1003,6 +1109,23 @@ export function ChatConversationStage({
 
     onSendText(quoteHtml)
     setQuoteDraft(null)
+  }
+
+  const insertTextAtCursor = (value: string) => {
+    restoreSelection()
+    document.execCommand('insertText', false, value)
+    syncDraftFromEditor()
+    window.requestAnimationFrame(focusEditorEnd)
+  }
+
+  const handleBotMentionSelect = () => {
+    insertTextAtCursor('bot ')
+    setIsBotMentionOpen(false)
+  }
+
+  const handleBotMentionButtonClick = () => {
+    insertTextAtCursor('@bot ')
+    setIsBotMentionOpen(false)
   }
 
   const applyInlineStyle = (
@@ -1085,6 +1208,7 @@ export function ChatConversationStage({
   const openInsertPanel = (type: InsertPanelType) => {
     setIsEmojiPickerOpen(false)
     setIsColorPaletteOpen(false)
+    setIsBotMentionOpen(false)
     setInsertPanelError(null)
     setInsertPanel(
       {
@@ -1098,6 +1222,7 @@ export function ChatConversationStage({
     setIsEmojiPickerOpen(false)
     setInsertPanel(null)
     setInsertPanelError(null)
+    setIsBotMentionOpen(false)
     setIsColorPaletteOpen((current) => !current)
   }
 
@@ -1222,6 +1347,7 @@ export function ChatConversationStage({
               }
 
               const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
+              const isBotMessage = entry.entryType === 'text' && entry.sourceDeviceId === 'bot_cloudflare_ai'
               const previewKind = entry.entryType === 'file'
                 ? resolveMediaPreviewKind(entry.file.mimeType, entry.file.fileName)
                 : null
@@ -1259,7 +1385,11 @@ export function ChatConversationStage({
                               className="dd-chatbox__bubble dd-chatbox__bubble--rich"
                               onClick={handleRichBubbleClick}
                               onContextMenu={(event) => openMessageContextMenu(event, entry, senderName)}
-                              dangerouslySetInnerHTML={{ __html: textHtml }}
+                              dangerouslySetInnerHTML={{
+                                __html: isBotMessage
+                                  ? sanitizeBotReplyHtml(entry.text)
+                                  : textHtml,
+                              }}
                             />
                             <button
                               type="button"
@@ -1329,8 +1459,9 @@ export function ChatConversationStage({
                                   type="button"
                                   className="dd-file-bubble__action"
                                   onClick={entry.file.onDownload}
+                                  disabled={entry.file.isDownloadDisabled}
                                 >
-                                  下载文件
+                                  {entry.file.isDownloadDisabled ? '下载中' : '下载文件'}
                                 </button>
                               ) : null}
                               {entry.file.downloadUrl ? (
@@ -1409,10 +1540,23 @@ export function ChatConversationStage({
                     <div>
                       <strong>{entry.fileName}</strong>
                       <span>{formatFileSize(entry.fileSize)} · {entry.statusLabel} · {entry.detail}</span>
+                      {entry.isDownloadDisabled ? (
+                        <div
+                          className="dd-shared-row__progress"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(entry.progress * 100)}
+                        >
+                          <div style={{ width: `${Math.round(entry.progress * 100)}%` }} />
+                        </div>
+                      ) : null}
                     </div>
                     <div className="dd-shared-row__actions">
                       {entry.onDownload ? (
-                        <button type="button" onClick={entry.onDownload}>下载</button>
+                        <button type="button" onClick={entry.onDownload} disabled={entry.isDownloadDisabled}>
+                          {entry.isDownloadDisabled ? '下载中' : '下载'}
+                        </button>
                       ) : null}
                       {entry.downloadUrl ? (
                         <a href={entry.downloadUrl} download={entry.downloadName}>下载</a>
@@ -1725,6 +1869,22 @@ export function ChatConversationStage({
             </div>
           )}
 
+          {isBotMentionOpen && (
+            <div ref={botMentionRef} className="dd-bot-mention-panel" role="listbox" aria-label="@ bot">
+              <button
+                type="button"
+                className="dd-bot-mention-option"
+                role="option"
+                aria-selected="true"
+                onMouseDown={preserveEditorFocus}
+                onClick={handleBotMentionSelect}
+              >
+                <strong>@bot</strong>
+                <span>{aiQuotaLabel}</span>
+              </button>
+            </div>
+          )}
+
           <div className="dd-chatbox__textarea-wrap">
             <div
               ref={editorRef}
@@ -1760,6 +1920,7 @@ export function ChatConversationStage({
                 onClick={() => {
                   setInsertPanel(null)
                   setInsertPanelError(null)
+                  setIsBotMentionOpen(false)
                   setIsEmojiPickerOpen((previous) => !previous)
                 }}
               >
@@ -1775,6 +1936,17 @@ export function ChatConversationStage({
                 onClick={handleFormatToolbarToggle}
               >
                 Aa
+              </button>
+              <button
+                type="button"
+                aria-label="Insert @bot"
+                title="Insert @bot"
+                className={`dd-chatbox__ai-trigger${isAiGenerating ? ' is-loading' : ''}`}
+                disabled={isAiGenerating}
+                onMouseDown={preserveEditorFocus}
+                onClick={handleBotMentionButtonClick}
+              >
+                {isAiGenerating ? '...' : '@'}
               </button>
             </div>
 

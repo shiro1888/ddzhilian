@@ -63,6 +63,15 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `TURN_USERNAME`: optional TURN username
 - `TURN_CREDENTIAL`: optional TURN credential
 - `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
+- `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
+- `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
+- `CLOUDFLARE_AI_MODEL`: Workers AI model name, default `@cf/qwen/qwen3-30b-a3b-fp8`
+- `CLOUDFLARE_AI_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/chat`, default `8000`
+- `CLOUDFLARE_AI_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
+- `CLOUDFLARE_AI_FREE_ONLY`: when not set to `false`, the server stops AI requests at the local free-tier budget
+- `CLOUDFLARE_AI_DAILY_NEURON_BUDGET`: local daily Workers AI budget, default `10000`
+- `CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS`: input pricing estimate for local budget checks, default `4625`
+- `CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS`: output pricing estimate for local budget checks, default `30475`
 
 ## History File Cleanup
 
@@ -81,6 +90,8 @@ Public rooms do not have a separate cleanup policy. They use the same file-histo
 
 - `GET /health`
 - `GET /api/debug/state` (disabled by default; requires bearer token when enabled)
+- `GET /api/ai/quota` (requires the device history bearer token; returns local Workers AI free-tier budget status)
+- `POST /api/ai/chat` (requires the device history bearer token; proxies prompts to Cloudflare Workers AI)
 - `WS /ws`
 
 ## Primary Client Events
