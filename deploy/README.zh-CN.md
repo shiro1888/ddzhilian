@@ -5,9 +5,9 @@
 ## 推荐架构
 
 1. 前端静态资源放 CDN 或静态托管。
-   - 上传 `npm run build:compressed` 生成的 `dist/`。
-   - `dist/assets/*` 是带 hash 的文件，可以长期缓存。
-   - `dist/index.html` 必须 `no-cache`，否则发版后用户可能拿到旧入口。
+   - 上传 `npm run build:compressed` 生成的 `out/`。
+   - `out/_next/static/*` 是带 hash 的文件，可以长期缓存。
+   - `out/index.html` 必须 `no-cache`，否则发版后用户可能拿到旧入口。
 
 2. 香港服务器只跑后端。
    - WebSocket：`/ws`
@@ -20,9 +20,9 @@
 
 ## 静态托管头
 
-`public/_headers` 会被 Vite 复制到 `dist/_headers`，可被部分静态托管平台识别：
+`public/_headers` 会被 Next.js 静态导出复制到 `out/_headers`，可被部分静态托管平台识别：
 
-- `/assets/*`: `Cache-Control: public, max-age=31536000, immutable`
+- `/_next/static/*`: `Cache-Control: public, max-age=31536000, immutable`
 - `/index.html`: 通过 `/*` 规则走 `no-cache`
 - SVG 图标：缓存 7 天
 
@@ -47,14 +47,14 @@ npm run build:compressed
 输出示例：
 
 ```text
-dist/
+out/
   index.html
-  assets/*.js
-  assets/*.js.gz
-  assets/*.js.br
-  assets/*.css
-  assets/*.css.gz
-  assets/*.css.br
+  _next/static/**/*.js
+  _next/static/**/*.js.gz
+  _next/static/**/*.js.br
+  _next/static/**/*.css
+  _next/static/**/*.css.gz
+  _next/static/**/*.css.br
 ```
 
 ## 线上排查顺序

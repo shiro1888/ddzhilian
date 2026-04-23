@@ -28,7 +28,7 @@ ddzhilian 是一个面向跨设备快速传输的桌面式应用，用来在设�
 
 ## 技术栈
 
-- 前端：React 19、TypeScript、Vite
+- 前端：Next.js 静态导出、React 19、TypeScript
 - 后端：Node.js、TypeScript、`ws`
 - 传输模型：WebSocket 信令 + 面向 WebRTC 的会话流转
 
@@ -94,7 +94,7 @@ npm install
 npm run dev
 ```
 
-默认会启动 Vite 开发服务器，一般地址为 `http://localhost:5173`。
+默认会启动 Next.js 开发服务器，一般地址为 `http://localhost:3000`。
 
 ### 前端路由
 
@@ -164,13 +164,13 @@ npm run build
 
 ### 前端静态托管
 
-前端使用 `BrowserRouter`，所以 Web 服务器必须把未知前端路由回退到 `index.html`。否则在刷新 `/connect` 或 `/text` 这类子路径时，服务器会直接返回 404。
+前端现在由 Next.js 静态导出，同时保留现有浏览器端工作区路由。Web 服务器仍建议把未知前端路由回退到 `index.html`，作为静态导出的兜底。
 
 典型生产部署流程：
 
 1. 执行 `npm run build`
-2. 部署生成的 `dist/` 目录
-3. 将非静态文件请求重写到 `dist/index.html`
+2. 部署生成的 `out/` 目录
+3. 将非静态文件请求重写到 `out/index.html`
 4. 暴露 `/ws` 到信令后端，或通过 `VITE_SIGNALING_WS_URL` / `VITE_SIGNALING_HTTP_URL` 显式指定
 
 当前生产前端地址为 `https://ddzhilian.com`。
@@ -210,7 +210,7 @@ npm run start
 根目录：
 
 - `npm run dev`：启动前端开发服务器
-- `npm run build`：类型检查并构建前端
+- `npm run build`：类型检查并将 Next.js 前端导出到 `out/`
 - `npm run lint`：运行 ESLint
 - `npm run preview`：预览前端构建产物
 

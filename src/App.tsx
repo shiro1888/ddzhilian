@@ -1,7 +1,6 @@
 import { lazy, startTransition, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import './App.css'
 import { navItems, viewMeta } from './app/config'
 import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'

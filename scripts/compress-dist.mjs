@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { constants, createBrotliCompress, createGzip } from 'node:zlib'
 
-const distDir = fileURLToPath(new URL('../dist/', import.meta.url))
+const distDir = fileURLToPath(new URL('../out/', import.meta.url))
 const minSize = 1024
 const compressibleExtensions = new Set([
   '.css',
@@ -74,4 +74,4 @@ for (const filePath of files) {
   compressedCount += 1
 }
 
-console.log(`Precompressed ${compressedCount.toString()} dist files.`)
+console.log(`Precompressed ${compressedCount.toString()} Next export files.`)

@@ -34,6 +34,15 @@ const TEXT_SEND_STATUS_MIN_MS = 900
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
+function readPublicEnv(name: 'SIGNALING_WS_URL' | 'SIGNALING_HTTP_URL') {
+  const env = process.env as Record<string, string | undefined>
+  return (
+    env[`NEXT_PUBLIC_${name}`]?.trim() ||
+    env[`VITE_${name}`]?.trim() ||
+    ''
+  )
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms)
@@ -41,7 +50,7 @@ function delay(ms: number) {
 }
 
 function resolveWsUrl() {
-  const configuredUrl = import.meta.env.VITE_SIGNALING_WS_URL?.trim()
+  const configuredUrl = readPublicEnv('SIGNALING_WS_URL')
   if (configuredUrl) {
     return configuredUrl
   }
@@ -58,7 +67,7 @@ function resolveWsUrl() {
 const WS_URL = resolveWsUrl()
 
 function resolveApiBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_SIGNALING_HTTP_URL?.trim()
+  const configuredUrl = readPublicEnv('SIGNALING_HTTP_URL')
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '')
   }
@@ -144,7 +153,7 @@ type IncomingTransferDraft = {
 type SystemName = 'windows' | 'android' | 'ios' | 'ipad' | 'mac' | 'linux' | 'web'
 
 function debugLog(...parts: unknown[]) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV === 'development') {
     console.debug('[ddzhilian]', ...parts)
   }
 }

@@ -28,7 +28,7 @@ ddzhilian is a desktop-style cross-device transfer app for quickly sending files
 
 ## Tech Stack
 
-- Frontend: React 19, TypeScript, Vite
+- Frontend: Next.js static export, React 19, TypeScript
 - Backend: Node.js, TypeScript, `ws`
 - Transport model: WebSocket signaling plus WebRTC-oriented session flow
 
@@ -94,7 +94,7 @@ From the repository root:
 npm run dev
 ```
 
-This starts the Vite frontend, typically on `http://localhost:5173`.
+This starts the Next.js frontend, typically on `http://localhost:3000`.
 
 ### Frontend Routes
 
@@ -169,13 +169,13 @@ Important variables include:
 
 ### Frontend Static Hosting
 
-The frontend uses `BrowserRouter`, so your web server must rewrite unknown frontend routes back to `index.html`. Without this SPA fallback, refreshing `/connect` or `/text` will return a 404 from the server instead of loading the app.
+The frontend is built by Next.js as a static export while preserving the existing browser-side workspace routes. Your web server should still rewrite unknown frontend routes back to `index.html` as a fallback.
 
 Typical production setup:
 
 1. Run `npm run build`
-2. Serve the generated `dist/` directory
-3. Rewrite non-file frontend requests to `dist/index.html`
+2. Serve the generated `out/` directory
+3. Rewrite non-file frontend requests to `out/index.html`
 4. Expose `/ws` to the signaling backend, or set `VITE_SIGNALING_WS_URL` and `VITE_SIGNALING_HTTP_URL`
 
 Current production frontend is served from `https://ddzhilian.com`.
@@ -215,7 +215,7 @@ This repository is currently positioned as an MVP/prototype:
 Root:
 
 - `npm run dev` - start the frontend development server
-- `npm run build` - type-check and build the frontend
+- `npm run build` - type-check and export the Next.js frontend to `out/`
 - `npm run lint` - run ESLint
 - `npm run preview` - preview the built frontend
 
