@@ -1118,7 +1118,7 @@ export function ChatConversationStage({
     mention.dataset.mention = 'bot'
     mention.textContent = '@bot'
 
-    const space = document.createTextNode('\u00a0')
+    const space = document.createTextNode(' ')
     const selection = window.getSelection()
     const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange()
 
@@ -1129,7 +1129,7 @@ export function ChatConversationStage({
     range.deleteContents()
     range.insertNode(space)
     range.insertNode(mention)
-    range.setStartAfter(space)
+    range.setStart(space, space.data.length)
     range.collapse(true)
     selection.removeAllRanges()
     selection.addRange(range)
