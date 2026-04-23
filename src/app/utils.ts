@@ -372,15 +372,196 @@ export function linkifyPlainTextUrls(value: string) {
   return html
 }
 
+function hasMarkdownFence(value: string) {
+  return /^ {0,3}(```|~~~)[\w#+.-]*\s*$/m.test(value)
+}
+
+function hasMarkdownSyntax(value: string) {
+  return (
+    hasMarkdownFence(value) ||
+    /^ {0,3}(#{1,3}\s+\S|>\s?\S|(?:[-*+]\s+|\d+[.)]\s+)\S)/m.test(value) ||
+    /(?:^|[\s([{])(?:\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|`[^`\n]+`)/.test(value) ||
+    /!?\[[^\]\n]+\]\((?:https?:\/\/|mailto:|tel:)[^)]+\)/i.test(value)
+  )
+}
+
+function createMarkdownPlaceholder(store: string[], html: string) {
+  const index = store.push(html) - 1
+  return `\uE000${index.toString()}\uE001`
+}
+
+function restoreMarkdownPlaceholders(value: string, store: string[]) {
+  return value.replace(/\uE000(\d+)\uE001/g, (_, rawIndex: string) => store[Number(rawIndex)] ?? '')
+}
+
+function renderMarkdownInline(value: string) {
+  const placeholders: string[] = []
+  let text = value.replace(/`([^`\n]+)`/g, (_, codeText: string) =>
+    createMarkdownPlaceholder(placeholders, `<code>${escapeHtml(codeText)}</code>`),
+  )
+
+  text = text.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, (match: string, alt: string, src: string) => {
+    if (!isSafeUrl(src, 'src')) {
+      return match
+    }
+
+    return createMarkdownPlaceholder(
+      placeholders,
+      `<img src="${escapeHtml(src)}"${alt ? ` alt="${escapeHtml(alt)}"` : ''} />`,
+    )
+  })
+
+  text = text.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (match: string, label: string, href: string) => {
+    if (!isSafeUrl(href, 'href')) {
+      return match
+    }
+
+    return createMarkdownPlaceholder(
+      placeholders,
+      `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`,
+    )
+  })
+
+  const replaceInlineStyle = (pattern: RegExp, tagName: 'strong' | 'em' | 's') => {
+    text = text.replace(pattern, (match: string, content: string) => {
+      const normalizedContent = content.trim()
+      if (!normalizedContent) {
+        return match
+      }
+
+      return createMarkdownPlaceholder(placeholders, `<${tagName}>${escapeHtml(normalizedContent)}</${tagName}>`)
+    })
+  }
+
+  replaceInlineStyle(/\*\*([^*\n]+)\*\*/g, 'strong')
+  replaceInlineStyle(/__([^_\n]+)__/g, 'strong')
+  replaceInlineStyle(/~~([^~\n]+)~~/g, 's')
+  replaceInlineStyle(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, 'em')
+  replaceInlineStyle(/(?<!_)_([^_\n]+)_(?!_)/g, 'em')
+
+  return restoreMarkdownPlaceholders(linkifyPlainTextUrls(text), placeholders)
+}
+
+function renderMarkdownFenceHtml(codeText: string, language: string, useCopyableBlock: boolean) {
+  if (useCopyableBlock) {
+    return renderCodeBlockHtml(codeText, language)
+  }
+
+  const languageLabel = detectCodeLanguage(codeText, language)
+  return [
+    `<pre data-language="${escapeHtml(languageLabel)}">`,
+    `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
+    '</pre>',
+  ].join('')
+}
+
+function renderMarkdownBlocks(value: string) {
+  const lines = value.replace(/\r\n?/g, '\n').split('\n')
+  const blocks: string[] = []
+  let index = 0
+
+  const isBlockStart = (line: string) =>
+    /^ {0,3}(```|~~~)[\w#+.-]*\s*$/.test(line) ||
+    /^ {0,3}#{1,3}\s+\S/.test(line) ||
+    /^ {0,3}>\s?/.test(line) ||
+    /^ {0,3}(?:[-*+]\s+|\d+[.)]\s+)/.test(line)
+
+  while (index < lines.length) {
+    const currentLine = lines[index] ?? ''
+
+    if (!currentLine.trim()) {
+      index += 1
+      continue
+    }
+
+    const fenceMatch = currentLine.match(/^ {0,3}(```|~~~)([\w#+.-]*)\s*$/)
+    if (fenceMatch) {
+      const [, marker, language = ''] = fenceMatch
+      const codeLines: string[] = []
+      index += 1
+
+      while (index < lines.length && !(lines[index] ?? '').startsWith(marker)) {
+        codeLines.push(lines[index] ?? '')
+        index += 1
+      }
+
+      if (index < lines.length) {
+        index += 1
+      }
+
+      const isStandaloneCodeBlock = lines.filter((line) => line.trim()).length === codeLines.filter((line) => line.trim()).length + 2
+      blocks.push(renderMarkdownFenceHtml(codeLines.join('\n').trimEnd(), language, isStandaloneCodeBlock))
+      continue
+    }
+
+    const headingMatch = currentLine.match(/^ {0,3}(#{1,3})\s+(.+)$/)
+    if (headingMatch) {
+      const level = headingMatch[1].length
+      blocks.push(`<h${level}>${renderMarkdownInline(headingMatch[2].trim())}</h${level}>`)
+      index += 1
+      continue
+    }
+
+    if (/^ {0,3}>\s?/.test(currentLine)) {
+      const quoteLines: string[] = []
+      while (index < lines.length && /^ {0,3}>\s?/.test(lines[index] ?? '')) {
+        quoteLines.push((lines[index] ?? '').replace(/^ {0,3}>\s?/, ''))
+        index += 1
+      }
+      blocks.push(`<blockquote>${quoteLines.map((line) => renderMarkdownInline(line)).join('<br />')}</blockquote>`)
+      continue
+    }
+
+    const unorderedListMatch = currentLine.match(/^ {0,3}[-*+]\s+(.+)$/)
+    const orderedListMatch = currentLine.match(/^ {0,3}\d+[.)]\s+(.+)$/)
+    if (unorderedListMatch || orderedListMatch) {
+      const isOrdered = Boolean(orderedListMatch)
+      const items: string[] = []
+      const itemPattern = isOrdered ? /^ {0,3}\d+[.)]\s+(.+)$/ : /^ {0,3}[-*+]\s+(.+)$/
+
+      while (index < lines.length) {
+        const itemMatch = (lines[index] ?? '').match(itemPattern)
+        if (!itemMatch) {
+          break
+        }
+
+        items.push(`<li>${renderMarkdownInline(itemMatch[1].trim())}</li>`)
+        index += 1
+      }
+
+      blocks.push(`<${isOrdered ? 'ol' : 'ul'}>${items.join('')}</${isOrdered ? 'ol' : 'ul'}>`)
+      continue
+    }
+
+    const paragraphLines: string[] = []
+    while (index < lines.length && lines[index]?.trim() && !isBlockStart(lines[index] ?? '')) {
+      paragraphLines.push(lines[index] ?? '')
+      index += 1
+    }
+
+    blocks.push(`<p>${paragraphLines.map((line) => renderMarkdownInline(line)).join('<br />')}</p>`)
+  }
+
+  return blocks.join('')
+}
+
 function normalizePlainRichText(value: string) {
   const appleMusicLyricShare = renderAppleMusicLyricShare(value)
   if (appleMusicLyricShare) {
     return appleMusicLyricShare
   }
 
+  if (hasMarkdownFence(value)) {
+    return renderMarkdownBlocks(value)
+  }
+
   const codeText = normalizeCodeText(value)
   if (shouldRenderCodeTextAsBlock(codeText)) {
     return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+  }
+
+  if (hasMarkdownSyntax(value)) {
+    return renderMarkdownBlocks(value)
   }
 
   return value.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />')

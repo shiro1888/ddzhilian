@@ -1,6 +1,6 @@
 import type { TextRecord } from '../../lib/ddzhilian-types'
 import type { TextMode } from '../types'
-import { formatChatDivider, formatRelativeTime, shouldInsertDivider } from '../utils'
+import { formatChatDivider, formatRelativeTime, sanitizeRichTextHtml, shouldInsertDivider } from '../utils'
 
 type TextStageProps = {
   textMode: TextMode
@@ -92,9 +92,10 @@ export function TextStage({
                     <div className={`dd-chatbox__message${record.fromSelf ? ' is-self' : ' is-peer'}`}>
                       {!record.fromSelf && <div className="dd-chatbox__avatar">TA</div>}
 
-                      <div className="dd-chatbox__bubble">
-                        <p>{record.text}</p>
-                      </div>
+                      <div
+                        className="dd-chatbox__bubble dd-chatbox__bubble--rich"
+                        dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(record.text) }}
+                      />
 
                       {record.fromSelf && <div className="dd-chatbox__avatar is-self">我</div>}
                     </div>

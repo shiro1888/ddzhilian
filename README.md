@@ -45,7 +45,21 @@ ddzhilian is a desktop-style cross-device transfer app for quickly sending files
 - Floating emoji picker with direct insertion into the chat composer
 - Rich chat composer toolbar inspired by classroom editors
 - Text formatting, color palette, table insertion, TEX/code block insertion, and link-style attachment insertion
+- Chat messages render common Markdown syntax, including headings, emphasis, blockquotes, lists, links, images, inline code, and fenced code blocks
 - Google Fonts based UI typography
+
+### Markdown Message Rendering
+
+Chat messages detect common Markdown syntax in plain-text content and render it as controlled rich HTML. The supported subset includes:
+
+- `#`, `##`, and `###` headings
+- `**bold**`, `*italic*`, and `~~strikethrough~~`
+- `>` blockquotes
+- `-` / `*` / `+` unordered lists and `1.` / `1)` ordered lists
+- `` `inline code` `` and triple-backtick fenced code blocks
+- `[links](https://example.com)` and `![images](https://example.com/image.png)`
+
+Messages that already contain HTML or pasted rich text still use the existing allowlist sanitizer, so rich-text paste behavior, code-paste handling, and the safety boundary remain intact.
 
 ## Backend Responsibilities
 

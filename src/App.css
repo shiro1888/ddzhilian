@@ -1360,6 +1360,31 @@
   margin-top: 8px;
 }
 
+.dd-chatbox__bubble--rich :where(h1, h2, h3) {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.dd-chatbox__bubble--rich h1 {
+  font-size: 1.12rem;
+}
+
+.dd-chatbox__bubble--rich h2 {
+  font-size: 1.04rem;
+}
+
+.dd-chatbox__bubble--rich h3 {
+  font-size: 0.98rem;
+}
+
+.dd-chatbox__bubble--rich :where(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.dd-chatbox__bubble--rich li + li {
+  margin-top: 3px;
+}
+
 .dd-chatbox__bubble--rich blockquote,
 .dd-chatbox__editor blockquote {
   display: grid;
