@@ -37,13 +37,13 @@
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--brand);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 18%, transparent);
-  font-family: var(--font-mono);
-  font-size: 0.86rem;
-  letter-spacing: 0.1em;
+  border-radius: 10px;
+}
+
+.dd-brand__mark img {
+  display: block;
+  width: 40px;
+  height: 40px;
 }
 
 .dd-brand strong {

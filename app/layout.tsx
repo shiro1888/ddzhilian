@@ -5,6 +5,10 @@ import '../src/App.css'
 
 export const metadata: Metadata = {
   title: 'ddzhilian | 文件与文本互传',
+  icons: {
+    icon: [{ url: '/logo-dd-link.svg', type: 'image/svg+xml' }],
+    shortcut: [{ url: '/logo-dd-link.svg', type: 'image/svg+xml' }],
+  },
 }
 
 export const viewport: Viewport = {
