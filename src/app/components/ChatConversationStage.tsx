@@ -1096,11 +1096,38 @@ export function ChatConversationStage({
   }
 
   const insertBotMentionAtCursor = (replaceTrigger: boolean) => {
+    const selection = window.getSelection()
+
+    if (replaceTrigger && editorRef.current && (!selection || !editorRef.current.contains(selection.anchorNode))) {
+      editorRef.current.focus()
+      const walker = document.createTreeWalker(editorRef.current, NodeFilter.SHOW_TEXT)
+      let triggerNode: Text | null = null
+      let triggerOffset = -1
+
+      while (walker.nextNode()) {
+        const textNode = walker.currentNode as Text
+        const offset = textNode.data.lastIndexOf('@')
+        if (offset >= 0) {
+          triggerNode = textNode
+          triggerOffset = offset + 1
+        }
+      }
+
+      if (triggerNode && triggerOffset >= 0) {
+        const triggerRange = document.createRange()
+        triggerRange.setStart(triggerNode, triggerOffset)
+        triggerRange.collapse(true)
+        selection?.removeAllRanges()
+        selection?.addRange(triggerRange)
+        savedRangeRef.current = triggerRange.cloneRange()
+      }
+    }
+
     restoreSelection()
 
     if (replaceTrigger) {
-      const selection = window.getSelection()
-      const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+      const activeSelection = window.getSelection()
+      const range = activeSelection?.rangeCount ? activeSelection.getRangeAt(0) : null
       const container = range?.startContainer
 
       if (range && container?.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
@@ -1119,10 +1146,10 @@ export function ChatConversationStage({
     mention.textContent = '@bot'
 
     const caretAnchor = document.createTextNode('\u200B ')
-    const selection = window.getSelection()
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange()
+    const insertionSelection = window.getSelection()
+    const range = insertionSelection?.rangeCount ? insertionSelection.getRangeAt(0) : document.createRange()
 
-    if (!selection) {
+    if (!insertionSelection) {
       return
     }
 
@@ -1131,8 +1158,8 @@ export function ChatConversationStage({
     range.insertNode(mention)
     range.setStart(caretAnchor, caretAnchor.data.length)
     range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
+    insertionSelection.removeAllRanges()
+    insertionSelection.addRange(range)
     savedRangeRef.current = range.cloneRange()
     syncDraftFromEditor()
   }
@@ -1140,6 +1167,18 @@ export function ChatConversationStage({
   const handleBotMentionSelect = () => {
     insertBotMentionAtCursor(true)
     setIsBotMentionOpen(false)
+  }
+
+  const preserveBotMentionSelection = (event: ReactMouseEvent<HTMLElement>) => {
+    const selection = window.getSelection()
+    if (editorRef.current && selection?.anchorNode && editorRef.current.contains(selection.anchorNode)) {
+      const range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null
+      if (range) {
+        savedRangeRef.current = range
+      }
+    }
+
+    preserveEditorFocus(event)
   }
 
   const handleBotMentionButtonClick = () => {
@@ -1937,7 +1976,7 @@ export function ChatConversationStage({
                 className="dd-bot-mention-option"
                 role="option"
                 aria-selected="true"
-                onMouseDown={preserveEditorFocus}
+                onMouseDown={preserveBotMentionSelection}
                 onClick={handleBotMentionSelect}
               >
                 <strong>@bot</strong>
