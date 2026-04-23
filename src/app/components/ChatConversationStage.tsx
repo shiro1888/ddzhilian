@@ -1118,7 +1118,7 @@ export function ChatConversationStage({
     mention.dataset.mention = 'bot'
     mention.textContent = '@bot'
 
-    const space = document.createTextNode(' ')
+    const caretAnchor = document.createTextNode('\u200B ')
     const selection = window.getSelection()
     const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange()
 
@@ -1127,9 +1127,9 @@ export function ChatConversationStage({
     }
 
     range.deleteContents()
-    range.insertNode(space)
+    range.insertNode(caretAnchor)
     range.insertNode(mention)
-    range.setStart(space, space.data.length)
+    range.setStart(caretAnchor, caretAnchor.data.length)
     range.collapse(true)
     selection.removeAllRanges()
     selection.addRange(range)
@@ -1161,12 +1161,12 @@ export function ChatConversationStage({
     if (container.nodeType === Node.TEXT_NODE) {
       const textNode = container as Text
       if (direction === 'backward') {
-        if (offset < textNode.data.length) {
+        if (offset < textNode.data.length || !/^[\u200B\s]*$/.test(textNode.data)) {
           return false
         }
         candidate = textNode.previousSibling
       } else {
-        if (offset > 0) {
+        if (offset > 0 || !/^[\u200B\s]*$/.test(textNode.data)) {
           return false
         }
         candidate = textNode.nextSibling
