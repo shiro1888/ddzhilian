@@ -724,22 +724,6 @@ export function ChatConversationStage({
     setIsBotMentionOpen(/(^|\s)@$/.test(plainText))
   }
 
-  const focusEditorEnd = () => {
-    const editor = editorRef.current
-    const selection = window.getSelection()
-    if (!editor || !selection) {
-      return
-    }
-
-    editor.focus()
-    const range = document.createRange()
-    range.selectNodeContents(editor)
-    range.collapse(false)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    savedRangeRef.current = range.cloneRange()
-  }
-
   const preserveEditorFocus = (event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault()
   }
@@ -1111,21 +1095,98 @@ export function ChatConversationStage({
     setQuoteDraft(null)
   }
 
-  const insertTextAtCursor = (value: string) => {
+  const insertBotMentionAtCursor = (replaceTrigger: boolean) => {
     restoreSelection()
-    document.execCommand('insertText', false, value)
+
+    if (replaceTrigger) {
+      const selection = window.getSelection()
+      const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+      const container = range?.startContainer
+
+      if (range && container?.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+        const textNode = container as Text
+        if (textNode.data.charAt(range.startOffset - 1) === '@') {
+          range.setStart(textNode, range.startOffset - 1)
+          range.deleteContents()
+        }
+      }
+    }
+
+    const mention = document.createElement('span')
+    mention.className = 'dd-chatbox__mention'
+    mention.contentEditable = 'false'
+    mention.dataset.mention = 'bot'
+    mention.textContent = '@bot'
+
+    const space = document.createTextNode('\u00a0')
+    const selection = window.getSelection()
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange()
+
+    if (!selection) {
+      return
+    }
+
+    range.deleteContents()
+    range.insertNode(space)
+    range.insertNode(mention)
+    range.setStartAfter(space)
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
     syncDraftFromEditor()
-    window.requestAnimationFrame(focusEditorEnd)
   }
 
   const handleBotMentionSelect = () => {
-    insertTextAtCursor('bot ')
+    insertBotMentionAtCursor(true)
     setIsBotMentionOpen(false)
   }
 
   const handleBotMentionButtonClick = () => {
-    insertTextAtCursor('@bot ')
+    insertBotMentionAtCursor(false)
     setIsBotMentionOpen(false)
+  }
+
+  const removeAdjacentBotMention = (direction: 'backward' | 'forward') => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+      return false
+    }
+
+    const range = selection.getRangeAt(0)
+    const container = range.startContainer
+    const offset = range.startOffset
+    let candidate: ChildNode | null = null
+
+    if (container.nodeType === Node.TEXT_NODE) {
+      const textNode = container as Text
+      if (direction === 'backward') {
+        if (offset < textNode.data.length) {
+          return false
+        }
+        candidate = textNode.previousSibling
+      } else {
+        if (offset > 0) {
+          return false
+        }
+        candidate = textNode.nextSibling
+      }
+    } else {
+      const parent = container as Node
+      candidate = parent.childNodes.item(direction === 'backward' ? offset - 1 : offset)
+    }
+
+    if (
+      candidate instanceof HTMLElement &&
+      candidate.classList.contains('dd-chatbox__mention') &&
+      candidate.dataset.mention === 'bot'
+    ) {
+      candidate.remove()
+      syncDraftFromEditor()
+      return true
+    }
+
+    return false
   }
 
   const applyInlineStyle = (
@@ -1513,7 +1574,7 @@ export function ChatConversationStage({
                       {entry.previewUrl && previewKind === 'image' ? (
                         <button
                           type="button"
-                          className="dd-shared-card__preview"
+                          className="dd-shared-card__preview dd-shared-card__preview--image"
                           onClick={() => openImagePreview(entry.previewUrl ?? '', entry.fileName)}
                         >
                           <img src={entry.previewUrl} alt={entry.fileName} loading="lazy" />
@@ -1896,6 +1957,16 @@ export function ChatConversationStage({
               onInput={syncDraftFromEditor}
               onPaste={handleEditorPaste}
               onKeyDown={(event) => {
+                if (event.key === 'Backspace' && removeAdjacentBotMention('backward')) {
+                  event.preventDefault()
+                  return
+                }
+
+                if (event.key === 'Delete' && removeAdjacentBotMention('forward')) {
+                  event.preventDefault()
+                  return
+                }
+
                 if (
                   event.key === 'Enter' &&
                   ((enterToSend && !event.shiftKey) || event.metaKey || event.ctrlKey)
