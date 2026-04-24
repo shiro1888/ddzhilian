@@ -545,10 +545,138 @@ function renderMarkdownBlocks(value: string) {
   return blocks.join('')
 }
 
+type MixedBlockSegment = {
+  type: 'text' | 'code'
+  lines: string[]
+}
+
+function isLikelyCodeLine(line: string) {
+  const trimmedLine = line.trim()
+  if (!trimmedLine) {
+    return false
+  }
+
+  if (/^@bot\b/i.test(trimmedLine)) {
+    return false
+  }
+
+  if (/^<\/?[a-z][\w.:-]*(?:\s+[^<>]*)?>$/i.test(trimmedLine)) {
+    return true
+  }
+
+  if (/^[{}()[\];,]+$/.test(trimmedLine)) {
+    return true
+  }
+
+  if (/^(?:const|let|var|function|return|if|else|for|while|switch|case|break|continue|try|catch|finally|class|import|export|from|async|await|def|print)\b/.test(trimmedLine)) {
+    return true
+  }
+
+  if (/^(?:\/\/|\/\*|\*\/|#include|#define)\b/.test(trimmedLine)) {
+    return true
+  }
+
+  if (/^\s/.test(line) && /[{}()[\];=<>]/.test(trimmedLine)) {
+    return true
+  }
+
+  if (
+    /[{}()[\];=<>]/.test(trimmedLine) &&
+    (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(trimmedLine) ||
+      /\b[A-Za-z_$][\w$]*\s*\([^)]*\)/.test(trimmedLine))
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function splitMixedLine(line: string) {
+  const trimmedLine = line.trim()
+  if (!trimmedLine) {
+    return []
+  }
+
+  const botCodeMatch = /^(@bot)\s+(.*)$/i.exec(trimmedLine)
+  if (botCodeMatch && isLikelyCodeLine(botCodeMatch[2])) {
+    return [
+      { type: 'text' as const, value: botCodeMatch[1] },
+      { type: 'code' as const, value: botCodeMatch[2] },
+    ]
+  }
+
+  const prefixCodeMatch = /^(.*?[：:])\s*(<\/?[a-z][\w.:-]*(?:\s+[^<>]*)?>.*|(?:const|let|var|function|if|for|while|class|import|export)\b.*)$/i.exec(trimmedLine)
+  if (prefixCodeMatch && isLikelyCodeLine(prefixCodeMatch[2])) {
+    return [
+      { type: 'text' as const, value: prefixCodeMatch[1] },
+      { type: 'code' as const, value: prefixCodeMatch[2] },
+    ]
+  }
+
+  return [{ type: isLikelyCodeLine(trimmedLine) ? ('code' as const) : ('text' as const), value: trimmedLine }]
+}
+
+function renderMixedTextAndCodeBlocks(value: string) {
+  const normalizedValue = normalizeCodeText(value)
+  const rawLines = normalizedValue.split('\n')
+  const segments: MixedBlockSegment[] = []
+  let current: MixedBlockSegment | null = null
+
+  const pushCurrent = () => {
+    if (!current || current.lines.length === 0) {
+      current = null
+      return
+    }
+
+    segments.push(current)
+    current = null
+  }
+
+  for (const rawLine of rawLines) {
+    if (!rawLine.trim()) {
+      pushCurrent()
+      continue
+    }
+
+    for (const part of splitMixedLine(rawLine)) {
+      if (!current || current.type !== part.type) {
+        pushCurrent()
+        current = {
+          type: part.type,
+          lines: [],
+        }
+      }
+
+      current.lines.push(part.value)
+    }
+  }
+
+  pushCurrent()
+
+  const hasCode = segments.some((segment) => segment.type === 'code')
+  const hasText = segments.some((segment) => segment.type === 'text')
+  if (!hasCode || !hasText) {
+    return ''
+  }
+
+  return segments
+    .map((segment) =>
+      segment.type === 'code'
+        ? renderCodeBlockHtml(segment.lines.join('\n'), detectCodeLanguage(segment.lines.join('\n')))
+        : `<p>${segment.lines.map((line) => renderMarkdownInline(line)).join('<br />')}</p>`,
+    )
+    .join('')
+}
+
 function normalizePlainRichText(value: string) {
   const appleMusicLyricShare = renderAppleMusicLyricShare(value)
   if (appleMusicLyricShare) {
     return appleMusicLyricShare
+  }
+
+  const mixedHtml = renderMixedTextAndCodeBlocks(value)
+  if (mixedHtml) {
+    return mixedHtml
   }
 
   if (hasMarkdownFence(value)) {
@@ -976,6 +1104,11 @@ export function sanitizeRichTextHtml(value: string) {
     return appleMusicLyricShare
   }
 
+  const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
+  if (mixedHtml) {
+    return mixedHtml
+  }
+
   if (shouldRenderAsCodeBlock(value, root)) {
     const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
     return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
@@ -1154,6 +1287,11 @@ export function sanitizeBotReplyHtml(value: string) {
   const root = documentFragment.body.firstElementChild
   if (!root) {
     return normalizePlainRichText(value)
+  }
+
+  const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
+  if (mixedHtml) {
+    return mixedHtml
   }
 
   const sanitizeNode = (node: Node): string => {
