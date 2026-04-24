@@ -1141,7 +1141,7 @@ export function sanitizeRichTextHtml(value: string) {
 }
 
 export function sanitizeBotReplyHtml(value: string) {
-  if (!value || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+  if (!value || !/[<>]/.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
     return normalizePlainRichText(value)
   }
 

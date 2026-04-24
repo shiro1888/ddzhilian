@@ -387,6 +387,7 @@ export function ChatConversationStage({
   const [isFormatToolbarOpen, setIsFormatToolbarOpen] = useState(false)
   const [insertPanel, setInsertPanel] = useState<InsertPanelState | null>(null)
   const [insertPanelError, setInsertPanelError] = useState<string | null>(null)
+  const insertPanelType = insertPanel?.type
   const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false)
   const [activeTextColor, setActiveTextColor] = useState<string | null>(null)
   const [activeParagraphFormat, setActiveParagraphFormat] = useState('')
@@ -724,7 +725,7 @@ export function ChatConversationStage({
   }, [isColorPaletteOpen])
 
   useEffect(() => {
-    if (!insertPanel) {
+    if (!insertPanelType) {
       return
     }
 
@@ -736,7 +737,7 @@ export function ChatConversationStage({
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [insertPanel])
+  }, [insertPanelType])
 
   useEffect(() => {
     if (!imagePreview) {

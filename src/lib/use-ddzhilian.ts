@@ -422,6 +422,7 @@ export function useDdzhilian() {
   const historyTextsRef = useRef<HistoryTextSummary[]>([])
   const historyTextRefreshKeyRef = useRef('')
   const historyTextRefreshRequestRef = useRef('')
+  const historyTextRefreshVersionRef = useRef(0)
   const incomingTransfersRef = useRef(new Map<string, IncomingTransferDraft>())
   const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>())
   const transferFilesRef = useRef(new Map<string, File>())
@@ -579,7 +580,9 @@ export function useDdzhilian() {
     const roomsWithText = rooms.filter((room) => room.historyTextCount > 0)
 
     if (roomsWithText.length === 0) {
+      historyTextRefreshVersionRef.current += 1
       historyTextRefreshKeyRef.current = refreshKey
+      historyTextRefreshRequestRef.current = ''
       startTransition(() => {
         setHistoryTexts([])
       })
@@ -587,6 +590,8 @@ export function useDdzhilian() {
       return
     }
 
+    const requestVersion = historyTextRefreshVersionRef.current + 1
+    historyTextRefreshVersionRef.current = requestVersion
     historyTextRefreshRequestRef.current = refreshKey
 
     try {
@@ -611,6 +616,10 @@ export function useDdzhilian() {
         .flat()
         .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
 
+      if (historyTextRefreshVersionRef.current !== requestVersion) {
+        return
+      }
+
       historyTextRefreshKeyRef.current = refreshKey
       archivedTextHistoryIdsRef.current = new Set(
         nextHistoryTexts.map((record) => record.historyId),
@@ -619,9 +628,14 @@ export function useDdzhilian() {
         setHistoryTexts(nextHistoryTexts)
       })
     } catch (error) {
-      debugLog('history text refresh failed', error)
+      if (historyTextRefreshVersionRef.current === requestVersion) {
+        debugLog('history text refresh failed', error)
+      }
     } finally {
-      if (historyTextRefreshRequestRef.current === refreshKey) {
+      if (
+        historyTextRefreshVersionRef.current === requestVersion &&
+        historyTextRefreshRequestRef.current === refreshKey
+      ) {
         historyTextRefreshRequestRef.current = ''
       }
     }

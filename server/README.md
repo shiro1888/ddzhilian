@@ -57,7 +57,8 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
 - `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
-- `HISTORY_RETENTION_MS`: file history retention window, default 6 hours; text history is persisted
+- `HISTORY_RETENTION_MS`: file history retention window, default 6 hours, capped at 24 hours
+- `HISTORY_TEXT_RETENTION_MS`: text history retention window, default 24 hours, capped at 24 hours
 - `TURN_URL`: optional single TURN server URL
 - `TURN_URLS`: optional comma-separated TURN server URLs
 - `TURN_USERNAME`: optional TURN username
@@ -73,18 +74,19 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS`: input pricing estimate for local budget checks, default `4625`
 - `CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS`: output pricing estimate for local budget checks, default `30475`
 
-## History File Cleanup
+## History Cleanup
 
 History files are stored under `server/data/history/files/<roomId>/...`; the durable metadata index is `server/data/history/index.json`.
 
 Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
 
-- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 6 hours.
+- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 6 hours, and the server caps it at 24 hours.
+- `HISTORY_TEXT_RETENTION_MS` removes text records older than the configured retention window. The default and maximum are 24 hours.
 - `HISTORY_MAX_BYTES` caps historical file storage per room. The default is 10 GiB.
 - When a room exceeds the byte cap, cleanup removes the oldest files first until the room is under the limit.
 - File cleanup deletes both the metadata entry and the stored file on disk.
-- Cleanup runs on server startup, history listing, file save/upload paths, and the periodic maintenance loop.
-- Text history is persisted independently of file cleanup. Text is removed only through explicit actions such as message recall.
+- Cleanup runs on server startup, history listing, history writes, file save/upload paths, and the periodic maintenance loop.
+- Text cleanup deletes the metadata entry; message recall still deletes the target text immediately.
 
 ## Endpoints
 

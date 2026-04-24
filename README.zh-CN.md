@@ -19,7 +19,7 @@ ddzhilian 是一个面向跨设备协作的轻量传输与聊天工作台。它�
 - 文件传输：支持拖拽选择、传输进度、接收队列和完成历史。
 - 长文本交换：支持普通文本、富文本粘贴和 Markdown 显示。
 - 公共对话：支持公共 room 入口和 room 内历史内容。
-- 历史内容：文本历史独立保存，历史文件按保留时间和容量自动清理。
+- 历史内容：文本历史默认保留 24 小时，历史文件按保留时间和容量自动清理。
 - 实时信令：通过 WebSocket 协调设备在线状态、配对和 WebRTC 连接。
 
 ## 技术栈
@@ -135,10 +135,11 @@ npm run dev
 
 - 文件保存在 `server/data/history/files/<roomId>/...`。
 - 元数据索引保存在 `server/data/history/index.json`。
-- `HISTORY_RETENTION_MS` 控制历史文件保留时长，默认 6 小时。
+- `HISTORY_RETENTION_MS` 控制历史文件保留时长，默认 6 小时，最大 24 小时。
+- `HISTORY_TEXT_RETENTION_MS` 控制历史文本保留时长，默认 24 小时，最大 24 小时。
 - `HISTORY_MAX_BYTES` 控制单个 room 的历史文件容量上限，默认 10 GiB。
 - 清理会在服务启动、查询历史、保存历史、上传文件和定期维护时触发。
-- 文本历史不受 `HISTORY_RETENTION_MS` 自动过期影响，用户撤回文本时通过历史文本删除接口移除。
+- 超过保留期的历史文本会从元数据索引中删除；超过保留期的历史文件会同时删除元数据和磁盘文件。
 
 ## 环境变量
 
@@ -161,6 +162,7 @@ npm run dev
 - `PING_INTERVAL_MS`
 - `SESSION_IDLE_MS`
 - `HISTORY_RETENTION_MS`
+- `HISTORY_TEXT_RETENTION_MS`
 - `HISTORY_MAX_BYTES`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`

@@ -417,6 +417,8 @@ export class HistoryRegistry {
     if (changed) {
       this.persist();
     }
+
+    return changed;
   }
 
   toSummary(record: HistoryFileRecord, publicBaseUrl?: string, isPublic = record.isPublic): HistoryFileSummary {

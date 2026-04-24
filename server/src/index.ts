@@ -1302,6 +1302,13 @@ function broadcastSnapshots() {
   }
 }
 
+const historyMaintenanceInterval = setInterval(() => {
+  if (history.prune()) {
+    broadcastSnapshots();
+  }
+}, config.pingIntervalMs);
+historyMaintenanceInterval.unref();
+
 function cancelPendingRoomExit(deviceId: string) {
   const timer = pendingRoomExitTimers.get(deviceId);
   if (!timer) {
@@ -2090,7 +2097,9 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
 
     isAlive = false;
     sessions.prune(config.sessionIdleMs);
-    history.prune();
+    if (history.prune()) {
+      broadcastSnapshots();
+    }
     socket.ping();
   }, config.pingIntervalMs);
 

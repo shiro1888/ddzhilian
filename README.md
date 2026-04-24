@@ -19,7 +19,7 @@ This repository contains:
 - File transfer: support drag-and-drop selection, progress state, receive queues, and completed history.
 - Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
 - Public rooms: support public room entry links and room-scoped history.
-- History management: persist text history and clean temporary file history by retention and size limits.
+- History management: keep text history for 24 hours by default and clean temporary file history by retention and size limits.
 - Realtime signaling: coordinate presence, pairing, and WebRTC setup through WebSocket signaling.
 
 ## Tech Stack
@@ -135,10 +135,11 @@ Public rooms and regular rooms share the same temporary file-history rules:
 
 - Files are stored under `server/data/history/files/<roomId>/...`.
 - Metadata is stored in `server/data/history/index.json`.
-- `HISTORY_RETENTION_MS` controls file-history retention. The default is 6 hours.
+- `HISTORY_RETENTION_MS` controls file-history retention. The default is 6 hours, capped at 24 hours.
+- `HISTORY_TEXT_RETENTION_MS` controls text-history retention. The default is 24 hours, capped at 24 hours.
 - `HISTORY_MAX_BYTES` controls the per-room historical file cap. The default is 10 GiB.
 - Cleanup runs during startup, history reads, history writes, uploads, and scheduled maintenance.
-- Text history is not automatically expired by `HISTORY_RETENTION_MS`; recalled text is removed through the history-text delete endpoint.
+- Expired text history is removed from the metadata index; expired file history removes both metadata and stored files.
 
 ## Environment Variables
 
@@ -161,6 +162,7 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `PING_INTERVAL_MS`
 - `SESSION_IDLE_MS`
 - `HISTORY_RETENTION_MS`
+- `HISTORY_TEXT_RETENTION_MS`
 - `HISTORY_MAX_BYTES`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`

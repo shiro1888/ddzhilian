@@ -7,6 +7,7 @@ const defaultAllowedOrigins = [
   'http://localhost:4173',
   'http://127.0.0.1:4173',
 ];
+const maxHistoryRetentionMs = 24 * 60 * 60 * 1000;
 
 export interface ServerConfig {
   host: string;
@@ -51,6 +52,16 @@ function readNumber(name: string, fallback: number) {
   const parsed = Number(raw);
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readHistoryRetentionMs(name: string, fallback: number) {
+  const value = readNumber(name, fallback);
+
+  if (value <= 0) {
+    return fallback;
+  }
+
+  return Math.min(value, maxHistoryRetentionMs);
 }
 
 function readTurnUrls() {
@@ -121,8 +132,8 @@ export function loadConfig(): ServerConfig {
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
     sessionIdleMs: readNumber('SESSION_IDLE_MS', 120_000),
     roomExitGraceMs: readNumber('ROOM_EXIT_GRACE_MS', 30 * 60 * 1000),
-    historyRetentionMs: readNumber('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
-    historyTextRetentionMs: readNumber('HISTORY_TEXT_RETENTION_MS', 24 * 60 * 60 * 1000),
+    historyRetentionMs: readHistoryRetentionMs('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
+    historyTextRetentionMs: readHistoryRetentionMs('HISTORY_TEXT_RETENTION_MS', maxHistoryRetentionMs),
     historyMaxBytes: readNumber('HISTORY_MAX_BYTES', 10 * 1024 * 1024 * 1024),
     rtcConfig: {
       iceServers: turnUrls.length > 0
