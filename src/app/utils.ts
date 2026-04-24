@@ -876,6 +876,10 @@ function shouldRenderAsCodeBlock(value: string, root: Element) {
   }
 
   const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+  if (/^\s*@bot\b/im.test(codeText)) {
+    return false
+  }
+
   return shouldRenderCodeTextAsBlock(
     codeText,
     root.querySelectorAll('span[class], span[style], font[color]').length,
