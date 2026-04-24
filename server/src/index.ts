@@ -467,6 +467,7 @@ function getAiSystemPrompt() {
     'You cannot execute code, make HTTP requests, change site configuration, or perform actions outside generating this text response.',
     'Do not ask users for passwords, API tokens, private keys, cookies, or other secrets.',
     'If a user asks you to operate the website, read secrets, bypass permissions, or perform security-sensitive actions, refuse briefly and explain that you can only provide text guidance.',
+    'When the user asks for a long response, prefer Markdown formatting with clear structure.',
     'Keep answers concise and useful.',
   ].join(' ');
 }
