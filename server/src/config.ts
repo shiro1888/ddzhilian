@@ -8,6 +8,21 @@ const defaultAllowedOrigins = [
   'http://127.0.0.1:4173',
 ];
 const maxHistoryRetentionMs = 24 * 60 * 60 * 1000;
+const defaultCloudflareAiModels = [
+  {
+    id: '@cf/google/gemma-4-26b-a4b-it',
+    label: 'Gemma 4 26B A4B',
+  },
+  {
+    id: '@cf/openai/gpt-oss-120b',
+    label: 'GPT-OSS 120B',
+  },
+];
+
+export type CloudflareAiModelOption = {
+  id: string;
+  label: string;
+};
 
 export interface ServerConfig {
   host: string;
@@ -33,6 +48,7 @@ export interface ServerConfig {
     accountId?: string;
     apiToken?: string;
     model: string;
+    models: CloudflareAiModelOption[];
     maxPromptChars: number;
     maxOutputTokens: number;
     freeOnly: boolean;
@@ -91,6 +107,45 @@ function readStringList(name: string) {
     .filter(Boolean);
 }
 
+function labelFromCloudflareAiModelId(modelId: string) {
+  return modelId.split('/').pop() || modelId;
+}
+
+function readCloudflareAiModels(defaultModelId: string) {
+  const configuredModels = readStringList('CLOUDFLARE_AI_MODELS')
+    .map((entry) => {
+      const [rawId, rawLabel] = entry.split('|');
+      const id = rawId?.trim();
+
+      if (!id) {
+        return undefined;
+      }
+
+      return {
+        id,
+        label: rawLabel?.trim() || labelFromCloudflareAiModelId(id),
+      };
+    })
+    .filter((model): model is CloudflareAiModelOption => Boolean(model));
+  const models = configuredModels.length > 0
+    ? configuredModels
+    : defaultCloudflareAiModels;
+  const uniqueModels = new Map<string, CloudflareAiModelOption>();
+
+  for (const model of models) {
+    uniqueModels.set(model.id, model);
+  }
+
+  if (!uniqueModels.has(defaultModelId)) {
+    uniqueModels.set(defaultModelId, {
+      id: defaultModelId,
+      label: labelFromCloudflareAiModelId(defaultModelId),
+    });
+  }
+
+  return [...uniqueModels.values()];
+}
+
 function derivePublicHttpBaseUrl(publicWsUrl: string) {
   try {
     const url = new URL(publicWsUrl);
@@ -117,6 +172,9 @@ export function loadConfig(): ServerConfig {
   const turnUrls = readTurnUrls();
   const turnUsername = process.env.TURN_USERNAME?.trim();
   const turnCredential = process.env.TURN_CREDENTIAL?.trim();
+  const cloudflareAiDefaultModel =
+    process.env.CLOUDFLARE_AI_MODEL?.trim() ||
+    defaultCloudflareAiModels[0].id;
 
   if (publicHttpBaseUrl) {
     allowedOrigins.add(publicHttpBaseUrl);
@@ -150,9 +208,8 @@ export function loadConfig(): ServerConfig {
     cloudflareAi: {
       accountId: process.env.CLOUDFLARE_AI_ACCOUNT_ID?.trim() || undefined,
       apiToken: process.env.CLOUDFLARE_AI_API_TOKEN?.trim() || undefined,
-      model:
-        process.env.CLOUDFLARE_AI_MODEL?.trim() ||
-        '@cf/zai-org/glm-4.7-flash',
+      model: cloudflareAiDefaultModel,
+      models: readCloudflareAiModels(cloudflareAiDefaultModel),
       maxPromptChars: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_PROMPT_CHARS', 8000)),
       maxOutputTokens: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_OUTPUT_TOKENS', 1000)),
       freeOnly: process.env.CLOUDFLARE_AI_FREE_ONLY !== 'false',

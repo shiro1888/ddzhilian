@@ -84,6 +84,7 @@
 .dd-sidebar__actions button,
 .dd-nav button,
 .dd-button,
+.dd-header__reconnect,
 .dd-session-list button,
 .dd-device-list button,
 .dd-icon-button {
@@ -267,6 +268,31 @@
   color: var(--ink-soft);
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.dd-header__reconnect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 10%, white);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 24%, transparent);
+  color: var(--brand-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dd-header__reconnect:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 16%, white);
+}
+
+.dd-header__reconnect:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 
 .dd-header > div > p {
@@ -2719,6 +2745,44 @@
   font-size: 0.78rem;
 }
 
+.dd-bot-model-select {
+  display: grid;
+  gap: 5px;
+  padding: 4px 4px 2px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.dd-bot-model-select select,
+.dd-chatbox__ai-model-select {
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.dd-bot-model-select select {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.dd-chatbox__ai-model-select {
+  width: 126px;
+  min-width: 0;
+  max-width: 34vw;
+  padding: 0 7px;
+  font-size: 0.78rem;
+}
+
+.dd-bot-model-select select:disabled,
+.dd-chatbox__ai-model-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .dd-chatbox__toolbar,
 .dd-chatbox__input-row,
 .dd-text-tools,
@@ -3926,6 +3990,13 @@ textarea:focus-visible,
   background: #ffffff;
   box-shadow: none;
   border: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+
+.dd-shell[data-theme='chat-desktop'] .dd-header__reconnect {
+  min-height: 24px;
+  padding: 0 10px;
+  box-shadow: none;
   font-size: 12px;
 }
 

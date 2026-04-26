@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
+import type { AiModelOption } from '../../lib/ddzhilian-types'
 import {
   extractPlainTextFromRichText,
   formatChatDivider,
@@ -35,6 +36,7 @@ type MessageContextMenuState = {
   text: string
   senderName: string
   fromSelf: boolean
+  isBotMessage: boolean
   left: number
   top: number
 }
@@ -230,6 +232,9 @@ type ChatConversationStageProps = {
   isSendDisabled: boolean
   isAiGenerating: boolean
   aiQuotaLabel: string
+  aiModelOptions: AiModelOption[]
+  selectedAiModel: string
+  selectedAiModelLabel: string
   enterToSend: boolean
   attachments: AttachmentDraft[]
   isSharedPanelOpen: boolean
@@ -250,6 +255,7 @@ type ChatConversationStageProps = {
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
   onRemoveAttachment: (id: string) => void
+  onAiModelChange: (modelId: string) => void
   onEnterToSendChange: (value: boolean) => void
   onSharedPanelOpenChange: (value: boolean) => void
   onSharedContentTabChange: (tab: SharedContentTab) => void
@@ -266,6 +272,18 @@ function normalizeEditorHtml(value: string) {
     .replace(/&nbsp;/gi, ' ')
     .trim()
   return normalizedValue
+}
+
+function isBotMentionElement(node: Node | null): node is HTMLElement {
+  return (
+    node instanceof HTMLElement &&
+    node.classList.contains('dd-chatbox__mention') &&
+    node.dataset.mention === 'bot'
+  )
+}
+
+function isBotMentionCaretTextNode(node: Node | null): node is Text {
+  return node instanceof Text && /^[\u200B\s]*$/.test(node.data)
 }
 
 function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
@@ -361,6 +379,9 @@ export function ChatConversationStage({
   isSendDisabled,
   isAiGenerating,
   aiQuotaLabel,
+  aiModelOptions,
+  selectedAiModel,
+  selectedAiModelLabel,
   enterToSend,
   attachments,
   isSharedPanelOpen,
@@ -375,6 +396,7 @@ export function ChatConversationStage({
   onSendText,
   onRecallText,
   onRemoveAttachment,
+  onAiModelChange,
   onEnterToSendChange,
   onSharedPanelOpenChange,
   onSharedContentTabChange,
@@ -411,18 +433,18 @@ export function ChatConversationStage({
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const pendingBotMentionCaretRef = useRef(false)
+  const pendingBotMentionBackspaceRepairRef = useRef(false)
   const activeSharedContentTab: SharedPanelTab = sharedContentTab === 'chat' ? 'media' : sharedContentTab
 
   const setInsertPanelInputElement = (element: HTMLInputElement | null) => {
     insertPanelInputRef.current = element
   }
 
-  function placeCaretAfterLastBotMention() {
+  function placeCaretAfterBotMention(mention: HTMLElement) {
     const editor = editorRef.current
     const selection = window.getSelection()
-    const mention = editor?.querySelector<HTMLElement>('.dd-chatbox__mention[data-mention="bot"]:last-of-type')
 
-    if (!editor || !selection || !mention) {
+    if (!editor || !selection) {
       return
     }
 
@@ -446,6 +468,50 @@ export function ChatConversationStage({
     savedRangeRef.current = range.cloneRange()
   }
 
+  function placeCaretAfterLastBotMention() {
+    const editor = editorRef.current
+    const mention = editor?.querySelector<HTMLElement>('.dd-chatbox__mention[data-mention="bot"]:last-of-type')
+
+    if (!editor || !mention) {
+      return
+    }
+
+    placeCaretAfterBotMention(mention)
+  }
+
+  function repairBotMentionCaretAfterBackspace() {
+    const selection = window.getSelection()
+    const editor = editorRef.current
+
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed || !editor) {
+      return
+    }
+
+    const range = selection.getRangeAt(0)
+    const container = range.startContainer
+    const offset = range.startOffset
+
+    if (!editor.contains(container)) {
+      return
+    }
+
+    if (container.nodeType === Node.TEXT_NODE) {
+      const textNode = container as Text
+      if (offset === 0 && isBotMentionElement(textNode.previousSibling) && isBotMentionCaretTextNode(textNode)) {
+        placeCaretAfterBotMention(textNode.previousSibling)
+      }
+      return
+    }
+
+    const candidate = (container as Node).childNodes.item(offset)
+    if (isBotMentionElement(candidate) && isBotMentionCaretTextNode(candidate.nextSibling)) {
+      // Chromium can move the caret in front of a non-editable mention when the trailing
+      // text is deleted back to its spacer. Pull it back behind the mention so Backspace
+      // continues to operate on the same token boundary.
+      placeCaretAfterBotMention(candidate)
+    }
+  }
+
   const latestConversationEntryId =
     unifiedConversationEntries[unifiedConversationEntries.length - 1]?.id ?? ''
 
@@ -455,7 +521,8 @@ export function ChatConversationStage({
     }
 
     const nextHtml = chatDraft || ''
-    if (editorRef.current.innerHTML !== nextHtml) {
+    const currentHtml = editorRef.current.innerHTML
+    if (currentHtml !== nextHtml && normalizeEditorHtml(currentHtml) !== nextHtml) {
       editorRef.current.innerHTML = nextHtml
     }
 
@@ -1015,6 +1082,7 @@ export function ChatConversationStage({
       text: entry.text,
       senderName,
       fromSelf: entry.fromSelf,
+      isBotMessage: entry.sourceDeviceId === 'bot_cloudflare_ai',
       left: Math.min(event.clientX, window.innerWidth - menuWidth - margin),
       top: Math.min(event.clientY, window.innerHeight - menuHeight - margin),
     })
@@ -1037,7 +1105,9 @@ export function ChatConversationStage({
     }
 
     const quoteText = getRichTextPreviewText(messageContextMenu.text)
-    const quoteHtml = sanitizeRichTextHtml(messageContextMenu.text)
+    const quoteHtml = messageContextMenu.isBotMessage
+      ? sanitizeBotReplyHtml(messageContextMenu.text)
+      : sanitizeRichTextHtml(messageContextMenu.text)
     if (quoteText) {
       setQuoteDraft({
         senderName: messageContextMenu.senderName,
@@ -1302,6 +1372,34 @@ export function ChatConversationStage({
     setIsBotMentionOpen(false)
   }
 
+  const shouldRepairBotMentionCaretOnBackspace = () => {
+    const selection = window.getSelection()
+    const editor = editorRef.current
+
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed || !editor) {
+      return false
+    }
+
+    const range = selection.getRangeAt(0)
+    const container = range.startContainer
+    const offset = range.startOffset
+
+    if (!editor.contains(container)) {
+      return false
+    }
+
+    if (container.nodeType === Node.TEXT_NODE) {
+      return isBotMentionElement((container as Text).previousSibling)
+    }
+
+    const previousNode = (container as Node).childNodes.item(offset - 1)
+    if (isBotMentionElement(previousNode)) {
+      return true
+    }
+
+    return previousNode instanceof Text && isBotMentionElement(previousNode.previousSibling)
+  }
+
   const removeAdjacentBotMention = (direction: 'backward' | 'forward') => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
@@ -1316,12 +1414,12 @@ export function ChatConversationStage({
     if (container.nodeType === Node.TEXT_NODE) {
       const textNode = container as Text
       if (direction === 'backward') {
-        if (offset < textNode.data.length || !/^[\u200B\s]*$/.test(textNode.data)) {
+        if (!isBotMentionCaretTextNode(textNode)) {
           return false
         }
         candidate = textNode.previousSibling
       } else {
-        if (offset > 0 || !/^[\u200B\s]*$/.test(textNode.data)) {
+        if (!isBotMentionCaretTextNode(textNode)) {
           return false
         }
         candidate = textNode.nextSibling
@@ -1331,17 +1429,21 @@ export function ChatConversationStage({
       candidate = parent.childNodes.item(direction === 'backward' ? offset - 1 : offset)
     }
 
-    if (
-      candidate instanceof HTMLElement &&
-      candidate.classList.contains('dd-chatbox__mention') &&
-      candidate.dataset.mention === 'bot'
-    ) {
+    if (isBotMentionElement(candidate)) {
       candidate.remove()
       syncDraftFromEditor()
       return true
     }
 
     return false
+  }
+
+  const handleEditorInput = () => {
+    if (pendingBotMentionBackspaceRepairRef.current) {
+      pendingBotMentionBackspaceRepairRef.current = false
+      repairBotMentionCaretAfterBackspace()
+    }
+    syncDraftFromEditor()
   }
 
   const applyInlineStyle = (
@@ -2096,8 +2198,24 @@ export function ChatConversationStage({
                 onClick={handleBotMentionSelect}
               >
                 <strong>@bot</strong>
-                <span>{aiQuotaLabel}</span>
+                <span>{selectedAiModelLabel} · {aiQuotaLabel}</span>
               </button>
+              {aiModelOptions.length > 0 && (
+                <label className="dd-bot-model-select">
+                  <span>模型</span>
+                  <select
+                    value={selectedAiModel}
+                    disabled={isAiGenerating}
+                    onChange={(event) => onAiModelChange(event.target.value)}
+                  >
+                    {aiModelOptions.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           )}
 
@@ -2109,16 +2227,21 @@ export function ChatConversationStage({
               suppressContentEditableWarning
               data-placeholder="输入消息"
               onClick={handleInlineImageClick}
-              onInput={syncDraftFromEditor}
+              onInput={handleEditorInput}
               onPaste={handleEditorPaste}
               onKeyDown={(event) => {
+                pendingBotMentionBackspaceRepairRef.current =
+                  event.key === 'Backspace' && shouldRepairBotMentionCaretOnBackspace()
+
                 if (event.key === 'Backspace' && removeAdjacentBotMention('backward')) {
                   event.preventDefault()
+                  pendingBotMentionBackspaceRepairRef.current = false
                   return
                 }
 
                 if (event.key === 'Delete' && removeAdjacentBotMention('forward')) {
                   event.preventDefault()
+                  pendingBotMentionBackspaceRepairRef.current = false
                   return
                 }
 
@@ -2174,6 +2297,22 @@ export function ChatConversationStage({
               >
                 {isAiGenerating ? '...' : '@'}
               </button>
+              {aiModelOptions.length > 0 && (
+                <select
+                  className="dd-chatbox__ai-model-select"
+                  aria-label="AI 模型"
+                  title="AI 模型"
+                  value={selectedAiModel}
+                  disabled={isAiGenerating}
+                  onChange={(event) => onAiModelChange(event.target.value)}
+                >
+                  {aiModelOptions.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="dd-chatbox__composer-actions">

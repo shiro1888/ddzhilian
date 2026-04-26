@@ -167,6 +167,7 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
 - `CLOUDFLARE_AI_MODEL`
+- `CLOUDFLARE_AI_MODELS`
 - `CLOUDFLARE_AI_FREE_ONLY`
 - `CLOUDFLARE_AI_DAILY_NEURON_BUDGET`
 - `TURN_URL`

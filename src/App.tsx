@@ -32,7 +32,7 @@ import {
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
-import type { AiQuotaStatus } from './lib/ddzhilian-types'
+import type { AiModelOption, AiQuotaStatus } from './lib/ddzhilian-types'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -130,6 +130,25 @@ function parseAiBotPrompt(value: string) {
   return match[1].trim()
 }
 
+function buildAiBotPrompt(question: string, quotedText: string) {
+  const normalizedQuestion = question.trim()
+  const normalizedQuote = quotedText.trim()
+
+  if (!normalizedQuote) {
+    return normalizedQuestion
+  }
+
+  return [
+    '请参考下面的引用内容回答用户问题。',
+    '',
+    '引用内容：',
+    normalizedQuote,
+    '',
+    '用户问题：',
+    normalizedQuestion || '请阅读并回应这段引用内容。',
+  ].join('\n')
+}
+
 function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
 }
@@ -157,6 +176,8 @@ function App() {
   const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
+  const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
+  const [selectedAiModel, setSelectedAiModel] = useState('')
   const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
   const [historyDownloadProgressById, setHistoryDownloadProgressById] = useState<
     Record<string, HistoryDownloadProgressState>
@@ -195,6 +216,7 @@ function App() {
     pairByShortCode,
     joinRoom,
     createPublicRoom,
+    reconnectSocket,
     requestConnect,
     disconnectSession,
     requestSnapshot,
@@ -219,6 +241,8 @@ function App() {
   useEffect(() => {
     if (!self?.historyAuthToken) {
       setAiQuotaStatus(null)
+      setAiModelOptions([])
+      setSelectedAiModel('')
       return
     }
 
@@ -228,11 +252,26 @@ function App() {
       .then((status) => {
         if (!isCancelled) {
           setAiQuotaStatus(status)
+          const models = status.models ?? []
+          setAiModelOptions(models)
+          setSelectedAiModel((current) => {
+            if (current && models.some((model) => model.id === current)) {
+              return current
+            }
+
+            if (status.model && models.some((model) => model.id === status.model)) {
+              return status.model
+            }
+
+            return models[0]?.id ?? status.model ?? ''
+          })
         }
       })
       .catch(() => {
         if (!isCancelled) {
           setAiQuotaStatus(null)
+          setAiModelOptions([])
+          setSelectedAiModel('')
         }
       })
 
@@ -898,6 +937,11 @@ function App() {
   const aiQuotaLabel = aiQuotaStatus
     ? `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
     : 'AI 额度加载中'
+  const selectedAiModelLabel =
+    aiModelOptions.find((model) => model.id === selectedAiModel)?.label ||
+    selectedAiModel ||
+    aiQuotaStatus?.model ||
+    'AI 模型'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const runnableTransferIds = visibleTransferItemsForConversation
     .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
@@ -1239,17 +1283,20 @@ function App() {
   const handleSendText = async (quoteHtml = '') => {
     const draftSource = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
     const rawText = quoteHtml ? `${quoteHtml}${draftSource}` : draftSource
+    const draftPlainText = extractPlainTextFromRichText(draftSource).trim()
+    const quotedText = quoteHtml ? extractPlainTextFromRichText(quoteHtml).trim() : ''
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
     const hasImageContent = hasRichTextImage(rawText)
     const hasTextPayload = normalizedText.length > 0 || hasImageContent
     const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
-    const aiBotPrompt = parseAiBotPrompt(normalizedText)
+    const aiBotQuestion = parseAiBotPrompt(draftPlainText)
+    const aiBotPrompt = aiBotQuestion === null ? null : buildAiBotPrompt(aiBotQuestion, quotedText)
     if (!hasTextPayload && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
     }
 
-    if (aiBotPrompt !== null && aiBotPrompt.length === 0) {
+    if (aiBotQuestion !== null && aiBotQuestion.length === 0 && !quotedText) {
       setLocalError('请输入要问 @bot 的问题。')
       return
     }
@@ -1339,7 +1386,7 @@ function App() {
       if (aiBotPrompt !== null) {
         setIsAiGenerating(true)
         try {
-          const isQuotaPrompt = isAiQuotaPrompt(aiBotPrompt)
+          const isQuotaPrompt = isAiQuotaPrompt(aiBotQuestion ?? '')
           const botRoomId =
             isChatDesktopTheme
               ? effectiveSelectedRoomId
@@ -1355,6 +1402,7 @@ function App() {
             kind: isQuotaPrompt ? 'quota' : 'chat',
             historyId: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
+            model: selectedAiModel || undefined,
           })
 
           if (answer.quota) {
@@ -1505,6 +1553,20 @@ function App() {
     requestConnect(selectedConnectionPeer.deviceId)
   }
 
+  const handleReconnectPublicRoom = () => {
+    setLocalError(null)
+    const publicRoomId = selectedRoom?.isPublic ? selectedRoom.roomId : null
+
+    if (!publicRoomId) {
+      setLocalError('请选择公共对话后再重连。')
+      return
+    }
+
+    reconnectSocket(() => {
+      joinRoom(publicRoomId)
+    })
+  }
+
   const handleConnectAllDevices = () => {
     if (onlinePeers.length === 0) {
       setLocalError('当前没有可连接的在线设备。')
@@ -1593,6 +1655,9 @@ function App() {
         }
         isAiGenerating={isAiGenerating}
         aiQuotaLabel={aiQuotaLabel}
+        aiModelOptions={aiModelOptions}
+        selectedAiModel={selectedAiModel}
+        selectedAiModelLabel={selectedAiModelLabel}
         enterToSend={preferences.enterToSend}
         attachments={attachmentDrafts}
         isSharedPanelOpen={isSharedPanelOpen}
@@ -1609,6 +1674,7 @@ function App() {
         }}
         onRecallText={handleRecallText}
         onRemoveAttachment={removeAttachment}
+        onAiModelChange={setSelectedAiModel}
         onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
         onSharedPanelOpenChange={handleSharedPanelOpenChange}
         onSharedContentTabChange={setSharedContentTab}
@@ -1699,6 +1765,12 @@ function App() {
           isSharedPanelOpen={isSharedPanelOpen}
           localError={localError}
           errorMessage={errorMessage}
+          isReconnectDisabled={socketState === 'connecting'}
+          onReconnect={
+            isChatConversationView && selectedRoom?.isPublic
+              ? handleReconnectPublicRoom
+              : undefined
+          }
           onToggleSharedPanel={
             isChatConversationView
               ? () => handleSharedPanelOpenChange(!isSharedPanelOpen)

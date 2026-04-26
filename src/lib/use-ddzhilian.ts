@@ -410,6 +410,8 @@ export function useDdzhilian() {
 
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const connectSocketRef = useRef<(() => void) | null>(null)
+  const reconnectCallbacksRef = useRef<Array<() => void>>([])
   const identityRef = useRef<StoredIdentity>(localIdentity)
   const selfRef = useRef<DirectorySnapshotPayload['self'] | null>(null)
   const rtcConfigRef = useRef<RTCConfiguration | null>(null)
@@ -450,6 +452,28 @@ export function useDdzhilian() {
   const archivingHistoryIdsRef = useRef(new Set<string>())
   const archivedTextHistoryIdsRef = useRef(new Set<string>())
   const archivingTextHistoryIdsRef = useRef(new Set<string>())
+
+  const reconnectSocket = useCallback((afterReconnect?: () => void) => {
+    reconnectCallbacksRef.current = afterReconnect ? [afterReconnect] : []
+
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+
+    const socket = socketRef.current
+    if (socket) {
+      socketRef.current = null
+
+      try {
+        socket.close()
+      } catch {
+        // Closing is best effort; the new signaling socket is created below.
+      }
+    }
+
+    connectSocketRef.current?.()
+  }, [])
 
   useEffect(() => {
     selfRef.current = self
@@ -1269,6 +1293,16 @@ export function useDdzhilian() {
       applySnapshot(event.payload)
       setSocketState('open')
       setErrorMessage(null)
+
+      const reconnectCallbacks = reconnectCallbacksRef.current
+      reconnectCallbacksRef.current = []
+      for (const callback of reconnectCallbacks) {
+        try {
+          callback()
+        } catch (error) {
+          debugLog('manual reconnect callback failed', error)
+        }
+      }
       return
     }
 
@@ -1365,11 +1399,20 @@ export function useDdzhilian() {
         return
       }
 
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+
       setSocketState('connecting')
       const socket = new WebSocket(WS_URL)
       socketRef.current = socket
 
       socket.addEventListener('open', () => {
+        if (disposed || socketRef.current !== socket) {
+          return
+        }
+
         const token = new URLSearchParams(window.location.search).get('token')
         const payload: DeviceSettingsPayload = {
           ...identityRef.current,
@@ -1386,6 +1429,10 @@ export function useDdzhilian() {
       })
 
       socket.addEventListener('message', (event) => {
+        if (disposed || socketRef.current !== socket) {
+          return
+        }
+
         try {
           const parsed = JSON.parse(String(event.data)) as ServerEvent
           void handleServerEvent(parsed)
@@ -1395,6 +1442,15 @@ export function useDdzhilian() {
       })
 
       socket.addEventListener('close', () => {
+        if (socketRef.current !== socket) {
+          return
+        }
+
+        socketRef.current = null
+        if (disposed) {
+          return
+        }
+
         setSocketState('closed')
         if (!disposed) {
           reconnectTimerRef.current = window.setTimeout(connect, 2_000)
@@ -1402,16 +1458,23 @@ export function useDdzhilian() {
       })
 
       socket.addEventListener('error', () => {
+        if (disposed || socketRef.current !== socket) {
+          return
+        }
+
         setSocketState('error')
       })
     }
 
+    connectSocketRef.current = connect
     connect()
 
     return () => {
       disposed = true
-      if (reconnectTimerRef.current) {
+      connectSocketRef.current = null
+      if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
       }
 
       for (const url of objectUrls) {
@@ -2516,6 +2579,7 @@ export function useDdzhilian() {
       kind?: 'chat' | 'quota'
       historyId?: string
       createdAt?: string
+      model?: string
     },
   ): Promise<AiChatResponse> => {
     const activeSelf = selfRef.current
@@ -2542,6 +2606,7 @@ export function useDdzhilian() {
         kind: options?.kind,
         historyId: options?.historyId,
         createdAt: options?.createdAt,
+        model: options?.model,
       }),
     })
 
@@ -2893,6 +2958,7 @@ export function useDdzhilian() {
     pairByShortCode,
     joinRoom,
     createPublicRoom,
+    reconnectSocket,
     requestConnect,
     disconnectSession,
     requestSnapshot,

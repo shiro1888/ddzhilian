@@ -344,6 +344,11 @@ export type AiChatResponse = {
   historyText?: HistoryTextSummary
 }
 
+export type AiModelOption = {
+  id: string
+  label: string
+}
+
 export type AiQuotaStatus = {
   date: string
   usedNeurons: number
@@ -351,6 +356,7 @@ export type AiQuotaStatus = {
   remainingNeurons: number
   freeOnly?: boolean
   model?: string
+  models?: AiModelOption[]
 }
 
 export type ReceivedFile = {

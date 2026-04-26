@@ -7,6 +7,8 @@ type AppHeaderProps = {
   isSharedPanelOpen?: boolean
   localError: string | null
   errorMessage: string | null
+  isReconnectDisabled?: boolean
+  onReconnect?: () => void
   onToggleSharedPanel?: () => void
 }
 
@@ -17,6 +19,8 @@ export function AppHeader({
   isSharedPanelOpen = false,
   localError,
   errorMessage,
+  isReconnectDisabled = false,
+  onReconnect,
   onToggleSharedPanel,
 }: AppHeaderProps) {
   const avatarLabel = currentMeta.title.trim().slice(0, 1) || 'D'
@@ -33,6 +37,16 @@ export function AppHeader({
             <h1>{currentMeta.title}</h1>
             {isChatConversationView && currentRoomId ? (
               <span className="dd-header__room-chip">Room ID: {currentRoomId}</span>
+            ) : null}
+            {isChatConversationView && onReconnect ? (
+              <button
+                type="button"
+                className="dd-header__reconnect"
+                disabled={isReconnectDisabled}
+                onClick={onReconnect}
+              >
+                重连公共 Room
+              </button>
             ) : null}
             {isChatConversationView && onToggleSharedPanel ? (
               <button

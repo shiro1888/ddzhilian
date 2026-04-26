@@ -695,6 +695,51 @@ function normalizePlainRichText(value: string) {
   return value.split(/\r?\n/).map((line) => linkifyPlainTextUrls(line)).join('<br />')
 }
 
+function renderBotMarkdownReply(value: string) {
+  const normalizedValue = normalizeCodeText(value)
+  const firstLineBreakIndex = normalizedValue.indexOf('\n')
+  const firstLine = firstLineBreakIndex >= 0
+    ? normalizedValue.slice(0, firstLineBreakIndex)
+    : normalizedValue
+  const remainingText = firstLineBreakIndex >= 0
+    ? normalizedValue.slice(firstLineBreakIndex + 1).trim()
+    : ''
+  const mentionMatch = firstLine.match(/^(@\S+)(?:\s+([\s\S]+))?$/)
+
+  if (!mentionMatch) {
+    return renderMarkdownBlocks(normalizedValue)
+  }
+
+  const [, mention, firstLineText = ''] = mentionMatch
+  const normalizedFirstLineText = firstLineText.trim()
+  const firstParagraph = [
+    '<p>',
+    `<strong>${escapeHtml(mention)}</strong>`,
+    normalizedFirstLineText && !hasMarkdownSyntax(normalizedFirstLineText)
+      ? ` ${renderMarkdownInline(normalizedFirstLineText)}`
+      : '',
+    '</p>',
+  ].join('')
+  const remainingMarkdown = [
+    hasMarkdownSyntax(normalizedFirstLineText) ? normalizedFirstLineText : '',
+    remainingText,
+  ].filter(Boolean).join('\n')
+
+  return remainingMarkdown
+    ? `${firstParagraph}${renderMarkdownBlocks(remainingMarkdown)}`
+    : firstParagraph
+}
+
+function hasBotMarkdownSyntax(value: string) {
+  if (hasMarkdownFence(value) || hasMarkdownSyntax(value)) {
+    return true
+  }
+
+  const firstLine = normalizeCodeText(value).split('\n')[0] ?? ''
+  const mentionMatch = firstLine.match(/^@\S+\s+([\s\S]+)$/)
+  return Boolean(mentionMatch?.[1] && hasMarkdownSyntax(mentionMatch[1].trim()))
+}
+
 function extractTextWithLineBreaks(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? ''
@@ -1099,19 +1144,22 @@ export function sanitizeRichTextHtml(value: string) {
     return normalizePlainRichText(value)
   }
 
+  const hasChatQuote = Boolean(root.querySelector('blockquote.dd-chatbox__quote'))
   const appleMusicLyricShare = renderAppleMusicLyricShare(extractTextWithLineBreaks(root))
   if (appleMusicLyricShare) {
     return appleMusicLyricShare
   }
 
-  const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
-  if (mixedHtml) {
-    return mixedHtml
-  }
+  if (!hasChatQuote) {
+    const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
+    if (mixedHtml) {
+      return mixedHtml
+    }
 
-  if (shouldRenderAsCodeBlock(value, root)) {
-    const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
-    return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+    if (shouldRenderAsCodeBlock(value, root)) {
+      const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+      return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+    }
   }
 
   const allowedTags = new Set([
@@ -1289,7 +1337,12 @@ export function sanitizeBotReplyHtml(value: string) {
     return normalizePlainRichText(value)
   }
 
-  const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
+  const plainText = normalizeCodeText(extractTextWithLineBreaks(root))
+  if (hasBotMarkdownSyntax(plainText)) {
+    return renderBotMarkdownReply(plainText)
+  }
+
+  const mixedHtml = renderMixedTextAndCodeBlocks(plainText)
   if (mixedHtml) {
     return mixedHtml
   }
