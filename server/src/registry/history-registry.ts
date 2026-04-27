@@ -43,9 +43,21 @@ export interface HistoryStats {
   textCount: number;
   totalBytes: number;
   roomCount: number;
+  activeUserCount: number;
   lastFileAt?: string;
   lastTextAt?: string;
   lastActivityAt?: string;
+}
+
+type HistoryActorRecord = Pick<HistoryFileRecord | HistoryTextRecord, 'sourceDeviceId' | 'sourceDeviceName'>;
+
+function normalizeHistoryUsername(record: HistoryActorRecord) {
+  if (record.sourceDeviceId.startsWith('bot_')) {
+    return undefined;
+  }
+
+  const username = record.sourceDeviceName.trim();
+  return username || undefined;
 }
 
 function sortByCreatedAt(
@@ -162,6 +174,10 @@ export class HistoryRegistry {
         ...fileRecords.map((record) => record.roomId),
         ...textRecords.map((record) => record.roomId),
       ]).size,
+      activeUserCount: new Set([
+        ...fileRecords.map(normalizeHistoryUsername),
+        ...textRecords.map(normalizeHistoryUsername),
+      ].filter((username): username is string => Boolean(username))).size,
       lastFileAt,
       lastTextAt,
       lastActivityAt,

@@ -367,6 +367,7 @@ export type AdminHistoryStats = {
   textCount: number
   totalBytes: number
   roomCount: number
+  activeUserCount?: number
   lastFileAt?: string
   lastTextAt?: string
   lastActivityAt?: string

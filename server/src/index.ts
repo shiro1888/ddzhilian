@@ -843,7 +843,7 @@ type AiChatMessage = {
 };
 
 function getAiSystemPrompt() {
-  return config.aiSystemPrompt.trim();
+  return adminConfig.getAiSettingsSnapshot().systemPrompt.trim();
 }
 
 function buildAiMessages(prompt: string): AiChatMessage[] {

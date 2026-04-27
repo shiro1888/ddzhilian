@@ -41,6 +41,7 @@ type AdminStageProps = {
 
 const ADMIN_BRAND_NAME = 'ddzhilian管理系统'
 const MODEL_PREVIEW_LIMIT = 5
+const USAGE_BAR_CHART_LIMIT = 3
 
 type AdminSection = 'dashboard' | 'models' | 'providers'
 
@@ -234,12 +235,13 @@ function buildBusinessKpiCards(historyStats: AdminHistoryStats | null, activeUsa
   const totalCalls = activeUsage.reduce((sum, item) => sum + item.totalCalls, 0)
   const totalPromptTokens = activeUsage.reduce((sum, item) => sum + item.promptTokens, 0)
   const totalCompletionTokens = activeUsage.reduce((sum, item) => sum + item.completionTokens, 0)
+  const activeUserCount = historyStats?.activeUserCount
   const estimatedRevenue = totalCompletionTokens > 0
     ? totalCompletionTokens * 0.0012
     : totalPromptTokens > 0
       ? totalPromptTokens * 0.0008
       : totalCalls * 0.74
-  const estimatedActiveUsers = Math.max(historyStats?.roomCount ?? 0, historyStats?.textCount ?? 0, totalCalls > 0 ? 1 : 0)
+  const estimatedActiveUsers = activeUserCount ?? Math.max(historyStats?.roomCount ?? 0, historyStats?.textCount ?? 0, totalCalls > 0 ? 1 : 0)
 
   return [
     {
@@ -251,7 +253,7 @@ function buildBusinessKpiCards(historyStats: AdminHistoryStats | null, activeUsa
     {
       label: '活跃用户（业务口径）',
       value: formatInteger(estimatedActiveUsers),
-      detail: '按当前活跃房间与文本交互折算',
+      detail: activeUserCount === undefined ? '按当前活跃房间与文本交互折算' : '按历史用户名去重计算',
       tone: 'blue',
     },
   ]
@@ -352,7 +354,7 @@ function TrendChart({ series }: { series: TrendPoint[] }) {
 }
 
 function UsageBarChart({ items }: { items: AdminModelUsage[] }) {
-  const topItems = [...items].sort((a, b) => b.totalCalls - a.totalCalls).slice(0, 8)
+  const topItems = [...items].sort((a, b) => b.totalCalls - a.totalCalls).slice(0, USAGE_BAR_CHART_LIMIT)
   const max = Math.max(...topItems.map((item) => item.totalCalls), 1)
 
   return (
@@ -360,7 +362,7 @@ function UsageBarChart({ items }: { items: AdminModelUsage[] }) {
       <div className="dd-admin-card__head">
         <div>
           <p>按模型调用量</p>
-          <h3>TOP 8</h3>
+          <h3>TOP {USAGE_BAR_CHART_LIMIT}</h3>
         </div>
       </div>
       <div className="dd-admin-bar-list">
