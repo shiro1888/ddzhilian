@@ -1197,18 +1197,20 @@ export function AdminStage({
                     {dashboardModules.charts ? (
                       <div className="dd-admin-chart-grid">
                         <TrendChart series={trendSeries} />
-                        <UsageBarChart items={activeUsage} />
                         <OutcomeDonut items={activeUsage} />
                       </div>
                     ) : null}
 
                     {currentSettings && dashboardModules.config ? (
                       <div className="dd-admin-lower-grid">
-                        <ProviderTable
-                          settings={currentSettings}
-                          activeProvider={currentSettings.provider}
-                          action={{ label: '进入供应商页面', onClick: () => setActiveSection('providers') }}
-                        />
+                        <div className="dd-admin-provider-stack">
+                          <ProviderTable
+                            settings={currentSettings}
+                            activeProvider={currentSettings.provider}
+                            action={{ label: '进入供应商页面', onClick: () => setActiveSection('providers') }}
+                          />
+                          {dashboardModules.charts ? <UsageBarChart items={activeUsage} /> : null}
+                        </div>
                         <ConfigPanel
                           settings={currentSettings}
                           onSystemPromptChange={onSystemPromptChange}

@@ -4252,7 +4252,7 @@
 
 .dd-admin-chart-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.8fr) minmax(250px, 0.65fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.72fr);
   gap: 16px;
   align-items: start;
 }
@@ -4266,6 +4266,12 @@
 
 .dd-admin-lower-grid--providers {
   grid-template-columns: minmax(320px, 0.76fr) minmax(0, 1.24fr);
+}
+
+.dd-admin-provider-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
 }
 
 .dd-admin-chart-card,
