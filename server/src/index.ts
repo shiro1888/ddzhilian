@@ -79,6 +79,19 @@ type OpenRouterKeyResponse = {
     is_free_tier?: boolean;
   };
 };
+type OpenRouterChatSuccess = {
+  ok: true;
+  model: string;
+  answer: string;
+  promptTokens: number;
+  completionTokens: number;
+};
+type OpenRouterChatFailure = {
+  ok: false;
+  model: string;
+  status: number;
+  message?: string;
+};
 type AiChatRequestPayload = {
   prompt?: unknown;
   roomId?: unknown;
@@ -120,6 +133,11 @@ const aiResponseMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 const adminSessionCookieName = 'ddzhilian_admin_session';
+const openRouterFallbackModelIds = [
+  'inclusionai/ling-2.6-flash:free',
+  'inclusionai/ling-2.6-1t:free',
+  'openrouter/free',
+];
 
 class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -516,6 +534,87 @@ function extractOpenRouterText(payload: OpenRouterChatResponse) {
 
 function formatOpenRouterError(payload: OpenRouterChatResponse | null) {
   return payload?.error?.message?.trim();
+}
+
+function buildOpenRouterChatHeaders() {
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${config.openrouterAi.apiKey ?? ''}`,
+    'content-type': 'application/json',
+  };
+
+  if (config.openrouterAi.siteUrl) {
+    headers['HTTP-Referer'] = config.openrouterAi.siteUrl;
+  }
+  if (config.openrouterAi.siteName) {
+    headers['X-OpenRouter-Title'] = config.openrouterAi.siteName;
+  }
+
+  return headers;
+}
+
+function getOpenRouterChatCandidates(primaryModel: string) {
+  const candidates = [
+    primaryModel,
+    config.openrouterAi.model,
+    ...openRouterFallbackModelIds,
+  ];
+  const seen = new Set<string>();
+
+  return candidates.filter((modelId) => {
+    if (!modelId || seen.has(modelId)) {
+      return false;
+    }
+
+    seen.add(modelId);
+    return true;
+  });
+}
+
+async function requestOpenRouterChat(
+  model: string,
+  prompt: string,
+  maxOutputTokens: number,
+): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
+  const endpoint = new URL(`${config.openrouterAi.baseUrl}/chat/completions`);
+  const aiResponse = await fetch(endpoint, {
+    method: 'POST',
+    headers: buildOpenRouterChatHeaders(),
+    body: JSON.stringify({
+      model,
+      messages: buildAiMessages(prompt),
+      max_tokens: maxOutputTokens,
+    }),
+  });
+  const aiPayload = await aiResponse.json().catch(() => null) as
+    | OpenRouterChatResponse
+    | null;
+
+  if (!aiResponse.ok || !aiPayload || aiPayload.error) {
+    return {
+      ok: false,
+      model,
+      status: aiResponse.status,
+      message: formatOpenRouterError(aiPayload),
+    };
+  }
+
+  const answer = extractOpenRouterText(aiPayload);
+  if (!answer) {
+    return {
+      ok: false,
+      model,
+      status: 502,
+      message: 'OpenRouter returned an empty response.',
+    };
+  }
+
+  return {
+    ok: true,
+    model,
+    answer,
+    promptTokens: Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? 0)),
+    completionTokens: Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? 0)),
+  };
 }
 
 function isCloudflareAiQuotaError(
@@ -1159,7 +1258,7 @@ async function handleAiChatRequest(
     return;
   }
 
-  const model = modelSelection.model;
+  let model = modelSelection.model;
 
   if (roomId) {
     const roomAccess = authorizeRoomMember(authResult.device, roomId);
@@ -1296,52 +1395,48 @@ async function handleAiChatRequest(
 
       answer = extractCloudflareAiText(aiPayload);
     } else {
-      const endpoint = new URL(`${config.openrouterAi.baseUrl}/chat/completions`);
-      const headers: Record<string, string> = {
-        authorization: `Bearer ${config.openrouterAi.apiKey ?? ''}`,
-        'content-type': 'application/json',
-      };
-      if (config.openrouterAi.siteUrl) {
-        headers['HTTP-Referer'] = config.openrouterAi.siteUrl;
-      }
-      if (config.openrouterAi.siteName) {
-        headers['X-OpenRouter-Title'] = config.openrouterAi.siteName;
-      }
+      let lastFailure: OpenRouterChatFailure | undefined;
+      for (const candidateModel of getOpenRouterChatCandidates(model)) {
+        const result = await requestOpenRouterChat(candidateModel, prompt, activeAi.maxOutputTokens);
+        if (result.ok) {
+          if (candidateModel !== model) {
+            console.warn('OpenRouter fallback model succeeded', {
+              requestedModel: model,
+              fallbackModel: candidateModel,
+            });
+          }
 
-      const aiResponse = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model,
-          messages: buildAiMessages(prompt),
-          max_tokens: activeAi.maxOutputTokens,
-        }),
-      });
+          model = result.model;
+          answer = result.answer;
+          promptTokens = result.promptTokens;
+          completionTokens = result.completionTokens;
+          break;
+        }
 
-      const aiPayload = await aiResponse.json().catch(() => null) as
-        | OpenRouterChatResponse
-        | null;
-
-      if (!aiResponse.ok || !aiPayload || aiPayload.error) {
-        console.error('OpenRouter request failed', {
-          status: aiResponse.status,
-          model,
-          message: formatOpenRouterError(aiPayload),
+        lastFailure = result;
+        console.warn('OpenRouter model attempt failed', {
+          status: result.status,
+          model: result.model,
+          message: result.message,
         });
         aiUsage.record({
           provider: config.aiProvider,
-          modelId: model,
-          modelLabel: getAiModelLabel(config.aiProvider, model),
+          modelId: candidateModel,
+          modelLabel: getAiModelLabel(config.aiProvider, candidateModel),
           outcome: 'failed',
           promptChars: prompt.length,
+        });
+      }
+
+      if (!answer) {
+        console.error('OpenRouter request failed', {
+          status: lastFailure?.status,
+          model: lastFailure?.model ?? model,
+          message: lastFailure?.message,
         });
         writeJson(response, 502, { error: 'OpenRouter request failed.' });
         return;
       }
-
-      answer = extractOpenRouterText(aiPayload);
-      promptTokens = Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? 0));
-      completionTokens = Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? 0));
     }
 
     if (!answer) {

@@ -3,6 +3,12 @@ import { dirname, resolve } from 'node:path'
 
 const defaultBaseUrl = 'https://openrouter.ai/api/v1'
 const defaultEnvPath = resolve(process.cwd(), '.env')
+const defaultPreferredModels = [
+  'inclusionai/ling-2.6-flash:free',
+  'inclusionai/ling-2.6-1t:free',
+  'openrouter/free',
+]
+const nonChatModelPattern = /\b(ocr|lyria|audio|speech|tts|clip|embedding|moderation)\b/i
 
 function readArgumentValue(name) {
   const index = process.argv.indexOf(name)
@@ -60,7 +66,7 @@ function chooseDefaultModel(models, existingDefault, envValues) {
   const modelIds = new Set(models.map((model) => model.id))
   const preferredModels = splitList(envValues.OPENROUTER_PREFERRED_MODELS)
 
-  for (const modelId of [existingDefault, ...preferredModels]) {
+  for (const modelId of [existingDefault, ...preferredModels, ...defaultPreferredModels]) {
     if (modelId && modelIds.has(modelId)) {
       return modelId
     }
@@ -146,6 +152,22 @@ async function fetchOpenRouterModels(envValues) {
   throw lastError instanceof Error ? lastError : new Error('OpenRouter models request failed.')
 }
 
+function isLikelyTextChatModel(model) {
+  const architecture = model?.architecture && typeof model.architecture === 'object'
+    ? model.architecture
+    : {}
+  const outputModalities = Array.isArray(architecture.output_modalities)
+    ? architecture.output_modalities
+    : []
+  const identity = `${model.id ?? ''} ${model.name ?? ''}`
+
+  return (
+    outputModalities.includes('text') &&
+    outputModalities.every((modality) => modality === 'text') &&
+    !nonChatModelPattern.test(identity)
+  )
+}
+
 function pickFreeModels(models) {
   return models
     .filter((model) => {
@@ -162,7 +184,8 @@ function pickFreeModels(models) {
         typeof model.id === 'string' &&
         model.id.trim().length > 0 &&
         parsePrice(pricing.prompt) === 0 &&
-        parsePrice(pricing.completion) === 0
+        parsePrice(pricing.completion) === 0 &&
+        isLikelyTextChatModel(model)
       )
     })
     .map((model) => ({
