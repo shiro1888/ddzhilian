@@ -286,6 +286,8 @@ export class DeviceRegistry {
         isPublic: room.isPublic,
         historyTextCount: textStats.count,
         historyTextLatestAt: textStats.latestAt,
+        historyTextPreview: textStats.latestPreview,
+        historyTextLatestSourceDeviceId: textStats.latestSourceDeviceId,
         updatedAt: room.updatedAt,
       };
     });

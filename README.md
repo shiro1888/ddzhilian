@@ -4,6 +4,8 @@
 
 ddzhilian is a lightweight cross-device transfer and chat workspace. It brings device discovery, short-code pairing, file transfer, long-text sharing, public rooms, and history management into a desktop-style chat interface for quickly moving content between computers, phones, and browser clients.
 
+For a token-friendly code map, see [CODEBASE_INDEX.md](CODEBASE_INDEX.md).
+
 This repository contains:
 
 - a Next.js, React, and TypeScript frontend
@@ -134,10 +136,11 @@ See [server/README.md](server/README.md) for backend protocol details.
 Public rooms and regular rooms share the same temporary file-history rules:
 
 - Files are stored under `server/data/history/files/<roomId>/...`.
-- Metadata is stored in `server/data/history/index.json`.
+- Metadata is stored in Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured; otherwise it falls back to `server/data/history/index.json`.
 - `HISTORY_RETENTION_MS` controls file-history retention. The default is 6 hours, capped at 24 hours.
 - `HISTORY_TEXT_RETENTION_MS` controls text-history retention. The default is 24 hours, capped at 24 hours.
 - `HISTORY_MAX_BYTES` controls the per-room historical file cap. The default is 10 GiB.
+- `HISTORY_PAGE_SIZE` controls the room-history lazy-load page size. The default is 50.
 - Cleanup runs during startup, history reads, history writes, uploads, and scheduled maintenance.
 - Expired text history is removed from the metadata index; expired file history removes both metadata and stored files.
 
@@ -164,6 +167,11 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `HISTORY_RETENTION_MS`
 - `HISTORY_TEXT_RETENTION_MS`
 - `HISTORY_MAX_BYTES`
+- `HISTORY_PAGE_SIZE`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_HISTORY_FILES_TABLE`
+- `SUPABASE_HISTORY_TEXTS_TABLE`
 - `AI_PROVIDER`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
@@ -186,6 +194,8 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `TURN_CREDENTIAL`
 
 Do not commit real secrets, tokens, or passwords to the repository.
+
+If you enable Supabase-backed history metadata, apply [supabase/schema.sql](supabase/schema.sql) or the SQL under [supabase/migrations](supabase/migrations), then set the matching backend environment variables in `server/.env`.
 
 ## Build And Check
 

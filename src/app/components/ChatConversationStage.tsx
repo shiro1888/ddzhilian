@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
@@ -248,6 +248,8 @@ type ChatConversationStageProps = {
     sourceName: string
     createdAt: string
   }>
+  hasOlderHistory: boolean
+  isOlderHistoryLoading: boolean
   onChatDraftChange: (value: string) => void
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void
   onRetryTransfer: (id: string) => void
@@ -255,6 +257,7 @@ type ChatConversationStageProps = {
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
   onRemoveAttachment: (id: string) => void
+  onLoadOlderHistory: () => void
   onAiModelChange: (modelId: string) => void
   onEnterToSendChange: (value: boolean) => void
   onSharedPanelOpenChange: (value: boolean) => void
@@ -389,6 +392,8 @@ export function ChatConversationStage({
   sharedMediaEntries,
   sharedFileEntries,
   sharedLinkEntries,
+  hasOlderHistory,
+  isOlderHistoryLoading,
   onChatDraftChange,
   onFileSelection,
   onRetryTransfer,
@@ -396,6 +401,7 @@ export function ChatConversationStage({
   onSendText,
   onRecallText,
   onRemoveAttachment,
+  onLoadOlderHistory,
   onAiModelChange,
   onEnterToSendChange,
   onSharedPanelOpenChange,
@@ -433,6 +439,10 @@ export function ChatConversationStage({
   const colorPaletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const insertPanelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const pendingOlderHistoryRestoreRef = useRef<{
+    previousScrollHeight: number
+    previousScrollTop: number
+  } | null>(null)
   const pendingBotMentionCaretRef = useRef(false)
   const pendingBotMentionBackspaceRepairRef = useRef(false)
   const activeSharedContentTab: SharedPanelTab = sharedContentTab === 'chat' ? 'media' : sharedContentTab
@@ -470,7 +480,7 @@ export function ChatConversationStage({
     savedRangeRef.current = range.cloneRange()
   }
 
-  function placeCaretAfterLastBotMention() {
+  const placeCaretAfterLastBotMention = useCallback(() => {
     const editor = editorRef.current
     const mention = editor?.querySelector<HTMLElement>('.dd-chatbox__mention[data-mention="bot"]:last-of-type')
 
@@ -479,7 +489,7 @@ export function ChatConversationStage({
     }
 
     placeCaretAfterBotMention(mention)
-  }
+  }, [])
 
   function repairBotMentionCaretAfterBackspace() {
     const selection = window.getSelection()
@@ -517,6 +527,19 @@ export function ChatConversationStage({
   const latestConversationEntryId =
     unifiedConversationEntries[unifiedConversationEntries.length - 1]?.id ?? ''
 
+  const requestOlderHistory = () => {
+    const thread = conversationThreadRef.current
+    if (!thread || isSharedPanelOpen || isOlderHistoryLoading || !hasOlderHistory) {
+      return
+    }
+
+    pendingOlderHistoryRestoreRef.current = {
+      previousScrollHeight: thread.scrollHeight,
+      previousScrollTop: thread.scrollTop,
+    }
+    onLoadOlderHistory()
+  }
+
   useEffect(() => {
     if (!editorRef.current) {
       return
@@ -534,7 +557,7 @@ export function ChatConversationStage({
         placeCaretAfterLastBotMention()
       })
     }
-  }, [chatDraft])
+  }, [chatDraft, placeCaretAfterLastBotMention])
 
   useEffect(() => {
     if (isSharedPanelOpen || !latestConversationEntryId) {
@@ -557,6 +580,22 @@ export function ChatConversationStage({
       window.cancelAnimationFrame(frameId)
     }
   }, [isSharedPanelOpen, latestConversationEntryId])
+
+  useEffect(() => {
+    if (isOlderHistoryLoading) {
+      return
+    }
+
+    const pendingRestore = pendingOlderHistoryRestoreRef.current
+    const thread = conversationThreadRef.current
+    if (!pendingRestore || !thread) {
+      return
+    }
+
+    thread.scrollTop =
+      thread.scrollHeight - pendingRestore.previousScrollHeight + pendingRestore.previousScrollTop
+    pendingOlderHistoryRestoreRef.current = null
+  }, [isOlderHistoryLoading, unifiedConversationEntries.length])
 
   useEffect(() => {
     if (isSharedPanelOpen) {
@@ -897,9 +936,14 @@ export function ChatConversationStage({
   }, [messageContextMenu])
 
   const syncDraftFromEditor = () => {
-    onChatDraftChange(normalizeEditorHtml(editorRef.current?.innerHTML ?? ''))
+    const normalizedHtml = normalizeEditorHtml(editorRef.current?.innerHTML ?? '')
     const plainText = editorRef.current?.innerText.replace(/\u00a0/g, ' ') ?? ''
-    setIsBotMentionOpen(/(^|\s)@$/.test(plainText))
+    const nextIsBotMentionOpen = /(^|\s)@$/.test(plainText)
+
+    startTransition(() => {
+      onChatDraftChange(normalizedHtml)
+      setIsBotMentionOpen((current) => (current === nextIsBotMentionOpen ? current : nextIsBotMentionOpen))
+    })
   }
 
   const preserveEditorFocus = (event: ReactMouseEvent<HTMLElement>) => {
@@ -1677,7 +1721,15 @@ export function ChatConversationStage({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div ref={conversationThreadRef} className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}>
+        <div
+          ref={conversationThreadRef}
+          className={`dd-chatbox__thread${isSharedPanelOpen ? ' is-shared-panel' : ''}`}
+          onScroll={(event) => {
+            if (event.currentTarget.scrollTop <= 80) {
+              requestOlderHistory()
+            }
+          }}
+        >
           {isSharedPanelOpen && (
             <div className="dd-shared-panel__header">
               <div className="dd-shared-panel__tabs" role="tablist" aria-label="共享内容">
@@ -1701,6 +1753,25 @@ export function ChatConversationStage({
               >
                 关闭
               </button>
+            </div>
+          )}
+
+          {!isSharedPanelOpen && (hasOlderHistory || isOlderHistoryLoading) && (
+            <div className="dd-chatbox__entry">
+              <div className="dd-chatbox__notice">
+                {hasOlderHistory ? (
+                  <button
+                    type="button"
+                    className="dd-chatbox__link-button"
+                    onClick={requestOlderHistory}
+                    disabled={isOlderHistoryLoading}
+                  >
+                    {isOlderHistoryLoading ? '正在加载更早消息...' : '加载更早消息'}
+                  </button>
+                ) : (
+                  <span>正在加载更早消息...</span>
+                )}
+              </div>
             </div>
           )}
 
@@ -1966,11 +2037,11 @@ export function ChatConversationStage({
 
         {!isSharedPanelOpen && unifiedConversationEntries.length > 0 && (
           <div className="dd-chatbox__jump-controls" aria-label="对话快捷滚动">
-            <button type="button" onClick={() => scrollConversationTo('top')}>
-              顶部
+            <button type="button" aria-label="回到顶部" onClick={() => scrollConversationTo('top')}>
+              <span aria-hidden="true">↑</span>
             </button>
-            <button type="button" onClick={() => scrollConversationTo('bottom')}>
-              底部
+            <button type="button" aria-label="回到底部" onClick={() => scrollConversationTo('bottom')}>
+              <span aria-hidden="true">↓</span>
             </button>
           </div>
         )}
@@ -2308,6 +2379,12 @@ export function ChatConversationStage({
                 if (event.key === 'Delete' && removeAdjacentBotMention('forward')) {
                   event.preventDefault()
                   pendingBotMentionBackspaceRepairRef.current = false
+                  return
+                }
+
+                if (event.key === 'Tab' && isBotMentionOpen) {
+                  event.preventDefault()
+                  handleBotMentionSelect()
                   return
                 }
 

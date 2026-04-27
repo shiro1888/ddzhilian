@@ -9,6 +9,7 @@ import {
 
 const ADMIN_CONFIG_ROOT = fileURLToPath(new URL('../../data/admin', import.meta.url));
 const ADMIN_CONFIG_PATH = join(ADMIN_CONFIG_ROOT, 'config.json');
+const ENV_PATH = fileURLToPath(new URL('../../.env', import.meta.url));
 const defaultOpenRouterBaseUrl = 'https://openrouter.ai/api/v1';
 
 export type AdminModelToggleItem = {
@@ -284,6 +285,47 @@ function toManagedOptions(models: AdminModelToggleItem[]): ManagedAiModelOption[
   }));
 }
 
+function toEnvLine(key: string, value: string) {
+  return `${key}=${JSON.stringify(value)}`;
+}
+
+function syncSystemPromptToEnvFile(systemPrompt: string) {
+  const nextLine = toEnvLine('AI_SYSTEM_PROMPT', systemPrompt);
+
+  try {
+    const current = readFileSync(ENV_PATH, 'utf8');
+    const lines = current.split(/\r?\n/);
+    const nextLines: string[] = [];
+    let replaced = false;
+
+    for (const line of lines) {
+      if (line.startsWith('AI_SYSTEM_PROMPT=')) {
+        if (!replaced) {
+          nextLines.push(nextLine);
+          replaced = true;
+        }
+        continue;
+      }
+
+      nextLines.push(line);
+    }
+
+    if (!replaced) {
+      if (nextLines.length === 0) {
+        nextLines.push(nextLine);
+      } else if (nextLines[nextLines.length - 1] !== '') {
+        nextLines.push(nextLine);
+      } else {
+        nextLines[nextLines.length - 1] = nextLine;
+      }
+    }
+
+    writeFileSync(ENV_PATH, `${nextLines.join('\n').replace(/\n*$/, '\n')}`, 'utf8');
+  } catch {
+    writeFileSync(ENV_PATH, `${nextLine}\n`, 'utf8');
+  }
+}
+
 export class AdminConfigRegistry {
   constructor(private readonly config: ServerConfig) {
     mkdirSync(ADMIN_CONFIG_ROOT, { recursive: true });
@@ -329,6 +371,7 @@ export class AdminConfigRegistry {
     const normalized = normalizeSnapshot(input, this.config);
     this.applyAiSettings(normalized);
     this.persist({ ai: normalized });
+    syncSystemPromptToEnvFile(normalized.systemPrompt);
     return this.getAiSettingsSnapshot();
   }
 

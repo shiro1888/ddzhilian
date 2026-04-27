@@ -110,11 +110,12 @@ type SocketWithAddress = WebSocket & {
 
 const config = loadConfig();
 const devices = new DeviceRegistry();
-const history = new HistoryRegistry(
-  config.historyRetentionMs,
-  config.historyMaxBytes,
-  config.historyTextRetentionMs,
-);
+const history = await HistoryRegistry.create({
+  retentionMs: config.historyRetentionMs,
+  maxBytes: config.historyMaxBytes,
+  textRetentionMs: config.historyTextRetentionMs,
+  supabase: config.supabase,
+});
 const adminConfig = new AdminConfigRegistry(config);
 const adminSessions = new AdminSessionRegistry();
 const aiUsage = new AiUsageRegistry(
@@ -130,6 +131,8 @@ const cloudflareAiQuota = new CloudflareAiQuota(
 const aiRequestMaxBytes = 64 * 1024;
 const aiPromptMaxBytes = 32 * 1024;
 const aiResponseMaxChars = 12_000;
+const aiRoomContextWindowMs = 24 * 60 * 60 * 1000;
+const aiRoomContextMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 const adminSessionCookieName = 'ddzhilian_admin_session';
@@ -842,6 +845,124 @@ type AiChatMessage = {
   content: string;
 };
 
+function decodeHtmlEntity(entity: string) {
+  switch (entity) {
+    case '&amp;':
+      return '&';
+    case '&lt;':
+      return '<';
+    case '&gt;':
+      return '>';
+    case '&quot;':
+      return '"';
+    case '&#39;':
+      return "'";
+    case '&nbsp;':
+      return ' ';
+    default:
+      return entity;
+  }
+}
+
+function htmlToPlainText(value: string) {
+  return value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p>/gi, '\n\n')
+    .replace(/<\/?(p|div|li|ul|ol|blockquote|h[1-6]|pre)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (entity) => decodeHtmlEntity(entity))
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function formatAiContextTimestamp(value: string) {
+  const parsedTime = Date.parse(value);
+  if (!Number.isFinite(parsedTime)) {
+    return value;
+  }
+
+  return new Date(parsedTime).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function buildRoomContextText(roomId: string, maxChars: number) {
+  if (maxChars <= 0) {
+    return '';
+  }
+
+  const minCreatedAt = Date.now() - aiRoomContextWindowMs;
+  const recentRecords = history
+    .listTextsForRoom(roomId)
+    .filter((record) => {
+      const createdAt = Date.parse(record.createdAt);
+      return Number.isFinite(createdAt) && createdAt >= minCreatedAt;
+    })
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+
+  if (recentRecords.length === 0) {
+    return '';
+  }
+
+  const contextLines: string[] = [];
+  let totalChars = 0;
+  const cappedContextMaxChars = Math.max(0, Math.min(aiRoomContextMaxChars, maxChars));
+
+  for (let index = recentRecords.length - 1; index >= 0; index -= 1) {
+    const record = recentRecords[index];
+    const plainText = htmlToPlainText(record.text);
+    if (!plainText) {
+      continue;
+    }
+
+    const line = `[${formatAiContextTimestamp(record.createdAt)}] ${record.sourceDeviceName}: ${plainText}`;
+    const nextChars = totalChars + line.length + 2;
+    if (contextLines.length > 0 && nextChars > cappedContextMaxChars) {
+      break;
+    }
+
+    if (contextLines.length === 0 && line.length > cappedContextMaxChars) {
+      continue;
+    }
+
+    contextLines.unshift(line);
+    totalChars = nextChars;
+  }
+
+  return contextLines.join('\n\n');
+}
+
+function buildAiPrompt(input: { prompt: string; roomId?: string; maxPromptChars: number }) {
+  if (!input.roomId) {
+    return input.prompt;
+  }
+
+  const promptWrapper = [
+    '以下是当前房间最近24小时的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
+    '',
+    '[房间上下文开始]',
+    '[房间上下文结束]',
+    '',
+    '[当前用户问题]',
+    input.prompt,
+  ].join('\n');
+  const remainingCharsForContext = input.maxPromptChars - promptWrapper.length;
+  const roomContext = buildRoomContextText(input.roomId, remainingCharsForContext);
+  if (!roomContext) {
+    return input.prompt;
+  }
+
+  return [
+    '以下是当前房间最近24小时的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
+    '',
+    '[房间上下文开始]',
+    roomContext,
+    '[房间上下文结束]',
+    '',
+    '[当前用户问题]',
+    input.prompt,
+  ].join('\n');
+}
+
 function getAiSystemPrompt() {
   return adminConfig.getAiSettingsSnapshot().systemPrompt.trim();
 }
@@ -1135,18 +1256,22 @@ function handleAdminHistoryClear(
     return;
   }
 
-  history.clearAll();
-  broadcastSnapshots();
-  void buildAdminStatePayload().then((dashboard) => {
-    writeJson(response, 200, {
-      ok: true,
-      ...dashboard,
+  void history.clearAll()
+    .then(() => {
+      broadcastSnapshots();
+      return buildAdminStatePayload();
+    })
+    .then((dashboard) => {
+      writeJson(response, 200, {
+        ok: true,
+        ...dashboard,
+      });
+    })
+    .catch((error) => {
+      writeJson(response, 500, {
+        error: error instanceof Error ? error.message : 'Failed to rebuild admin dashboard.',
+      });
     });
-  }).catch((error) => {
-    writeJson(response, 500, {
-      error: error instanceof Error ? error.message : 'Failed to rebuild admin dashboard.',
-    });
-  });
 }
 
 function handleAiQuotaRequest(
@@ -1175,7 +1300,7 @@ function handleAiQuotaRequest(
   writeJson(response, 200, buildAiQuotaPayload(modelSelection.model));
 }
 
-function saveAiBotHistoryText(input: {
+async function saveAiBotHistoryText(input: {
   requester: ConnectedDevice;
   roomId: string;
   historyId?: string;
@@ -1192,7 +1317,7 @@ function saveAiBotHistoryText(input: {
     };
   }
 
-  const record = history.saveText({
+  const record = await history.saveText({
     historyId: input.historyId ?? randomUUID(),
     roomId: input.roomId,
     isPublic: roomAccess.room.isPublic,
@@ -1275,7 +1400,7 @@ async function handleAiChatRequest(
           cloudflareAiQuota.getStatus(config.cloudflareAi.dailyNeuronBudget),
         );
     const saved = roomId
-      ? saveAiBotHistoryText({
+      ? await saveAiBotHistoryText({
           requester: authResult.device,
           roomId,
           historyId,
@@ -1319,23 +1444,43 @@ async function handleAiChatRequest(
     return;
   }
 
+  const aiPrompt = buildAiPrompt({
+    prompt,
+    roomId,
+    maxPromptChars: activeAi.maxPromptChars,
+  });
+
+  if (Buffer.byteLength(aiPrompt, 'utf8') > aiPromptMaxBytes) {
+    writeJson(response, 413, {
+      error: 'Prompt plus room context exceeds the AI request byte limit.',
+    });
+    return;
+  }
+
+  if (aiPrompt.length > activeAi.maxPromptChars) {
+    writeJson(response, 413, {
+      error: `Prompt plus room context exceeds the ${activeAi.maxPromptChars.toString()} character limit.`,
+    });
+    return;
+  }
+
   let quotaReservation: AiQuotaReservation | undefined;
   if (config.aiProvider === 'cloudflare' && config.cloudflareAi.freeOnly) {
     const quota = cloudflareAiQuota.reserve(
-      estimateCloudflareAiNeurons(prompt),
+      estimateCloudflareAiNeurons(aiPrompt),
       config.cloudflareAi.dailyNeuronBudget,
     );
 
     if (!quota.ok) {
-      aiUsage.record({
-        provider: config.aiProvider,
-        modelId: model,
-        modelLabel: getAiModelLabel(config.aiProvider, model),
-        outcome: 'quota_rejected',
-        promptChars: prompt.length,
-      });
-      writeAiQuotaExhausted(response);
-      return;
+        aiUsage.record({
+          provider: config.aiProvider,
+          modelId: model,
+          modelLabel: getAiModelLabel(config.aiProvider, model),
+          outcome: 'quota_rejected',
+          promptChars: aiPrompt.length,
+        });
+        writeAiQuotaExhausted(response);
+        return;
     }
 
     quotaReservation = quota.reservation;
@@ -1357,7 +1502,7 @@ async function handleAiChatRequest(
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          messages: buildAiMessages(prompt),
+          messages: buildAiMessages(aiPrompt),
           max_tokens: activeAi.maxOutputTokens,
         }),
       });
@@ -1387,7 +1532,7 @@ async function handleAiChatRequest(
           modelId: model,
           modelLabel: getAiModelLabel(config.aiProvider, model),
           outcome: 'failed',
-          promptChars: prompt.length,
+          promptChars: aiPrompt.length,
         });
         writeJson(response, 502, { error: 'Cloudflare AI request failed.' });
         return;
@@ -1397,7 +1542,7 @@ async function handleAiChatRequest(
     } else {
       let lastFailure: OpenRouterChatFailure | undefined;
       for (const candidateModel of getOpenRouterChatCandidates(model)) {
-        const result = await requestOpenRouterChat(candidateModel, prompt, activeAi.maxOutputTokens);
+        const result = await requestOpenRouterChat(candidateModel, aiPrompt, activeAi.maxOutputTokens);
         if (result.ok) {
           if (candidateModel !== model) {
             console.warn('OpenRouter fallback model succeeded', {
@@ -1424,7 +1569,7 @@ async function handleAiChatRequest(
           modelId: candidateModel,
           modelLabel: getAiModelLabel(config.aiProvider, candidateModel),
           outcome: 'failed',
-          promptChars: prompt.length,
+          promptChars: aiPrompt.length,
         });
       }
 
@@ -1449,14 +1594,14 @@ async function handleAiChatRequest(
         modelId: model,
         modelLabel: getAiModelLabel(config.aiProvider, model),
         outcome: 'failed',
-        promptChars: prompt.length,
+        promptChars: aiPrompt.length,
       });
       writeJson(response, 502, { error: `${activeAi.label} returned an empty response.` });
       return;
     }
 
     const saved = roomId
-      ? saveAiBotHistoryText({
+      ? await saveAiBotHistoryText({
           requester: authResult.device,
           roomId,
           historyId,
@@ -1476,7 +1621,7 @@ async function handleAiChatRequest(
       modelId: model,
       modelLabel: getAiModelLabel(config.aiProvider, model),
       outcome: 'success',
-      promptChars: prompt.length,
+      promptChars: aiPrompt.length,
       responseChars: answer.length,
       promptTokens,
       completionTokens,
@@ -1503,7 +1648,7 @@ async function handleAiChatRequest(
       modelId: model,
       modelLabel: getAiModelLabel(config.aiProvider, model),
       outcome: 'failed',
-      promptChars: prompt.length,
+      promptChars: aiPrompt.length,
     });
     writeJson(response, 502, { error: `${activeAi.label} request failed.` });
   }
@@ -1765,6 +1910,15 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/history/text' && request.method === 'GET') {
     const roomId = url.searchParams.get('roomId')?.trim();
+    const limit = Math.max(
+      1,
+      Math.min(
+        config.historyPageSize,
+        Number(url.searchParams.get('limit')?.trim() || config.historyPageSize),
+      ),
+    );
+    const beforeCreatedAt = url.searchParams.get('beforeCreatedAt')?.trim();
+    const beforeHistoryId = url.searchParams.get('beforeHistoryId')?.trim();
     if (!roomId) {
       writeJson(response, 400, { error: 'Missing roomId.' });
       return;
@@ -1782,11 +1936,23 @@ const httpServer = createServer((request, response) => {
       return;
     }
 
+    const page = history.listTextPageForRoom(
+      roomId,
+      limit,
+      beforeCreatedAt && beforeHistoryId
+        ? {
+            createdAt: beforeCreatedAt,
+            historyId: beforeHistoryId,
+          }
+        : undefined,
+    );
+
     writeJson(response, 200, {
       ok: true,
-      texts: history
-        .listTextsForRoom(roomId)
+      texts: page.texts
         .map((record) => history.toTextSummary(record, roomAccess.room.isPublic || record.isPublic)),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     });
     return;
   }
@@ -1833,7 +1999,7 @@ const httpServer = createServer((request, response) => {
           return;
         }
 
-        const record = history.saveText({
+        void history.saveText({
           historyId: payload.historyId,
           roomId: payload.roomId,
           sessionId: payload.sessionId,
@@ -1842,10 +2008,14 @@ const httpServer = createServer((request, response) => {
           sourceDeviceName: authResult.device.deviceName,
           text: payload.text,
           createdAt: payload.createdAt ?? new Date().toISOString(),
+        }).then((record) => {
+          writeJson(response, 200, { ok: true, text: history.toTextSummary(record) });
+          broadcastSnapshots();
+        }).catch((error) => {
+          writeJson(response, 500, {
+            error: error instanceof Error ? error.message : 'History text upload failed.',
+          });
         });
-
-        writeJson(response, 200, { ok: true, text: history.toTextSummary(record) });
-        broadcastSnapshots();
       })
       .catch((error) => {
         writeJson(response, 500, {
@@ -1882,11 +2052,18 @@ const httpServer = createServer((request, response) => {
       return;
     }
 
-    const deleted = history.deleteText(historyId);
-    writeJson(response, 200, { ok: true, deleted });
-    if (deleted) {
-      broadcastSnapshots();
-    }
+    void history.deleteText(historyId)
+      .then((deleted) => {
+        writeJson(response, 200, { ok: true, deleted });
+        if (deleted) {
+          broadcastSnapshots();
+        }
+      })
+      .catch((error) => {
+        writeJson(response, 500, {
+          error: error instanceof Error ? error.message : 'History text recall failed.',
+        });
+      });
     return;
   }
 

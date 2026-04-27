@@ -65,6 +65,13 @@ export interface ServerConfig {
   historyRetentionMs: number;
   historyTextRetentionMs: number;
   historyMaxBytes: number;
+  historyPageSize: number;
+  supabase?: {
+    url: string;
+    serviceRoleKey: string;
+    historyFilesTable: string;
+    historyTextsTable: string;
+  };
   aiProvider: AiProvider;
   aiSystemPrompt: string;
   rtcConfig: {
@@ -263,6 +270,16 @@ export function loadConfig(): ServerConfig {
     historyRetentionMs: readHistoryRetentionMs('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
     historyTextRetentionMs: readHistoryRetentionMs('HISTORY_TEXT_RETENTION_MS', maxHistoryRetentionMs),
     historyMaxBytes: readNumber('HISTORY_MAX_BYTES', 10 * 1024 * 1024 * 1024),
+    historyPageSize: Math.max(1, readNumber('HISTORY_PAGE_SIZE', 50)),
+    supabase:
+      process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+        ? {
+            url: process.env.SUPABASE_URL.trim(),
+            serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY.trim(),
+            historyFilesTable: process.env.SUPABASE_HISTORY_FILES_TABLE?.trim() || 'history_files',
+            historyTextsTable: process.env.SUPABASE_HISTORY_TEXTS_TABLE?.trim() || 'history_texts',
+          }
+        : undefined,
     aiProvider: readAiProvider(),
     aiSystemPrompt: process.env.AI_SYSTEM_PROMPT?.trim() || defaultAiSystemPrompt,
     rtcConfig: {

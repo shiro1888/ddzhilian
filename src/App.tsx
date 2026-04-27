@@ -198,6 +198,8 @@ function App() {
   const fileInputId = useId()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isContentRailCollapsed, setIsContentRailCollapsed] = useState(false)
+  const [isCompactMobileViewport, setIsCompactMobileViewport] = useState(false)
+  const [isMobileConversationListVisible, setIsMobileConversationListVisible] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [textMode, setTextMode] = useState<'long' | 'chat'>('long')
@@ -262,6 +264,7 @@ function App() {
     receivedFiles,
     historyFiles,
     historyTexts,
+    historyTextPaginationByRoomId,
     errorMessage,
     lastCreatedPublicRoomId,
     pairByShortCode,
@@ -282,6 +285,8 @@ function App() {
     sendText,
     recallText,
     sendRoomText,
+    ensureRoomHistoryLoaded,
+    loadOlderRoomHistoryTexts,
     askAi,
     getAiQuota,
     sendRoomFiles,
@@ -465,6 +470,9 @@ function App() {
       ? selectedRoomId
       : (rooms[0]?.roomId ?? null)
   const selectedRoom = effectiveSelectedRoomId ? roomById.get(effectiveSelectedRoomId) ?? null : null
+  const selectedRoomHistoryPagination = selectedRoom
+    ? historyTextPaginationByRoomId[selectedRoom.roomId]
+    : undefined
   const selectedRoomMemberNames =
     selectedRoom?.members
       .filter((member) => member.deviceId !== self?.deviceId)
@@ -494,6 +502,14 @@ function App() {
   const selectedConversationSessionIds = new Set(
     selectedConversationSessions.map((session) => session.sessionId),
   )
+
+  useEffect(() => {
+    if (!selectedRoom) {
+      return
+    }
+
+    ensureRoomHistoryLoaded(selectedRoom.roomId)
+  }, [ensureRoomHistoryLoaded, selectedRoom])
 
   useEffect(() => {
     if (!pendingRoomSelectionId || !self) {
@@ -1011,6 +1027,7 @@ function App() {
       const memberNames = room.members
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
+      const hasLoadedHistoryTexts = historyTexts.some((record) => record.roomId === room.roomId)
       const title =
         room.isPublic
           ? '公共对话'
@@ -1056,6 +1073,12 @@ function App() {
             createdAt: file.createdAt,
             previewText: `[文件] ${file.fileName}`,
           })),
+        ...(!hasLoadedHistoryTexts && room.historyTextLatestAt && room.historyTextPreview
+          ? [{
+              createdAt: room.historyTextLatestAt,
+              previewText: `[文本] ${(extractPlainTextFromRichText(room.historyTextPreview).slice(0, 28) || '空消息')}`,
+            }]
+          : []),
       ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
       const latestEvent = latestEvents[0]
       const updatedAt = latestEvent?.createdAt ?? latestSession?.updatedAt ?? room.updatedAt
@@ -1088,6 +1111,12 @@ function App() {
         ...historyFiles
           .filter((file) => file.roomId === room.roomId && file.sourceDeviceId !== self?.deviceId)
           .map((file) => file.createdAt),
+        ...(!hasLoadedHistoryTexts &&
+        room.historyTextLatestAt &&
+        room.historyTextLatestSourceDeviceId &&
+        room.historyTextLatestSourceDeviceId !== self?.deviceId
+          ? [room.historyTextLatestAt]
+          : []),
       ]
       const unreadCount =
         lastReadTime === null
@@ -1184,6 +1213,29 @@ function App() {
 
     previousConnectionStatusesRef.current = currentStatuses
   }, [connectionStates])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 1024px)')
+    const applyViewportState = (matches: boolean) => {
+      setIsCompactMobileViewport(matches)
+      setIsMobileConversationListVisible((current) => (matches ? current : false))
+    }
+
+    applyViewportState(mediaQuery.matches)
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      applyViewportState(event.matches)
+    }
+
+    mediaQuery.addEventListener('change', handleChange)
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange)
+    }
+  }, [])
 
   useEffect(() => {
     if (activeView === 'send' || activeView === 'receive' || activeView === 'sessions') {
@@ -1836,6 +1888,7 @@ function App() {
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
 
     setSelectedRoomId(roomId)
+    setIsMobileConversationListVisible(false)
     setSelectedPeerId(firstPeer?.deviceId ?? null)
     setSelectedSessionId(latestSession?.sessionId ?? null)
     updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
@@ -1977,6 +2030,8 @@ function App() {
         sharedMediaEntries={sharedMediaEntries}
         sharedFileEntries={sharedFileEntries}
         sharedLinkEntries={sharedLinkEntries}
+        hasOlderHistory={selectedRoomHistoryPagination?.hasMore ?? false}
+        isOlderHistoryLoading={selectedRoomHistoryPagination?.isLoading ?? false}
         onChatDraftChange={setChatDraft}
         onFileSelection={handleFileSelection}
         onRetryTransfer={retryTransfer}
@@ -1986,6 +2041,11 @@ function App() {
         }}
         onRecallText={handleRecallText}
         onRemoveAttachment={removeAttachment}
+        onLoadOlderHistory={() => {
+          if (selectedRoom) {
+            loadOlderRoomHistoryTexts(selectedRoom.roomId)
+          }
+        }}
         onAiModelChange={setSelectedAiModel}
         onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
         onSharedPanelOpenChange={handleSharedPanelOpenChange}
@@ -2095,16 +2155,23 @@ function App() {
         />
       ) : null}
 
-      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}`}>
+      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}${isCompactMobileViewport && isMobileConversationListVisible ? ' is-mobile-room-list-open' : ''}`}>
         {!isAdminView ? (
           <AppHeader
             isChatConversationView={isChatConversationView}
             currentMeta={currentMeta}
             currentRoomId={effectiveSelectedRoomId}
             isSharedPanelOpen={isSharedPanelOpen}
+            isEditingDeviceName={isEditingDeviceName}
+            deviceNameDraft={deviceNameDraft}
+            selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
             localError={localError}
             errorMessage={errorMessage}
             isReconnectDisabled={socketState === 'connecting'}
+            onBeginEditDeviceName={beginEditDeviceName}
+            onDeviceNameDraftChange={setDeviceNameDraft}
+            onSaveDeviceName={saveDeviceName}
+            onCancelEditDeviceName={cancelEditDeviceName}
             onReconnect={
               isChatConversationView && selectedRoom?.isPublic
                 ? handleReconnectPublicRoom
@@ -2169,6 +2236,7 @@ function App() {
             roomListItems={roomListItems}
             selectedRoomId={effectiveSelectedRoomId}
             isContentRailCollapsed={isContentRailCollapsed}
+            isMobileConversationListVisible={isMobileConversationListVisible}
             connectionActionLabel={connectionActionLabel}
             connectionActionDisabled={connectionActionDisabled}
             connectAllDisabled={onlinePeers.length === 0}

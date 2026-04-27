@@ -35,3 +35,6 @@ server/data/
 frontend-dist.tar.gz
 temp-autolink-debug.cjs
 plink.exe
+android/.gradle/
+android/app/build/
+android/local.properties

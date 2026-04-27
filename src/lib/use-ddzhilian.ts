@@ -31,6 +31,7 @@ const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
 const TEXT_SEND_STATUS_MIN_MS = 900
+const HISTORY_PAGE_SIZE = 50
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
@@ -109,6 +110,14 @@ type HistoryDownloadProgress = {
   receivedBytes: number
   totalBytes: number
   progress: number
+}
+
+type HistoryTextPaginationState = {
+  initialized: boolean
+  isLoading: boolean
+  hasMore: boolean
+  oldestCreatedAt?: string
+  oldestHistoryId?: string
 }
 
 function saveBlobAsDownload(blob: Blob, fileName: string) {
@@ -400,6 +409,9 @@ export function useDdzhilian() {
   const [preferences, setPreferences] = useState<DevicePreferencesPayload>({ enterToSend: true })
   const [historyFiles, setHistoryFiles] = useState<HistoryFileSummary[]>([])
   const [historyTexts, setHistoryTexts] = useState<HistoryTextSummary[]>([])
+  const [historyTextPaginationByRoomId, setHistoryTextPaginationByRoomId] = useState<
+    Record<string, HistoryTextPaginationState>
+  >({})
   const [sessionsById, setSessionsById] = useState<Record<string, LiveSession>>({})
   const [connectionStatesById, setConnectionStatesById] = useState<Record<string, PeerConnectionState>>({})
   const [textRecords, setTextRecords] = useState<TextRecord[]>([])
@@ -422,9 +434,7 @@ export function useDdzhilian() {
   const transferItemsRef = useRef<TransferItem[]>([])
   const textRecordsRef = useRef<TextRecord[]>([])
   const historyTextsRef = useRef<HistoryTextSummary[]>([])
-  const historyTextRefreshKeyRef = useRef('')
-  const historyTextRefreshRequestRef = useRef('')
-  const historyTextRefreshVersionRef = useRef(0)
+  const historyTextPaginationRef = useRef<Record<string, HistoryTextPaginationState>>({})
   const incomingTransfersRef = useRef(new Map<string, IncomingTransferDraft>())
   const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>())
   const transferFilesRef = useRef(new Map<string, File>())
@@ -498,6 +508,10 @@ export function useDdzhilian() {
   useEffect(() => {
     historyTextsRef.current = historyTexts
   }, [historyTexts])
+
+  useEffect(() => {
+    historyTextPaginationRef.current = historyTextPaginationByRoomId
+  }, [historyTextPaginationByRoomId])
 
   const sendEvent = (event: ClientEvent) => {
     const socket = socketRef.current
@@ -584,84 +598,135 @@ export function useDdzhilian() {
     })
   }
 
-  const refreshHistoryTextsForRooms = async (
-    requestSelf: DirectorySnapshotPayload['self'],
-    rooms: RoomSummary[],
+  const mergeHistoryTexts = (
+    previous: HistoryTextSummary[],
+    roomId: string,
+    nextTexts: HistoryTextSummary[],
+    replaceRoom: boolean,
   ) => {
-    const roomKey = rooms
-      .map((room) => `${room.roomId}:${room.historyTextCount}:${room.historyTextLatestAt ?? ''}`)
-      .sort()
-      .join('|')
-    const refreshKey = `${requestSelf.historyAuthToken}:${roomKey}`
+    const base = replaceRoom
+      ? previous.filter((record) => record.roomId !== roomId)
+      : previous.slice()
+    const textById = new Map(base.map((record) => [record.historyId, record] as const))
 
-    if (
-      historyTextRefreshKeyRef.current === refreshKey ||
-      historyTextRefreshRequestRef.current === refreshKey
-    ) {
+    for (const record of nextTexts) {
+      textById.set(record.historyId, record)
+    }
+
+    return [...textById.values()].sort(
+      (left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt),
+    )
+  }
+
+  const fetchRoomHistoryTexts = async (
+    roomId: string,
+    mode: 'initial' | 'older',
+    options?: {
+      roomSummary?: RoomSummary
+    },
+  ) => {
+    const requestSelf = selfRef.current
+    const room = options?.roomSummary ?? roomsById[roomId]
+
+    if (!requestSelf?.historyAuthToken || !room) {
       return
     }
 
-    const roomsWithText = rooms.filter((room) => room.historyTextCount > 0)
+    const currentState = historyTextPaginationRef.current[roomId]
+    if (currentState?.isLoading) {
+      return
+    }
 
-    if (roomsWithText.length === 0) {
-      historyTextRefreshVersionRef.current += 1
-      historyTextRefreshKeyRef.current = refreshKey
-      historyTextRefreshRequestRef.current = ''
+    if (mode === 'older' && (!currentState?.initialized || !currentState.hasMore)) {
+      return
+    }
+
+    if (mode === 'initial' && room.historyTextCount === 0) {
       startTransition(() => {
-        setHistoryTexts([])
+        setHistoryTexts((previous) => previous.filter((record) => record.roomId !== roomId))
+        setHistoryTextPaginationByRoomId((previous) => ({
+          ...previous,
+          [roomId]: {
+            initialized: true,
+            isLoading: false,
+            hasMore: false,
+          },
+        }))
       })
-      archivedTextHistoryIdsRef.current = new Set()
       return
     }
 
-    const requestVersion = historyTextRefreshVersionRef.current + 1
-    historyTextRefreshVersionRef.current = requestVersion
-    historyTextRefreshRequestRef.current = refreshKey
+    startTransition(() => {
+      setHistoryTextPaginationByRoomId((previous) => ({
+        ...previous,
+        [roomId]: {
+          initialized: currentState?.initialized ?? false,
+          isLoading: true,
+          hasMore: currentState?.hasMore ?? room.historyTextCount > 0,
+          oldestCreatedAt: currentState?.oldestCreatedAt,
+          oldestHistoryId: currentState?.oldestHistoryId,
+        },
+      }))
+    })
 
     try {
-      const results = await Promise.all(
-        roomsWithText.map(async (room) => {
-          const url = new URL('/api/history/text', API_BASE_URL)
-          url.searchParams.set('roomId', room.roomId)
+      const url = new URL('/api/history/text', API_BASE_URL)
+      url.searchParams.set('roomId', roomId)
+      url.searchParams.set('limit', HISTORY_PAGE_SIZE.toString())
 
-          const response = await fetch(url, {
-            headers: buildHistoryAuthHeaders(requestSelf),
-          })
-
-          if (!response.ok) {
-            throw new Error(`历史文本拉取失败：${response.status.toString()} ${await readResponseError(response)}`)
-          }
-
-          const payload = await response.json() as { texts?: HistoryTextSummary[] }
-          return payload.texts ?? []
-        }),
-      )
-      const nextHistoryTexts = results
-        .flat()
-        .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
-
-      if (historyTextRefreshVersionRef.current !== requestVersion) {
-        return
+      if (mode === 'older' && currentState?.oldestCreatedAt && currentState.oldestHistoryId) {
+        url.searchParams.set('beforeCreatedAt', currentState.oldestCreatedAt)
+        url.searchParams.set('beforeHistoryId', currentState.oldestHistoryId)
       }
 
-      historyTextRefreshKeyRef.current = refreshKey
-      archivedTextHistoryIdsRef.current = new Set(
-        nextHistoryTexts.map((record) => record.historyId),
-      )
-      startTransition(() => {
-        setHistoryTexts(nextHistoryTexts)
+      const response = await fetch(url, {
+        headers: buildHistoryAuthHeaders(requestSelf),
       })
+
+      if (!response.ok) {
+        throw new Error(`历史文本拉取失败：${response.status.toString()} ${await readResponseError(response)}`)
+      }
+
+      const payload = await response.json() as {
+        texts?: HistoryTextSummary[]
+        hasMore?: boolean
+        nextCursor?: {
+          createdAt?: string
+          historyId?: string
+        }
+      }
+      const nextTexts = payload.texts ?? []
+      startTransition(() => {
+        setHistoryTexts((previous) => mergeHistoryTexts(previous, roomId, nextTexts, mode === 'initial'))
+        setHistoryTextPaginationByRoomId((previous) => ({
+          ...previous,
+          [roomId]: {
+            initialized: true,
+            isLoading: false,
+            hasMore: payload.hasMore === true,
+            oldestCreatedAt: payload.nextCursor?.createdAt,
+            oldestHistoryId: payload.nextCursor?.historyId,
+          },
+        }))
+      })
+      archivedTextHistoryIdsRef.current = new Set([
+        ...archivedTextHistoryIdsRef.current,
+        ...nextTexts.map((record) => record.historyId),
+      ])
     } catch (error) {
-      if (historyTextRefreshVersionRef.current === requestVersion) {
-        debugLog('history text refresh failed', error)
-      }
-    } finally {
-      if (
-        historyTextRefreshVersionRef.current === requestVersion &&
-        historyTextRefreshRequestRef.current === refreshKey
-      ) {
-        historyTextRefreshRequestRef.current = ''
-      }
+      startTransition(() => {
+        setHistoryTextPaginationByRoomId((previous) => ({
+          ...previous,
+          [roomId]: {
+            initialized: currentState?.initialized ?? false,
+            isLoading: false,
+            hasMore: currentState?.hasMore ?? room.historyTextCount > 0,
+            oldestCreatedAt: currentState?.oldestCreatedAt,
+            oldestHistoryId: currentState?.oldestHistoryId,
+          },
+        }))
+      })
+      debugLog('history text page fetch failed', { roomId, mode, error })
     }
   }
 
@@ -688,8 +753,19 @@ export function useDdzhilian() {
     const peerNameById = new Map(normalizedPeers.map((peer) => [peer.deviceId, peer.deviceName] as const))
     peerNameById.set(snapshot.self.deviceId, snapshot.self.deviceName)
     const snapshotIds = new Set(snapshot.sessions.map((session) => session.sessionId))
+    const roomsNeedingRefresh = snapshot.rooms.filter((room) => {
+      const previousRoom = roomsById[room.roomId]
+      const pagination = historyTextPaginationRef.current[room.roomId]
 
-    void refreshHistoryTextsForRooms(snapshot.self, snapshot.rooms)
+      if (!previousRoom || !pagination?.initialized || pagination.isLoading) {
+        return false
+      }
+
+      return (
+        previousRoom.historyTextCount !== room.historyTextCount ||
+        previousRoom.historyTextLatestAt !== room.historyTextLatestAt
+      )
+    })
 
     startTransition(() => {
       setSelf(snapshot.self)
@@ -700,9 +776,37 @@ export function useDdzhilian() {
       setRoomStates(snapshot.roomStates ?? [])
       setPreferences(snapshot.self.preferences ?? { enterToSend: true })
       setHistoryFiles(snapshot.historyFiles)
-      if (snapshot.historyTexts.length > 0) {
-        setHistoryTexts(snapshot.historyTexts)
-      }
+      setHistoryTexts((previous) => {
+        const roomsWithPersistedTexts = new Set(
+          snapshot.rooms
+            .filter((room) => room.historyTextCount > 0)
+            .map((room) => room.roomId),
+        )
+        return previous.filter((record) => roomsWithPersistedTexts.has(record.roomId))
+      })
+      setHistoryTextPaginationByRoomId((previous) => {
+        const next: Record<string, HistoryTextPaginationState> = {}
+
+        for (const room of snapshot.rooms) {
+          const current = previous[room.roomId]
+          if (room.historyTextCount === 0) {
+            next[room.roomId] = {
+              initialized: true,
+              isLoading: false,
+              hasMore: false,
+            }
+            continue
+          }
+
+          next[room.roomId] = current ?? {
+            initialized: false,
+            isLoading: false,
+            hasMore: true,
+          }
+        }
+
+        return next
+      })
       setSessionsById((previous) => {
         const next: Record<string, LiveSession> = {}
 
@@ -771,6 +875,10 @@ export function useDdzhilian() {
       archivedTextHistoryIdsRef.current = new Set(
         snapshot.historyTexts.map((text) => text.historyId),
       )
+    }
+
+    for (const room of roomsNeedingRefresh) {
+      void fetchRoomHistoryTexts(room.roomId, 'initial', { roomSummary: room })
     }
   }
 
@@ -2954,6 +3062,7 @@ export function useDdzhilian() {
     receivedFiles,
     historyFiles,
     historyTexts,
+    historyTextPaginationByRoomId,
     errorMessage,
     lastCreatedPublicRoomId,
     pairByShortCode,
@@ -2974,6 +3083,16 @@ export function useDdzhilian() {
     sendText,
     recallText,
     sendRoomText,
+    ensureRoomHistoryLoaded: (roomId: string) => {
+      const state = historyTextPaginationRef.current[roomId]
+      if (state?.initialized || state?.isLoading) {
+        return
+      }
+      void fetchRoomHistoryTexts(roomId, 'initial')
+    },
+    loadOlderRoomHistoryTexts: (roomId: string) => {
+      void fetchRoomHistoryTexts(roomId, 'older')
+    },
     askAi,
     getAiQuota,
     sendRoomFiles,

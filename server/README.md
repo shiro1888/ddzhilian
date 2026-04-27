@@ -59,11 +59,16 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
 - `HISTORY_RETENTION_MS`: file history retention window, default 6 hours, capped at 24 hours
 - `HISTORY_TEXT_RETENTION_MS`: text history retention window, default 24 hours, capped at 24 hours
+- `HISTORY_PAGE_SIZE`: history text lazy-load page size, default `50`
 - `TURN_URL`: optional single TURN server URL
 - `TURN_URLS`: optional comma-separated TURN server URLs
 - `TURN_USERNAME`: optional TURN username
 - `TURN_CREDENTIAL`: optional TURN credential
 - `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
+- `SUPABASE_URL`: optional Supabase project URL for history metadata
+- `SUPABASE_SERVICE_ROLE_KEY`: optional service-role key used only by the backend
+- `SUPABASE_HISTORY_FILES_TABLE`: optional file-metadata table name, default `history_files`
+- `SUPABASE_HISTORY_TEXTS_TABLE`: optional text-history table name, default `history_texts`
 - `AI_PROVIDER`: active AI provider, `cloudflare` or `openrouter`; when omitted, OpenRouter is used if `OPENROUTER_API_KEY` is set, otherwise Cloudflare is used
 - `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
 - `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
@@ -89,13 +94,18 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 
 ## History Cleanup
 
-History files are stored under `server/data/history/files/<roomId>/...`; the durable metadata index is `server/data/history/index.json`.
+History files are stored under `server/data/history/files/<roomId>/...`.
+
+- When Supabase is configured, text history and file metadata are persisted in Supabase.
+- When Supabase is not configured, metadata falls back to `server/data/history/index.json`.
+- SQL for the metadata tables lives in `../supabase/schema.sql` and `../supabase/migrations/20260427170000_history_metadata.sql`.
 
 Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
 
 - `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 6 hours, and the server caps it at 24 hours.
 - `HISTORY_TEXT_RETENTION_MS` removes text records older than the configured retention window. The default and maximum are 24 hours.
 - `HISTORY_MAX_BYTES` caps historical file storage per room. The default is 10 GiB.
+- `HISTORY_PAGE_SIZE` controls how many historical texts are returned per request. The default is 50.
 - When a room exceeds the byte cap, cleanup removes the oldest files first until the room is under the limit.
 - File cleanup deletes both the metadata entry and the stored file on disk.
 - Cleanup runs on server startup, history listing, history writes, file save/upload paths, and the periodic maintenance loop.

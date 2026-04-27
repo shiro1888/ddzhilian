@@ -90,6 +90,8 @@ export interface RoomSummary {
   isPublic: boolean;
   historyTextCount: number;
   historyTextLatestAt?: string;
+  historyTextPreview?: string;
+  historyTextLatestSourceDeviceId?: string;
   updatedAt: string;
 }
 

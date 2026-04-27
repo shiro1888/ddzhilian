@@ -4,6 +4,8 @@ import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
 import {
   type HistoryFileSummary,
   type HistoryTextSummary,
@@ -12,6 +14,7 @@ import {
 const HISTORY_ROOT = fileURLToPath(new URL('../../data/history', import.meta.url));
 const FILES_ROOT = join(HISTORY_ROOT, 'files');
 const INDEX_PATH = join(HISTORY_ROOT, 'index.json');
+const REMOTE_BATCH_SIZE = 500;
 
 export interface HistoryFileRecord {
   historyId: string;
@@ -49,6 +52,61 @@ export interface HistoryStats {
   lastActivityAt?: string;
 }
 
+export interface HistoryTextRoomStats {
+  count: number;
+  latestAt?: string;
+  latestPreview?: string;
+  latestSourceDeviceId?: string;
+}
+
+export interface HistoryTextCursor {
+  createdAt: string;
+  historyId: string;
+}
+
+export interface HistoryTextPage {
+  texts: HistoryTextRecord[];
+  hasMore: boolean;
+  nextCursor?: HistoryTextCursor;
+}
+
+export interface HistoryRegistryOptions {
+  retentionMs: number;
+  maxBytes: number;
+  textRetentionMs: number;
+  supabase?: {
+    url: string;
+    serviceRoleKey: string;
+    historyFilesTable: string;
+    historyTextsTable: string;
+  };
+}
+
+type PersistedHistoryFileRow = {
+  history_id: string;
+  room_id: string;
+  session_id: string | null;
+  is_public: boolean;
+  source_device_id: string;
+  source_device_name: string;
+  file_name: string;
+  size: number;
+  mime_type: string | null;
+  created_at: string;
+  storage_path: string;
+};
+
+type PersistedHistoryTextRow = {
+  history_id: string;
+  room_id: string;
+  session_id: string | null;
+  is_public: boolean;
+  source_device_id: string;
+  source_device_name: string;
+  text: string;
+  created_at: string;
+};
+
 type HistoryActorRecord = Pick<HistoryFileRecord | HistoryTextRecord, 'sourceDeviceId' | 'sourceDeviceName'>;
 
 function normalizeHistoryUsername(record: HistoryActorRecord) {
@@ -60,11 +118,25 @@ function normalizeHistoryUsername(record: HistoryActorRecord) {
   return username || undefined;
 }
 
+function compareHistoryTimestamp(left: string, right: string) {
+  const timeDiff = Date.parse(left) - Date.parse(right);
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+
+  return left.localeCompare(right);
+}
+
 function sortByCreatedAt(
-  left: Pick<{ createdAt: string }, 'createdAt'>,
-  right: Pick<{ createdAt: string }, 'createdAt'>,
+  left: Pick<{ createdAt: string; historyId?: string }, 'createdAt' | 'historyId'>,
+  right: Pick<{ createdAt: string; historyId?: string }, 'createdAt' | 'historyId'>,
 ) {
-  return Date.parse(left.createdAt) - Date.parse(right.createdAt);
+  const dateDiff = compareHistoryTimestamp(left.createdAt, right.createdAt);
+  if (dateDiff !== 0) {
+    return dateDiff;
+  }
+
+  return (left.historyId ?? '').localeCompare(right.historyId ?? '');
 }
 
 function safeFileSegment(value: string) {
@@ -82,19 +154,119 @@ function buildStoragePath(roomId: string, historyId: string, fileName: string) {
 async function drainStream(stream: NodeJS.ReadableStream) {
   for await (const chunk of stream) {
     void chunk;
-    // Intentionally drain duplicate upload bodies so the HTTP connection closes cleanly.
   }
 }
 
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+function toFileRow(record: HistoryFileRecord): PersistedHistoryFileRow {
+  return {
+    history_id: record.historyId,
+    room_id: record.roomId,
+    session_id: record.sessionId ?? null,
+    is_public: record.isPublic,
+    source_device_id: record.sourceDeviceId,
+    source_device_name: record.sourceDeviceName,
+    file_name: record.fileName,
+    size: record.size,
+    mime_type: record.mimeType ?? null,
+    created_at: record.createdAt,
+    storage_path: record.storagePath,
+  };
+}
+
+function toTextRow(record: HistoryTextRecord): PersistedHistoryTextRow {
+  return {
+    history_id: record.historyId,
+    room_id: record.roomId,
+    session_id: record.sessionId ?? null,
+    is_public: record.isPublic,
+    source_device_id: record.sourceDeviceId,
+    source_device_name: record.sourceDeviceName,
+    text: record.text,
+    created_at: record.createdAt,
+  };
+}
+
+function fromFileRow(row: PersistedHistoryFileRow): HistoryFileRecord {
+  return {
+    historyId: row.history_id,
+    roomId: row.room_id,
+    sessionId: row.session_id ?? undefined,
+    isPublic: row.is_public,
+    sourceDeviceId: row.source_device_id,
+    sourceDeviceName: row.source_device_name,
+    fileName: row.file_name,
+    size: row.size,
+    mimeType: row.mime_type ?? undefined,
+    createdAt: row.created_at,
+    storagePath: row.storage_path,
+  };
+}
+
+function fromTextRow(row: PersistedHistoryTextRow): HistoryTextRecord {
+  return {
+    historyId: row.history_id,
+    roomId: row.room_id,
+    sessionId: row.session_id ?? undefined,
+    isPublic: row.is_public,
+    sourceDeviceId: row.source_device_id,
+    sourceDeviceName: row.source_device_name,
+    text: row.text,
+    createdAt: row.created_at,
+  };
+}
+
+function isBeforeCursor(record: HistoryTextRecord, cursor: HistoryTextCursor) {
+  const createdAtDiff = compareHistoryTimestamp(record.createdAt, cursor.createdAt);
+  if (createdAtDiff !== 0) {
+    return createdAtDiff < 0;
+  }
+
+  return record.historyId.localeCompare(cursor.historyId) < 0;
+}
+
 export class HistoryRegistry {
-  constructor(
-    private readonly retentionMs: number,
-    private readonly maxBytes: number,
-    private readonly textRetentionMs: number,
-  ) {
+  static async create(options: HistoryRegistryOptions) {
+    const registry = new HistoryRegistry(options);
+    await registry.load();
+    registry.prune();
+    return registry;
+  }
+
+  private readonly retentionMs: number;
+
+  private readonly maxBytes: number;
+
+  private readonly textRetentionMs: number;
+
+  private readonly supabaseClient?: SupabaseClient;
+
+  private readonly historyFilesTable?: string;
+
+  private readonly historyTextsTable?: string;
+
+  private constructor(options: HistoryRegistryOptions) {
+    this.retentionMs = options.retentionMs;
+    this.maxBytes = options.maxBytes;
+    this.textRetentionMs = options.textRetentionMs;
+    this.supabaseClient = options.supabase
+      ? createClient(options.supabase.url, options.supabase.serviceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+      : undefined;
+    this.historyFilesTable = options.supabase?.historyFilesTable;
+    this.historyTextsTable = options.supabase?.historyTextsTable;
+
     mkdirSync(FILES_ROOT, { recursive: true });
-    this.load();
-    this.prune();
   }
 
   private readonly filesById = new Map<string, HistoryFileRecord>();
@@ -107,15 +279,7 @@ export class HistoryRegistry {
 
   listForRoom(roomId: string) {
     this.prune();
-    const ids = this.fileIdsByRoomId.get(roomId);
-    if (!ids) {
-      return [];
-    }
-
-    return [...ids]
-      .map((historyId) => this.filesById.get(historyId))
-      .filter((record): record is HistoryFileRecord => Boolean(record))
-      .sort(sortByCreatedAt);
+    return this.listFileRecordsForRoom(roomId);
   }
 
   getById(historyId: string) {
@@ -131,7 +295,7 @@ export class HistoryRegistry {
     ].filter((record) => record.isPublic);
 
     return publicRecords
-      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0]
+      .sort((left, right) => sortByCreatedAt(right, left))[0]
       ?.roomId;
   }
 
@@ -140,12 +304,33 @@ export class HistoryRegistry {
     return this.listTextRecordsForRoom(roomId);
   }
 
+  listTextPageForRoom(roomId: string, limit: number, cursor?: HistoryTextCursor): HistoryTextPage {
+    this.prune();
+    const records = this.listTextRecordsForRoom(roomId);
+    const filtered = cursor
+      ? records.filter((record) => isBeforeCursor(record, cursor))
+      : records;
+    const page = filtered.slice(Math.max(0, filtered.length - limit));
+    const oldest = page[0];
+
+    return {
+      texts: page,
+      hasMore: filtered.length > page.length,
+      nextCursor: oldest
+        ? {
+            createdAt: oldest.createdAt,
+            historyId: oldest.historyId,
+          }
+        : undefined,
+    };
+  }
+
   getTextById(historyId: string) {
     this.prune();
     return this.textsById.get(historyId);
   }
 
-  getTextStatsForRoom(roomId: string) {
+  getTextStatsForRoom(roomId: string): HistoryTextRoomStats {
     this.prune();
     const records = this.listTextRecordsForRoom(roomId);
     const latest = records.at(-1);
@@ -153,6 +338,8 @@ export class HistoryRegistry {
     return {
       count: records.length,
       latestAt: latest?.createdAt,
+      latestPreview: latest?.text,
+      latestSourceDeviceId: latest?.sourceDeviceId,
     };
   }
 
@@ -164,7 +351,7 @@ export class HistoryRegistry {
     const lastTextAt = textRecords.at(-1)?.createdAt;
     const lastActivityAt = [lastFileAt, lastTextAt]
       .filter((value): value is string => Boolean(value))
-      .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+      .sort((left, right) => compareHistoryTimestamp(right, left))[0];
 
     return {
       fileCount: fileRecords.length,
@@ -184,7 +371,25 @@ export class HistoryRegistry {
     };
   }
 
-  clearAll() {
+  async clearAll() {
+    if (this.supabaseClient && this.historyFilesTable && this.historyTextsTable) {
+      await Promise.all([
+        this.supabaseClient
+          .from(this.historyFilesTable)
+          .delete()
+          .not('history_id', 'is', null),
+        this.supabaseClient
+          .from(this.historyTextsTable)
+          .delete()
+          .not('history_id', 'is', null),
+      ]).then((results) => {
+        const firstError = results.find((result) => result.error)?.error;
+        if (firstError) {
+          throw firstError;
+        }
+      });
+    }
+
     this.filesById.clear();
     this.fileIdsByRoomId.clear();
     this.textsById.clear();
@@ -192,7 +397,10 @@ export class HistoryRegistry {
 
     rmSync(FILES_ROOT, { recursive: true, force: true });
     mkdirSync(FILES_ROOT, { recursive: true });
-    this.persist();
+
+    if (!this.supabaseClient) {
+      this.persistLocalIndex();
+    }
   }
 
   async saveFile(input: {
@@ -219,7 +427,6 @@ export class HistoryRegistry {
     await fs.mkdir(roomDir, { recursive: true });
 
     const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
-
     await fs.writeFile(storagePath, input.data);
 
     const record: HistoryFileRecord = {
@@ -236,14 +443,20 @@ export class HistoryRegistry {
       storagePath,
     };
 
-    this.filesById.set(record.historyId, record);
-    const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
-    roomIds.add(record.historyId);
-    this.fileIdsByRoomId.set(record.roomId, roomIds);
-    this.pruneRoomCapacity(record.roomId);
-    this.persist();
+    this.addFileRecord(record);
 
-    return record;
+    try {
+      await this.persistFileRecord(record);
+      return record;
+    } catch (error) {
+      this.removeFileRecord(record);
+      try {
+        await fs.unlink(storagePath);
+      } catch {
+        // Ignore cleanup failure after persistence rejection.
+      }
+      throw error;
+    }
   }
 
   async saveFileStream(input: {
@@ -291,26 +504,24 @@ export class HistoryRegistry {
         storagePath,
       };
 
-      this.filesById.set(record.historyId, record);
-      const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
-      roomIds.add(record.historyId);
-      this.fileIdsByRoomId.set(record.roomId, roomIds);
-      this.pruneRoomCapacity(record.roomId);
-      this.persist();
-
+      this.addFileRecord(record);
+      await this.persistFileRecord(record);
       return record;
     } catch (error) {
+      const persistedRecord = this.filesById.get(input.historyId);
+      if (persistedRecord) {
+        this.removeFileRecord(persistedRecord);
+      }
       try {
         await fs.unlink(tempPath);
       } catch {
         // Ignore partial-file cleanup failures.
       }
-
       throw error;
     }
   }
 
-  saveText(input: HistoryTextRecord) {
+  async saveText(input: HistoryTextRecord) {
     this.prune();
     const existing = this.textsById.get(input.historyId);
     if (existing) {
@@ -328,30 +539,36 @@ export class HistoryRegistry {
       createdAt: input.createdAt,
     };
 
-    this.textsById.set(record.historyId, record);
-    const roomIds = this.textIdsByRoomId.get(record.roomId) ?? new Set<string>();
-    roomIds.add(record.historyId);
-    this.textIdsByRoomId.set(record.roomId, roomIds);
-    this.persist();
+    this.addTextRecord(record);
 
-    return record;
+    try {
+      await this.persistTextRecord(record);
+      return record;
+    } catch (error) {
+      this.removeTextRecord(record);
+      throw error;
+    }
   }
 
-  deleteText(historyId: string) {
+  async deleteText(historyId: string) {
     this.prune();
     const record = this.textsById.get(historyId);
     if (!record) {
       return false;
     }
 
-    this.textsById.delete(historyId);
-    const roomIds = this.textIdsByRoomId.get(record.roomId);
-    roomIds?.delete(historyId);
-    if (roomIds && roomIds.size === 0) {
-      this.textIdsByRoomId.delete(record.roomId);
+    this.removeTextRecord(record);
+
+    try {
+      await this.deleteRemoteTexts([historyId]);
+      if (!this.supabaseClient) {
+        this.persistLocalIndex();
+      }
+      return true;
+    } catch (error) {
+      this.addTextRecord(record);
+      throw error;
     }
-    this.persist();
-    return true;
   }
 
   async saveFileChunk(input: {
@@ -433,12 +650,19 @@ export class HistoryRegistry {
       storagePath,
     };
 
-    this.filesById.set(record.historyId, record);
-    const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
-    roomIds.add(record.historyId);
-    this.fileIdsByRoomId.set(record.roomId, roomIds);
-    this.pruneRoomCapacity(record.roomId);
-    this.persist();
+    this.addFileRecord(record);
+
+    try {
+      await this.persistFileRecord(record);
+    } catch (error) {
+      this.removeFileRecord(record);
+      try {
+        await fs.unlink(storagePath);
+      } catch {
+        // Ignore cleanup failures after remote persistence rejection.
+      }
+      throw error;
+    }
 
     return {
       complete: true as const,
@@ -450,6 +674,8 @@ export class HistoryRegistry {
 
   prune(now = Date.now()) {
     let changed = false;
+    const prunedFileIds: string[] = [];
+    const prunedTextIds: string[] = [];
 
     for (const record of [...this.filesById.values()]) {
       if (now - Date.parse(record.createdAt) <= this.retentionMs) {
@@ -457,11 +683,16 @@ export class HistoryRegistry {
       }
 
       this.removeFileRecord(record);
+      prunedFileIds.push(record.historyId);
       changed = true;
     }
 
     for (const roomId of [...this.fileIdsByRoomId.keys()]) {
-      changed = this.pruneRoomCapacity(roomId) || changed;
+      const removedIds = this.pruneRoomCapacity(roomId);
+      if (removedIds.length > 0) {
+        prunedFileIds.push(...removedIds);
+        changed = true;
+      }
     }
 
     if (this.textRetentionMs > 0) {
@@ -471,12 +702,17 @@ export class HistoryRegistry {
         }
 
         this.removeTextRecord(record);
+        prunedTextIds.push(record.historyId);
         changed = true;
       }
     }
 
     if (changed) {
-      this.persist();
+      if (this.supabaseClient) {
+        void this.syncPrunedRemoteRecords(prunedFileIds, prunedTextIds);
+      } else {
+        this.persistLocalIndex();
+      }
     }
 
     return changed;
@@ -514,7 +750,47 @@ export class HistoryRegistry {
     };
   }
 
-  private load() {
+  private async load() {
+    this.resetRecords();
+
+    if (!this.supabaseClient || !this.historyFilesTable || !this.historyTextsTable) {
+      this.loadFromLocalIndex();
+      return;
+    }
+
+    const [fileRows, textRows] = await Promise.all([
+      this.fetchAllRows<PersistedHistoryFileRow>(this.historyFilesTable),
+      this.fetchAllRows<PersistedHistoryTextRow>(this.historyTextsTable),
+    ]);
+
+    if (fileRows.length === 0 && textRows.length === 0) {
+      const imported = this.loadFromLocalIndex();
+      if (imported.fileCount > 0 || imported.textCount > 0) {
+        await Promise.all([
+          this.upsertFileRows([...this.filesById.values()]),
+          this.upsertTextRows([...this.textsById.values()]),
+        ]);
+      }
+      return;
+    }
+
+    for (const row of fileRows) {
+      this.addFileRecord(fromFileRow(row));
+    }
+
+    for (const row of textRows) {
+      this.addTextRecord(fromTextRow(row));
+    }
+  }
+
+  private resetRecords() {
+    this.filesById.clear();
+    this.fileIdsByRoomId.clear();
+    this.textsById.clear();
+    this.textIdsByRoomId.clear();
+  }
+
+  private loadFromLocalIndex() {
     try {
       const raw = readFileSync(INDEX_PATH, 'utf8');
       const parsed = JSON.parse(raw) as {
@@ -525,30 +801,33 @@ export class HistoryRegistry {
       const texts = parsed.texts ?? [];
 
       for (const record of files) {
-        this.filesById.set(record.historyId, {
+        this.addFileRecord({
           ...record,
           isPublic: record.isPublic ?? false,
         });
-        const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
-        roomIds.add(record.historyId);
-        this.fileIdsByRoomId.set(record.roomId, roomIds);
       }
 
       for (const record of texts) {
-        this.textsById.set(record.historyId, {
+        this.addTextRecord({
           ...record,
           isPublic: record.isPublic ?? false,
         });
-        const roomIds = this.textIdsByRoomId.get(record.roomId) ?? new Set<string>();
-        roomIds.add(record.historyId);
-        this.textIdsByRoomId.set(record.roomId, roomIds);
       }
+
+      return {
+        fileCount: files.length,
+        textCount: texts.length,
+      };
     } catch {
-      this.persist();
+      this.persistLocalIndex();
+      return {
+        fileCount: 0,
+        textCount: 0,
+      };
     }
   }
 
-  private persist() {
+  private persistLocalIndex() {
     mkdirSync(HISTORY_ROOT, { recursive: true });
     const files = [...this.filesById.values()].sort(sortByCreatedAt);
     const texts = [...this.textsById.values()].sort(sortByCreatedAt);
@@ -567,12 +846,12 @@ export class HistoryRegistry {
 
   private pruneRoomCapacity(roomId: string) {
     if (this.maxBytes <= 0) {
-      return false;
+      return [];
     }
 
     const records = this.listFileRecordsForRoom(roomId);
     let totalSize = records.reduce((total, record) => total + record.size, 0);
-    let changed = false;
+    const removedIds: string[] = [];
 
     for (const record of records) {
       if (totalSize <= this.maxBytes) {
@@ -581,10 +860,10 @@ export class HistoryRegistry {
 
       this.removeFileRecord(record);
       totalSize -= record.size;
-      changed = true;
+      removedIds.push(record.historyId);
     }
 
-    return changed;
+    return removedIds;
   }
 
   private listFileRecordsForRoom(roomId: string) {
@@ -620,19 +899,42 @@ export class HistoryRegistry {
     }
   }
 
+  private addFileRecord(record: HistoryFileRecord) {
+    this.filesById.set(record.historyId, record);
+    const roomIds = this.fileIdsByRoomId.get(record.roomId) ?? new Set<string>();
+    roomIds.add(record.historyId);
+    this.fileIdsByRoomId.set(record.roomId, roomIds);
+  }
+
   private removeFileRecord(record: HistoryFileRecord) {
-    this.filesById.delete(record.historyId);
-    const roomIds = this.fileIdsByRoomId.get(record.roomId);
-    roomIds?.delete(record.historyId);
-    if (roomIds && roomIds.size === 0) {
-      this.fileIdsByRoomId.delete(record.roomId);
-    }
+    this.removeFileRecordById(record.historyId);
 
     try {
       unlinkSync(record.storagePath);
     } catch {
       // Ignore missing files during cleanup.
     }
+  }
+
+  private removeFileRecordById(historyId: string) {
+    const record = this.filesById.get(historyId);
+    if (!record) {
+      return;
+    }
+
+    this.filesById.delete(historyId);
+    const roomIds = this.fileIdsByRoomId.get(record.roomId);
+    roomIds?.delete(historyId);
+    if (roomIds && roomIds.size === 0) {
+      this.fileIdsByRoomId.delete(record.roomId);
+    }
+  }
+
+  private addTextRecord(record: HistoryTextRecord) {
+    this.textsById.set(record.historyId, record);
+    const roomIds = this.textIdsByRoomId.get(record.roomId) ?? new Set<string>();
+    roomIds.add(record.historyId);
+    this.textIdsByRoomId.set(record.roomId, roomIds);
   }
 
   private removeTextRecord(record: HistoryTextRecord) {
@@ -642,5 +944,134 @@ export class HistoryRegistry {
     if (roomIds && roomIds.size === 0) {
       this.textIdsByRoomId.delete(record.roomId);
     }
+  }
+
+  private async persistFileRecord(record: HistoryFileRecord) {
+    if (this.supabaseClient && this.historyFilesTable) {
+      await this.upsertFileRows([record]);
+      return;
+    }
+
+    this.persistLocalIndex();
+  }
+
+  private async persistTextRecord(record: HistoryTextRecord) {
+    if (this.supabaseClient && this.historyTextsTable) {
+      await this.upsertTextRows([record]);
+      return;
+    }
+
+    this.persistLocalIndex();
+  }
+
+  private async upsertFileRows(records: HistoryFileRecord[]) {
+    if (!this.supabaseClient || !this.historyFilesTable || records.length === 0) {
+      return;
+    }
+
+    for (const batch of chunkArray(records, REMOTE_BATCH_SIZE)) {
+      const { error } = await this.supabaseClient
+        .from(this.historyFilesTable)
+        .upsert(batch.map(toFileRow), { onConflict: 'history_id' });
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  private async upsertTextRows(records: HistoryTextRecord[]) {
+    if (!this.supabaseClient || !this.historyTextsTable || records.length === 0) {
+      return;
+    }
+
+    for (const batch of chunkArray(records, REMOTE_BATCH_SIZE)) {
+      const { error } = await this.supabaseClient
+        .from(this.historyTextsTable)
+        .upsert(batch.map(toTextRow), { onConflict: 'history_id' });
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  private async deleteRemoteFiles(historyIds: string[]) {
+    if (!this.supabaseClient || !this.historyFilesTable || historyIds.length === 0) {
+      return;
+    }
+
+    for (const batch of chunkArray(historyIds, REMOTE_BATCH_SIZE)) {
+      const { error } = await this.supabaseClient
+        .from(this.historyFilesTable)
+        .delete()
+        .in('history_id', batch);
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  private async deleteRemoteTexts(historyIds: string[]) {
+    if (!this.supabaseClient || !this.historyTextsTable || historyIds.length === 0) {
+      return;
+    }
+
+    for (const batch of chunkArray(historyIds, REMOTE_BATCH_SIZE)) {
+      const { error } = await this.supabaseClient
+        .from(this.historyTextsTable)
+        .delete()
+        .in('history_id', batch);
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  private async syncPrunedRemoteRecords(fileIds: string[], textIds: string[]) {
+    try {
+      await Promise.all([
+        this.deleteRemoteFiles(fileIds),
+        this.deleteRemoteTexts(textIds),
+      ]);
+    } catch (error) {
+      console.error('[history] failed to prune remote metadata', error);
+    }
+  }
+
+  private async fetchAllRows<Row>(tableName: string) {
+    if (!this.supabaseClient) {
+      return [];
+    }
+
+    const rows: Row[] = [];
+    let from = 0;
+
+    while (true) {
+      const to = from + REMOTE_BATCH_SIZE - 1;
+      const { data, error } = await this.supabaseClient
+        .from(tableName)
+        .select('*')
+        .order('created_at', { ascending: true })
+        .order('history_id', { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const batch = (data ?? []) as Row[];
+      rows.push(...batch);
+
+      if (batch.length < REMOTE_BATCH_SIZE) {
+        break;
+      }
+
+      from += REMOTE_BATCH_SIZE;
+    }
+
+    return rows;
   }
 }
