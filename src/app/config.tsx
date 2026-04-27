@@ -64,6 +64,17 @@ export const navItems: NavItem[] = [
       </>
     ),
   },
+  {
+    id: 'admin',
+    label: '管理员',
+    hint: '清理历史与管理模型接入',
+    icon: (
+      <>
+        <path d="M12 3.5 5.5 6.2v5.1c0 4 2.7 7.7 6.5 9.2 3.8-1.5 6.5-5.2 6.5-9.2V6.2Z" />
+        <path d="M9.5 11.8 11.2 13.5 14.8 9.8" />
+      </>
+    ),
+  },
 ]
 
 export const viewMeta: Record<NavView, StageMeta> = {
@@ -96,6 +107,12 @@ export const viewMeta: Record<NavView, StageMeta> = {
     description: '搜索当前与历史会话。',
     primaryAction: '刷新列表',
     secondaryAction: '查看在线设备',
+  },
+  admin: {
+    title: '管理员',
+    description: '清理历史记录，并管理当前服务器的 AI 模型接入配置。',
+    primaryAction: '保存配置',
+    secondaryAction: '清空历史',
   },
 }
 

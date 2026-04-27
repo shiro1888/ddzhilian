@@ -8,6 +8,7 @@ export const viewPaths: Record<NavView, string> = {
   receive: '/receive',
   text: '/text',
   sessions: '/sessions',
+  admin: '/admin',
 }
 
 export function pathForView(view: NavView) {

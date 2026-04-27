@@ -1,0 +1,372 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  type ManagedAiModelOption,
+  type ServerConfig,
+} from '../config.js';
+
+const ADMIN_CONFIG_ROOT = fileURLToPath(new URL('../../data/admin', import.meta.url));
+const ADMIN_CONFIG_PATH = join(ADMIN_CONFIG_ROOT, 'config.json');
+const defaultOpenRouterBaseUrl = 'https://openrouter.ai/api/v1';
+
+export type AdminModelToggleItem = {
+  id: string;
+  label: string;
+  enabled: boolean;
+};
+
+export type AdminAiSettingsSnapshot = {
+  provider: 'cloudflare' | 'openrouter';
+  systemPrompt: string;
+  cloudflare: {
+    accountId: string;
+    apiToken: string;
+    model: string;
+    models: AdminModelToggleItem[];
+    freeOnly: boolean;
+    dailyNeuronBudget: number;
+    maxPromptChars: number;
+    maxOutputTokens: number;
+  };
+  openrouter: {
+    apiKey: string;
+    baseUrl: string;
+    siteUrl: string;
+    siteName: string;
+    model: string;
+    models: AdminModelToggleItem[];
+    maxPromptChars: number;
+    maxOutputTokens: number;
+  };
+};
+
+type LegacyProviderSnapshot = {
+  model?: unknown;
+  modelsText?: unknown;
+  models?: unknown;
+  accountId?: unknown;
+  apiToken?: unknown;
+  apiKey?: unknown;
+  baseUrl?: unknown;
+  siteUrl?: unknown;
+  siteName?: unknown;
+  freeOnly?: unknown;
+  dailyNeuronBudget?: unknown;
+  maxPromptChars?: unknown;
+  maxOutputTokens?: unknown;
+};
+
+type PersistedAdminConfig = {
+  ai?: {
+    provider?: unknown;
+    systemPrompt?: unknown;
+    cloudflare?: LegacyProviderSnapshot;
+    openrouter?: LegacyProviderSnapshot;
+  };
+};
+
+function normalizeOptionalString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
+function normalizeSystemPrompt(value: unknown, fallback: string) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  return value.trim().slice(0, 20_000);
+}
+
+function labelFromAiModelId(modelId: string) {
+  return modelId.split('/').pop() || modelId;
+}
+
+function parseModelToggleItems(
+  value: unknown,
+  defaultModelId: string,
+  fallbackModels: ManagedAiModelOption[],
+): AdminModelToggleItem[] {
+  if (Array.isArray(value)) {
+    const mapped = value
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return undefined;
+        }
+
+        const record = entry as Record<string, unknown>;
+        const id = normalizeOptionalString(record.id);
+        if (!id) {
+          return undefined;
+        }
+
+        return {
+          id,
+          label: normalizeOptionalString(record.label) || labelFromAiModelId(id),
+          enabled: record.enabled !== false,
+        } satisfies AdminModelToggleItem;
+      })
+      .filter((entry): entry is AdminModelToggleItem => Boolean(entry));
+
+    return ensureDefaultEnabled(mapped, defaultModelId, fallbackModels);
+  }
+
+  const legacyText = normalizeOptionalString(value);
+  if (!legacyText) {
+    return ensureDefaultEnabled(
+      fallbackModels.map((model) => ({
+        id: model.id,
+        label: model.label,
+        enabled: model.enabled !== false,
+      })),
+      defaultModelId,
+      fallbackModels,
+    );
+  }
+
+  const parsed = legacyText
+    .split(/\r?\n|,/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .flatMap<AdminModelToggleItem>((entry) => {
+      const [rawId, ...labelParts] = entry.split('|');
+      const id = rawId?.trim();
+      if (!id) {
+        return [];
+      }
+
+      return [{
+        id,
+        label: labelParts.join('|').trim() || labelFromAiModelId(id),
+        enabled: true,
+      } satisfies AdminModelToggleItem];
+    });
+
+  return ensureDefaultEnabled(parsed, defaultModelId, fallbackModels);
+}
+
+function ensureDefaultEnabled(
+  models: AdminModelToggleItem[],
+  defaultModelId: string,
+  fallbackModels: ManagedAiModelOption[],
+) {
+  const next = new Map<string, AdminModelToggleItem>();
+
+  for (const model of models) {
+    next.set(model.id, model);
+  }
+
+  for (const fallbackModel of fallbackModels) {
+    if (!next.has(fallbackModel.id)) {
+      next.set(fallbackModel.id, {
+        id: fallbackModel.id,
+        label: fallbackModel.label,
+        enabled: fallbackModel.enabled !== false,
+      });
+    }
+  }
+
+  const enabledModels = [...next.values()].filter((model) => model.enabled);
+  const safeDefaultId = defaultModelId || enabledModels[0]?.id || [...next.keys()][0] || '';
+
+  if (safeDefaultId) {
+    const currentDefault = next.get(safeDefaultId);
+    if (currentDefault) {
+      next.set(safeDefaultId, {
+        ...currentDefault,
+        enabled: true,
+      });
+    } else {
+      next.set(safeDefaultId, {
+        id: safeDefaultId,
+        label: labelFromAiModelId(safeDefaultId),
+        enabled: true,
+      });
+    }
+  }
+
+  if ([...next.values()].every((model) => !model.enabled) && safeDefaultId) {
+    const first = next.get(safeDefaultId);
+    if (first) {
+      next.set(safeDefaultId, { ...first, enabled: true });
+    }
+  }
+
+  return [...next.values()];
+}
+
+function normalizeSnapshot(
+  input: PersistedAdminConfig['ai'] | AdminAiSettingsSnapshot,
+  fallback: ServerConfig,
+): AdminAiSettingsSnapshot {
+  const provider = input?.provider === 'openrouter' ? 'openrouter' : 'cloudflare';
+  const cloudflareInput = (input?.cloudflare ?? {}) as LegacyProviderSnapshot;
+  const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
+  const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
+  const openrouterModel = normalizeOptionalString(openrouterInput.model) || fallback.openrouterAi.model;
+
+  return {
+    provider,
+    systemPrompt: normalizeSystemPrompt(input?.systemPrompt, fallback.aiSystemPrompt),
+    cloudflare: {
+      accountId: normalizeOptionalString(cloudflareInput.accountId),
+      apiToken: normalizeOptionalString(cloudflareInput.apiToken),
+      model: cloudflareModel,
+      models: parseModelToggleItems(
+        cloudflareInput.models ?? cloudflareInput.modelsText,
+        cloudflareModel,
+        fallback.cloudflareAi.models,
+      ),
+      freeOnly: cloudflareInput.freeOnly !== false,
+      dailyNeuronBudget: normalizeNonNegativeInteger(
+        cloudflareInput.dailyNeuronBudget,
+        fallback.cloudflareAi.dailyNeuronBudget,
+      ),
+      maxPromptChars: normalizePositiveInteger(
+        cloudflareInput.maxPromptChars,
+        fallback.cloudflareAi.maxPromptChars,
+      ),
+      maxOutputTokens: normalizePositiveInteger(
+        cloudflareInput.maxOutputTokens,
+        fallback.cloudflareAi.maxOutputTokens,
+      ),
+    },
+    openrouter: {
+      apiKey: normalizeOptionalString(openrouterInput.apiKey),
+      baseUrl:
+        normalizeOptionalString(openrouterInput.baseUrl).replace(/\/$/, '') ||
+        fallback.openrouterAi.baseUrl ||
+        defaultOpenRouterBaseUrl,
+      siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
+      siteName: normalizeOptionalString(openrouterInput.siteName) || fallback.openrouterAi.siteName,
+      model: openrouterModel,
+      models: parseModelToggleItems(
+        openrouterInput.models ?? openrouterInput.modelsText,
+        openrouterModel,
+        fallback.openrouterAi.models,
+      ),
+      maxPromptChars: normalizePositiveInteger(
+        openrouterInput.maxPromptChars,
+        fallback.openrouterAi.maxPromptChars,
+      ),
+      maxOutputTokens: normalizePositiveInteger(
+        openrouterInput.maxOutputTokens,
+        fallback.openrouterAi.maxOutputTokens,
+      ),
+    },
+  };
+}
+
+function toManagedOptions(models: AdminModelToggleItem[]): ManagedAiModelOption[] {
+  return models.map((model) => ({
+    id: model.id,
+    label: model.label,
+    enabled: model.enabled,
+  }));
+}
+
+export class AdminConfigRegistry {
+  constructor(private readonly config: ServerConfig) {
+    mkdirSync(ADMIN_CONFIG_ROOT, { recursive: true });
+    this.load();
+  }
+
+  getAiSettingsSnapshot(): AdminAiSettingsSnapshot {
+    return {
+      provider: this.config.aiProvider,
+      systemPrompt: this.config.aiSystemPrompt,
+      cloudflare: {
+        accountId: this.config.cloudflareAi.accountId ?? '',
+        apiToken: this.config.cloudflareAi.apiToken ?? '',
+        model: this.config.cloudflareAi.model,
+        models: this.config.cloudflareAi.models.map((model) => ({
+          id: model.id,
+          label: model.label,
+          enabled: model.enabled !== false,
+        })),
+        freeOnly: this.config.cloudflareAi.freeOnly,
+        dailyNeuronBudget: this.config.cloudflareAi.dailyNeuronBudget,
+        maxPromptChars: this.config.cloudflareAi.maxPromptChars,
+        maxOutputTokens: this.config.cloudflareAi.maxOutputTokens,
+      },
+      openrouter: {
+        apiKey: this.config.openrouterAi.apiKey ?? '',
+        baseUrl: this.config.openrouterAi.baseUrl,
+        siteUrl: this.config.openrouterAi.siteUrl ?? '',
+        siteName: this.config.openrouterAi.siteName,
+        model: this.config.openrouterAi.model,
+        models: this.config.openrouterAi.models.map((model) => ({
+          id: model.id,
+          label: model.label,
+          enabled: model.enabled !== false,
+        })),
+        maxPromptChars: this.config.openrouterAi.maxPromptChars,
+        maxOutputTokens: this.config.openrouterAi.maxOutputTokens,
+      },
+    };
+  }
+
+  updateAiSettings(input: AdminAiSettingsSnapshot) {
+    const normalized = normalizeSnapshot(input, this.config);
+    this.applyAiSettings(normalized);
+    this.persist({ ai: normalized });
+    return this.getAiSettingsSnapshot();
+  }
+
+  private load() {
+    try {
+      const parsed = JSON.parse(readFileSync(ADMIN_CONFIG_PATH, 'utf8')) as PersistedAdminConfig;
+      if (parsed.ai) {
+        this.applyAiSettings(normalizeSnapshot(parsed.ai, this.config));
+      }
+    } catch {
+      // Use environment defaults when no persisted admin overrides are present.
+    }
+  }
+
+  private applyAiSettings(input: AdminAiSettingsSnapshot) {
+    this.config.aiProvider = input.provider;
+    this.config.aiSystemPrompt = input.systemPrompt;
+    this.config.cloudflareAi.accountId = input.cloudflare.accountId || undefined;
+    this.config.cloudflareAi.apiToken = input.cloudflare.apiToken || undefined;
+    this.config.cloudflareAi.model = input.cloudflare.model;
+    this.config.cloudflareAi.models = toManagedOptions(input.cloudflare.models);
+    this.config.cloudflareAi.freeOnly = input.cloudflare.freeOnly;
+    this.config.cloudflareAi.dailyNeuronBudget = input.cloudflare.dailyNeuronBudget;
+    this.config.cloudflareAi.maxPromptChars = input.cloudflare.maxPromptChars;
+    this.config.cloudflareAi.maxOutputTokens = input.cloudflare.maxOutputTokens;
+
+    this.config.openrouterAi.apiKey = input.openrouter.apiKey || undefined;
+    this.config.openrouterAi.baseUrl = input.openrouter.baseUrl;
+    this.config.openrouterAi.siteUrl = input.openrouter.siteUrl || undefined;
+    this.config.openrouterAi.siteName = input.openrouter.siteName;
+    this.config.openrouterAi.model = input.openrouter.model;
+    this.config.openrouterAi.models = toManagedOptions(input.openrouter.models);
+    this.config.openrouterAi.maxPromptChars = input.openrouter.maxPromptChars;
+    this.config.openrouterAi.maxOutputTokens = input.openrouter.maxOutputTokens;
+  }
+
+  private persist(payload: PersistedAdminConfig) {
+    mkdirSync(ADMIN_CONFIG_ROOT, { recursive: true });
+    writeFileSync(ADMIN_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  }
+}

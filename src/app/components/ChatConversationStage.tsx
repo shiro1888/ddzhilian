@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import type { CSSProperties, ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
@@ -425,6 +425,7 @@ export function ChatConversationStage({
   const [isBotMentionOpen, setIsBotMentionOpen] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const conversationThreadRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botMentionRef = useRef<HTMLDivElement | null>(null)
@@ -435,6 +436,7 @@ export function ChatConversationStage({
   const pendingBotMentionCaretRef = useRef(false)
   const pendingBotMentionBackspaceRepairRef = useRef(false)
   const activeSharedContentTab: SharedPanelTab = sharedContentTab === 'chat' ? 'media' : sharedContentTab
+  const [mobileComposerHeight, setMobileComposerHeight] = useState(160)
 
   const setInsertPanelInputElement = (element: HTMLInputElement | null) => {
     insertPanelInputRef.current = element
@@ -555,6 +557,42 @@ export function ChatConversationStage({
       window.cancelAnimationFrame(frameId)
     }
   }, [isSharedPanelOpen, latestConversationEntryId])
+
+  useEffect(() => {
+    if (isSharedPanelOpen) {
+      return
+    }
+
+    const composer = composerRef.current
+    if (!composer) {
+      return
+    }
+
+    const updateComposerHeight = () => {
+      setMobileComposerHeight(Math.ceil(composer.getBoundingClientRect().height))
+    }
+
+    updateComposerHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateComposerHeight)
+      return () => {
+        window.removeEventListener('resize', updateComposerHeight)
+      }
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateComposerHeight()
+    })
+
+    observer.observe(composer)
+    window.addEventListener('resize', updateComposerHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateComposerHeight)
+    }
+  }, [attachments.length, isFormatToolbarOpen, isSharedPanelOpen, quoteDraft])
 
   useEffect(() => {
     if (!isBotMentionOpen) {
@@ -1613,10 +1651,27 @@ export function ChatConversationStage({
     }
   }
 
+  const scrollConversationTo = (position: 'top' | 'bottom') => {
+    const thread = conversationThreadRef.current
+    if (!thread) {
+      return
+    }
+
+    thread.scrollTo({
+      top: position === 'top' ? 0 : thread.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+
+  const chatboxStyle = {
+    '--dd-mobile-composer-offset': `${(isSharedPanelOpen ? 0 : mobileComposerHeight).toString()}px`,
+  } as CSSProperties
+
   return (
     <section className="dd-view dd-view--single dd-view--files">
       <div
         className={`dd-chatbox dd-chatbox--files${isDragging ? ' is-dragging' : ''}`}
+        style={chatboxStyle}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -1909,8 +1964,19 @@ export function ChatConversationStage({
           )}
         </div>
 
+        {!isSharedPanelOpen && unifiedConversationEntries.length > 0 && (
+          <div className="dd-chatbox__jump-controls" aria-label="对话快捷滚动">
+            <button type="button" onClick={() => scrollConversationTo('top')}>
+              顶部
+            </button>
+            <button type="button" onClick={() => scrollConversationTo('bottom')}>
+              底部
+            </button>
+          </div>
+        )}
+
         {!isSharedPanelOpen && (
-        <div className="dd-chatbox__composer">
+        <div ref={composerRef} className="dd-chatbox__composer">
           {isFormatToolbarOpen && (
           <div className="dd-rich-toolbar-scroll">
             <div className="dd-rich-toolbar">

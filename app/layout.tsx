@@ -6,8 +6,8 @@ import '../src/App.css'
 export const metadata: Metadata = {
   title: 'ddzhilian | 文件与文本互传',
   icons: {
-    icon: [{ url: '/logo-dd-link.svg', type: 'image/svg+xml' }],
-    shortcut: [{ url: '/logo-dd-link.svg', type: 'image/svg+xml' }],
+    icon: [{ url: '/favicon.png', type: 'image/png' }],
+    shortcut: [{ url: '/favicon.png', type: 'image/png' }],
   },
 }
 
@@ -23,6 +23,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6789129259270412"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body>{children}</body>
     </html>
   )

@@ -1,4 +1,4 @@
-import { appendFileSync, createWriteStream, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, createWriteStream, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -36,6 +36,16 @@ export interface HistoryTextRecord {
   sourceDeviceName: string;
   text: string;
   createdAt: string;
+}
+
+export interface HistoryStats {
+  fileCount: number;
+  textCount: number;
+  totalBytes: number;
+  roomCount: number;
+  lastFileAt?: string;
+  lastTextAt?: string;
+  lastActivityAt?: string;
 }
 
 function sortByCreatedAt(
@@ -132,6 +142,41 @@ export class HistoryRegistry {
       count: records.length,
       latestAt: latest?.createdAt,
     };
+  }
+
+  getStats(): HistoryStats {
+    this.prune();
+    const fileRecords = [...this.filesById.values()].sort(sortByCreatedAt);
+    const textRecords = [...this.textsById.values()].sort(sortByCreatedAt);
+    const lastFileAt = fileRecords.at(-1)?.createdAt;
+    const lastTextAt = textRecords.at(-1)?.createdAt;
+    const lastActivityAt = [lastFileAt, lastTextAt]
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+
+    return {
+      fileCount: fileRecords.length,
+      textCount: textRecords.length,
+      totalBytes: fileRecords.reduce((total, record) => total + record.size, 0),
+      roomCount: new Set([
+        ...fileRecords.map((record) => record.roomId),
+        ...textRecords.map((record) => record.roomId),
+      ]).size,
+      lastFileAt,
+      lastTextAt,
+      lastActivityAt,
+    };
+  }
+
+  clearAll() {
+    this.filesById.clear();
+    this.fileIdsByRoomId.clear();
+    this.textsById.clear();
+    this.textIdsByRoomId.clear();
+
+    rmSync(FILES_ROOT, { recursive: true, force: true });
+    mkdirSync(FILES_ROOT, { recursive: true });
+    this.persist();
   }
 
   async saveFile(input: {

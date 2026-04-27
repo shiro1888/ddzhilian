@@ -22,7 +22,7 @@ export function AppSidebar({
     <aside className={`dd-sidebar${isMobileNavOpen ? ' is-mobile-open' : ''}`}>
       <div className="dd-brand">
         <span className="dd-brand__mark" aria-hidden="true">
-          <img src="/logo-dd-link.svg" alt="" />
+          <img src="/logo-dd-link.png" alt="" />
         </span>
         <div className="dd-brand__copy">
           <strong>ddzhilian</strong>

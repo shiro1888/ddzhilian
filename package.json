@@ -8,6 +8,8 @@
     "build": "next build",
     "build:compressed": "npm run build && node scripts/compress-dist.mjs",
     "lint": "eslint .",
+    "openrouter:sync": "node scripts/sync-openrouter-free-models.mjs",
+    "openrouter:sync:env": "node scripts/sync-openrouter-free-models.mjs --write-env server/.env",
     "preview": "node scripts/serve-out.mjs"
   },
   "dependencies": {

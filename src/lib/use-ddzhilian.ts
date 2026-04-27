@@ -2571,7 +2571,7 @@ export function useDdzhilian() {
     })
   }
 
-  const askCloudflareAi = async (
+  const askAi = async (
     prompt: string,
     options?: {
       roomId?: string
@@ -2614,25 +2614,26 @@ export function useDdzhilian() {
       throw new Error(
         await readApiError(
           response,
-          `Cloudflare AI request failed with status ${response.status.toString()}`,
+          `AI request failed with status ${response.status.toString()}`,
         ),
       )
     }
 
     const payload = await response.json() as Partial<AiChatResponse>
     if (typeof payload.response !== 'string' || !payload.response.trim()) {
-      throw new Error('Cloudflare AI 返回了空结果。')
+      throw new Error('AI 返回了空结果。')
     }
 
     return {
       response: payload.response,
+      provider: payload.provider,
       model: typeof payload.model === 'string' ? payload.model : '',
       quota: payload.quota,
       historyText: payload.historyText,
     }
   }
 
-  const getCloudflareAiQuota = useCallback(async (): Promise<AiQuotaStatus> => {
+  const getAiQuota = useCallback(async (): Promise<AiQuotaStatus> => {
     const activeSelf = selfRef.current
 
     if (!activeSelf?.historyAuthToken) {
@@ -2647,7 +2648,7 @@ export function useDdzhilian() {
       throw new Error(
         await readApiError(
           response,
-          `Cloudflare AI quota request failed with status ${response.status.toString()}`,
+          `AI quota request failed with status ${response.status.toString()}`,
         ),
       )
     }
@@ -2973,8 +2974,8 @@ export function useDdzhilian() {
     sendText,
     recallText,
     sendRoomText,
-    askCloudflareAi,
-    getCloudflareAiQuota,
+    askAi,
+    getAiQuota,
     sendRoomFiles,
     sendFiles,
     stateToUiStatus,

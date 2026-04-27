@@ -64,6 +64,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `TURN_USERNAME`: optional TURN username
 - `TURN_CREDENTIAL`: optional TURN credential
 - `HISTORY_MAX_BYTES`: per-room history file storage cap, default 10 GiB
+- `AI_PROVIDER`: active AI provider, `cloudflare` or `openrouter`; when omitted, OpenRouter is used if `OPENROUTER_API_KEY` is set, otherwise Cloudflare is used
 - `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
 - `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
 - `CLOUDFLARE_AI_MODEL`: default Workers AI model name, default `@cf/google/gemma-4-26b-a4b-it`
@@ -74,6 +75,17 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `CLOUDFLARE_AI_DAILY_NEURON_BUDGET`: local daily Workers AI budget, default `10000`
 - `CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS`: input pricing estimate for local budget checks, default `4625`
 - `CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS`: output pricing estimate for local budget checks, default `30475`
+- `OPENROUTER_API_KEY`: OpenRouter API key used only by the backend
+- `OPENROUTER_API_KEY_FILE`: optional file path used by the model sync script when the key is not in the environment
+- `OPENROUTER_MODEL`: default OpenRouter model ID
+- `OPENROUTER_MODELS`: comma-separated OpenRouter model allowlist for the UI and API, each item can be `modelId|Label`, for example `openai/gpt-4o-mini|GPT-4o mini,anthropic/claude-3.5-haiku|Claude 3.5 Haiku`
+- `OPENROUTER_PREFERRED_MODELS`: optional comma-separated preference order for the sync script when choosing `OPENROUTER_MODEL`
+- `OPENROUTER_SYNC_SET_PROVIDER`: set to `true` if the sync script should switch `AI_PROVIDER` to `openrouter` even when no API key is present
+- `OPENROUTER_BASE_URL`: OpenRouter API base URL, default `https://openrouter.ai/api/v1`
+- `OPENROUTER_SITE_URL`: optional site attribution URL sent as `HTTP-Referer`
+- `OPENROUTER_SITE_NAME`: optional site attribution title sent as `X-OpenRouter-Title`, default `ddzhilian`
+- `OPENROUTER_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/chat`, default `8000`
+- `OPENROUTER_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
 
 ## History Cleanup
 
@@ -93,8 +105,8 @@ Public rooms do not have a separate cleanup policy. They use the same file-histo
 
 - `GET /health`
 - `GET /api/debug/state` (disabled by default; requires bearer token when enabled)
-- `GET /api/ai/quota` (requires the device history bearer token; returns local Workers AI free-tier budget status)
-- `POST /api/ai/chat` (requires the device history bearer token; proxies prompts to Cloudflare Workers AI)
+- `GET /api/ai/quota` (requires the device history bearer token; returns active AI provider status and model options)
+- `POST /api/ai/chat` (requires the device history bearer token; proxies prompts to the configured AI provider)
 - `WS /ws`
 
 ## Primary Client Events

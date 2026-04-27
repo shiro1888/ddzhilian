@@ -125,7 +125,7 @@ The backend coordinates connections instead of acting as permanent file storage.
 - room and session lifecycles
 - WebRTC signaling relay
 - history text and history file metadata
-- Cloudflare AI proxy requests
+- AI proxy requests through Cloudflare AI or OpenRouter
 
 See [server/README.md](server/README.md) for backend protocol details.
 
@@ -164,12 +164,22 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `HISTORY_RETENTION_MS`
 - `HISTORY_TEXT_RETENTION_MS`
 - `HISTORY_MAX_BYTES`
+- `AI_PROVIDER`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
 - `CLOUDFLARE_AI_MODEL`
 - `CLOUDFLARE_AI_MODELS`
 - `CLOUDFLARE_AI_FREE_ONLY`
 - `CLOUDFLARE_AI_DAILY_NEURON_BUDGET`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_API_KEY_FILE`
+- `OPENROUTER_MODEL`
+- `OPENROUTER_MODELS`
+- `OPENROUTER_PREFERRED_MODELS`
+- `OPENROUTER_SYNC_SET_PROVIDER`
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_SITE_URL`
+- `OPENROUTER_SITE_NAME`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`

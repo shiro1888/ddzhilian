@@ -2,6 +2,7 @@ import { lazy, startTransition, Suspense, useEffect, useId, useMemo, useRef, use
 import type { ChangeEvent, DragEvent } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { navItems, viewMeta } from './app/config'
+import { AdminStage } from './app/components/AdminStage'
 import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'
 import { ConnectStage } from './app/components/ConnectStage'
@@ -32,7 +33,16 @@ import {
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
-import type { AiModelOption, AiQuotaStatus } from './lib/ddzhilian-types'
+import type {
+  AdminAiSettings,
+  AdminCloudflareConfig,
+  AdminHistoryStats,
+  AdminOpenRouterConfig,
+  AdminStateResponse,
+  AdminUsageSnapshot,
+  AiModelOption,
+  AiQuotaStatus,
+} from './lib/ddzhilian-types'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -149,6 +159,35 @@ function buildAiBotPrompt(question: string, quotedText: string) {
   ].join('\n')
 }
 
+function resolveAdminApiBaseUrl() {
+  const env = process.env as Record<string, string | undefined>
+  const configuredUrl =
+    env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() ||
+    env.VITE_SIGNALING_HTTP_URL?.trim() ||
+    ''
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '')
+  }
+
+  const { protocol, hostname, host } = window.location
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8787'
+  }
+
+  return `${protocol}//${host}`
+}
+
+const ADMIN_API_BASE_URL = resolveAdminApiBaseUrl()
+const ADMIN_LOGIN_EXIT_ANIMATION_MS = 720
+
+async function readAdminApiError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallback
+}
+
 function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
 }
@@ -184,12 +223,24 @@ function App() {
   >({})
   const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
+  const [adminPasswordDraft, setAdminPasswordDraft] = useState('')
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
+  const [isAdminLoading, setIsAdminLoading] = useState(false)
+  const [isAdminLoginTransitioning, setIsAdminLoginTransitioning] = useState(false)
+  const [isAdminSaving, setIsAdminSaving] = useState(false)
+  const [isAdminClearingHistory, setIsAdminClearingHistory] = useState(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
+  const [adminHistoryStats, setAdminHistoryStats] = useState<AdminHistoryStats | null>(null)
+  const [adminAiSettings, setAdminAiSettings] = useState<AdminAiSettings | null>(null)
+  const [adminUsage, setAdminUsage] = useState<AdminUsageSnapshot | null>(null)
   const activeView = resolveViewFromPathname(location.pathname)
+  const isAdminView = activeView === 'admin'
   const isChatDesktopTheme = true
-  const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions'].includes(item.id))
+  const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions', 'admin'].includes(item.id))
   const effectiveNavView: NavView =
     activeView === 'send' || activeView === 'receive' || activeView === 'sessions' ? 'text' : activeView
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
+  const adminLoginTransitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasConnectionSnapshotRef = useRef(false)
   const attachmentDraftsRef = useRef<AttachmentDraft[]>([])
   const joinedRoomLinkRef = useRef<string | null>(null)
@@ -231,8 +282,8 @@ function App() {
     sendText,
     recallText,
     sendRoomText,
-    askCloudflareAi,
-    getCloudflareAiQuota,
+    askAi,
+    getAiQuota,
     sendRoomFiles,
     stateToUiStatus,
     reasonLabel,
@@ -248,7 +299,7 @@ function App() {
 
     let isCancelled = false
 
-    void getCloudflareAiQuota()
+    void getAiQuota()
       .then((status) => {
         if (!isCancelled) {
           setAiQuotaStatus(status)
@@ -278,7 +329,7 @@ function App() {
     return () => {
       isCancelled = true
     }
-  }, [getCloudflareAiQuota, self?.historyAuthToken])
+  }, [getAiQuota, self?.historyAuthToken])
 
   useEffect(() => {
     attachmentDraftsRef.current = attachmentDrafts
@@ -935,7 +986,9 @@ function App() {
     Boolean(selectedRoom) &&
     (hasChatTextDraft || attachmentDrafts.length > 0)
   const aiQuotaLabel = aiQuotaStatus
-    ? `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
+    ? aiQuotaStatus.provider === 'openrouter'
+      ? (aiQuotaStatus.limitLabel ?? 'OpenRouter API')
+      : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
     : 'AI 额度加载中'
   const selectedAiModelLabel =
     aiModelOptions.find((model) => model.id === selectedAiModel)?.label ||
@@ -1138,6 +1191,63 @@ function App() {
     }
   }, [activeView, navigate])
 
+  useEffect(() => {
+    if (!isAdminView) {
+      return
+    }
+
+    let isCancelled = false
+    setIsAdminLoading(true)
+    setAdminError(null)
+
+    void fetch(`${ADMIN_API_BASE_URL}/api/admin/session`, {
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '管理员状态加载失败。'))
+        }
+
+        return response.json() as Promise<Partial<AdminStateResponse> & { authenticated?: boolean }>
+      })
+      .then((payload) => {
+        if (isCancelled) {
+          return
+        }
+
+        if (!payload.authenticated) {
+          setIsAdminAuthenticated(false)
+          setIsAdminLoginTransitioning(false)
+          setAdminHistoryStats(null)
+          setAdminAiSettings(null)
+          setAdminUsage(null)
+          return
+        }
+
+        setIsAdminAuthenticated(true)
+        setIsAdminLoginTransitioning(false)
+        setAdminHistoryStats(payload.history ?? null)
+        setAdminAiSettings(payload.ai ?? null)
+        setAdminUsage(payload.usage ?? null)
+      })
+      .catch((error) => {
+        if (isCancelled) {
+          return
+        }
+
+        setAdminError(error instanceof Error ? error.message : '管理员状态加载失败。')
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsAdminLoading(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [isAdminView])
+
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
       navigate(pathForView(view))
@@ -1146,6 +1256,208 @@ function App() {
       setIsEditingDeviceName(false)
       setLocalError(null)
     })
+  }
+
+  const handleAdminConnect = () => {
+    const nextPassword = adminPasswordDraft.trim()
+    if (!nextPassword) {
+      setAdminError('请输入管理员密码。')
+      return
+    }
+
+    setIsAdminLoading(true)
+    setIsAdminLoginTransitioning(false)
+    setAdminError(null)
+
+    void fetch(`${ADMIN_API_BASE_URL}/api/admin/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ password: nextPassword }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '管理员登录失败。'))
+        }
+
+        return response.json() as Promise<AdminStateResponse & { authenticated?: boolean }>
+      })
+      .then((payload) => {
+        if (!payload.authenticated) {
+          setIsAdminAuthenticated(false)
+          setIsAdminLoginTransitioning(false)
+          setAdminError('管理员登录失败。')
+          return
+        }
+
+        setAdminHistoryStats(payload.history)
+        setAdminAiSettings(payload.ai)
+        setAdminUsage(payload.usage)
+        setIsAdminLoginTransitioning(true)
+
+        if (adminLoginTransitionTimeoutRef.current) {
+          clearTimeout(adminLoginTransitionTimeoutRef.current)
+        }
+
+        adminLoginTransitionTimeoutRef.current = setTimeout(() => {
+          setIsAdminAuthenticated(true)
+          setIsAdminLoginTransitioning(false)
+          adminLoginTransitionTimeoutRef.current = null
+        }, ADMIN_LOGIN_EXIT_ANIMATION_MS)
+      })
+      .catch((error) => {
+        setIsAdminLoginTransitioning(false)
+        setAdminError(error instanceof Error ? error.message : '管理员登录失败。')
+      })
+      .finally(() => {
+        setIsAdminLoading(false)
+      })
+  }
+
+  const handleAdminDisconnect = () => {
+    if (adminLoginTransitionTimeoutRef.current) {
+      clearTimeout(adminLoginTransitionTimeoutRef.current)
+      adminLoginTransitionTimeoutRef.current = null
+    }
+
+    setIsAdminLoading(true)
+    void fetch(`${ADMIN_API_BASE_URL}/api/admin/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).finally(() => {
+      setIsAdminLoading(false)
+    })
+    setIsAdminAuthenticated(false)
+    setIsAdminLoginTransitioning(false)
+    setAdminPasswordDraft('')
+    setAdminHistoryStats(null)
+    setAdminAiSettings(null)
+    setAdminUsage(null)
+    setAdminError(null)
+  }
+
+  const handleAdminProviderChange = (provider: AdminAiSettings['provider']) => {
+    setAdminAiSettings((previous) => (previous ? { ...previous, provider } : previous))
+  }
+
+  const handleAdminSystemPromptChange = (systemPrompt: string) => {
+    setAdminAiSettings((previous) => (previous ? { ...previous, systemPrompt } : previous))
+  }
+
+  const handleAdminCloudflareFieldChange = <Field extends keyof AdminCloudflareConfig,>(
+    field: Field,
+    value: AdminCloudflareConfig[Field],
+  ) => {
+    setAdminAiSettings((previous) =>
+      previous
+        ? {
+            ...previous,
+            cloudflare: {
+              ...previous.cloudflare,
+              [field]: value,
+            },
+          }
+        : previous,
+    )
+  }
+
+  const handleAdminOpenRouterFieldChange = <Field extends keyof AdminOpenRouterConfig,>(
+    field: Field,
+    value: AdminOpenRouterConfig[Field],
+  ) => {
+    setAdminAiSettings((previous) =>
+      previous
+        ? {
+            ...previous,
+            openrouter: {
+              ...previous.openrouter,
+              [field]: value,
+            },
+          }
+        : previous,
+    )
+  }
+
+  const handleAdminSave = () => {
+    if (!isAdminAuthenticated || !adminAiSettings) {
+      setAdminError('请先登录后台。')
+      return
+    }
+
+    setIsAdminSaving(true)
+    setAdminError(null)
+
+    void fetch(`${ADMIN_API_BASE_URL}/api/admin/ai-config`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(adminAiSettings),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, 'AI 配置保存失败。'))
+        }
+
+        return response.json() as Promise<{
+          ai: AdminAiSettings
+          history: AdminHistoryStats
+          usage?: AdminUsageSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminAiSettings(payload.ai)
+        setAdminHistoryStats(payload.history)
+        setAdminUsage(payload.usage ?? null)
+      })
+      .catch((error) => {
+        setAdminError(error instanceof Error ? error.message : 'AI 配置保存失败。')
+      })
+      .finally(() => {
+        setIsAdminSaving(false)
+      })
+  }
+
+  const handleAdminClearHistory = () => {
+    if (!isAdminAuthenticated) {
+      setAdminError('请先登录后台。')
+      return
+    }
+
+    setIsAdminClearingHistory(true)
+    setAdminError(null)
+
+    void fetch(`${ADMIN_API_BASE_URL}/api/admin/history/clear`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '历史记录清空失败。'))
+        }
+
+        return response.json() as Promise<{
+          history: AdminHistoryStats
+          usage?: AdminUsageSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminHistoryStats(payload.history)
+        setAdminUsage(payload.usage ?? null)
+      })
+      .catch((error) => {
+        setAdminError(error instanceof Error ? error.message : '历史记录清空失败。')
+      })
+      .finally(() => {
+        setIsAdminClearingHistory(false)
+      })
   }
 
   const beginEditDeviceName = () => {
@@ -1396,7 +1708,7 @@ function App() {
             throw new Error('当前对话尚未建立房间，无法同步 bot 回复。')
           }
 
-          const answer = await askCloudflareAi(aiBotPrompt, {
+          const answer = await askAi(aiBotPrompt, {
             roomId: botRoomId,
             replyToName: self?.deviceName ?? localIdentity.deviceName,
             kind: isQuotaPrompt ? 'quota' : 'chat',
@@ -1409,7 +1721,7 @@ function App() {
             setAiQuotaStatus(answer.quota)
           }
         } catch (error) {
-          setLocalError(error instanceof Error ? error.message : 'Cloudflare AI 请求失败。')
+          setLocalError(error instanceof Error ? error.message : 'AI 请求失败。')
         } finally {
           setIsAiGenerating(false)
         }
@@ -1746,37 +2058,65 @@ function App() {
     />
   )
 
-  return (
-    <div className="dd-shell" data-theme="chat-desktop">
-      <AppSidebar
-        isMobileNavOpen={isMobileNavOpen}
-        effectiveNavView={effectiveNavView}
-        visibleNavItems={visibleNavItems}
-        onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
-        onToggleContentRail={() => setIsContentRailCollapsed((previous) => !previous)}
-        onViewChange={handleViewChange}
-      />
+  const adminRouteElement = (
+    <AdminStage
+      adminPasswordDraft={adminPasswordDraft}
+      isAdminAuthenticated={isAdminAuthenticated}
+      isAdminLoading={isAdminLoading}
+      isAdminLoginTransitioning={isAdminLoginTransitioning}
+      isAdminSaving={isAdminSaving}
+      isAdminClearingHistory={isAdminClearingHistory}
+      adminError={adminError}
+      historyStats={adminHistoryStats}
+      aiSettings={adminAiSettings}
+      usage={adminUsage}
+      onAdminPasswordDraftChange={setAdminPasswordDraft}
+      onConnect={handleAdminConnect}
+      onDisconnect={handleAdminDisconnect}
+      onProviderChange={handleAdminProviderChange}
+      onSystemPromptChange={handleAdminSystemPromptChange}
+      onCloudflareFieldChange={handleAdminCloudflareFieldChange}
+      onOpenRouterFieldChange={handleAdminOpenRouterFieldChange}
+      onSave={handleAdminSave}
+      onClearHistory={handleAdminClearHistory}
+    />
+  )
 
-      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}`}>
-        <AppHeader
-          isChatConversationView={isChatConversationView}
-          currentMeta={currentMeta}
-          currentRoomId={effectiveSelectedRoomId}
-          isSharedPanelOpen={isSharedPanelOpen}
-          localError={localError}
-          errorMessage={errorMessage}
-          isReconnectDisabled={socketState === 'connecting'}
-          onReconnect={
-            isChatConversationView && selectedRoom?.isPublic
-              ? handleReconnectPublicRoom
-              : undefined
-          }
-          onToggleSharedPanel={
-            isChatConversationView
-              ? () => handleSharedPanelOpenChange(!isSharedPanelOpen)
-              : undefined
-          }
+  return (
+    <div className={`dd-shell${isAdminView ? ' dd-shell--admin' : ''}`} data-theme="chat-desktop">
+      {!isAdminView ? (
+        <AppSidebar
+          isMobileNavOpen={isMobileNavOpen}
+          effectiveNavView={effectiveNavView}
+          visibleNavItems={visibleNavItems}
+          onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
+          onToggleContentRail={() => setIsContentRailCollapsed((previous) => !previous)}
+          onViewChange={handleViewChange}
         />
+      ) : null}
+
+      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}`}>
+        {!isAdminView ? (
+          <AppHeader
+            isChatConversationView={isChatConversationView}
+            currentMeta={currentMeta}
+            currentRoomId={effectiveSelectedRoomId}
+            isSharedPanelOpen={isSharedPanelOpen}
+            localError={localError}
+            errorMessage={errorMessage}
+            isReconnectDisabled={socketState === 'connecting'}
+            onReconnect={
+              isChatConversationView && selectedRoom?.isPublic
+                ? handleReconnectPublicRoom
+                : undefined
+            }
+            onToggleSharedPanel={
+              isChatConversationView
+                ? () => handleSharedPanelOpenChange(!isSharedPanelOpen)
+                : undefined
+            }
+          />
+        ) : null}
 
         <section className="dd-stage">
           <div className="dd-stage__backdrop" aria-hidden="true" />
@@ -1814,6 +2154,7 @@ function App() {
             <Route path="/send" element={sendRouteElement} />
             <Route path="/receive" element={receiveRouteElement} />
             <Route path="/text" element={textRouteElement} />
+            <Route path="/admin" element={adminRouteElement} />
             <Route path="/sessions" element={<Navigate to={pathForView('text')} replace />} />
             <Route
               path="*"
@@ -1822,31 +2163,33 @@ function App() {
           </Routes>
         </section>
 
-        <ContentGrid
-          roomJoinDraft={joinRoomIdDraft}
-          roomListItems={roomListItems}
-          selectedRoomId={effectiveSelectedRoomId}
-          isContentRailCollapsed={isContentRailCollapsed}
-          connectionActionLabel={connectionActionLabel}
-          connectionActionDisabled={connectionActionDisabled}
-          connectAllDisabled={onlinePeers.length === 0}
-          isEditingDeviceName={isEditingDeviceName}
-          deviceNameDraft={deviceNameDraft}
-          selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
-          onRoomJoinDraftChange={setJoinRoomIdDraft}
-          onDeviceNameDraftChange={setDeviceNameDraft}
-          onJoinRoom={handleJoinRoomById}
-          onConnectionAction={handleSelectedDeviceConnectionAction}
-          onConnectAllDevices={handleConnectAllDevices}
-          onCreateNewConversation={handleCreateNewConversation}
-          onCreatePublicRoom={handleCreatePublicRoom}
-          onCopyPublicRoomLink={handleCopyPublicRoomLink}
-          onBeginEditDeviceName={beginEditDeviceName}
-          onSaveDeviceName={saveDeviceName}
-          onCancelEditDeviceName={cancelEditDeviceName}
-          onOpenRoomConversation={handleOpenRoomConversation}
-          onToggleRoomPinned={handleToggleRoomPinned}
-        />
+        {!isAdminView ? (
+          <ContentGrid
+            roomJoinDraft={joinRoomIdDraft}
+            roomListItems={roomListItems}
+            selectedRoomId={effectiveSelectedRoomId}
+            isContentRailCollapsed={isContentRailCollapsed}
+            connectionActionLabel={connectionActionLabel}
+            connectionActionDisabled={connectionActionDisabled}
+            connectAllDisabled={onlinePeers.length === 0}
+            isEditingDeviceName={isEditingDeviceName}
+            deviceNameDraft={deviceNameDraft}
+            selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
+            onRoomJoinDraftChange={setJoinRoomIdDraft}
+            onDeviceNameDraftChange={setDeviceNameDraft}
+            onJoinRoom={handleJoinRoomById}
+            onConnectionAction={handleSelectedDeviceConnectionAction}
+            onConnectAllDevices={handleConnectAllDevices}
+            onCreateNewConversation={handleCreateNewConversation}
+            onCreatePublicRoom={handleCreatePublicRoom}
+            onCopyPublicRoomLink={handleCopyPublicRoomLink}
+            onBeginEditDeviceName={beginEditDeviceName}
+            onSaveDeviceName={saveDeviceName}
+            onCancelEditDeviceName={cancelEditDeviceName}
+            onOpenRoomConversation={handleOpenRoomConversation}
+            onToggleRoomPinned={handleToggleRoomPinned}
+          />
+        ) : null}
       </main>
     </div>
   )

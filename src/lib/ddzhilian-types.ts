@@ -339,6 +339,7 @@ export type TextRecord = {
 
 export type AiChatResponse = {
   response: string
+  provider?: 'cloudflare' | 'openrouter'
   model: string
   quota?: AiQuotaStatus
   historyText?: HistoryTextSummary
@@ -355,8 +356,115 @@ export type AiQuotaStatus = {
   dailyNeuronBudget: number
   remainingNeurons: number
   freeOnly?: boolean
+  provider?: 'cloudflare' | 'openrouter'
+  limitLabel?: string
   model?: string
   models?: AiModelOption[]
+}
+
+export type AdminHistoryStats = {
+  fileCount: number
+  textCount: number
+  totalBytes: number
+  roomCount: number
+  lastFileAt?: string
+  lastTextAt?: string
+  lastActivityAt?: string
+}
+
+export type AdminCloudflareConfig = {
+  accountId: string
+  apiToken: string
+  model: string
+  models: AdminModelToggleItem[]
+  freeOnly: boolean
+  dailyNeuronBudget: number
+  maxPromptChars: number
+  maxOutputTokens: number
+}
+
+export type AdminOpenRouterConfig = {
+  apiKey: string
+  baseUrl: string
+  siteUrl: string
+  siteName: string
+  model: string
+  models: AdminModelToggleItem[]
+  maxPromptChars: number
+  maxOutputTokens: number
+}
+
+export type AdminModelToggleItem = {
+  id: string
+  label: string
+  enabled: boolean
+}
+
+export type AdminAiSettings = {
+  provider: 'cloudflare' | 'openrouter'
+  systemPrompt: string
+  cloudflare: AdminCloudflareConfig
+  openrouter: AdminOpenRouterConfig
+}
+
+export type AdminModelUsage = {
+  provider: 'cloudflare' | 'openrouter'
+  modelId: string
+  modelLabel: string
+  totalCalls: number
+  successCalls: number
+  failedCalls: number
+  quotaRejectedCalls: number
+  promptChars: number
+  responseChars: number
+  promptTokens: number
+  completionTokens: number
+  lastCalledAt?: string
+}
+
+export type AdminUsageTrendBucket = {
+  provider: 'cloudflare' | 'openrouter'
+  bucketStartAt: string
+  totalCalls: number
+  successCalls: number
+  failedCalls: number
+  quotaRejectedCalls: number
+}
+
+export type AdminCloudflareBudget = {
+  date: string
+  usedNeurons: number
+  dailyNeuronBudget: number
+  remainingNeurons: number
+  freeOnly: boolean
+}
+
+export type AdminOpenRouterBalance = {
+  available: boolean
+  message?: string
+  totalCredits?: number
+  totalUsage?: number
+  remainingCredits?: number
+  keyLabel?: string
+  keyUsage?: number
+  keyLimit?: number | null
+  keyLimitRemaining?: number | null
+  freeTier?: boolean
+}
+
+export type AdminUsageSnapshot = {
+  models: AdminModelUsage[]
+  trendBuckets: AdminUsageTrendBucket[]
+  cloudflareBudget: AdminCloudflareBudget
+  openrouterBalance?: AdminOpenRouterBalance
+}
+
+export type AdminStateResponse = {
+  authenticated?: boolean
+  history: AdminHistoryStats
+  ai: AdminAiSettings
+  usage: AdminUsageSnapshot
+  serverTime: string
 }
 
 export type ReceivedFile = {
