@@ -1,5 +1,5 @@
 import { navItems } from '../config'
-import type { NavView } from '../types'
+import type { InterfaceMode, NavView } from '../types'
 
 type AppSidebarProps = {
   isMobileNavOpen: boolean
@@ -7,6 +7,7 @@ type AppSidebarProps = {
   visibleNavItems: typeof navItems
   onToggleMobileNav: () => void
   onToggleContentRail: () => void
+  onInterfaceModeChange: (mode: InterfaceMode) => void
   onViewChange: (view: NavView) => void
 }
 
@@ -16,6 +17,7 @@ export function AppSidebar({
   visibleNavItems,
   onToggleMobileNav,
   onToggleContentRail,
+  onInterfaceModeChange,
   onViewChange,
 }: AppSidebarProps) {
   return (
@@ -111,6 +113,17 @@ export function AppSidebar({
             </button>
           ))}
         </nav>
+
+        <div className="dd-beta-entry">
+          <button
+            type="button"
+            aria-label="进入 BETA 界面"
+            title="进入 BETA 界面"
+            onClick={() => onInterfaceModeChange('snaplink')}
+          >
+            BETA
+          </button>
+        </div>
       </div>
     </aside>
   )

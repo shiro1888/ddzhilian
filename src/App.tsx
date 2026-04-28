@@ -9,11 +9,13 @@ import { ConnectStage } from './app/components/ConnectStage'
 import { ContentGrid } from './app/components/ContentGrid'
 import { ReceiveStage } from './app/components/ReceiveStage'
 import { SendStage } from './app/components/SendStage'
+import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { TextStage } from './app/components/TextStage'
 import { DEFAULT_VIEW, pathForView, resolveViewFromPathname } from './app/routes'
 import type {
   AttachmentDraft,
   ConversationNotice,
+  InterfaceMode,
   NavView,
   RoomListItem,
   SessionArtifact,
@@ -180,6 +182,17 @@ function resolveAdminApiBaseUrl() {
 
 const ADMIN_API_BASE_URL = resolveAdminApiBaseUrl()
 const ADMIN_LOGIN_EXIT_ANIMATION_MS = 720
+const INTERFACE_MODE_STORAGE_KEY = 'ddzhilian-interface-mode'
+
+function readStoredInterfaceMode(): InterfaceMode {
+  if (typeof window === 'undefined') {
+    return 'classic'
+  }
+
+  return window.localStorage.getItem(INTERFACE_MODE_STORAGE_KEY) === 'snaplink'
+    ? 'snaplink'
+    : 'classic'
+}
 
 async function readAdminApiError(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null) as { error?: unknown } | null
@@ -196,6 +209,7 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const fileInputId = useId()
+  const [interfaceMode, setInterfaceMode] = useState<InterfaceMode>(readStoredInterfaceMode)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isContentRailCollapsed, setIsContentRailCollapsed] = useState(false)
   const [isCompactMobileViewport, setIsCompactMobileViewport] = useState(false)
@@ -237,6 +251,7 @@ function App() {
   const [adminUsage, setAdminUsage] = useState<AdminUsageSnapshot | null>(null)
   const activeView = resolveViewFromPathname(location.pathname)
   const isAdminView = activeView === 'admin'
+  const isSnapLinkMode = !isAdminView && interfaceMode === 'snaplink'
   const isChatDesktopTheme = true
   const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions', 'admin'].includes(item.id))
   const effectiveNavView: NavView =
@@ -293,6 +308,10 @@ function App() {
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
+
+  useEffect(() => {
+    window.localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, interfaceMode)
+  }, [interfaceMode])
 
   useEffect(() => {
     if (!self?.historyAuthToken) {
@@ -1550,8 +1569,8 @@ function App() {
     setLocalError('请输入互传码，或先从在线设备里选择一个目标。')
   }
 
-  const handleJoinRoomById = () => {
-    const nextRoomId = joinRoomIdDraft.trim().toUpperCase()
+  const handleJoinRoomByIdValue = (roomId: string) => {
+    const nextRoomId = roomId.trim().toUpperCase()
     if (!nextRoomId) {
       setLocalError('请输入 roomId。')
       return
@@ -1565,6 +1584,10 @@ function App() {
     if (activeView !== 'text') {
       handleViewChange('text')
     }
+  }
+
+  const handleJoinRoomById = () => {
+    handleJoinRoomByIdValue(joinRoomIdDraft)
   }
 
   const addAttachmentFiles = (files: File[]) => {
@@ -1638,6 +1661,53 @@ function App() {
         isChatDesktopTheme ? runnableTransferIds : undefined,
         null,
       )
+      setLocalError(null)
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '文件发送失败。')
+    }
+  }
+
+  const handleSendFilesToCurrentConversation = async (files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    if (!selectedRoom) {
+      setLocalError('请先创建或选择一个对话。')
+      return
+    }
+
+    const shouldSendRoomFilesThroughHistory =
+      selectedRoom.isPublic || selectedRoomConnectedTargets.length === 0
+
+    try {
+      if (shouldSendRoomFilesThroughHistory) {
+        await sendRoomFiles(
+          selectedRoom.roomId,
+          files.map((file) => ({
+            id: crypto.randomUUID(),
+            file,
+          })),
+        )
+      } else {
+        const targetSessionIds =
+          selectedConversationTransferSessionIds.length > 0
+            ? selectedConversationTransferSessionIds
+            : selectedRoomConnectedTargets.map((target) => target.session.sessionId)
+
+        if (targetSessionIds.length === 0) {
+          setLocalError('先加入当前对话，再发送文件。')
+          return
+        }
+
+        const created = createTransferItems(files, targetSessionIds)
+        await startPendingTransfers(
+          created.map((item) => item.id),
+          null,
+        )
+      }
+
+      clearAttachments()
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文件发送失败。')
@@ -2142,6 +2212,56 @@ function App() {
     />
   )
 
+  if (isSnapLinkMode) {
+    return (
+      <SnapLinkStage
+        isDragging={isDragging}
+        selectedRoomId={effectiveSelectedRoomId}
+        selectedConversationName={selectedConversationName}
+        activeTransferLabel={activeTransferLabel}
+        roomJoinDraft={joinRoomIdDraft}
+        roomListItems={roomListItems}
+        chatDraft={chatDraft}
+        fileInputId={fileInputId}
+        isSendDisabled={
+          !hasChatDraftContent ||
+          (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
+        }
+        isAiGenerating={isAiGenerating}
+        aiQuotaLabel={aiQuotaLabel}
+        aiModelOptions={aiModelOptions}
+        selectedAiModel={selectedAiModel}
+        selectedAiModelLabel={selectedAiModelLabel}
+        unifiedConversationEntries={unifiedConversationEntries}
+        fileConversationEmptyState={fileConversationEmptyState}
+        localError={localError}
+        errorMessage={errorMessage}
+        onRoomJoinDraftChange={setJoinRoomIdDraft}
+        onJoinRoomById={handleJoinRoomByIdValue}
+        onCreatePublicRoom={handleCreatePublicRoom}
+        onOpenRoomConversation={handleOpenRoomConversation}
+        onCopyPublicRoomLink={handleCopyPublicRoomLink}
+        onChatDraftChange={setChatDraft}
+        onAiModelChange={setSelectedAiModel}
+        onDirectFileSelection={(files) => {
+          void handleSendFilesToCurrentConversation(files)
+        }}
+        onSendText={() => {
+          void handleSendText()
+        }}
+        onRetryTransfer={retryTransfer}
+        onCancelTransfer={cancelTransfer}
+        onUseClassicInterface={() => setInterfaceMode('classic')}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(event) => {
+          void handleDrop(event)
+        }}
+      />
+    )
+  }
+
   return (
     <div className={`dd-shell${isAdminView ? ' dd-shell--admin' : ''}`} data-theme="chat-desktop">
       {!isAdminView ? (
@@ -2151,6 +2271,7 @@ function App() {
           visibleNavItems={visibleNavItems}
           onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
           onToggleContentRail={() => setIsContentRailCollapsed((previous) => !previous)}
+          onInterfaceModeChange={setInterfaceMode}
           onViewChange={handleViewChange}
         />
       ) : null}
