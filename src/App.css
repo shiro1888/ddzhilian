@@ -7249,6 +7249,7 @@ textarea:focus-visible,
   --snap-muted: #a1a1aa;
   --snap-border: #e4e4e7;
   --snap-green: #16a34a;
+  --snap-bottom-safe: env(safe-area-inset-bottom, 0px);
   display: grid;
   grid-template-rows: 48px minmax(0, 1fr);
   min-height: 100svh;
@@ -8219,6 +8220,14 @@ textarea:focus-visible,
 }
 
 @media (max-width: 640px) {
+  .dd-snaplink {
+    --snap-bottom-safe: max(26px, env(safe-area-inset-bottom, 0px));
+    height: 100svh;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
   .dd-snaplink__topbar {
     padding: 0 14px;
   }
@@ -8233,19 +8242,23 @@ textarea:focus-visible,
 
   .dd-snaplink__canvas {
     align-items: stretch;
+    overflow: hidden;
     padding: 0;
   }
 
   .dd-snaplink__app {
     width: 100%;
-    min-height: calc(100svh - 48px);
+    height: calc(100dvh - 48px);
+    min-height: 0;
+    max-height: none;
     border: 0;
     border-radius: 0;
   }
 
   .dd-snaplink__room {
     grid-template-rows: minmax(0, 1fr) auto auto;
-    height: calc(100svh - 48px);
+    height: 100%;
+    min-height: 0;
   }
 
   .dd-snaplink__room-head {
@@ -8254,6 +8267,11 @@ textarea:focus-visible,
 
   .dd-snaplink__lobby {
     padding: 32px 20px;
+  }
+
+  .dd-snaplink__compose {
+    background: var(--snap-surface);
+    padding-bottom: calc(10px + var(--snap-bottom-safe));
   }
 
   .dd-snaplink__message-main {
