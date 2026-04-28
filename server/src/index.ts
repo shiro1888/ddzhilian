@@ -539,11 +539,24 @@ function formatOpenRouterError(payload: OpenRouterChatResponse | null) {
   return payload?.error?.message?.trim();
 }
 
+function isOpenRouterBaseUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === 'openrouter.ai' || url.hostname.endsWith('.openrouter.ai');
+  } catch {
+    return false;
+  }
+}
+
 function buildOpenRouterChatHeaders() {
   const headers: Record<string, string> = {
     authorization: `Bearer ${config.openrouterAi.apiKey ?? ''}`,
     'content-type': 'application/json',
   };
+
+  if (!isOpenRouterBaseUrl(config.openrouterAi.baseUrl)) {
+    return headers;
+  }
 
   if (config.openrouterAi.siteUrl) {
     headers['HTTP-Referer'] = config.openrouterAi.siteUrl;
@@ -607,7 +620,7 @@ async function requestOpenRouterChat(
       ok: false,
       model,
       status: 502,
-      message: 'OpenRouter returned an empty response.',
+      message: 'OpenAI-compatible API returned an empty response.',
     };
   }
 
@@ -695,7 +708,7 @@ function formatAiQuotaStatus(input: {
 }
 
 function formatOpenRouterStatus(model: string) {
-  return `当前 AI 提供方为 OpenRouter，模型 ${model}。本站不统计 OpenRouter 额度；实际费用和限额以你的 OpenRouter 账户为准。`;
+  return `当前 AI 提供方为 OpenAI 兼容接口，模型 ${model}。本站不统计该接口额度；实际费用和限额以你的 API 服务账户为准。`;
 }
 
 function normalizeBotTextValue(value: unknown, fallback: string) {
@@ -717,7 +730,7 @@ function getActiveAiSettings() {
     const defaultModel = models.find((model) => model.id === config.openrouterAi.model)?.id ?? models[0]?.id ?? '';
     return {
       provider: 'openrouter' as const,
-      label: 'OpenRouter',
+      label: 'OpenAI 兼容接口',
       model: defaultModel,
       models,
       maxPromptChars: config.openrouterAi.maxPromptChars,
@@ -987,11 +1000,11 @@ function writeAiQuotaExhausted(response: ServerResponse) {
 function getAiConfigurationError(provider: AiProvider) {
   if (provider === 'openrouter') {
     if (!config.openrouterAi.apiKey) {
-      return 'OpenRouter API is not configured on this server.';
+      return 'OpenAI-compatible API is not configured on this server.';
     }
 
     if (!config.openrouterAi.model || config.openrouterAi.models.length === 0) {
-      return 'OpenRouter model list is not configured on this server.';
+      return 'OpenAI-compatible model list is not configured on this server.';
     }
 
     return undefined;
@@ -1018,7 +1031,7 @@ function buildAiQuotaPayload(model: string) {
       remainingNeurons: 0,
       freeOnly: false,
       provider: 'openrouter',
-      limitLabel: 'OpenRouter account billing',
+      limitLabel: 'OpenAI-compatible API billing',
       model,
       models: config.openrouterAi.models
         .filter((entry) => entry.enabled !== false)
@@ -1042,6 +1055,13 @@ function buildAiQuotaPayload(model: string) {
 }
 
 async function fetchOpenRouterBalanceSnapshot() {
+  if (!isOpenRouterBaseUrl(config.openrouterAi.baseUrl)) {
+    return {
+      available: false,
+      message: '当前使用 OpenAI 兼容接口，未提供统一余额查询。',
+    };
+  }
+
   const apiKey = config.openrouterAi.apiKey;
   if (!apiKey) {
     return {
@@ -1579,7 +1599,7 @@ async function handleAiChatRequest(
           model: lastFailure?.model ?? model,
           message: lastFailure?.message,
         });
-        writeJson(response, 502, { error: 'OpenRouter request failed.' });
+        writeJson(response, 502, { error: 'OpenAI-compatible API request failed.' });
         return;
       }
     }

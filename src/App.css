@@ -4870,6 +4870,49 @@
   resize: vertical;
 }
 
+.dd-admin-manual-api-card {
+  display: grid;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(170, 185, 173, 0.24);
+}
+
+.dd-admin-manual-api-card .dd-admin-card__head {
+  margin-bottom: 0;
+}
+
+.dd-admin-manual-api-card .dd-admin-card__head span {
+  display: block;
+  max-width: 620px;
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.dd-admin-manual-api-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dd-admin-manual-api-message {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.dd-admin-manual-api-message.is-success {
+  color: #1e6c34;
+}
+
+.dd-admin-manual-api-message.is-error {
+  color: #c73636;
+}
+
 .dd-admin-config-actions {
   display: flex;
   justify-content: flex-end;

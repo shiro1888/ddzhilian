@@ -42,8 +42,17 @@ type AdminStageProps = {
 const ADMIN_BRAND_NAME = 'ddzhilian管理系统'
 const MODEL_PREVIEW_LIMIT = 5
 const USAGE_BAR_CHART_LIMIT = 3
+const OPENAI_COMPATIBLE_PROVIDER_LABEL = 'OpenAI 兼容接口'
+const OPENAI_COMPATIBLE_BASE_URL_PLACEHOLDER = 'https://api.openai.com/v1'
 
 type AdminSection = 'dashboard' | 'models' | 'providers'
+
+type ManualOpenAiApiDraft = {
+  label: string
+  baseUrl: string
+  apiKey: string
+  modelId: string
+}
 
 type AdminNavIconName =
   | 'audit'
@@ -273,6 +282,44 @@ function buildPolyline(values: number[], width: number, height: number, padding:
     .join(' ')
 }
 
+function labelFromOpenAiModelId(modelId: string) {
+  return modelId.split('/').pop() || modelId
+}
+
+function normalizeOpenAiCompatibleBaseUrl(value: string) {
+  return value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/+$/g, '')
+}
+
+function isHttpBaseUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+function upsertOpenAiCompatibleModel(
+  models: AdminModelToggleItem[],
+  modelId: string,
+  label: string,
+) {
+  const next = new Map(models.map((model) => [model.id, model]))
+  const previous = next.get(modelId)
+
+  next.set(modelId, {
+    id: modelId,
+    label: label || previous?.label || labelFromOpenAiModelId(modelId),
+    enabled: true,
+  })
+
+  return [...next.values()]
+}
+
 function describeProviderStatus(settings: AdminAiSettings) {
   return [
     {
@@ -282,7 +329,7 @@ function describeProviderStatus(settings: AdminAiSettings) {
       enabled: settings.provider === 'cloudflare',
     },
     {
-      name: 'OpenRouter',
+      name: OPENAI_COMPATIBLE_PROVIDER_LABEL,
       state: settings.openrouter.apiKey ? '健康' : '待配置',
       modelCount: settings.openrouter.models.filter((model) => model.enabled).length,
       enabled: settings.provider === 'openrouter',
@@ -578,7 +625,7 @@ function ProviderTable({
               <td>{provider.name}</td>
               <td><span className={`dd-admin-status-dot ${provider.state === '健康' ? 'is-green' : 'is-amber'}`}>{provider.state}</span></td>
               <td>{provider.modelCount}</td>
-              <td>{provider.enabled ? (activeProvider === 'openrouter' ? 'OpenRouter' : 'Cloudflare') : '待切换'}</td>
+              <td>{provider.enabled ? (activeProvider === 'openrouter' ? OPENAI_COMPATIBLE_PROVIDER_LABEL : 'Cloudflare') : '待切换'}</td>
             </tr>
           ))}
         </tbody>
@@ -611,14 +658,14 @@ function ConfigPanel({
       <div className="dd-admin-card__head">
         <div>
           <p>配置中心</p>
-          <h3>{isOpenRouter ? 'OpenRouter' : 'Cloudflare AI'}</h3>
+          <h3>{isOpenRouter ? OPENAI_COMPATIBLE_PROVIDER_LABEL : 'Cloudflare AI'}</h3>
         </div>
         <div className="dd-admin-provider-tabs">
           <button type="button" className={!isOpenRouter ? 'is-active' : ''} onClick={() => onProviderChange('cloudflare')}>
             Cloudflare
           </button>
           <button type="button" className={isOpenRouter ? 'is-active' : ''} onClick={() => onProviderChange('openrouter')}>
-            OpenRouter
+            OpenAI 兼容
           </button>
         </div>
       </div>
@@ -700,10 +747,133 @@ function ConfigPanel({
           </label>
         </div>
       )}
+      <ManualOpenAiApiPanel
+        settings={settings.openrouter}
+        onProviderChange={onProviderChange}
+        onOpenRouterFieldChange={onOpenRouterFieldChange}
+      />
       <div className="dd-admin-config-actions">
         <button type="button" className="dd-button dd-button--dark">取消</button>
         <button type="button" className="dd-button dd-button--primary" onClick={onSave}>
           {isSaving ? '保存中...' : '保存配置'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function ManualOpenAiApiPanel({
+  settings,
+  onProviderChange,
+  onOpenRouterFieldChange,
+}: {
+  settings: AdminOpenRouterConfig
+  onProviderChange: (provider: AdminAiSettings['provider']) => void
+  onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
+}) {
+  const [draft, setDraft] = useState<ManualOpenAiApiDraft>(() => ({
+    label: '',
+    baseUrl: settings.baseUrl || OPENAI_COMPATIBLE_BASE_URL_PLACEHOLDER,
+    apiKey: '',
+    modelId: settings.model,
+  }))
+  const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+
+  const updateDraft = (field: keyof ManualOpenAiApiDraft, value: string) => {
+    setDraft((previous) => ({
+      ...previous,
+      [field]: value,
+    }))
+    setMessage(null)
+  }
+
+  const addManualApi = () => {
+    const baseUrl = normalizeOpenAiCompatibleBaseUrl(draft.baseUrl)
+    const apiKey = draft.apiKey.trim()
+    const modelId = draft.modelId.trim()
+    const label = draft.label.trim() || labelFromOpenAiModelId(modelId)
+
+    if (!baseUrl || !apiKey || !modelId) {
+      setMessage({ tone: 'error', text: 'Base URL、API Key 和模型 ID 都需要填写。' })
+      return
+    }
+
+    if (!isHttpBaseUrl(baseUrl)) {
+      setMessage({ tone: 'error', text: 'Base URL 需要是 http 或 https 地址。' })
+      return
+    }
+
+    onProviderChange('openrouter')
+    onOpenRouterFieldChange('baseUrl', baseUrl)
+    onOpenRouterFieldChange('apiKey', apiKey)
+    onOpenRouterFieldChange('model', modelId)
+    onOpenRouterFieldChange('models', upsertOpenAiCompatibleModel(settings.models, modelId, label))
+    setDraft((previous) => ({
+      ...previous,
+      baseUrl,
+      modelId,
+      label,
+    }))
+    setMessage({ tone: 'success', text: '已加入 OpenAI 兼容接口配置，点击保存配置后生效。' })
+  }
+
+  return (
+    <section className="dd-admin-manual-api-card">
+      <div className="dd-admin-card__head">
+        <div>
+          <p>手动添加 API</p>
+          <h3>OpenAI 兼容接口</h3>
+          <span>填写兼容 Chat Completions 的 Base URL、API Key 和模型 ID，会同步加入模型列表并切换为当前接口。</span>
+        </div>
+      </div>
+      <div className="dd-admin-config-form">
+        <label className="dd-admin-config-field">
+          <span>模型显示名</span>
+          <input
+            type="text"
+            value={draft.label}
+            placeholder="例如 GPT-4.1 或 DeepSeek V3"
+            onChange={(event) => updateDraft('label', event.target.value)}
+          />
+        </label>
+        <label className="dd-admin-config-field">
+          <span>模型 ID</span>
+          <input
+            type="text"
+            value={draft.modelId}
+            placeholder="例如 gpt-4.1-mini"
+            onChange={(event) => updateDraft('modelId', event.target.value)}
+          />
+        </label>
+        <label className="dd-admin-config-field dd-admin-config-field--wide">
+          <span>Base URL</span>
+          <input
+            type="text"
+            value={draft.baseUrl}
+            placeholder={OPENAI_COMPATIBLE_BASE_URL_PLACEHOLDER}
+            onChange={(event) => updateDraft('baseUrl', event.target.value)}
+          />
+        </label>
+        <label className="dd-admin-config-field dd-admin-config-field--wide">
+          <span>API Key</span>
+          <input
+            type="password"
+            value={draft.apiKey}
+            placeholder="sk-..."
+            onChange={(event) => updateDraft('apiKey', event.target.value)}
+          />
+        </label>
+      </div>
+      <div className="dd-admin-manual-api-actions">
+        {message ? (
+          <p className={`dd-admin-manual-api-message is-${message.tone}`} aria-live="polite">
+            {message.text}
+          </p>
+        ) : (
+          <p className="dd-admin-manual-api-message">如果粘贴了完整 /chat/completions 地址，系统会自动截取到接口根路径。</p>
+        )}
+        <button type="button" className="dd-button dd-button--primary" onClick={addManualApi}>
+          加入配置
         </button>
       </div>
     </section>

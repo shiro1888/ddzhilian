@@ -154,6 +154,14 @@ function readStringList(name: string) {
     .filter(Boolean);
 }
 
+function normalizeOpenAiCompatibleBaseUrl(value: string) {
+  return value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/+$/g, '');
+}
+
 function labelFromAiModelId(modelId: string) {
   return modelId.split('/').pop() || modelId;
 }
@@ -318,7 +326,7 @@ export function loadConfig(): ServerConfig {
     },
     openrouterAi: {
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
-      baseUrl: (process.env.OPENROUTER_BASE_URL?.trim() || 'https://openrouter.ai/api/v1').replace(/\/$/, ''),
+      baseUrl: normalizeOpenAiCompatibleBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
       siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || undefined,
       siteName: process.env.OPENROUTER_SITE_NAME?.trim() || 'ddzhilian',
       model: openrouterAiDefaultModel,

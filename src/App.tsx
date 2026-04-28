@@ -1035,7 +1035,7 @@ function App() {
     (hasChatTextDraft || attachmentDrafts.length > 0)
   const aiQuotaLabel = aiQuotaStatus
     ? aiQuotaStatus.provider === 'openrouter'
-      ? (aiQuotaStatus.limitLabel ?? 'OpenRouter API')
+      ? (aiQuotaStatus.limitLabel ?? 'OpenAI 兼容接口')
       : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
     : 'AI 额度加载中'
   const selectedAiModelLabel =

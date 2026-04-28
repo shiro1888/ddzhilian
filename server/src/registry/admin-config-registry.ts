@@ -72,6 +72,13 @@ function normalizeOptionalString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeOpenAiCompatibleBaseUrl(value: unknown) {
+  return normalizeOptionalString(value)
+    .replace(/\/+$/g, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/+$/g, '');
+}
+
 function normalizePositiveInteger(value: unknown, fallback: number) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -254,7 +261,7 @@ function normalizeSnapshot(
     openrouter: {
       apiKey: normalizeOptionalString(openrouterInput.apiKey),
       baseUrl:
-        normalizeOptionalString(openrouterInput.baseUrl).replace(/\/$/, '') ||
+        normalizeOpenAiCompatibleBaseUrl(openrouterInput.baseUrl) ||
         fallback.openrouterAi.baseUrl ||
         defaultOpenRouterBaseUrl,
       siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
