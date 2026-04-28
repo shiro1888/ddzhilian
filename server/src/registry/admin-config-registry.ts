@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   type ManagedAiModelOption,
+  type OpenAiCompatibleWireApi,
   type ServerConfig,
 } from '../config.js';
 
@@ -34,6 +35,7 @@ export type AdminAiSettingsSnapshot = {
   openrouter: {
     apiKey: string;
     baseUrl: string;
+    wireApi: OpenAiCompatibleWireApi;
     siteUrl: string;
     siteName: string;
     model: string;
@@ -51,6 +53,7 @@ type LegacyProviderSnapshot = {
   apiToken?: unknown;
   apiKey?: unknown;
   baseUrl?: unknown;
+  wireApi?: unknown;
   siteUrl?: unknown;
   siteName?: unknown;
   freeOnly?: unknown;
@@ -76,7 +79,20 @@ function normalizeOpenAiCompatibleBaseUrl(value: unknown) {
   return normalizeOptionalString(value)
     .replace(/\/+$/g, '')
     .replace(/\/chat\/completions$/i, '')
+    .replace(/\/responses$/i, '')
     .replace(/\/+$/g, '');
+}
+
+function normalizeOpenAiCompatibleWireApi(
+  value: unknown,
+  fallback: OpenAiCompatibleWireApi,
+): OpenAiCompatibleWireApi {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[-/]/g, '_');
+  return normalized === 'responses' ? 'responses' : 'chat_completions';
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number) {
@@ -264,6 +280,10 @@ function normalizeSnapshot(
         normalizeOpenAiCompatibleBaseUrl(openrouterInput.baseUrl) ||
         fallback.openrouterAi.baseUrl ||
         defaultOpenRouterBaseUrl,
+      wireApi: normalizeOpenAiCompatibleWireApi(
+        openrouterInput.wireApi,
+        fallback.openrouterAi.wireApi,
+      ),
       siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
       siteName: normalizeOptionalString(openrouterInput.siteName) || fallback.openrouterAi.siteName,
       model: openrouterModel,
@@ -360,6 +380,7 @@ export class AdminConfigRegistry {
       openrouter: {
         apiKey: this.config.openrouterAi.apiKey ?? '',
         baseUrl: this.config.openrouterAi.baseUrl,
+        wireApi: this.config.openrouterAi.wireApi,
         siteUrl: this.config.openrouterAi.siteUrl ?? '',
         siteName: this.config.openrouterAi.siteName,
         model: this.config.openrouterAi.model,
@@ -407,6 +428,7 @@ export class AdminConfigRegistry {
 
     this.config.openrouterAi.apiKey = input.openrouter.apiKey || undefined;
     this.config.openrouterAi.baseUrl = input.openrouter.baseUrl;
+    this.config.openrouterAi.wireApi = input.openrouter.wireApi;
     this.config.openrouterAi.siteUrl = input.openrouter.siteUrl || undefined;
     this.config.openrouterAi.siteName = input.openrouter.siteName;
     this.config.openrouterAi.model = input.openrouter.model;

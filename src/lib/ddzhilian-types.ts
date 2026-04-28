@@ -389,6 +389,7 @@ export type AdminCloudflareConfig = {
 export type AdminOpenRouterConfig = {
   apiKey: string
   baseUrl: string
+  wireApi: AdminOpenAiWireApi
   siteUrl: string
   siteName: string
   model: string
@@ -396,6 +397,8 @@ export type AdminOpenRouterConfig = {
   maxPromptChars: number
   maxOutputTokens: number
 }
+
+export type AdminOpenAiWireApi = 'chat_completions' | 'responses'
 
 export type AdminModelToggleItem = {
   id: string

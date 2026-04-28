@@ -32,6 +32,7 @@ const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
+const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
@@ -101,9 +102,21 @@ async function readResponseError(response: Response) {
 
 async function readApiError(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null) as { error?: unknown } | null
-  return typeof payload?.error === 'string' && payload.error.trim()
+  const message = typeof payload?.error === 'string' && payload.error.trim()
     ? payload.error
     : fallback
+
+  return normalizeApiErrorMessage(message)
+}
+
+function normalizeApiErrorMessage(message: string) {
+  return message === 'Missing bearer token.' || message === 'Invalid bearer token.'
+    ? HISTORY_AUTH_EXPIRED_MESSAGE
+    : message
+}
+
+function isHistoryAuthExpiredError(status: number, message: string) {
+  return status === 401 && message === HISTORY_AUTH_EXPIRED_MESSAGE
 }
 
 type HistoryDownloadProgress = {
@@ -2719,12 +2732,16 @@ export function useDdzhilian() {
     })
 
     if (!response.ok) {
-      throw new Error(
-        await readApiError(
-          response,
-          `AI request failed with status ${response.status.toString()}`,
-        ),
+      const message = await readApiError(
+        response,
+        `AI request failed with status ${response.status.toString()}`,
       )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
     }
 
     const payload = await response.json() as Partial<AiChatResponse>
@@ -2753,16 +2770,20 @@ export function useDdzhilian() {
     })
 
     if (!response.ok) {
-      throw new Error(
-        await readApiError(
-          response,
-          `AI quota request failed with status ${response.status.toString()}`,
-        ),
+      const message = await readApiError(
+        response,
+        `AI quota request failed with status ${response.status.toString()}`,
       )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
     }
 
     return response.json() as Promise<AiQuotaStatus>
-  }, [])
+  }, [reconnectSocket])
 
   const uploadRoomFileChunk = async (input: {
     roomId: string

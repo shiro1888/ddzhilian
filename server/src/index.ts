@@ -50,6 +50,8 @@ type CloudflareAiResultObject = {
   }>;
 };
 type OpenRouterChatResponse = {
+  output_text?: unknown;
+  output?: unknown;
   choices?: Array<{
     message?: {
       content?: unknown;
@@ -62,6 +64,8 @@ type OpenRouterChatResponse = {
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
   };
 };
 type OpenRouterCreditsResponse = {
@@ -517,6 +521,16 @@ function formatCloudflareAiError(payload: CloudflareAiRunResponse) {
 }
 
 function extractOpenRouterText(payload: OpenRouterChatResponse) {
+  const outputText = collectCloudflareAiText(payload.output_text).join('\n').trim();
+  if (outputText) {
+    return outputText;
+  }
+
+  const output = collectCloudflareAiText(payload.output).join('\n').trim();
+  if (output) {
+    return output;
+  }
+
   const choice = payload.choices?.[0];
   const messageContent = choice?.message?.content;
   if (typeof messageContent === 'string') {
@@ -533,6 +547,35 @@ function extractOpenRouterText(payload: OpenRouterChatResponse) {
   }
 
   return '';
+}
+
+function buildOpenAiCompatibleRequestBody(
+  model: string,
+  prompt: string,
+  maxOutputTokens: number,
+) {
+  if (config.openrouterAi.wireApi === 'responses') {
+    const instructions = getAiSystemPrompt();
+    return {
+      model,
+      ...(instructions ? { instructions } : {}),
+      input: prompt,
+      max_output_tokens: maxOutputTokens,
+    };
+  }
+
+  return {
+    model,
+    messages: buildAiMessages(prompt),
+    max_tokens: maxOutputTokens,
+  };
+}
+
+function buildOpenAiCompatibleEndpoint() {
+  const path = config.openrouterAi.wireApi === 'responses'
+    ? '/responses'
+    : '/chat/completions';
+  return new URL(`${config.openrouterAi.baseUrl}${path}`);
 }
 
 function formatOpenRouterError(payload: OpenRouterChatResponse | null) {
@@ -591,15 +634,11 @@ async function requestOpenRouterChat(
   prompt: string,
   maxOutputTokens: number,
 ): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
-  const endpoint = new URL(`${config.openrouterAi.baseUrl}/chat/completions`);
+  const endpoint = buildOpenAiCompatibleEndpoint();
   const aiResponse = await fetch(endpoint, {
     method: 'POST',
     headers: buildOpenRouterChatHeaders(),
-    body: JSON.stringify({
-      model,
-      messages: buildAiMessages(prompt),
-      max_tokens: maxOutputTokens,
-    }),
+    body: JSON.stringify(buildOpenAiCompatibleRequestBody(model, prompt, maxOutputTokens)),
   });
   const aiPayload = await aiResponse.json().catch(() => null) as
     | OpenRouterChatResponse
@@ -628,8 +667,8 @@ async function requestOpenRouterChat(
     ok: true,
     model,
     answer,
-    promptTokens: Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? 0)),
-    completionTokens: Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? 0)),
+    promptTokens: Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? aiPayload.usage?.input_tokens ?? 0)),
+    completionTokens: Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? aiPayload.usage?.output_tokens ?? 0)),
   };
 }
 

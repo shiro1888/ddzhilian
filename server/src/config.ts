@@ -40,6 +40,7 @@ const defaultAiSystemPrompt = [
 ].join(' ');
 
 export type AiProvider = 'cloudflare' | 'openrouter';
+export type OpenAiCompatibleWireApi = 'chat_completions' | 'responses';
 
 export type AiModelOption = {
   id: string;
@@ -96,6 +97,7 @@ export interface ServerConfig {
   openrouterAi: {
     apiKey?: string;
     baseUrl: string;
+    wireApi: OpenAiCompatibleWireApi;
     siteUrl?: string;
     siteName: string;
     model: string;
@@ -159,7 +161,17 @@ function normalizeOpenAiCompatibleBaseUrl(value: string) {
     .trim()
     .replace(/\/+$/g, '')
     .replace(/\/chat\/completions$/i, '')
+    .replace(/\/responses$/i, '')
     .replace(/\/+$/g, '');
+}
+
+function readOpenAiCompatibleWireApi(value: unknown): OpenAiCompatibleWireApi {
+  if (typeof value !== 'string') {
+    return 'chat_completions';
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[-/]/g, '_');
+  return normalized === 'responses' ? 'responses' : 'chat_completions';
 }
 
 function labelFromAiModelId(modelId: string) {
@@ -327,6 +339,7 @@ export function loadConfig(): ServerConfig {
     openrouterAi: {
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
       baseUrl: normalizeOpenAiCompatibleBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
+      wireApi: readOpenAiCompatibleWireApi(process.env.OPENROUTER_WIRE_API),
       siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || undefined,
       siteName: process.env.OPENROUTER_SITE_NAME?.trim() || 'ddzhilian',
       model: openrouterAiDefaultModel,

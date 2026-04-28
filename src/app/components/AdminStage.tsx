@@ -50,6 +50,7 @@ type AdminSection = 'dashboard' | 'models' | 'providers'
 type ManualOpenAiApiDraft = {
   label: string
   baseUrl: string
+  wireApi: AdminOpenRouterConfig['wireApi']
   apiKey: string
   modelId: string
 }
@@ -291,6 +292,7 @@ function normalizeOpenAiCompatibleBaseUrl(value: string) {
     .trim()
     .replace(/\/+$/g, '')
     .replace(/\/chat\/completions$/i, '')
+    .replace(/\/responses$/i, '')
     .replace(/\/+$/g, '')
 }
 
@@ -726,6 +728,13 @@ function ConfigPanel({
             <input type="text" value={settings.openrouter.baseUrl} onChange={(event) => onOpenRouterFieldChange('baseUrl', event.target.value)} />
           </label>
           <label className="dd-admin-config-field">
+            <span>接口类型</span>
+            <select value={settings.openrouter.wireApi} onChange={(event) => onOpenRouterFieldChange('wireApi', event.target.value as AdminOpenRouterConfig['wireApi'])}>
+              <option value="chat_completions">Chat Completions</option>
+              <option value="responses">Responses</option>
+            </select>
+          </label>
+          <label className="dd-admin-config-field">
             <span>站点 URL</span>
             <input type="text" value={settings.openrouter.siteUrl} onChange={(event) => onOpenRouterFieldChange('siteUrl', event.target.value)} />
           </label>
@@ -774,6 +783,7 @@ function ManualOpenAiApiPanel({
   const [draft, setDraft] = useState<ManualOpenAiApiDraft>(() => ({
     label: '',
     baseUrl: settings.baseUrl || OPENAI_COMPATIBLE_BASE_URL_PLACEHOLDER,
+    wireApi: settings.wireApi ?? 'chat_completions',
     apiKey: '',
     modelId: settings.model,
   }))
@@ -805,6 +815,7 @@ function ManualOpenAiApiPanel({
 
     onProviderChange('openrouter')
     onOpenRouterFieldChange('baseUrl', baseUrl)
+    onOpenRouterFieldChange('wireApi', draft.wireApi)
     onOpenRouterFieldChange('apiKey', apiKey)
     onOpenRouterFieldChange('model', modelId)
     onOpenRouterFieldChange('models', upsertOpenAiCompatibleModel(settings.models, modelId, label))
@@ -844,6 +855,16 @@ function ManualOpenAiApiPanel({
             placeholder="例如 gpt-4.1-mini"
             onChange={(event) => updateDraft('modelId', event.target.value)}
           />
+        </label>
+        <label className="dd-admin-config-field">
+          <span>接口类型</span>
+          <select
+            value={draft.wireApi}
+            onChange={(event) => updateDraft('wireApi', event.target.value as AdminOpenRouterConfig['wireApi'])}
+          >
+            <option value="chat_completions">Chat Completions</option>
+            <option value="responses">Responses</option>
+          </select>
         </label>
         <label className="dd-admin-config-field dd-admin-config-field--wide">
           <span>Base URL</span>
