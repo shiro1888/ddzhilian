@@ -768,6 +768,7 @@ function App() {
               record.sessionId ??
               selectedConversationSessions[0]?.sessionId ??
               '',
+            sourceDeviceId: record.sourceDeviceId,
             fromSelf: record.sourceDeviceId === self?.deviceId,
             senderName: record.sourceDeviceName,
             status: undefined,
@@ -965,21 +966,33 @@ function App() {
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
 
   const unifiedConversationEntries: UnifiedConversationEntry[] = [
-    ...sortedChatRecordsForConversation.map((record) => ({
-      id: `text-${record.id}`,
-      entryType: 'text' as const,
-      sessionId: record.sessionId,
-      sourceDeviceId: record.senderName === 'bot' && !record.fromSelf
-        ? 'bot_cloudflare_ai'
-        : undefined,
-      fromSelf: record.fromSelf,
-      senderName: record.fromSelf
-        ? selfName
-        : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
-      status: record.status,
-      createdAt: record.createdAt,
-      text: record.text,
-    })),
+    ...sortedChatRecordsForConversation.map((record) => {
+      const recordSourceDeviceId =
+        'sourceDeviceId' in record && typeof record.sourceDeviceId === 'string'
+          ? record.sourceDeviceId
+          : undefined
+      const sourceDeviceId =
+        recordSourceDeviceId ??
+        (record.senderName === 'bot' && !record.fromSelf
+          ? 'bot_cloudflare_ai'
+          : record.fromSelf
+            ? self?.deviceId
+            : undefined)
+
+      return {
+        id: `text-${record.id}`,
+        entryType: 'text' as const,
+        sessionId: record.sessionId,
+        sourceDeviceId,
+        fromSelf: record.fromSelf,
+        senderName: record.fromSelf
+          ? selfName
+          : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+        status: record.status,
+        createdAt: record.createdAt,
+        text: record.text,
+      }
+    }),
     ...conversationNoticesForConversation.map((notice) => ({
       id: `notice-${notice.id}`,
       entryType: 'notice' as const,
@@ -2246,9 +2259,10 @@ function App() {
         onDirectFileSelection={(files) => {
           void handleSendFilesToCurrentConversation(files)
         }}
-        onSendText={() => {
-          void handleSendText()
+        onSendText={(quoteHtml) => {
+          void handleSendText(quoteHtml)
         }}
+        onRecallText={handleRecallText}
         onRetryTransfer={retryTransfer}
         onCancelTransfer={cancelTransfer}
         onUseClassicInterface={() => setInterfaceMode('classic')}

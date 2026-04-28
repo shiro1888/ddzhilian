@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { RoomListItem, UnifiedConversationEntry } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
 import {
@@ -15,6 +16,22 @@ type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }
 type BotMentionTriggerRange = {
   start: number
   end: number
+}
+
+type SnapLinkMessageContextMenuState = {
+  entryId: string
+  text: string
+  senderName: string
+  fromSelf: boolean
+  isBotMessage: boolean
+  left: number
+  top: number
+}
+
+type SnapLinkQuoteDraftState = {
+  senderName: string
+  text: string
+  html: string
 }
 
 const snapLinkQuickEmojis = [
@@ -51,7 +68,8 @@ type SnapLinkStageProps = {
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onDirectFileSelection: (files: File[]) => void
-  onSendText: () => void
+  onSendText: (quoteHtml?: string) => void
+  onRecallText: (entryId: string) => Promise<void> | void
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
   onUseClassicInterface: () => void
@@ -63,6 +81,83 @@ type SnapLinkStageProps = {
 
 function normalizeRoomDraft(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function escapeInlineHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+function getRichTextPreviewText(value: string) {
+  const text = extractPlainTextFromRichText(value)
+  if (text) {
+    return text
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    const parser = new DOMParser()
+    const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+    const image = documentFragment.body.querySelector('img[src]')
+    if (image) {
+      return image.getAttribute('alt')?.trim() || '图片'
+    }
+  }
+
+  return ''
+}
+
+async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return
+    } catch {
+      // Fall back to a temporary textarea when clipboard permissions are unavailable.
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.setAttribute('readonly', '')
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  textarea.remove()
+}
+
+async function copyRichTextToClipboard(value: string) {
+  const sanitizedHtml = sanitizeRichTextHtml(value)
+  const plainText = getRichTextPreviewText(value)
+
+  if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && sanitizedHtml) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([sanitizedHtml], { type: 'text/html' }),
+          'text/plain': new Blob([plainText], { type: 'text/plain' }),
+        }),
+      ])
+      return
+    } catch {
+      // Fall back to text-only clipboard behavior below.
+    }
+  }
+
+  await copyTextToClipboard(plainText || sanitizedHtml || value)
+}
+
+function renderQuoteDraftHtml(quoteDraft: SnapLinkQuoteDraftState) {
+  return [
+    '<blockquote class="dd-chatbox__quote">',
+    `<strong>${escapeInlineHtml(quoteDraft.senderName)}：</strong>`,
+    quoteDraft.html,
+    '</blockquote>',
+  ].join('')
 }
 
 function normalizePlainComposerDraft(value: string) {
@@ -160,6 +255,50 @@ function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
   return Array.from(compactName)[0]?.toUpperCase() ?? 'TA'
 }
 
+const DEVICE_SYSTEM_PREFIXES = new Set(['windows', 'android', 'ios', 'ipad', 'mac', 'linux', 'web'])
+
+function resolveActorIdentity(
+  entry: Exclude<UnifiedConversationEntry, { entryType: 'notice' }>,
+  isBotMessage: boolean,
+) {
+  if (isBotMessage) {
+    return {
+      displayName: 'AI',
+      title: 'AI',
+      badgeLabel: 'AI',
+      avatarLabel: 'AI',
+    }
+  }
+
+  const fallbackName = entry.fromSelf ? '我' : '对方设备'
+  const rawName = entry.senderName.trim() || fallbackName
+  const prefixMatch = rawName.match(/^([a-z]+)-(.+)$/i)
+  const systemLabel = prefixMatch?.[1]?.toLowerCase()
+  const splitDisplayName =
+    systemLabel && DEVICE_SYSTEM_PREFIXES.has(systemLabel)
+      ? prefixMatch?.[2]?.trim()
+      : undefined
+  const displayName = entry.fromSelf ? '我' : splitDisplayName || rawName
+
+  return {
+    displayName,
+    title: rawName,
+    badgeLabel: systemLabel && DEVICE_SYSTEM_PREFIXES.has(systemLabel) ? systemLabel : undefined,
+    avatarLabel: resolveAvatarLabel(displayName, entry.fromSelf),
+  }
+}
+
+function OnlineMemberIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+      <path d="M3.5 19a5 5 0 0 1 10 0" />
+      <path d="M16.5 11.5a2.5 2.5 0 1 0 0-5" />
+      <path d="M15 15.5a4.5 4.5 0 0 1 5.5 3.5" />
+    </svg>
+  )
+}
+
 function isConversationMessageEntry(
   entry: UnifiedConversationEntry | undefined,
 ): entry is Exclude<UnifiedConversationEntry, { entryType: 'notice' }> {
@@ -210,6 +349,7 @@ export function SnapLinkStage({
   onAiModelChange,
   onDirectFileSelection,
   onSendText,
+  onRecallText,
   onRetryTransfer,
   onCancelTransfer,
   onUseClassicInterface,
@@ -222,6 +362,9 @@ export function SnapLinkStage({
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
+  const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
+  const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
+  const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const botTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -233,6 +376,9 @@ export function SnapLinkStage({
     () => roomListItems.find((room) => room.roomId === selectedRoomId),
     [roomListItems, selectedRoomId],
   )
+  const selectedRoomOnlineCount = selectedRoom
+    ? Math.min(selectedRoom.memberCount, selectedRoom.onlineCount + 1)
+    : 0
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
@@ -252,6 +398,13 @@ export function SnapLinkStage({
   const plainDraft = normalizePlainComposerDraft(chatDraft)
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
+  const visibleConversationEntries = useMemo(
+    () =>
+      unifiedConversationEntries.filter((entry) =>
+        !(entry.entryType === 'text' && hiddenTextEntryIds.has(entry.id)),
+      ),
+    [hiddenTextEntryIds, unifiedConversationEntries],
+  )
 
   useEffect(() => {
     const messages = messagesRef.current
@@ -260,7 +413,7 @@ export function SnapLinkStage({
     }
 
     messages.scrollTop = messages.scrollHeight
-  }, [hasActiveRoom, unifiedConversationEntries.length])
+  }, [hasActiveRoom, visibleConversationEntries.length])
 
   useEffect(() => {
     if (!isEmojiPickerOpen) {
@@ -334,6 +487,41 @@ export function SnapLinkStage({
     }
   }, [isBotPanelOpen])
 
+  useEffect(() => {
+    if (!messageContextMenu) {
+      return undefined
+    }
+
+    const closeMessageContextMenu = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.dd-message-menu')) {
+        return
+      }
+
+      setMessageContextMenu(null)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMessageContextMenu(null)
+      }
+    }
+
+    const handleScroll = () => {
+      setMessageContextMenu(null)
+    }
+
+    window.addEventListener('pointerdown', closeMessageContextMenu)
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('scroll', handleScroll, true)
+
+    return () => {
+      window.removeEventListener('pointerdown', closeMessageContextMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [messageContextMenu])
+
   const handleCreateRoom = () => {
     setIsLobbyOpen(false)
     onCreatePublicRoom()
@@ -383,10 +571,12 @@ export function SnapLinkStage({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!isSendDisabled) {
+      const quoteHtml = quoteDraft ? renderQuoteDraftHtml(quoteDraft) : undefined
       setIsEmojiPickerOpen(false)
       setIsBotPanelOpen(false)
       botMentionTriggerRangeRef.current = null
-      onSendText()
+      onSendText(quoteHtml)
+      setQuoteDraft(null)
     }
   }
 
@@ -455,6 +645,118 @@ export function SnapLinkStage({
     }
   }
 
+  const markCodeCopyButton = (button: HTMLButtonElement) => {
+    button.classList.add('is-copied')
+    button.textContent = '已复制'
+
+    window.setTimeout(() => {
+      button.classList.remove('is-copied')
+      button.textContent = '复制'
+    }, 1600)
+  }
+
+  const handleRichBubbleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target
+
+    if (!(target instanceof HTMLElement)) {
+      return
+    }
+
+    const copyButton = target.closest<HTMLButtonElement>('.dd-code-copy')
+    if (!copyButton || !event.currentTarget.contains(copyButton)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
+    if (codeText) {
+      void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
+    }
+  }
+
+  const openMessageContextMenu = (
+    event: ReactMouseEvent<HTMLDivElement>,
+    entry: Extract<UnifiedConversationEntry, { entryType: 'text' }>,
+    senderName: string,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const menuWidth = 148
+    const menuHeight = 156
+    const margin = 8
+    const isBotMessage = entry.sourceDeviceId === 'bot_cloudflare_ai'
+    setMessageContextMenu({
+      entryId: entry.id,
+      text: entry.text,
+      senderName,
+      fromSelf: entry.fromSelf,
+      isBotMessage,
+      left: Math.max(margin, Math.min(event.clientX, window.innerWidth - menuWidth - margin)),
+      top: Math.max(margin, Math.min(event.clientY, window.innerHeight - menuHeight - margin)),
+    })
+  }
+
+  const copyContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    if (messageContextMenu.text) {
+      void copyRichTextToClipboard(messageContextMenu.text)
+    }
+    setMessageContextMenu(null)
+  }
+
+  const quoteContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const quoteText = getRichTextPreviewText(messageContextMenu.text)
+    const quoteHtml = messageContextMenu.isBotMessage
+      ? sanitizeBotReplyHtml(messageContextMenu.text)
+      : sanitizeRichTextHtml(messageContextMenu.text)
+
+    if (quoteText) {
+      setQuoteDraft({
+        senderName: messageContextMenu.senderName,
+        text: quoteText,
+        html: quoteHtml,
+      })
+      focusComposerInput(plainDraft.length)
+    }
+    setMessageContextMenu(null)
+  }
+
+  const deleteContextMessage = () => {
+    if (!messageContextMenu) {
+      return
+    }
+
+    const deletedEntryId = messageContextMenu.entryId
+    setHiddenTextEntryIds((current) => {
+      const next = new Set(current)
+      next.add(deletedEntryId)
+      return next
+    })
+    setMessageContextMenu(null)
+  }
+
+  const recallContextMessage = () => {
+    if (!messageContextMenu?.fromSelf) {
+      return
+    }
+
+    const recalledEntryId = messageContextMenu.entryId
+    setMessageContextMenu(null)
+    void Promise.resolve(onRecallText(recalledEntryId)).catch(() => {
+      // The parent surface reports the recall failure.
+    })
+  }
+
   const renderFileActions = (file: SnapLinkFileEntry) => {
     if (!file.downloadUrl && !file.onDownload && !file.action) {
       return null
@@ -516,13 +818,14 @@ export function SnapLinkStage({
   }
 
   return (
-    <section
-      className={`dd-snaplink${isDragging ? ' is-dragging' : ''}`}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+    <>
+      <section
+        className={`dd-snaplink${isDragging ? ' is-dragging' : ''}`}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
       <header className="dd-snaplink__topbar">
         <div className="dd-snaplink__brand">
           <i aria-hidden="true" />
@@ -542,6 +845,16 @@ export function SnapLinkStage({
                 </option>
               ))}
             </select>
+          ) : null}
+          {hasActiveRoom && selectedRoom ? (
+            <span
+              className="dd-snaplink__online-count"
+              aria-label={`${selectedRoomOnlineCount.toString()} 人在线`}
+              title={`${selectedRoomOnlineCount.toString()} 人在线`}
+            >
+              <OnlineMemberIcon />
+              <span>{selectedRoomOnlineCount}</span>
+            </span>
           ) : null}
           <button type="button" onClick={onUseClassicInterface}>
             原界面
@@ -647,9 +960,9 @@ export function SnapLinkStage({
               </div>
 
               <div ref={messagesRef} className="dd-snaplink__messages">
-                {unifiedConversationEntries.length > 0 ? (
-                  unifiedConversationEntries.map((entry, index) => {
-                    const previousIso = index > 0 ? unifiedConversationEntries[index - 1].createdAt : null
+                {visibleConversationEntries.length > 0 ? (
+                  visibleConversationEntries.map((entry, index) => {
+                    const previousIso = index > 0 ? visibleConversationEntries[index - 1].createdAt : null
                     const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
 
                     if (entry.entryType === 'notice') {
@@ -660,8 +973,8 @@ export function SnapLinkStage({
                       )
                     }
 
-                    const previousEntry = unifiedConversationEntries[index - 1]
-                    const nextEntry = unifiedConversationEntries[index + 1]
+                    const previousEntry = visibleConversationEntries[index - 1]
+                    const nextEntry = visibleConversationEntries[index + 1]
                     const isGroupedWithPrevious =
                       isConversationMessageEntry(previousEntry) &&
                       resolveMessageActorKey(previousEntry) === resolveMessageActorKey(entry) &&
@@ -678,9 +991,7 @@ export function SnapLinkStage({
                       isGroupedWithPrevious ? 'is-grouped-with-previous' : '',
                       isGroupedWithNext ? 'is-grouped-with-next' : '',
                     ].filter(Boolean).join(' ')
-                    const senderName = entry.senderName.trim() || (entry.fromSelf ? '我' : '对方设备')
-                    const displaySenderName = entry.fromSelf ? '我' : isBotMessage ? 'AI' : senderName
-                    const avatarLabel = isBotMessage ? 'AI' : resolveAvatarLabel(displaySenderName, entry.fromSelf)
+                    const actorIdentity = resolveActorIdentity(entry, isBotMessage)
                     const showSenderIdentity = !isGroupedWithPrevious
                     const showMessageTime = !isGroupedWithNext
                     const avatarClassName = [
@@ -693,23 +1004,32 @@ export function SnapLinkStage({
                         <div className={rowClassName}>
                           {!entry.fromSelf ? (
                             <span className={avatarClassName} aria-hidden="true">
-                              {avatarLabel}
+                              {actorIdentity.avatarLabel}
                             </span>
                           ) : null}
                           <div className="dd-snaplink__message-main">
                             {showSenderIdentity ? (
                               <div className="dd-snaplink__sender-meta">
-                                <span className="dd-snaplink__sender-name" title={displaySenderName}>
-                                  {displaySenderName}
+                                <span className="dd-snaplink__sender-name" title={actorIdentity.title}>
+                                  {actorIdentity.displayName}
                                 </span>
-                                {isBotMessage ? (
-                                  <span className="dd-snaplink__sender-tag">AI</span>
+                                {actorIdentity.badgeLabel ? (
+                                  <span
+                                    className={[
+                                      'dd-snaplink__sender-badge',
+                                      isBotMessage ? 'is-ai' : '',
+                                    ].filter(Boolean).join(' ')}
+                                  >
+                                    {actorIdentity.badgeLabel}
+                                  </span>
                                 ) : null}
                               </div>
                             ) : null}
                             {entry.entryType === 'text' ? (
                               <div
-                                className="dd-snaplink__bubble"
+                                className="dd-snaplink__bubble dd-chatbox__bubble--rich"
+                                onClick={handleRichBubbleClick}
+                                onContextMenu={(event) => openMessageContextMenu(event, entry, actorIdentity.displayName)}
                                 dangerouslySetInnerHTML={{
                                   __html: isBotMessage
                                     ? sanitizeBotReplyHtml(entry.text)
@@ -727,7 +1047,7 @@ export function SnapLinkStage({
                           </div>
                           {entry.fromSelf ? (
                             <span className={avatarClassName} aria-hidden="true">
-                              {avatarLabel}
+                              {actorIdentity.avatarLabel}
                             </span>
                           ) : null}
                         </div>
@@ -742,6 +1062,24 @@ export function SnapLinkStage({
               {(localError || errorMessage) && (
                 <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
               )}
+
+              {quoteDraft ? (
+                <div className="dd-snaplink__quote-preview">
+                  <div className="dd-snaplink__quote-preview-body">
+                    <div className="dd-snaplink__quote-preview-copy">
+                      <strong>{quoteDraft.senderName}</strong>
+                      <span>{quoteDraft.text}</span>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="取消引用"
+                      onClick={() => setQuoteDraft(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <form className="dd-snaplink__compose" onSubmit={handleSubmit}>
                 <label className="dd-snaplink__attach" htmlFor={fileInputId} title="发送文件">
@@ -870,6 +1208,38 @@ export function SnapLinkStage({
           )}
         </div>
       </main>
-    </section>
+      </section>
+      {messageContextMenu && createPortal(
+        <div
+          className="dd-message-menu"
+          role="menu"
+          aria-label="消息操作"
+          style={{
+            left: `${messageContextMenu.left.toString()}px`,
+            top: `${messageContextMenu.top.toString()}px`,
+          }}
+        >
+          <button type="button" role="menuitem" onClick={copyContextMessage}>
+            复制
+          </button>
+          <button type="button" role="menuitem" onClick={quoteContextMessage}>
+            引用
+          </button>
+          <button type="button" role="menuitem" className="is-danger" onClick={deleteContextMessage}>
+            删除
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!messageContextMenu.fromSelf}
+            title={messageContextMenu.fromSelf ? '撤回这条消息' : '只能撤回自己发送的消息'}
+            onClick={recallContextMessage}
+          >
+            撤回
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }

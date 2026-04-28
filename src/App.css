@@ -7314,6 +7314,30 @@ textarea:focus-visible,
   color: var(--snap-ink-soft);
 }
 
+.dd-snaplink__online-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 4px;
+  color: var(--snap-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dd-snaplink__online-count svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .dd-snaplink__top-actions button,
 .dd-snaplink__room-actions button {
   padding: 0 10px;
@@ -7731,7 +7755,7 @@ textarea:focus-visible,
 .dd-snaplink__sender-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
   padding: 0 2px;
@@ -7784,17 +7808,31 @@ textarea:focus-visible,
   text-align: right;
 }
 
-.dd-snaplink__sender-tag {
+.dd-snaplink__sender-badge {
   display: inline-grid;
   place-items: center;
-  min-height: 15px;
+  flex: none;
+  min-height: 17px;
   padding: 0 5px;
+  border: 1px solid #d6dbe3;
   border-radius: 4px;
+  background: #f8fafc;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+
+.dd-snaplink__sender-badge.is-ai {
+  border-color: #111827;
   background: #111827;
   color: #ffffff;
-  font-size: 9px;
+  font-family: inherit;
   font-weight: 800;
-  line-height: 1;
+  text-transform: none;
 }
 
 .dd-snaplink__bubble {
@@ -7967,6 +8005,68 @@ textarea:focus-visible,
 
 .dd-snaplink__note.is-error {
   color: var(--danger);
+}
+
+.dd-snaplink__quote-preview {
+  padding: 8px 14px;
+  border-top: 1px solid var(--snap-border);
+  background: var(--snap-surface);
+}
+
+.dd-snaplink__quote-preview-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 8px 10px;
+  border: 1px solid #dfe6ee;
+  border-left: 3px solid var(--snap-green);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--snap-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dd-snaplink__quote-preview-copy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dd-snaplink__quote-preview-copy strong {
+  overflow: hidden;
+  color: var(--snap-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__quote-preview-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__quote-preview-body button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--snap-muted);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
 }
 
 .dd-snaplink__compose {
