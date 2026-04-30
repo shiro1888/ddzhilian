@@ -22,6 +22,8 @@ This repository contains:
 - Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
 - Public rooms: support public room entry links and room-scoped history.
 - History management: keep text history for 24 hours by default and clean temporary file history by retention and size limits.
+- Account-gated image generation: require Supabase-backed login for text-to-image or image-edit generation, support multi-image uploads, enforce per-account daily free image quota plus paid image quota balances stored on the Supabase user profile row, store generated image files on the backend, return authenticated image URLs instead of base64 JSON payloads, and keep lazy-loaded generated-image history per account.
+- Account-based admin: use Supabase account email/password for admin login, read super admins from `ADMIN_SUPER_EMAILS`, store normal admins in `admin_roles`, and restrict API key configuration to super admins.
 - Realtime signaling: coordinate presence, pairing, and WebRTC setup through WebSocket signaling.
 
 ## Tech Stack
@@ -94,6 +96,7 @@ The frontend uses browser history routes. Main routes include:
 - `/send`
 - `/receive`
 - `/text`
+- `/image`
 - `/sessions`
 
 The current product shape centers on the chat-desktop experience. File sending and receiving flows fold back into the conversation workspace.
@@ -127,7 +130,10 @@ The backend coordinates connections instead of acting as permanent file storage.
 - room and session lifecycles
 - WebRTC signaling relay
 - history text and history file metadata
-- AI proxy requests through Cloudflare AI or OpenRouter
+- Supabase Auth-backed account sessions and cursor-paged per-account image-generation history
+- Supabase Auth-backed admin verification, super-admin configuration, and normal-admin role management
+- AI chat proxy requests through Cloudflare AI or OpenRouter
+- GPT image generation and image editing through the configured Codex reverse-proxy base URL
 
 See [server/README.md](server/README.md) for backend protocol details.
 
@@ -172,6 +178,11 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_HISTORY_FILES_TABLE`
 - `SUPABASE_HISTORY_TEXTS_TABLE`
+- `SUPABASE_USER_PROFILES_TABLE`
+- `SUPABASE_IMAGE_GENERATIONS_TABLE`
+- `SUPABASE_ADMIN_ROLES_TABLE`
+- `ADMIN_SUPER_EMAILS`
+- `ACCOUNT_INVITE_CODE`
 - `AI_PROVIDER`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
@@ -186,8 +197,18 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `OPENROUTER_PREFERRED_MODELS`
 - `OPENROUTER_SYNC_SET_PROVIDER`
 - `OPENROUTER_BASE_URL`
+- `OPENROUTER_REASONING_EFFORT`
 - `OPENROUTER_SITE_URL`
 - `OPENROUTER_SITE_NAME`
+- `CODEX_IMAGE_BASE_URL`
+- `CODEX_IMAGE_API_KEY`
+- `CODEX_IMAGE_MODEL`
+- `CODEX_IMAGE_SIZE`
+- `CODEX_IMAGE_QUALITY`
+- `CODEX_IMAGE_MAX_PROMPT_CHARS`
+- `CODEX_IMAGE_DAILY_FREE_QUOTA`
+- `CODEX_IMAGE_QUOTA_RESET_HOUR`
+- `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`
@@ -195,7 +216,7 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 
 Do not commit real secrets, tokens, or passwords to the repository.
 
-If you enable Supabase-backed history metadata, apply [supabase/schema.sql](supabase/schema.sql) or the SQL under [supabase/migrations](supabase/migrations), then set the matching backend environment variables in `server/.env`.
+If you enable Supabase-backed history metadata, account-gated image generation, or admin role management, apply [supabase/schema.sql](supabase/schema.sql) or the SQL under [supabase/migrations](supabase/migrations), then set the matching backend environment variables in `server/.env`. Set production super-admin emails through `ADMIN_SUPER_EMAILS`; do not hardcode emails or secrets in source.
 
 ## Build And Check
 

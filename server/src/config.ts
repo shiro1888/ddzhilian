@@ -41,6 +41,7 @@ const defaultAiSystemPrompt = [
 
 export type AiProvider = 'cloudflare' | 'openrouter';
 export type OpenAiCompatibleWireApi = 'chat_completions' | 'responses';
+export type OpenAiCompatibleReasoningEffort = '' | 'low' | 'medium' | 'high';
 
 export type AiModelOption = {
   id: string;
@@ -57,7 +58,8 @@ export interface ServerConfig {
   port: number;
   publicWsUrl: string;
   allowedOrigins: string[];
-  adminPassword?: string;
+  adminSuperEmails: string[];
+  accountInviteCode?: string;
   debugStateApiEnabled: boolean;
   debugStateApiToken?: string;
   pingIntervalMs: number;
@@ -72,6 +74,9 @@ export interface ServerConfig {
     serviceRoleKey: string;
     historyFilesTable: string;
     historyTextsTable: string;
+    userProfilesTable: string;
+    imageGenerationsTable: string;
+    adminRolesTable: string;
   };
   aiProvider: AiProvider;
   aiSystemPrompt: string;
@@ -98,12 +103,24 @@ export interface ServerConfig {
     apiKey?: string;
     baseUrl: string;
     wireApi: OpenAiCompatibleWireApi;
+    reasoningEffort: OpenAiCompatibleReasoningEffort;
     siteUrl?: string;
     siteName: string;
     model: string;
     models: ManagedAiModelOption[];
     maxPromptChars: number;
     maxOutputTokens: number;
+  };
+  codexImageAi: {
+    apiKey?: string;
+    baseUrl: string;
+    model: string;
+    size: string;
+    quality: string;
+    maxPromptChars: number;
+    dailyFreeQuota: number;
+    quotaResetHour: number;
+    quotaTimezoneOffsetMinutes: number;
   };
 }
 
@@ -117,6 +134,11 @@ function readNumber(name: string, fallback: number) {
   const parsed = Number(raw);
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readIntegerInRange(name: string, fallback: number, min: number, max: number) {
+  const value = Math.trunc(readNumber(name, fallback));
+  return Math.min(max, Math.max(min, value));
 }
 
 function readHistoryRetentionMs(name: string, fallback: number) {
@@ -165,6 +187,15 @@ function normalizeOpenAiCompatibleBaseUrl(value: string) {
     .replace(/\/+$/g, '');
 }
 
+function normalizeOpenAiImageBaseUrl(value: string) {
+  return value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/images\/generations$/i, '')
+    .replace(/\/images\/edits$/i, '')
+    .replace(/\/+$/g, '');
+}
+
 function readOpenAiCompatibleWireApi(value: unknown): OpenAiCompatibleWireApi {
   if (typeof value !== 'string') {
     return 'chat_completions';
@@ -172,6 +203,19 @@ function readOpenAiCompatibleWireApi(value: unknown): OpenAiCompatibleWireApi {
 
   const normalized = value.trim().toLowerCase().replace(/[-/]/g, '_');
   return normalized === 'responses' ? 'responses' : 'chat_completions';
+}
+
+function readOpenAiCompatibleReasoningEffort(value: unknown): OpenAiCompatibleReasoningEffort {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized;
+  }
+
+  return '';
 }
 
 function labelFromAiModelId(modelId: string) {
@@ -268,6 +312,11 @@ export function loadConfig(): ServerConfig {
     process.env.OPENROUTER_MODEL?.trim() ||
     openrouterModelIds[0] ||
     '';
+  const codexImageBaseUrl =
+    process.env.CODEX_IMAGE_BASE_URL?.trim() ||
+    process.env.OPENAI_IMAGE_BASE_URL?.trim() ||
+    process.env.OPENAI_BASE_URL?.trim() ||
+    'https://cpa.shiro1888.com/v1';
 
   if (publicHttpBaseUrl) {
     allowedOrigins.add(publicHttpBaseUrl);
@@ -278,10 +327,8 @@ export function loadConfig(): ServerConfig {
     port,
     publicWsUrl,
     allowedOrigins: [...allowedOrigins],
-    adminPassword:
-      process.env.ADMIN_PASSWORD?.trim() ||
-      process.env.ADMIN_TOKEN?.trim() ||
-      undefined,
+    adminSuperEmails: readStringList('ADMIN_SUPER_EMAILS').map((email) => email.toLowerCase()),
+    accountInviteCode: process.env.ACCOUNT_INVITE_CODE?.trim() || undefined,
     debugStateApiEnabled: process.env.ENABLE_DEBUG_STATE_API === 'true',
     debugStateApiToken: process.env.DEBUG_STATE_API_TOKEN?.trim() || undefined,
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
@@ -298,6 +345,9 @@ export function loadConfig(): ServerConfig {
             serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY.trim(),
             historyFilesTable: process.env.SUPABASE_HISTORY_FILES_TABLE?.trim() || 'history_files',
             historyTextsTable: process.env.SUPABASE_HISTORY_TEXTS_TABLE?.trim() || 'history_texts',
+            userProfilesTable: process.env.SUPABASE_USER_PROFILES_TABLE?.trim() || 'user_profiles',
+            imageGenerationsTable: process.env.SUPABASE_IMAGE_GENERATIONS_TABLE?.trim() || 'image_generations',
+            adminRolesTable: process.env.SUPABASE_ADMIN_ROLES_TABLE?.trim() || 'admin_roles',
           }
         : undefined,
     aiProvider: readAiProvider(),
@@ -340,12 +390,33 @@ export function loadConfig(): ServerConfig {
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
       baseUrl: normalizeOpenAiCompatibleBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
       wireApi: readOpenAiCompatibleWireApi(process.env.OPENROUTER_WIRE_API),
+      reasoningEffort: readOpenAiCompatibleReasoningEffort(process.env.OPENROUTER_REASONING_EFFORT),
       siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || undefined,
       siteName: process.env.OPENROUTER_SITE_NAME?.trim() || 'ddzhilian',
       model: openrouterAiDefaultModel,
       models: readAiModelOptions('OPENROUTER_MODELS', openrouterAiDefaultModel, []),
       maxPromptChars: Math.max(1, readNumber('OPENROUTER_MAX_PROMPT_CHARS', 8000)),
       maxOutputTokens: Math.max(1, readNumber('OPENROUTER_MAX_OUTPUT_TOKENS', 1000)),
+    },
+    codexImageAi: {
+      apiKey:
+        process.env.CODEX_IMAGE_API_KEY?.trim() ||
+        process.env.OPENAI_IMAGE_API_KEY?.trim() ||
+        process.env.OPENAI_API_KEY?.trim() ||
+        undefined,
+      baseUrl: normalizeOpenAiImageBaseUrl(codexImageBaseUrl),
+      model: process.env.CODEX_IMAGE_MODEL?.trim() || 'gpt-image-2',
+      size: process.env.CODEX_IMAGE_SIZE?.trim() || 'auto',
+      quality: process.env.CODEX_IMAGE_QUALITY?.trim() || 'auto',
+      maxPromptChars: Math.max(1, readNumber('CODEX_IMAGE_MAX_PROMPT_CHARS', 4000)),
+      dailyFreeQuota: Math.max(0, Math.trunc(readNumber('CODEX_IMAGE_DAILY_FREE_QUOTA', 3))),
+      quotaResetHour: readIntegerInRange('CODEX_IMAGE_QUOTA_RESET_HOUR', 4, 0, 23),
+      quotaTimezoneOffsetMinutes: readIntegerInRange(
+        'CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES',
+        8 * 60,
+        -12 * 60,
+        14 * 60,
+      ),
     },
   };
 }

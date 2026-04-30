@@ -20,6 +20,8 @@ ddzhilian 是一个面向跨设备协作的轻量传输与聊天工作台。它�
 - 长文本交换：支持普通文本、富文本粘贴和 Markdown 显示。
 - 公共对话：支持公共 room 入口和 room 内历史内容。
 - 历史内容：文本历史默认保留 24 小时，历史文件按保留时间和容量自动清理。
+- 账号生图：登录后使用图片生成，每个账号默认每天 3 张免费额度，免费次数和付费余额都保存在 Supabase 用户表；免费额度每日 04:00 刷新且不累加，生图时优先消耗免费额度，不足部分再消耗付费额度。
+- 账号后台：后台入口使用 Supabase 账号邮箱和密码登录，超级管理员来自 `ADMIN_SUPER_EMAILS`，普通管理员写入 Supabase `admin_roles` 表；API 密钥配置仅超级管理员可管理。
 - 实时信令：通过 WebSocket 协调设备在线状态、配对和 WebRTC 连接。
 
 ## 技术栈
@@ -92,6 +94,7 @@ npm run dev
 - `/send`
 - `/receive`
 - `/text`
+- `/image`
 - `/sessions`
 
 当前产品形态以聊天桌面体验为主，文件发送和接收流程会收敛到对话工作区。
@@ -125,7 +128,11 @@ npm run dev
 - room 与 session 生命周期
 - WebRTC 信令转发
 - 历史文本与历史文件元数据管理
-- Cloudflare AI 或 OpenRouter 的 AI 代理接口
+- 基于 Supabase Auth 的账号会话、文本生图、上传图片修改、多图参考、每日免费额度、付费额度余额和按账号游标分页加载的生图历史
+- 基于 Supabase Auth 的后台管理员账号验证、超级管理员配置和普通管理员增删
+- 生成图会保存为服务端图片文件，并以账号鉴权的图片链接返回给前端，而不是把 base64 直接塞进 JSON
+- Cloudflare AI 或 OpenRouter 的文本 AI 代理接口
+- 通过 Codex 反代地址接入 `gpt-image-2` 图片生成与图片编辑接口
 
 更详细的后端协议说明见 [server/README.md](server/README.md)。
 
@@ -134,7 +141,7 @@ npm run dev
 公共 room 和普通 room 使用同一套历史文件临时存储规则：
 
 - 文件保存在 `server/data/history/files/<roomId>/...`。
-- 元数据索引保存在 `server/data/history/index.json`。
+- 元数据在配置 Supabase 后写入 Supabase；未配置时回退到 `server/data/history/index.json`。
 - `HISTORY_RETENTION_MS` 控制历史文件保留时长，默认 6 小时，最大 24 小时。
 - `HISTORY_TEXT_RETENTION_MS` 控制历史文本保留时长，默认 24 小时，最大 24 小时。
 - `HISTORY_MAX_BYTES` 控制单个 room 的历史文件容量上限，默认 10 GiB。
@@ -164,6 +171,15 @@ npm run dev
 - `HISTORY_RETENTION_MS`
 - `HISTORY_TEXT_RETENTION_MS`
 - `HISTORY_MAX_BYTES`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_HISTORY_FILES_TABLE`
+- `SUPABASE_HISTORY_TEXTS_TABLE`
+- `SUPABASE_USER_PROFILES_TABLE`
+- `SUPABASE_IMAGE_GENERATIONS_TABLE`
+- `SUPABASE_ADMIN_ROLES_TABLE`
+- `ADMIN_SUPER_EMAILS`
+- `ACCOUNT_INVITE_CODE`
 - `AI_PROVIDER`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
@@ -178,14 +194,26 @@ npm run dev
 - `OPENROUTER_PREFERRED_MODELS`
 - `OPENROUTER_SYNC_SET_PROVIDER`
 - `OPENROUTER_BASE_URL`
+- `OPENROUTER_REASONING_EFFORT`
 - `OPENROUTER_SITE_URL`
 - `OPENROUTER_SITE_NAME`
+- `CODEX_IMAGE_BASE_URL`
+- `CODEX_IMAGE_API_KEY`
+- `CODEX_IMAGE_MODEL`
+- `CODEX_IMAGE_SIZE`
+- `CODEX_IMAGE_QUALITY`
+- `CODEX_IMAGE_MAX_PROMPT_CHARS`
+- `CODEX_IMAGE_DAILY_FREE_QUOTA`
+- `CODEX_IMAGE_QUOTA_RESET_HOUR`
+- `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`
 - `TURN_URL`
 - `TURN_URLS`
 - `TURN_USERNAME`
 - `TURN_CREDENTIAL`
 
 不要把真实密钥、令牌或密码提交到仓库。
+
+如果启用 Supabase 历史元数据、账号生图历史或后台管理员角色，需要先执行 [supabase/schema.sql](supabase/schema.sql) 或 [supabase/migrations](supabase/migrations) 下的 SQL，再配置后端环境变量。生产环境中把你的超级管理员邮箱写入 `ADMIN_SUPER_EMAILS`，不要把邮箱或密钥硬编码进源码。
 
 ## 构建与检查
 

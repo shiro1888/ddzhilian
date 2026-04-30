@@ -7,6 +7,8 @@ import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'
 import { ConnectStage } from './app/components/ConnectStage'
 import { ContentGrid } from './app/components/ContentGrid'
+import { ImageAccountGate } from './app/components/ImageAccountGate'
+import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { ReceiveStage } from './app/components/ReceiveStage'
 import { SendStage } from './app/components/SendStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
@@ -40,11 +42,17 @@ import type {
   AdminCloudflareConfig,
   AdminHistoryStats,
   AdminOpenRouterConfig,
+  AdminRolesSnapshot,
+  AdminSessionInfo,
   AdminStateResponse,
   AdminUsageSnapshot,
+  AdminUserQuotaUpdate,
+  AdminUsersSnapshot,
+  AiChatImageInput,
   AiModelOption,
   AiQuotaStatus,
 } from './lib/ddzhilian-types'
+import { useAccountAuth } from './lib/use-account-auth'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -142,12 +150,15 @@ function parseAiBotPrompt(value: string) {
   return match[1].trim()
 }
 
-function buildAiBotPrompt(question: string, quotedText: string) {
-  const normalizedQuestion = question.trim()
+function buildAiBotPrompt(question: string, quotedText: string, imageCount: number) {
+  const normalizedQuestion =
+    question.trim() ||
+    (imageCount > 0 ? '请阅读图片并说明你看到的内容。' : '')
   const normalizedQuote = quotedText.trim()
+  const imageInstruction = imageCount > 0 ? '\n\n用户同时附带了图片，请结合图片回答。' : ''
 
   if (!normalizedQuote) {
-    return normalizedQuestion
+    return `${normalizedQuestion}${imageInstruction}`
   }
 
   return [
@@ -157,8 +168,81 @@ function buildAiBotPrompt(question: string, quotedText: string) {
     normalizedQuote,
     '',
     '用户问题：',
-    normalizedQuestion || '请阅读并回应这段引用内容。',
+    `${normalizedQuestion || '请阅读并回应这段引用内容。'}${imageInstruction}`,
   ].join('\n')
+}
+
+function normalizeAiChatImageMimeType(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) {
+    return undefined
+  }
+
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized
+}
+
+function parseDataUrlImageMimeType(value: string) {
+  const match = /^data:([^;,]+)(?:;[^,]*)?,/i.exec(value.trim())
+  return normalizeAiChatImageMimeType(match?.[1])
+}
+
+function normalizeAiChatImageSource(value: string) {
+  const source = value.trim()
+  if (!source) {
+    return null
+  }
+
+  if (source.toLowerCase().startsWith('data:image/')) {
+    const mimeType = parseDataUrlImageMimeType(source)
+    if (!mimeType || !AI_CHAT_ALLOWED_IMAGE_TYPES.has(mimeType)) {
+      return null
+    }
+
+    return { url: source, mimeType }
+  }
+
+  try {
+    const url = new URL(source)
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return { url: url.toString(), mimeType: undefined }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function extractAiChatImagesFromRichText(value: string): AiChatImageInput[] {
+  if (!value || typeof DOMParser === 'undefined') {
+    return []
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const seenSources = new Set<string>()
+  const images: AiChatImageInput[] = []
+
+  for (const image of Array.from(documentFragment.body.querySelectorAll('img[src]'))) {
+    if (images.length >= AI_CHAT_IMAGE_MAX_COUNT) {
+      break
+    }
+
+    const normalizedSource = normalizeAiChatImageSource(image.getAttribute('src') ?? '')
+    if (!normalizedSource || seenSources.has(normalizedSource.url)) {
+      continue
+    }
+
+    seenSources.add(normalizedSource.url)
+    const alt = image.getAttribute('alt')?.trim()
+    images.push({
+      url: normalizedSource.url,
+      mimeType: normalizedSource.mimeType,
+      ...(alt ? { alt: alt.slice(0, 120) } : {}),
+    })
+  }
+
+  return images
 }
 
 function resolveAdminApiBaseUrl() {
@@ -183,6 +267,8 @@ function resolveAdminApiBaseUrl() {
 const ADMIN_API_BASE_URL = resolveAdminApiBaseUrl()
 const ADMIN_LOGIN_EXIT_ANIMATION_MS = 720
 const INTERFACE_MODE_STORAGE_KEY = 'ddzhilian-interface-mode'
+const AI_CHAT_IMAGE_MAX_COUNT = 4
+const AI_CHAT_ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 
 function readStoredInterfaceMode(): InterfaceMode {
   if (typeof window === 'undefined') {
@@ -239,16 +325,22 @@ function App() {
   >({})
   const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
+  const [adminEmailDraft, setAdminEmailDraft] = useState('')
   const [adminPasswordDraft, setAdminPasswordDraft] = useState('')
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
   const [isAdminLoading, setIsAdminLoading] = useState(false)
   const [isAdminLoginTransitioning, setIsAdminLoginTransitioning] = useState(false)
   const [isAdminSaving, setIsAdminSaving] = useState(false)
   const [isAdminClearingHistory, setIsAdminClearingHistory] = useState(false)
+  const [isAdminUpdatingUser, setIsAdminUpdatingUser] = useState(false)
+  const [isAdminUpdatingRole, setIsAdminUpdatingRole] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
+  const [adminSession, setAdminSession] = useState<AdminSessionInfo | null>(null)
   const [adminHistoryStats, setAdminHistoryStats] = useState<AdminHistoryStats | null>(null)
   const [adminAiSettings, setAdminAiSettings] = useState<AdminAiSettings | null>(null)
   const [adminUsage, setAdminUsage] = useState<AdminUsageSnapshot | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUsersSnapshot | null>(null)
+  const [adminRoles, setAdminRoles] = useState<AdminRolesSnapshot | null>(null)
   const activeView = resolveViewFromPathname(location.pathname)
   const isAdminView = activeView === 'admin'
   const isSnapLinkMode = !isAdminView && interfaceMode === 'snaplink'
@@ -256,6 +348,8 @@ function App() {
   const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions', 'admin'].includes(item.id))
   const effectiveNavView: NavView =
     activeView === 'send' || activeView === 'receive' || activeView === 'sessions' ? 'text' : activeView
+  const isImageView = activeView === 'image'
+  const isAdminProtectedView = isAdminView
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const adminLoginTransitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasConnectionSnapshotRef = useRef(false)
@@ -303,15 +397,28 @@ function App() {
     ensureRoomHistoryLoaded,
     loadOlderRoomHistoryTexts,
     askAi,
+    generateImage,
+    getImageQuota,
+    listImageHistory,
     getAiQuota,
     sendRoomFiles,
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
+  const imageAccount = useAccountAuth()
 
   useEffect(() => {
     window.localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, interfaceMode)
   }, [interfaceMode])
+
+  useEffect(() => {
+    const nextAccountId = imageAccount.user?.id ?? ''
+    if ((localIdentity.accountId ?? '') === nextAccountId) {
+      return
+    }
+
+    updateSettings({ accountId: nextAccountId })
+  }, [imageAccount.user?.id, localIdentity.accountId, updateSettings])
 
   useEffect(() => {
     if (!self?.historyAuthToken) {
@@ -391,7 +498,7 @@ function App() {
     handledPublicRoomRef.current = lastCreatedPublicRoomId
     setPendingRoomSelectionId(lastCreatedPublicRoomId)
     setSelectedRoomId(lastCreatedPublicRoomId)
-    setLocalError('已进入公共对话，可复制入口链接分享。')
+    setLocalError('已进入世界对话，可复制入口链接分享。')
 
     if (activeView !== 'text') {
       navigate(pathForView('text'))
@@ -627,7 +734,7 @@ function App() {
       : []
   const selectedConversationTitle = isChatDesktopTheme
     ? selectedRoom?.isPublic
-      ? '公共对话'
+      ? '世界对话'
       : selectedRoom && selectedRoomMemberNames.length > 0
       ? selectedRoomMemberNames.length <= 3
         ? selectedRoomMemberNames.join('、')
@@ -651,7 +758,7 @@ function App() {
     ? {
         title: selectedConversationName,
         description: selectedRoom
-          ? `${selectedRoom.isPublic ? '公共对话 · ' : ''}${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
+          ? `${selectedRoom.isPublic ? '世界对话 · ' : ''}${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
           : selectedDevicePeer
             ? `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
             : '选择一个已有对话开始查看。',
@@ -1017,7 +1124,7 @@ function App() {
   const fileConversationEmptyState =
     selectedRoom
       ? selectedRoom.isPublic
-        ? '公共对话的文件会通过服务器中转保存。'
+        ? '世界对话的文件会通过服务器中转保存。'
         : selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
         : `还没有与 ${selectedConversationName} 建立直连，发送的文件会先保存到当前对话。`
@@ -1062,7 +1169,7 @@ function App() {
       const hasLoadedHistoryTexts = historyTexts.some((record) => record.roomId === room.roomId)
       const title =
         room.isPublic
-          ? '公共对话'
+          ? '世界对话'
           : memberNames.length === 0
           ? `Room ${room.roomId}`
           : memberNames.length <= 3
@@ -1121,7 +1228,7 @@ function App() {
             ? `[文件] ${latestUiSession.summary}`
             : latestUiSession.summary
           : room.isPublic
-            ? '公共对话，可通过链接加入'
+            ? '世界对话，可通过链接加入'
             : '暂无消息')
       const onlineCount = room.members.filter(
         (member) => member.deviceId !== self?.deviceId && member.online,
@@ -1276,7 +1383,7 @@ function App() {
   }, [activeView, navigate])
 
   useEffect(() => {
-    if (!isAdminView) {
+    if (!isAdminProtectedView) {
       return
     }
 
@@ -1302,17 +1409,23 @@ function App() {
         if (!payload.authenticated) {
           setIsAdminAuthenticated(false)
           setIsAdminLoginTransitioning(false)
+          setAdminSession(null)
           setAdminHistoryStats(null)
           setAdminAiSettings(null)
           setAdminUsage(null)
+          setAdminUsers(null)
+          setAdminRoles(null)
           return
         }
 
         setIsAdminAuthenticated(true)
         setIsAdminLoginTransitioning(false)
+        setAdminSession(payload.admin ?? null)
         setAdminHistoryStats(payload.history ?? null)
         setAdminAiSettings(payload.ai ?? null)
         setAdminUsage(payload.usage ?? null)
+        setAdminUsers(payload.users ?? null)
+        setAdminRoles(payload.roles ?? null)
       })
       .catch((error) => {
         if (isCancelled) {
@@ -1330,7 +1443,7 @@ function App() {
     return () => {
       isCancelled = true
     }
-  }, [isAdminView])
+  }, [isAdminProtectedView])
 
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
@@ -1343,9 +1456,15 @@ function App() {
   }
 
   const handleAdminConnect = () => {
+    const nextEmail = adminEmailDraft.trim()
     const nextPassword = adminPasswordDraft.trim()
+    if (!nextEmail) {
+      setAdminError('请输入管理员邮箱。')
+      return
+    }
+
     if (!nextPassword) {
-      setAdminError('请输入管理员密码。')
+      setAdminError('请输入账号密码。')
       return
     }
 
@@ -1359,7 +1478,7 @@ function App() {
       headers: {
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ password: nextPassword }),
+      body: JSON.stringify({ email: nextEmail, password: nextPassword }),
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -1376,9 +1495,12 @@ function App() {
           return
         }
 
+        setAdminSession(payload.admin ?? null)
         setAdminHistoryStats(payload.history)
         setAdminAiSettings(payload.ai)
         setAdminUsage(payload.usage)
+        setAdminUsers(payload.users ?? null)
+        setAdminRoles(payload.roles ?? null)
         setIsAdminLoginTransitioning(true)
 
         if (adminLoginTransitionTimeoutRef.current) {
@@ -1415,10 +1537,14 @@ function App() {
     })
     setIsAdminAuthenticated(false)
     setIsAdminLoginTransitioning(false)
+    setAdminEmailDraft('')
     setAdminPasswordDraft('')
+    setAdminSession(null)
     setAdminHistoryStats(null)
     setAdminAiSettings(null)
     setAdminUsage(null)
+    setAdminUsers(null)
+    setAdminRoles(null)
     setAdminError(null)
   }
 
@@ -1487,15 +1613,21 @@ function App() {
         }
 
         return response.json() as Promise<{
+          admin?: AdminSessionInfo
           ai: AdminAiSettings
           history: AdminHistoryStats
           usage?: AdminUsageSnapshot
+          users?: AdminUsersSnapshot
+          roles?: AdminRolesSnapshot
         }>
       })
       .then((payload) => {
+        setAdminSession(payload.admin ?? adminSession)
         setAdminAiSettings(payload.ai)
         setAdminHistoryStats(payload.history)
         setAdminUsage(payload.usage ?? null)
+        setAdminUsers(payload.users ?? null)
+        setAdminRoles(payload.roles ?? adminRoles)
       })
       .catch((error) => {
         setAdminError(error instanceof Error ? error.message : 'AI 配置保存失败。')
@@ -1528,19 +1660,141 @@ function App() {
         }
 
         return response.json() as Promise<{
+          admin?: AdminSessionInfo
           history: AdminHistoryStats
           usage?: AdminUsageSnapshot
+          users?: AdminUsersSnapshot
+          roles?: AdminRolesSnapshot
         }>
       })
       .then((payload) => {
+        setAdminSession(payload.admin ?? adminSession)
         setAdminHistoryStats(payload.history)
         setAdminUsage(payload.usage ?? null)
+        setAdminUsers(payload.users ?? null)
+        setAdminRoles(payload.roles ?? adminRoles)
       })
       .catch((error) => {
         setAdminError(error instanceof Error ? error.message : '历史记录清空失败。')
       })
       .finally(() => {
         setIsAdminClearingHistory(false)
+      })
+  }
+
+  const handleAdminUserQuotaUpdate = (userId: string, quota: AdminUserQuotaUpdate) => {
+    if (!isAdminAuthenticated) {
+      const message = '请先登录后台。'
+      setAdminError(message)
+      return Promise.reject(new Error(message))
+    }
+
+    setIsAdminUpdatingUser(true)
+    setAdminError(null)
+
+    return fetch(`${ADMIN_API_BASE_URL}/api/admin/users/quota`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ userId, ...quota }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '用户额度保存失败。'))
+        }
+
+        return response.json() as Promise<{
+          users?: AdminUsersSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminUsers(payload.users ?? null)
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '用户额度保存失败。'
+        setAdminError(message)
+        throw new Error(message)
+      })
+      .finally(() => {
+        setIsAdminUpdatingUser(false)
+      })
+  }
+
+  const handleAdminRoleCreate = (email: string) => {
+    if (!isAdminAuthenticated || !adminSession?.isSuperAdmin) {
+      const message = '仅超级管理员可以管理角色。'
+      setAdminError(message)
+      return Promise.reject(new Error(message))
+    }
+
+    setIsAdminUpdatingRole(true)
+    setAdminError(null)
+
+    return fetch(`${ADMIN_API_BASE_URL}/api/admin/roles`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '管理员添加失败。'))
+        }
+
+        return response.json() as Promise<{
+          roles?: AdminRolesSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminRoles(payload.roles ?? null)
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '管理员添加失败。'
+        setAdminError(message)
+        throw new Error(message)
+      })
+      .finally(() => {
+        setIsAdminUpdatingRole(false)
+      })
+  }
+
+  const handleAdminRoleDelete = (userId: string) => {
+    if (!isAdminAuthenticated || !adminSession?.isSuperAdmin) {
+      const message = '仅超级管理员可以管理角色。'
+      setAdminError(message)
+      return Promise.reject(new Error(message))
+    }
+
+    setIsAdminUpdatingRole(true)
+    setAdminError(null)
+
+    return fetch(`${ADMIN_API_BASE_URL}/api/admin/roles/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '管理员删除失败。'))
+        }
+
+        return response.json() as Promise<{
+          roles?: AdminRolesSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminRoles(payload.roles ?? null)
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '管理员删除失败。'
+        setAdminError(message)
+        throw new Error(message)
+      })
+      .finally(() => {
+        setIsAdminUpdatingRole(false)
       })
   }
 
@@ -1737,13 +1991,14 @@ function App() {
     const hasTextPayload = normalizedText.length > 0 || hasImageContent
     const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
     const aiBotQuestion = parseAiBotPrompt(draftPlainText)
-    const aiBotPrompt = aiBotQuestion === null ? null : buildAiBotPrompt(aiBotQuestion, quotedText)
+    const aiBotImages = aiBotQuestion === null ? [] : extractAiChatImagesFromRichText(rawText)
+    const aiBotPrompt = aiBotQuestion === null ? null : buildAiBotPrompt(aiBotQuestion, quotedText, aiBotImages.length)
     if (!hasTextPayload && attachmentFiles.length === 0) {
       setLocalError('请输入要发送的内容。')
       return
     }
 
-    if (aiBotQuestion !== null && aiBotQuestion.length === 0 && !quotedText) {
+    if (aiBotQuestion !== null && aiBotQuestion.length === 0 && !quotedText && aiBotImages.length === 0) {
       setLocalError('请输入要问 @bot 的问题。')
       return
     }
@@ -1850,6 +2105,7 @@ function App() {
             historyId: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
             model: selectedAiModel || undefined,
+            images: aiBotImages,
           })
 
           if (answer.quota) {
@@ -2006,7 +2262,7 @@ function App() {
     const publicRoomId = selectedRoom?.isPublic ? selectedRoom.roomId : null
 
     if (!publicRoomId) {
-      setLocalError('请选择公共对话后再重连。')
+      setLocalError('请选择世界对话后再重连。')
       return
     }
 
@@ -2050,7 +2306,7 @@ function App() {
 
   const handleCreatePublicRoom = () => {
     if (!self) {
-      setLocalError('服务连接完成后才能进入公共对话。')
+      setLocalError('服务连接完成后才能进入世界对话。')
       return
     }
 
@@ -2066,16 +2322,16 @@ function App() {
     const url = buildPublicRoomUrl(roomId)
 
     if (!navigator.clipboard) {
-      setLocalError(`公共对话入口链接：${url}`)
+      setLocalError(`世界对话入口链接：${url}`)
       return
     }
 
     void navigator.clipboard.writeText(url).then(
       () => {
-        setLocalError('公共对话入口链接已复制。')
+        setLocalError('世界对话入口链接已复制。')
       },
       () => {
-        setLocalError(`公共对话入口链接：${url}`)
+        setLocalError(`世界对话入口链接：${url}`)
       },
     )
   }
@@ -2203,16 +2459,23 @@ function App() {
 
   const adminRouteElement = (
     <AdminStage
+      adminEmailDraft={adminEmailDraft}
       adminPasswordDraft={adminPasswordDraft}
+      adminSession={adminSession}
       isAdminAuthenticated={isAdminAuthenticated}
       isAdminLoading={isAdminLoading}
       isAdminLoginTransitioning={isAdminLoginTransitioning}
       isAdminSaving={isAdminSaving}
       isAdminClearingHistory={isAdminClearingHistory}
+      isAdminUpdatingUser={isAdminUpdatingUser}
+      isAdminUpdatingRole={isAdminUpdatingRole}
       adminError={adminError}
       historyStats={adminHistoryStats}
       aiSettings={adminAiSettings}
       usage={adminUsage}
+      users={adminUsers}
+      roles={adminRoles}
+      onAdminEmailDraftChange={setAdminEmailDraft}
       onAdminPasswordDraftChange={setAdminPasswordDraft}
       onConnect={handleAdminConnect}
       onDisconnect={handleAdminDisconnect}
@@ -2222,6 +2485,19 @@ function App() {
       onOpenRouterFieldChange={handleAdminOpenRouterFieldChange}
       onSave={handleAdminSave}
       onClearHistory={handleAdminClearHistory}
+      onUserQuotaUpdate={handleAdminUserQuotaUpdate}
+      onRoleCreate={handleAdminRoleCreate}
+      onRoleDelete={handleAdminRoleDelete}
+    />
+  )
+
+  const imageAuthGateElement = (
+    <ImageAccountGate
+      isLoading={imageAccount.isLoading}
+      isSubmitting={imageAccount.isSubmitting}
+      error={imageAccount.error}
+      onLogin={imageAccount.login}
+      onRegister={imageAccount.register}
     />
   )
 
@@ -2290,8 +2566,8 @@ function App() {
         />
       ) : null}
 
-      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}${isCompactMobileViewport && isMobileConversationListVisible ? ' is-mobile-room-list-open' : ''}`}>
-        {!isAdminView ? (
+      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}${isImageView ? ' is-standalone-main' : ''}${isCompactMobileViewport && isMobileConversationListVisible ? ' is-mobile-room-list-open' : ''}`}>
+        {!isAdminView && !isImageView ? (
           <AppHeader
             isChatConversationView={isChatConversationView}
             currentMeta={currentMeta}
@@ -2356,6 +2632,21 @@ function App() {
             <Route path="/send" element={sendRouteElement} />
             <Route path="/receive" element={receiveRouteElement} />
             <Route path="/text" element={textRouteElement} />
+            <Route
+              path="/image"
+              element={
+                imageAccount.isAuthenticated ? (
+                  <ImageGenerationStage
+                    isReady={!imageAccount.isLoading}
+                    userEmail={imageAccount.user?.email ?? ''}
+                    onGenerateImage={generateImage}
+                    onGetImageQuota={getImageQuota}
+                    onListImageHistory={listImageHistory}
+                    onLogout={imageAccount.logout}
+                  />
+                ) : imageAuthGateElement
+              }
+            />
             <Route path="/admin" element={adminRouteElement} />
             <Route path="/sessions" element={<Navigate to={pathForView('text')} replace />} />
             <Route
@@ -2365,7 +2656,7 @@ function App() {
           </Routes>
         </section>
 
-        {!isAdminView ? (
+        {!isAdminView && !isImageView ? (
           <ContentGrid
             roomJoinDraft={joinRoomIdDraft}
             roomListItems={roomListItems}

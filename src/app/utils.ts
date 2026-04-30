@@ -550,6 +550,8 @@ type MixedBlockSegment = {
   lines: string[]
 }
 
+const codeAssignmentTargetPattern = /^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|\[[^\]\n]+\])*\s*=/
+
 function isLikelyCodeLine(line: string) {
   const trimmedLine = line.trim()
   if (!trimmedLine) {
@@ -582,7 +584,7 @@ function isLikelyCodeLine(line: string) {
 
   if (
     /[{}()[\];=<>]/.test(trimmedLine) &&
-    (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(trimmedLine) ||
+    (codeAssignmentTargetPattern.test(trimmedLine) ||
       /\b[A-Za-z_$][\w$]*\s*\([^)]*\)/.test(trimmedLine))
   ) {
     return true
@@ -1073,7 +1075,7 @@ function shouldRenderCodeTextAsBlock(codeText: string, styledSpanCount = 0) {
   const hasIndentedLine = lines.some((line) => /^(?: {2,}|\t)/.test(line))
   const hasCommentLine = lines.some((line) => /^(?:#|\/\/|\/\*)/.test(line.trimStart()))
   const hasAssignmentLine = lines.some((line) =>
-    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(line.trimStart()),
+    codeAssignmentTargetPattern.test(line.trimStart()),
   )
   const hasCallExpression = /\b[A-Za-z_$][\w$]*\s*\([^)\n]*\)/.test(codeText)
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   type ManagedAiModelOption,
+  type OpenAiCompatibleReasoningEffort,
   type OpenAiCompatibleWireApi,
   type ServerConfig,
 } from '../config.js';
@@ -36,6 +37,7 @@ export type AdminAiSettingsSnapshot = {
     apiKey: string;
     baseUrl: string;
     wireApi: OpenAiCompatibleWireApi;
+    reasoningEffort: OpenAiCompatibleReasoningEffort;
     siteUrl: string;
     siteName: string;
     model: string;
@@ -54,6 +56,7 @@ type LegacyProviderSnapshot = {
   apiKey?: unknown;
   baseUrl?: unknown;
   wireApi?: unknown;
+  reasoningEffort?: unknown;
   siteUrl?: unknown;
   siteName?: unknown;
   freeOnly?: unknown;
@@ -93,6 +96,22 @@ function normalizeOpenAiCompatibleWireApi(
 
   const normalized = value.trim().toLowerCase().replace(/[-/]/g, '_');
   return normalized === 'responses' ? 'responses' : 'chat_completions';
+}
+
+function normalizeOpenAiCompatibleReasoningEffort(
+  value: unknown,
+  fallback: OpenAiCompatibleReasoningEffort,
+): OpenAiCompatibleReasoningEffort {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized;
+  }
+
+  return '';
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number) {
@@ -284,6 +303,10 @@ function normalizeSnapshot(
         openrouterInput.wireApi,
         fallback.openrouterAi.wireApi,
       ),
+      reasoningEffort: normalizeOpenAiCompatibleReasoningEffort(
+        openrouterInput.reasoningEffort,
+        fallback.openrouterAi.reasoningEffort,
+      ),
       siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
       siteName: normalizeOptionalString(openrouterInput.siteName) || fallback.openrouterAi.siteName,
       model: openrouterModel,
@@ -381,6 +404,7 @@ export class AdminConfigRegistry {
         apiKey: this.config.openrouterAi.apiKey ?? '',
         baseUrl: this.config.openrouterAi.baseUrl,
         wireApi: this.config.openrouterAi.wireApi,
+        reasoningEffort: this.config.openrouterAi.reasoningEffort,
         siteUrl: this.config.openrouterAi.siteUrl ?? '',
         siteName: this.config.openrouterAi.siteName,
         model: this.config.openrouterAi.model,
@@ -429,6 +453,7 @@ export class AdminConfigRegistry {
     this.config.openrouterAi.apiKey = input.openrouter.apiKey || undefined;
     this.config.openrouterAi.baseUrl = input.openrouter.baseUrl;
     this.config.openrouterAi.wireApi = input.openrouter.wireApi;
+    this.config.openrouterAi.reasoningEffort = input.openrouter.reasoningEffort;
     this.config.openrouterAi.siteUrl = input.openrouter.siteUrl || undefined;
     this.config.openrouterAi.siteName = input.openrouter.siteName;
     this.config.openrouterAi.model = input.openrouter.model;

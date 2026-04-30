@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import type { AdminAccountSession } from './account-registry.js';
+
 const defaultSessionTtlMs = 7 * 24 * 60 * 60 * 1000;
 
-type AdminSession = {
+type AdminSession = AdminAccountSession & {
   sessionId: string;
   createdAt: string;
   expiresAt: number;
@@ -13,9 +15,10 @@ export class AdminSessionRegistry {
 
   private readonly sessions = new Map<string, AdminSession>();
 
-  create() {
+  create(admin: AdminAccountSession) {
     const sessionId = randomUUID();
     const session: AdminSession = {
+      ...admin,
       sessionId,
       createdAt: new Date().toISOString(),
       expiresAt: Date.now() + this.sessionTtlMs,

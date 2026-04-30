@@ -1,6 +1,13 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type {
+  AiChatImageInput,
   AiChatResponse,
+  AiImageHistoryPage,
+  AiImageHistoryRequestOptions,
+  AiImageJobResponse,
+  AiImageQuotaResponse,
+  AiImageRequestInput,
+  AiImageResponse,
   AiQuotaStatus,
   ChannelMessage,
   ClientEvent,
@@ -33,6 +40,8 @@ const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
 const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
+const IMAGE_JOB_POLL_INTERVAL_MS = 2_000
+const IMAGE_JOB_POLL_TIMEOUT_MS = 15 * 60 * 1000
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
@@ -2701,16 +2710,18 @@ export function useDdzhilian() {
       historyId?: string
       createdAt?: string
       model?: string
+      images?: AiChatImageInput[]
     },
   ): Promise<AiChatResponse> => {
     const activeSelf = selfRef.current
     const normalizedPrompt = prompt.trim()
+    const images = options?.images ?? []
 
     if (!activeSelf?.historyAuthToken) {
       throw new Error('当前设备尚未完成 AI 请求授权。')
     }
 
-    if (!normalizedPrompt) {
+    if (!normalizedPrompt && images.length === 0) {
       throw new Error('请输入要交给 AI 的内容。')
     }
 
@@ -2728,6 +2739,7 @@ export function useDdzhilian() {
         historyId: options?.historyId,
         createdAt: options?.createdAt,
         model: options?.model,
+        images,
       }),
     })
 
@@ -2757,6 +2769,188 @@ export function useDdzhilian() {
       historyText: payload.historyText,
     }
   }
+
+  const generateImage = async (
+    input: string | AiImageRequestInput,
+    options?: {
+      model?: string
+      size?: string
+      quality?: string
+    },
+  ): Promise<AiImageResponse> => {
+    const normalizedPrompt = typeof input === 'string'
+      ? input.trim()
+      : input.prompt.trim()
+    const referenceImages = typeof input === 'string' ? [] : input.images ?? []
+
+    if (!normalizedPrompt) {
+      throw new Error('请输入图片提示词。')
+    }
+
+    const body = referenceImages.length > 0
+      ? new FormData()
+      : JSON.stringify({
+          prompt: normalizedPrompt,
+          model: options?.model,
+          size: options?.size,
+          quality: options?.quality,
+        })
+    const headers: Record<string, string> = {}
+
+    if (body instanceof FormData) {
+      body.append('prompt', normalizedPrompt)
+
+      if (options?.model) {
+        body.append('model', options.model)
+      }
+
+      if (options?.size) {
+        body.append('size', options.size)
+      }
+
+      if (options?.quality) {
+        body.append('quality', options.quality)
+      }
+
+      for (const image of referenceImages) {
+        body.append('image[]', image, image.name)
+      }
+    } else {
+      headers['content-type'] = 'application/json'
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/image`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body,
+    })
+
+    if (!response.ok) {
+      const message = await readApiError(
+        response,
+        `AI image request failed with status ${response.status.toString()}`,
+      )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
+    }
+
+    const startPayload = await response.json() as Partial<AiImageJobResponse & AiImageResponse>
+    if (Array.isArray(startPayload.images) && startPayload.images.length > 0) {
+      return {
+        provider: startPayload.provider,
+        model: typeof startPayload.model === 'string' ? startPayload.model : '',
+        images: startPayload.images,
+        createdAt: typeof startPayload.createdAt === 'string' ? startPayload.createdAt : new Date().toISOString(),
+        historyItem: startPayload.historyItem,
+        quota: startPayload.quota,
+      }
+    }
+
+    const jobId = typeof startPayload.jobId === 'string' ? startPayload.jobId.trim() : ''
+    if (!jobId) {
+      throw new Error('生图任务创建失败。')
+    }
+
+    const startedAt = Date.now()
+    while (Date.now() - startedAt <= IMAGE_JOB_POLL_TIMEOUT_MS) {
+      await delay(IMAGE_JOB_POLL_INTERVAL_MS)
+
+      const jobResponse = await fetch(
+        `${API_BASE_URL}/api/ai/image/jobs/${encodeURIComponent(jobId)}`,
+        { credentials: 'include' },
+      )
+
+      if (!jobResponse.ok) {
+        const message = await readApiError(
+          jobResponse,
+          `AI image job request failed with status ${jobResponse.status.toString()}`,
+        )
+
+        if (isHistoryAuthExpiredError(jobResponse.status, message)) {
+          reconnectSocket()
+        }
+
+        throw new Error(message)
+      }
+
+      const jobPayload = await jobResponse.json() as Partial<AiImageJobResponse>
+      if (jobPayload.status === 'complete') {
+        const result = jobPayload.result
+        if (!result || !Array.isArray(result.images) || result.images.length === 0) {
+          throw new Error('AI 没有返回图片。')
+        }
+
+        return {
+          provider: result.provider,
+          model: typeof result.model === 'string' ? result.model : '',
+          images: result.images,
+          createdAt: typeof result.createdAt === 'string' ? result.createdAt : new Date().toISOString(),
+          historyItem: result.historyItem,
+          quota: result.quota ?? jobPayload.quota,
+        }
+      }
+
+      if (jobPayload.status === 'failed') {
+        throw new Error(
+          typeof jobPayload.error === 'string' && jobPayload.error.trim()
+            ? jobPayload.error
+            : '图片生成失败。',
+        )
+      }
+    }
+
+    throw new Error('图片生成仍在后台处理中，请稍后刷新历史记录查看结果。')
+  }
+
+  const listImageHistory = useCallback(async (
+    options: AiImageHistoryRequestOptions = {},
+  ): Promise<AiImageHistoryPage> => {
+    const url = new URL('/api/ai/image/history', API_BASE_URL)
+    url.searchParams.set('limit', Math.max(1, Math.min(options.limit ?? 12, 50)).toString())
+
+    if (options.before) {
+      url.searchParams.set('beforeCreatedAt', options.before.createdAt)
+      url.searchParams.set('beforeGenerationId', options.before.generationId)
+    }
+
+    const response = await fetch(url, {
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      throw new Error(await readApiError(response, '生图历史加载失败。'))
+    }
+
+    const payload = await response.json() as Partial<AiImageHistoryPage>
+    return {
+      items: Array.isArray(payload.items) ? payload.items : [],
+      hasMore: payload.hasMore === true,
+      nextCursor: payload.nextCursor,
+      quota: payload.quota,
+    }
+  }, [])
+
+  const getImageQuota = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/ai/image/quota`, {
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      throw new Error(await readApiError(response, '生图额度加载失败。'))
+    }
+
+    const payload = await response.json() as Partial<AiImageQuotaResponse>
+    if (!payload.quota) {
+      throw new Error('生图额度加载失败。')
+    }
+
+    return payload.quota
+  }, [])
 
   const getAiQuota = useCallback(async (): Promise<AiQuotaStatus> => {
     const activeSelf = selfRef.current
@@ -3115,6 +3309,9 @@ export function useDdzhilian() {
       void fetchRoomHistoryTexts(roomId, 'older')
     },
     askAi,
+    generateImage,
+    getImageQuota,
+    listImageHistory,
     getAiQuota,
     sendRoomFiles,
     sendFiles,

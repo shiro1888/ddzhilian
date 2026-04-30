@@ -146,6 +146,8 @@ function renderPlainTextForEditor(value: string) {
     .join('<br />')
 }
 
+const codeAssignmentTargetPattern = /^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|\[[^\]\n]+\])*\s*=/
+
 function shouldPasteCodeLikePlainText(value: string) {
   const lines = value
     .replace(/\r\n?/g, '\n')
@@ -159,7 +161,7 @@ function shouldPasteCodeLikePlainText(value: string) {
 
   const hasCommentLine = lines.some((line) => /^(?:#|\/\/|\/\*)/.test(line))
   const hasAssignmentLine = lines.some((line) =>
-    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])?\s*=/.test(line),
+    codeAssignmentTargetPattern.test(line),
   )
   const hasCallExpression = /\b[A-Za-z_$][\w$]*\s*\([^)\n]*\)/.test(value)
   const hasCodePunctuation = /[{}()[\];=<>]/.test(value)
@@ -2383,6 +2385,12 @@ export function ChatConversationStage({
                 }
 
                 if (event.key === 'Tab' && isBotMentionOpen) {
+                  event.preventDefault()
+                  handleBotMentionSelect()
+                  return
+                }
+
+                if (event.key === 'Enter' && isBotMentionOpen && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
                   event.preventDefault()
                   handleBotMentionSelect()
                   return

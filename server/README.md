@@ -19,6 +19,9 @@ The actual chat text and file bytes should move through WebRTC data channels bet
 - LAN auto-link for discoverable devices
 - WebRTC signaling relay
 - Session lifecycle state
+- Supabase Auth account sessions for the image-generation route
+- Per-account image-generation history plus daily free and paid image quota counters stored in `user_profiles`
+- Account-based admin login and admin role management backed by Supabase Auth plus `admin_roles`
 
 ## LAN Discovery In This MVP
 
@@ -69,6 +72,11 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `SUPABASE_SERVICE_ROLE_KEY`: optional service-role key used only by the backend
 - `SUPABASE_HISTORY_FILES_TABLE`: optional file-metadata table name, default `history_files`
 - `SUPABASE_HISTORY_TEXTS_TABLE`: optional text-history table name, default `history_texts`
+- `SUPABASE_USER_PROFILES_TABLE`: optional user profile table name, default `user_profiles`
+- `SUPABASE_IMAGE_GENERATIONS_TABLE`: optional generated-image history table name, default `image_generations`
+- `SUPABASE_ADMIN_ROLES_TABLE`: optional admin role table name, default `admin_roles`
+- `ADMIN_SUPER_EMAILS`: comma-separated Supabase account emails that act as super administrators; super admins can add/remove normal admins and manage API keys
+- `ACCOUNT_INVITE_CODE`: required shared invite code for account registration; if empty, new account registration is disabled
 - `AI_PROVIDER`: active AI provider, `cloudflare` or `openrouter`; when omitted, OpenRouter is used if `OPENROUTER_API_KEY` is set, otherwise Cloudflare is used
 - `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
 - `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
@@ -87,18 +95,31 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `OPENROUTER_PREFERRED_MODELS`: optional comma-separated preference order for the sync script when choosing `OPENROUTER_MODEL`
 - `OPENROUTER_SYNC_SET_PROVIDER`: set to `true` if the sync script should switch `AI_PROVIDER` to `openrouter` even when no API key is present
 - `OPENROUTER_BASE_URL`: OpenRouter API base URL, default `https://openrouter.ai/api/v1`
+- `OPENROUTER_REASONING_EFFORT`: optional reasoning effort for OpenAI-compatible requests, allowed values `low`, `medium`, `high`
 - `OPENROUTER_SITE_URL`: optional site attribution URL sent as `HTTP-Referer`
 - `OPENROUTER_SITE_NAME`: optional site attribution title sent as `X-OpenRouter-Title`, default `ddzhilian`
 - `OPENROUTER_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/chat`, default `8000`
 - `OPENROUTER_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
+- `CODEX_IMAGE_BASE_URL`: Codex reverse-proxy OpenAI-compatible base URL for `/api/ai/image`, default `https://cpa.shiro1888.com/v1`; the backend uses `/images/generations` for text-only requests and `/images/edits` when images are uploaded
+- `CODEX_IMAGE_API_KEY`: optional backend-only bearer token for the Codex image reverse proxy; falls back to `OPENAI_IMAGE_API_KEY` or `OPENAI_API_KEY`
+- `CODEX_IMAGE_MODEL`: image model used by `/api/ai/image`, default `gpt-image-2`
+- `CODEX_IMAGE_SIZE`: generated image size sent to the reverse proxy, default `auto`; keep `auto` to let the model infer aspect ratio from the prompt, or set an explicit size to force one.
+- `CODEX_IMAGE_QUALITY`: optional image quality parameter, default `auto`
+- `CODEX_IMAGE_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/image`, default `4000`
+- `CODEX_IMAGE_DAILY_FREE_QUOTA`: per-account free generated-image quota per refresh period, default `3`
+- `CODEX_IMAGE_QUOTA_RESET_HOUR`: quota refresh hour in the configured quota timezone, default `4`
+- `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`: quota timezone offset from UTC in minutes, default `480` for UTC+8
 
 ## History Cleanup
 
 History files are stored under `server/data/history/files/<roomId>/...`.
+Generated images are stored under `server/data/image-assets/<userId>/<generationId>/...` and returned to the browser as authenticated `/api/ai/image/assets/...` image URLs instead of embedding base64 payloads in JSON responses.
+Image quota usage is stored on `user_profiles`: `image_quota_used` and `image_quota_period_started_at` track the daily free quota window, while `image_paid_quota_remaining` and `image_paid_quota_used` track non-expiring paid image balance. Successful image jobs consume free quota first, then paid balance, by the number of returned image entries.
+Admin access uses Supabase account login instead of a shared admin password. Super admins come from `ADMIN_SUPER_EMAILS`; normal admins are rows in `admin_roles`. API key and provider configuration endpoints require a super admin session, and non-super admin state responses do not include raw API key values.
 
 - When Supabase is configured, text history and file metadata are persisted in Supabase.
 - When Supabase is not configured, metadata falls back to `server/data/history/index.json`.
-- SQL for the metadata tables lives in `../supabase/schema.sql` and `../supabase/migrations/20260427170000_history_metadata.sql`.
+- SQL for the metadata and account image-history tables lives in `../supabase/schema.sql` and `../supabase/migrations`.
 
 Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
 
@@ -115,8 +136,25 @@ Public rooms do not have a separate cleanup policy. They use the same file-histo
 
 - `GET /health`
 - `GET /api/debug/state` (disabled by default; requires bearer token when enabled)
+- `POST /api/auth/register` (requires `inviteCode`, creates a Supabase Auth user, and returns an HttpOnly account session cookie)
+- `POST /api/auth/login` (returns an HttpOnly account session cookie)
+- `POST /api/auth/logout` (clears the account session cookie)
+- `GET /api/auth/session` (returns the current account session state)
+- `POST /api/admin/login` (requires Supabase account email/password and an admin role; returns an HttpOnly admin session cookie)
+- `POST /api/admin/logout` (clears the admin session cookie)
+- `GET /api/admin/session` (returns the current admin session, dashboard state, and role-aware configuration)
+- `GET /api/admin/state` (requires an admin session)
+- `POST /api/admin/ai-config` (requires a super admin session)
+- `POST /api/admin/users/quota` (requires an admin session)
+- `POST /api/admin/roles` (requires a super admin session; body `{ "email": "admin@example.com" }`)
+- `DELETE /api/admin/roles/:userId` (requires a super admin session)
 - `GET /api/ai/quota` (requires the device history bearer token; returns active AI provider status and model options)
 - `POST /api/ai/chat` (requires the device history bearer token; proxies prompts to the configured AI provider)
+- `GET /api/ai/image/quota` (requires the account session cookie; returns the current account's free, paid, and total image quota)
+- `POST /api/ai/image` (requires the account session cookie; accepts JSON text-to-image requests or multipart image-edit requests with up to 8 `image[]` files; creates an async image-generation job and returns a `jobId`)
+- `GET /api/ai/image/jobs/:jobId` (requires the account session cookie; polls the job until it returns the generated image or an error)
+- `GET /api/ai/image/history` (requires the account session cookie; returns the account's generated-image history)
+- `GET /api/ai/image/assets/:generationId/:index.png` (requires the account session cookie; streams the generated image file owned by the current account)
 - `WS /ws`
 
 ## Primary Client Events

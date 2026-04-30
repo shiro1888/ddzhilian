@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createReadStream, promises as fs } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer } from 'ws';
@@ -14,6 +15,15 @@ import {
   parseClientEvent,
 } from './protocol.js';
 import {
+  AccountAuthError,
+  type AdminAccountSession,
+  type AccountImageQuotaPeriod,
+  type AccountImageQuotaStatus,
+  AccountRegistry,
+  type AccountSession,
+  type AccountUserSummary,
+} from './registry/account-registry.js';
+import {
   type ConnectedDevice,
   DeviceRegistry,
 } from './registry/device-registry.js';
@@ -21,6 +31,12 @@ import { AdminConfigRegistry, type AdminAiSettingsSnapshot } from './registry/ad
 import { AdminSessionRegistry } from './registry/admin-session-registry.js';
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
 import { HistoryRegistry } from './registry/history-registry.js';
+import {
+  type ImageGenerationCursor,
+  ImageGenerationHistoryRegistry,
+  type ImageGenerationImage,
+  type ImageGenerationRecord,
+} from './registry/image-generation-history-registry.js';
 import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
 import { UiStateRegistry } from './registry/ui-state-registry.js';
@@ -104,6 +120,79 @@ type AiChatRequestPayload = {
   replyToName?: unknown;
   kind?: unknown;
   model?: unknown;
+  images?: unknown;
+};
+type AiChatImageInput = {
+  url: string;
+  mimeType?: string;
+  alt?: string;
+};
+type AiImageRequestPayload = {
+  prompt?: unknown;
+  model?: unknown;
+  size?: unknown;
+  quality?: unknown;
+};
+type AiImageUpload = {
+  filename: string;
+  mimeType: string;
+  buffer: Buffer;
+};
+type AiImagePreparedRequest = {
+  payload: AiImageRequestPayload;
+  uploadedImages: AiImageUpload[];
+};
+type AiImageUpstreamRequest = {
+  endpointKind: 'generation' | 'edit';
+  headers: Record<string, string>;
+  createBody: () => string | FormData;
+};
+type CodexImageUpstreamResult = {
+  response: Response;
+  payload: CodexImageGenerationResponse | null;
+  attempts: number;
+};
+type ImageGenerationJobStatus = 'queued' | 'running' | 'complete' | 'failed';
+type CodexImageGenerationResponse = {
+  created?: number;
+  data?: Array<{
+    b64_json?: unknown;
+    url?: unknown;
+    revised_prompt?: unknown;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+type CodexImageResult = ImageGenerationImage;
+type ImageGenerationJobResult = {
+  provider: 'codex-reverse-proxy';
+  model: string;
+  images: CodexImageResult[];
+  createdAt: string;
+  historyItem: ImageGenerationRecord;
+  quota?: AccountImageQuotaStatus;
+};
+type ImageGenerationJob = {
+  jobId: string;
+  userId: string;
+  user: AccountUserSummary;
+  prompt: string;
+  model: string;
+  size: string;
+  quality: string;
+  sourceImageCount: number;
+  status: ImageGenerationJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+  quota?: AccountImageQuotaStatus;
+  result?: ImageGenerationJobResult;
+};
+type AccountSessionCookiePayload = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: number;
 };
 type SocketWithAddress = WebSocket & {
   clientAddress?: string;
@@ -120,26 +209,59 @@ const history = await HistoryRegistry.create({
   textRetentionMs: config.historyTextRetentionMs,
   supabase: config.supabase,
 });
+const accounts = config.supabase
+  ? new AccountRegistry({
+      url: config.supabase.url,
+      serviceRoleKey: config.supabase.serviceRoleKey,
+      userProfilesTable: config.supabase.userProfilesTable,
+      adminRolesTable: config.supabase.adminRolesTable,
+    })
+  : undefined;
+const imageGenerationHistory = config.supabase
+  ? new ImageGenerationHistoryRegistry({
+      url: config.supabase.url,
+      serviceRoleKey: config.supabase.serviceRoleKey,
+      imageGenerationsTable: config.supabase.imageGenerationsTable,
+    })
+  : undefined;
 const adminConfig = new AdminConfigRegistry(config);
 const adminSessions = new AdminSessionRegistry();
 const aiUsage = new AiUsageRegistry(
   fileURLToPath(new URL('../data/admin/ai-usage.json', import.meta.url)),
 );
+const imageAssetRoot = fileURLToPath(new URL('../data/image-assets', import.meta.url));
 const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
 const uiState = new UiStateRegistry();
 const pendingRoomExitTimers = new Map<string, NodeJS.Timeout>();
+const imageGenerationJobs = new Map<string, ImageGenerationJob>();
 const cloudflareAiQuota = new CloudflareAiQuota(
   fileURLToPath(new URL('../data/cloudflare-ai-quota.json', import.meta.url)),
 );
-const aiRequestMaxBytes = 64 * 1024;
+const aiRequestMaxBytes = 24 * 1024 * 1024;
 const aiPromptMaxBytes = 32 * 1024;
 const aiResponseMaxChars = 12_000;
+const aiChatImageMaxCount = 4;
+const aiChatImageMaxDecodedBytes = 4 * 1024 * 1024;
+const aiChatAllowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const aiImageJsonRequestMaxBytes = 16 * 1024;
+const aiImageMultipartRequestMaxBytes = 32 * 1024 * 1024;
+const aiImageUploadMaxFiles = 8;
+const aiImageUploadMaxFileBytes = 8 * 1024 * 1024;
+const aiImageAllowedUploadTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const imageAssetRoutePrefix = '/api/ai/image/assets/';
+const imageGenerationJobRetentionMs = 30 * 60 * 1000;
+const imageGenerationJobMaxCount = 200;
+const codexImageRetryStatusCodes = new Set([502, 504, 524]);
+const codexImageMaxAttempts = 3;
+const codexImageRetryBaseDelayMs = 3_000;
 const aiRoomContextWindowMs = 24 * 60 * 60 * 1000;
 const aiRoomContextMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 const adminSessionCookieName = 'ddzhilian_admin_session';
+const userSessionCookieName = 'ddzhilian_user_session';
+const imageQuotaExhaustedMessage = '总额度已耗尽。';
 const openRouterFallbackModelIds = [
   'inclusionai/ling-2.6-flash:free',
   'inclusionai/ling-2.6-1t:free',
@@ -285,6 +407,204 @@ function parseCookies(value: string | string[] | undefined) {
   );
 }
 
+function readHeaderString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function resolveRequestBaseUrl(request: IncomingMessage) {
+  const forwardedProto = readHeaderString(request.headers['x-forwarded-proto'])
+    ?.split(',')[0]
+    ?.trim();
+  const protocol = forwardedProto || 'http';
+  const host = readHeaderString(request.headers['x-forwarded-host'])
+    ?.split(',')[0]
+    ?.trim() || readHeaderString(request.headers.host)?.trim();
+
+  return host ? `${protocol}://${host}` : '';
+}
+
+function readMultipartBoundary(contentType: string | undefined) {
+  const match = /(?:^|;)\s*boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType ?? '');
+  return (match?.[1] ?? match?.[2])?.trim();
+}
+
+function parseContentDisposition(value: string | undefined) {
+  if (!value) {
+    return {};
+  }
+
+  const result: {
+    name?: string;
+    filename?: string;
+  } = {};
+
+  for (const part of value.split(';').map((entry) => entry.trim())) {
+    const [rawKey, ...rawValueParts] = part.split('=');
+    const key = rawKey?.trim().toLowerCase();
+    if (!key || rawValueParts.length === 0) {
+      continue;
+    }
+
+    const rawValue = rawValueParts.join('=').trim();
+    const valueText = rawValue.startsWith('"') && rawValue.endsWith('"')
+      ? rawValue.slice(1, -1)
+      : rawValue;
+
+    if (key === 'name') {
+      result.name = valueText;
+    } else if (key === 'filename') {
+      result.filename = valueText;
+    }
+  }
+
+  return result;
+}
+
+function parseMultipartHeaders(rawHeaders: string) {
+  const headers = new Map<string, string>();
+
+  for (const line of rawHeaders.split('\r\n')) {
+    const index = line.indexOf(':');
+    if (index <= 0) {
+      continue;
+    }
+
+    headers.set(
+      line.slice(0, index).trim().toLowerCase(),
+      line.slice(index + 1).trim(),
+    );
+  }
+
+  return headers;
+}
+
+function sanitizeUploadedImageFilename(value: string | undefined, index: number) {
+  const fallback = `image-${index.toString()}.png`;
+  if (!value) {
+    return fallback;
+  }
+
+  const filename = value
+    .replace(/\\/g, '/')
+    .split('/')
+    .pop()
+    ?.replace(/[^\w.\-() ]/g, '_')
+    .trim();
+
+  return filename || fallback;
+}
+
+function validateUploadedImages(images: AiImageUpload[]) {
+  if (images.length > aiImageUploadMaxFiles) {
+    throw new AccountAuthError(`最多一次上传 ${aiImageUploadMaxFiles.toString()} 张图片。`, 413);
+  }
+
+  for (const image of images) {
+    if (!aiImageAllowedUploadTypes.has(image.mimeType)) {
+      throw new AccountAuthError('只支持 PNG、JPEG 或 WebP 图片。', 415);
+    }
+
+    if (image.buffer.byteLength <= 0) {
+      throw new AccountAuthError('上传的图片不能为空。', 400);
+    }
+
+    if (image.buffer.byteLength > aiImageUploadMaxFileBytes) {
+      throw new AccountAuthError('单张图片不能超过 8 MiB。', 413);
+    }
+  }
+}
+
+function parseMultipartImageRequest(buffer: Buffer, boundary: string): AiImagePreparedRequest {
+  const delimiter = Buffer.from(`--${boundary}`);
+  const headerSeparator = Buffer.from('\r\n\r\n');
+  const fields = new Map<string, string>();
+  const uploadedImages: AiImageUpload[] = [];
+
+  let cursor = buffer.indexOf(delimiter);
+  while (cursor >= 0) {
+    cursor += delimiter.length;
+
+    if (buffer[cursor] === 45 && buffer[cursor + 1] === 45) {
+      break;
+    }
+
+    if (buffer[cursor] === 13 && buffer[cursor + 1] === 10) {
+      cursor += 2;
+    }
+
+    const headerEnd = buffer.indexOf(headerSeparator, cursor);
+    if (headerEnd < 0) {
+      break;
+    }
+
+    const headers = parseMultipartHeaders(buffer.subarray(cursor, headerEnd).toString('utf8'));
+    const bodyStart = headerEnd + headerSeparator.length;
+    const nextDelimiter = buffer.indexOf(delimiter, bodyStart);
+    if (nextDelimiter < 0) {
+      break;
+    }
+
+    let bodyEnd = nextDelimiter;
+    if (bodyEnd >= 2 && buffer[bodyEnd - 2] === 13 && buffer[bodyEnd - 1] === 10) {
+      bodyEnd -= 2;
+    }
+
+    const contentDisposition = parseContentDisposition(headers.get('content-disposition'));
+    const name = contentDisposition.name;
+    const body = buffer.subarray(bodyStart, bodyEnd);
+
+    if (name) {
+      if (contentDisposition.filename !== undefined) {
+        if (name === 'image' || name === 'image[]' || name === 'images') {
+          uploadedImages.push({
+            filename: sanitizeUploadedImageFilename(contentDisposition.filename, uploadedImages.length + 1),
+            mimeType: headers.get('content-type')?.toLowerCase() || 'application/octet-stream',
+            buffer: body,
+          });
+        }
+      } else {
+        fields.set(name, body.toString('utf8'));
+      }
+    }
+
+    cursor = nextDelimiter;
+  }
+
+  validateUploadedImages(uploadedImages);
+
+  return {
+    payload: {
+      prompt: fields.get('prompt'),
+      model: fields.get('model'),
+      size: fields.get('size'),
+      quality: fields.get('quality'),
+    },
+    uploadedImages,
+  };
+}
+
+async function readAiImageRequestPayload(request: IncomingMessage): Promise<AiImagePreparedRequest> {
+  const contentType = readHeaderString(request.headers['content-type']);
+
+  if (contentType?.toLowerCase().startsWith('multipart/form-data')) {
+    const boundary = readMultipartBoundary(contentType);
+    if (!boundary) {
+      throw new AccountAuthError('图片上传请求缺少 multipart boundary。', 400);
+    }
+
+    const buffer = await readRequestBuffer(request, { maxBytes: aiImageMultipartRequestMaxBytes });
+    return parseMultipartImageRequest(buffer, boundary);
+  }
+
+  const buffer = await readRequestBuffer(request, { maxBytes: aiImageJsonRequestMaxBytes });
+  const payload = JSON.parse(buffer.toString('utf8')) as AiImageRequestPayload;
+
+  return {
+    payload,
+    uploadedImages: [],
+  };
+}
+
 function appendResponseCookie(response: ServerResponse, value: string) {
   const current = response.getHeader('Set-Cookie');
   if (!current) {
@@ -319,6 +639,67 @@ function buildAdminSessionCookie(sessionId: string) {
 function buildAdminSessionClearCookie() {
   const parts = [
     `${adminSessionCookieName}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+  ];
+
+  if (process.env.NODE_ENV === 'production') {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
+}
+
+function encodeUserSessionCookie(payload: AccountSessionCookiePayload) {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function decodeUserSessionCookie(value: string | undefined): AccountSessionCookiePayload | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<AccountSessionCookiePayload>;
+    if (typeof parsed.accessToken !== 'string' || typeof parsed.refreshToken !== 'string') {
+      return undefined;
+    }
+
+    return {
+      accessToken: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      expiresAt: typeof parsed.expiresAt === 'number' ? parsed.expiresAt : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function buildUserSessionCookie(session: AccountSession) {
+  const parts = [
+    `${userSessionCookieName}=${encodeURIComponent(encodeUserSessionCookie({
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiresAt: session.expiresAt,
+    }))}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${(30 * 24 * 60 * 60).toString()}`,
+  ];
+
+  if (process.env.NODE_ENV === 'production') {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
+}
+
+function buildUserSessionClearCookie() {
+  const parts = [
+    `${userSessionCookieName}=`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
@@ -553,21 +934,33 @@ function buildOpenAiCompatibleRequestBody(
   model: string,
   prompt: string,
   maxOutputTokens: number,
+  images: AiChatImageInput[] = [],
 ) {
+  const reasoningEffort = config.openrouterAi.reasoningEffort;
+
   if (config.openrouterAi.wireApi === 'responses') {
     const instructions = getAiSystemPrompt();
+    const input = images.length > 0
+      ? [{
+          role: 'user' as const,
+          content: buildAiResponseInputContent(prompt, images),
+        }]
+      : prompt;
+
     return {
       model,
       ...(instructions ? { instructions } : {}),
-      input: prompt,
+      input,
       max_output_tokens: maxOutputTokens,
+      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
     };
   }
 
   return {
     model,
-    messages: buildAiMessages(prompt),
+    messages: buildAiMessages(prompt, images),
     max_tokens: maxOutputTokens,
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
   };
 }
 
@@ -633,12 +1026,13 @@ async function requestOpenRouterChat(
   model: string,
   prompt: string,
   maxOutputTokens: number,
+  images: AiChatImageInput[] = [],
 ): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
   const endpoint = buildOpenAiCompatibleEndpoint();
   const aiResponse = await fetch(endpoint, {
     method: 'POST',
     headers: buildOpenRouterChatHeaders(),
-    body: JSON.stringify(buildOpenAiCompatibleRequestBody(model, prompt, maxOutputTokens)),
+    body: JSON.stringify(buildOpenAiCompatibleRequestBody(model, prompt, maxOutputTokens, images)),
   });
   const aiPayload = await aiResponse.json().catch(() => null) as
     | OpenRouterChatResponse
@@ -763,6 +1157,447 @@ function normalizeOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function normalizeImageOption(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function getImageQuotaPeriod(now = new Date()): AccountImageQuotaPeriod {
+  const timezoneOffsetMs = config.codexImageAi.quotaTimezoneOffsetMinutes * 60 * 1000;
+  const shiftedNow = new Date(now.getTime() + timezoneOffsetMs);
+  let periodStartedAtShiftedMs = Date.UTC(
+    shiftedNow.getUTCFullYear(),
+    shiftedNow.getUTCMonth(),
+    shiftedNow.getUTCDate(),
+    config.codexImageAi.quotaResetHour,
+  );
+
+  if (shiftedNow.getTime() < periodStartedAtShiftedMs) {
+    periodStartedAtShiftedMs -= 24 * 60 * 60 * 1000;
+  }
+
+  const periodEndsAtShiftedMs = periodStartedAtShiftedMs + 24 * 60 * 60 * 1000;
+
+  return {
+    date: new Date(periodStartedAtShiftedMs).toISOString().slice(0, 10),
+    periodStartedAt: new Date(periodStartedAtShiftedMs - timezoneOffsetMs).toISOString(),
+    resetAt: new Date(periodEndsAtShiftedMs - timezoneOffsetMs).toISOString(),
+    resetHour: config.codexImageAi.quotaResetHour,
+    timezoneOffsetMinutes: config.codexImageAi.quotaTimezoneOffsetMinutes,
+  };
+}
+
+async function getImageQuotaStatus(user: AccountUserSummary): Promise<AccountImageQuotaStatus> {
+  if (!accounts) {
+    throw new Error('Account registry is not configured.');
+  }
+
+  const period = getImageQuotaPeriod();
+  return accounts.getImageQuotaStatus({
+    user,
+    period,
+    limit: config.codexImageAi.dailyFreeQuota,
+  });
+}
+
+function safeImageAssetSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'asset';
+}
+
+function imageAssetExtension(mimeType: string) {
+  switch (mimeType.toLowerCase()) {
+    case 'image/jpeg':
+    case 'image/jpg':
+      return 'jpg';
+    case 'image/webp':
+      return 'webp';
+    case 'image/png':
+    default:
+      return 'png';
+  }
+}
+
+function imageAssetFilename(index: number, mimeType: string) {
+  return `${index.toString()}.${imageAssetExtension(mimeType)}`;
+}
+
+function buildImageAssetPath(userId: string, generationId: string, index: number, mimeType: string) {
+  return join(
+    imageAssetRoot,
+    safeImageAssetSegment(userId),
+    safeImageAssetSegment(generationId),
+    imageAssetFilename(index, mimeType),
+  );
+}
+
+function buildImageAssetRoute(generationId: string, index: number, mimeType: string) {
+  return `${imageAssetRoutePrefix}${encodeURIComponent(generationId)}/${imageAssetFilename(index, mimeType)}`;
+}
+
+function parseImageAssetRoute(pathname: string) {
+  if (!pathname.startsWith(imageAssetRoutePrefix)) {
+    return null;
+  }
+
+  const [encodedGenerationId, fileName, ...extraSegments] = pathname
+    .slice(imageAssetRoutePrefix.length)
+    .split('/');
+  if (!encodedGenerationId || !fileName || extraSegments.length > 0) {
+    return null;
+  }
+
+  const match = /^(\d+)\.(?:png|jpe?g|webp)$/i.exec(fileName);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const index = Number(match[1]);
+    return Number.isSafeInteger(index) && index >= 0
+      ? {
+          generationId: decodeURIComponent(encodedGenerationId),
+          index,
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeImageBase64(value: string) {
+  const commaIndex = value.indexOf(',');
+  return value.startsWith('data:') && commaIndex >= 0
+    ? value.slice(commaIndex + 1)
+    : value;
+}
+
+function toPublicImageUrl(url: string | undefined, requestBaseUrl: string) {
+  if (!url) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(url) || !requestBaseUrl) {
+    return url;
+  }
+
+  return url.startsWith('/')
+    ? `${requestBaseUrl}${url}`
+    : `${requestBaseUrl}/${url}`;
+}
+
+function toPublicImagePayload(image: ImageGenerationImage, requestBaseUrl: string) {
+  return {
+    url: toPublicImageUrl(image.url, requestBaseUrl),
+    mimeType: image.mimeType,
+    revisedPrompt: image.revisedPrompt,
+  };
+}
+
+async function saveBase64ImageAsset(input: {
+  userId: string;
+  generationId: string;
+  index: number;
+  image: ImageGenerationImage;
+}) {
+  if (!input.image.b64Json) {
+    return input.image;
+  }
+
+  const mimeType = input.image.mimeType || 'image/png';
+  const storagePath = buildImageAssetPath(input.userId, input.generationId, input.index, mimeType);
+  const bytes = Buffer.from(normalizeImageBase64(input.image.b64Json), 'base64');
+  if (bytes.byteLength === 0) {
+    throw new Error('Generated image base64 payload is empty.');
+  }
+
+  await fs.mkdir(join(imageAssetRoot, safeImageAssetSegment(input.userId), safeImageAssetSegment(input.generationId)), {
+    recursive: true,
+  });
+  await fs.writeFile(storagePath, bytes);
+
+  return {
+    url: buildImageAssetRoute(input.generationId, input.index, mimeType),
+    mimeType,
+    revisedPrompt: input.image.revisedPrompt,
+  };
+}
+
+async function materializeImageRecordAssets(record: ImageGenerationRecord) {
+  let changed = false;
+  const images = await Promise.all(record.images.map(async (image, index) => {
+    if (image.url && !image.b64Json) {
+      return image;
+    }
+
+    changed = true;
+    if (image.b64Json) {
+      return saveBase64ImageAsset({
+        userId: record.userId,
+        generationId: record.generationId,
+        index,
+        image,
+      });
+    }
+
+    return {
+      url: image.url,
+      mimeType: image.mimeType,
+      revisedPrompt: image.revisedPrompt,
+    };
+  }));
+
+  if (!changed || !imageGenerationHistory) {
+    return {
+      ...record,
+      images,
+    };
+  }
+
+  return imageGenerationHistory.save({
+    ...record,
+    images,
+  });
+}
+
+function getCodexImageConfigurationError() {
+  if (!config.codexImageAi.baseUrl) {
+    return 'Codex image reverse proxy base URL is not configured on this server.';
+  }
+
+  if (!config.codexImageAi.model) {
+    return 'Codex image model is not configured on this server.';
+  }
+
+  return undefined;
+}
+
+function buildCodexImageEndpoint(kind: 'generation' | 'edit') {
+  return new URL(
+    `${config.codexImageAi.baseUrl}/images/${kind === 'edit' ? 'edits' : 'generations'}`,
+  );
+}
+
+function buildCodexImageHeaders(contentType?: string) {
+  const headers: Record<string, string> = {};
+
+  if (contentType) {
+    headers['content-type'] = contentType;
+  }
+
+  if (config.codexImageAi.apiKey) {
+    headers.authorization = `Bearer ${config.codexImageAi.apiKey}`;
+  }
+
+  return headers;
+}
+
+function toArrayBufferBackedBytes(buffer: Buffer) {
+  const bytes = new Uint8Array(buffer.byteLength);
+  bytes.set(buffer);
+  return bytes;
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function buildCodexImageRequest(input: {
+  model: string;
+  prompt: string;
+  size: string;
+  quality: string;
+  uploadedImages: AiImageUpload[];
+}): AiImageUpstreamRequest {
+  if (input.uploadedImages.length === 0) {
+    const requestBody: Record<string, unknown> = {
+      model: input.model,
+      prompt: input.prompt,
+      size: input.size,
+    };
+
+    if (input.quality && input.quality !== 'auto') {
+      requestBody.quality = input.quality;
+    }
+
+    return {
+      endpointKind: 'generation',
+      headers: buildCodexImageHeaders('application/json'),
+      createBody: () => JSON.stringify(requestBody),
+    };
+  }
+
+  return {
+    endpointKind: 'edit',
+    headers: buildCodexImageHeaders(),
+    createBody: () => {
+      const formData = new FormData();
+      formData.append('model', input.model);
+      formData.append('prompt', input.prompt);
+      formData.append('size', input.size);
+
+      if (input.quality && input.quality !== 'auto') {
+        formData.append('quality', input.quality);
+      }
+
+      for (const image of input.uploadedImages) {
+        formData.append(
+          'image[]',
+          new Blob([toArrayBufferBackedBytes(image.buffer)], { type: image.mimeType }),
+          image.filename,
+        );
+      }
+
+      return formData;
+    },
+  };
+}
+
+function shouldRetryCodexImageStatus(status: number) {
+  return codexImageRetryStatusCodes.has(status);
+}
+
+function getCodexImageRetryDelayMs(attempt: number) {
+  return codexImageRetryBaseDelayMs * attempt;
+}
+
+async function requestCodexImageWithRetry(
+  job: ImageGenerationJob,
+  upstreamRequest: AiImageUpstreamRequest,
+): Promise<CodexImageUpstreamResult> {
+  const endpoint = buildCodexImageEndpoint(upstreamRequest.endpointKind);
+  const baseUrl = config.codexImageAi.baseUrl;
+  let lastResponse: Response | undefined;
+  let lastPayload: CodexImageGenerationResponse | null = null;
+
+  for (let attempt = 1; attempt <= codexImageMaxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: upstreamRequest.headers,
+        body: upstreamRequest.createBody(),
+      });
+    } catch (error) {
+      console.error('Codex image reverse proxy request threw', {
+        jobId: job.jobId,
+        baseUrl,
+        endpointKind: upstreamRequest.endpointKind,
+        model: job.model,
+        attempt,
+        maxAttempts: codexImageMaxAttempts,
+        durationMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+
+    const payload = await response.json().catch(() => null) as
+      | CodexImageGenerationResponse
+      | null;
+    const durationMs = Date.now() - startedAt;
+
+    lastResponse = response;
+    lastPayload = payload;
+
+    console.info('Codex image reverse proxy request completed', {
+      jobId: job.jobId,
+      baseUrl,
+      endpointKind: upstreamRequest.endpointKind,
+      status: response.status,
+      ok: response.ok,
+      model: job.model,
+      attempt,
+      maxAttempts: codexImageMaxAttempts,
+      durationMs,
+    });
+
+    if (response.ok || !shouldRetryCodexImageStatus(response.status) || attempt >= codexImageMaxAttempts) {
+      return {
+        response,
+        payload,
+        attempts: attempt,
+      };
+    }
+
+    console.warn('Codex image reverse proxy request will retry', {
+      jobId: job.jobId,
+      baseUrl,
+      endpointKind: upstreamRequest.endpointKind,
+      status: response.status,
+      model: job.model,
+      attempt,
+      maxAttempts: codexImageMaxAttempts,
+      durationMs,
+    });
+    await wait(getCodexImageRetryDelayMs(attempt));
+  }
+
+  if (!lastResponse) {
+    throw new Error('Codex image reverse proxy request did not run.');
+  }
+
+  return {
+    response: lastResponse,
+    payload: lastPayload,
+    attempts: codexImageMaxAttempts,
+  };
+}
+
+function formatCodexImageError(payload: CodexImageGenerationResponse | null) {
+  return payload?.error?.message?.trim();
+}
+
+function formatCodexImageFailureMessage(
+  status: number,
+  payload: CodexImageGenerationResponse | null,
+) {
+  const message = formatCodexImageError(payload);
+  if (message) {
+    return message;
+  }
+
+  if (status === 524 || status === 504) {
+    return '图片反代请求超时，上游服务没有及时返回结果，请稍后重试。';
+  }
+
+  if (status === 401 || status === 403) {
+    return '图片反代鉴权失败，请检查 CODEX_IMAGE_API_KEY 配置。';
+  }
+
+  return `图片反代请求失败，上游状态码 ${status.toString()}。`;
+}
+
+function extractCodexImageResults(payload: CodexImageGenerationResponse): CodexImageResult[] {
+  const images: CodexImageResult[] = [];
+
+  for (const item of payload.data ?? []) {
+    const b64Json = typeof item.b64_json === 'string' && item.b64_json.trim()
+      ? item.b64_json.trim()
+      : undefined;
+    const url = typeof item.url === 'string' && item.url.trim()
+      ? item.url.trim()
+      : undefined;
+
+    if (!b64Json && !url) {
+      continue;
+    }
+
+    images.push({
+      b64Json,
+      url,
+      mimeType: 'image/png',
+      revisedPrompt:
+        typeof item.revised_prompt === 'string' && item.revised_prompt.trim()
+          ? item.revised_prompt.trim()
+          : undefined,
+    });
+  }
+
+  return images;
+}
+
 function getActiveAiSettings() {
   if (config.aiProvider === 'openrouter') {
     const models = config.openrouterAi.models.filter((model) => model.enabled !== false);
@@ -789,17 +1624,32 @@ function getActiveAiSettings() {
   };
 }
 
-function authenticateAdminRequest(request: {
+type AdminAuthResult =
+  | {
+      ok: true;
+      sessionId: string;
+      admin: AdminAccountSession;
+    }
+  | {
+      ok: false;
+      statusCode: number;
+      message: string;
+    };
+
+async function authenticateAdminRequest(
+  request: {
   headers: {
     authorization?: string | string[];
     cookie?: string | string[];
   };
-}) {
-  if (!config.adminPassword) {
+  },
+  response?: ServerResponse,
+): Promise<AdminAuthResult> {
+  if (!accounts) {
     return {
       ok: false as const,
       statusCode: 503,
-      message: 'Admin API is not configured on this server.',
+      message: '管理员账号登录未配置，请先配置 Supabase。',
     };
   }
 
@@ -808,34 +1658,232 @@ function authenticateAdminRequest(request: {
   if (sessionId) {
     const session = adminSessions.get(sessionId);
     if (session) {
-      return {
-        ok: true as const,
-        sessionId: session.sessionId,
-      };
+      try {
+        const admin = await accounts.getAdminUserById(session.userId, config.adminSuperEmails);
+        if (admin) {
+          return {
+            ok: true as const,
+            sessionId: session.sessionId,
+            admin,
+          };
+        }
+      } catch (error) {
+        if (error instanceof AccountAuthError && error.statusCode === 503) {
+          throw error;
+        }
+      }
+
+      adminSessions.delete(sessionId);
+      if (response) {
+        appendResponseCookie(response, buildAdminSessionClearCookie());
+      }
     }
   }
 
-  const adminPassword = readBearerToken(request.headers.authorization);
-  if (adminPassword && adminPassword === config.adminPassword) {
-    return {
-      ok: true as const,
-      sessionId: 'bearer',
-    };
-  }
-
-  if (!sessionId && !adminPassword) {
+  if (!sessionId) {
     return {
       ok: false as const,
       statusCode: 401,
-      message: 'Missing admin session.',
+      message: '管理员账号未登录。',
     };
   }
 
   return {
     ok: false as const,
     statusCode: 401,
-    message: 'Invalid admin session.',
+    message: '管理员账号会话已失效。',
   };
+}
+
+function requireSuperAdmin(authResult: AdminAuthResult) {
+  if (!authResult.ok) {
+    return authResult;
+  }
+
+  if (!authResult.admin.isSuperAdmin) {
+    return {
+      ok: false as const,
+      statusCode: 403,
+      message: '仅超级管理员可以执行该操作。',
+    };
+  }
+
+  return authResult;
+}
+
+function toAdminSessionPayload(admin: AdminAccountSession) {
+  return {
+    userId: admin.userId,
+    email: admin.email,
+    role: admin.role,
+    isSuperAdmin: admin.isSuperAdmin,
+  };
+}
+
+function sanitizeAdminAiSettingsSnapshot(snapshot: AdminAiSettingsSnapshot): AdminAiSettingsSnapshot {
+  return {
+    ...snapshot,
+    cloudflare: {
+      ...snapshot.cloudflare,
+      apiToken: '',
+    },
+    openrouter: {
+      ...snapshot.openrouter,
+      apiKey: '',
+    },
+  };
+}
+
+function toAccountUserPayload(user: AccountUserSummary) {
+  return {
+    id: user.id,
+    email: user.email,
+    createdAt: user.createdAt,
+  };
+}
+
+function toImageGenerationPayload(record: ImageGenerationRecord, requestBaseUrl = '') {
+  return {
+    generationId: record.generationId,
+    prompt: record.prompt,
+    provider: record.provider,
+    model: record.model,
+    size: record.size,
+    quality: record.quality,
+    images: record.images.map((image) => toPublicImagePayload(image, requestBaseUrl)),
+    createdAt: record.createdAt,
+  };
+}
+
+function toImageGenerationJobPayload(job: ImageGenerationJob, requestBaseUrl = '') {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    sourceImageCount: job.sourceImageCount,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    error: job.error,
+    quota: job.result?.quota ?? job.quota,
+    result: job.result
+      ? {
+          provider: job.result.provider,
+          model: job.result.model,
+          images: job.result.images.map((image) => toPublicImagePayload(image, requestBaseUrl)),
+          createdAt: job.result.createdAt,
+          historyItem: toImageGenerationPayload(job.result.historyItem, requestBaseUrl),
+          quota: job.result.quota,
+        }
+      : undefined,
+  };
+}
+
+function touchImageGenerationJob(
+  job: ImageGenerationJob,
+  status: ImageGenerationJobStatus,
+) {
+  job.status = status;
+  job.updatedAt = new Date().toISOString();
+}
+
+function cleanupImageGenerationJobs() {
+  const now = Date.now();
+  for (const [jobId, job] of imageGenerationJobs) {
+    if (job.status !== 'complete' && job.status !== 'failed') {
+      continue;
+    }
+
+    const updatedAtMs = Date.parse(job.updatedAt);
+    if (Number.isFinite(updatedAtMs) && now - updatedAtMs > imageGenerationJobRetentionMs) {
+      imageGenerationJobs.delete(jobId);
+    }
+  }
+
+  if (imageGenerationJobs.size <= imageGenerationJobMaxCount) {
+    return;
+  }
+
+  const removableJobs = [...imageGenerationJobs.values()]
+    .filter((job) => job.status === 'complete' || job.status === 'failed')
+    .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+
+  for (const job of removableJobs) {
+    if (imageGenerationJobs.size <= imageGenerationJobMaxCount) {
+      return;
+    }
+
+    imageGenerationJobs.delete(job.jobId);
+  }
+}
+
+async function refreshAccountSessionCookie(
+  sessionCookie: AccountSessionCookiePayload,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    return undefined;
+  }
+
+  const refreshedSession = await accounts.refreshSession(sessionCookie.refreshToken);
+  appendResponseCookie(response, buildUserSessionCookie(refreshedSession));
+  return refreshedSession;
+}
+
+async function authenticateAccountRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    return {
+      ok: false as const,
+      statusCode: 503,
+      message: '账号登录未配置，请先配置 Supabase。',
+    };
+  }
+
+  const cookieValue = parseCookies(request.headers.cookie).get(userSessionCookieName);
+  const sessionCookie = decodeUserSessionCookie(cookieValue);
+  if (!sessionCookie) {
+    appendResponseCookie(response, buildUserSessionClearCookie());
+    return {
+      ok: false as const,
+      statusCode: 401,
+      message: '请先登录账号后再使用生图功能。',
+    };
+  }
+
+  try {
+    const shouldRefresh = typeof sessionCookie.expiresAt === 'number' && sessionCookie.expiresAt - Date.now() < 60_000;
+    const activeSession = shouldRefresh
+      ? await refreshAccountSessionCookie(sessionCookie, response)
+      : undefined;
+    const user = activeSession?.user ?? await accounts.getUser(sessionCookie.accessToken);
+
+    return {
+      ok: true as const,
+      user,
+    };
+  } catch (error) {
+    if (sessionCookie.refreshToken) {
+      try {
+        const refreshedSession = await refreshAccountSessionCookie(sessionCookie, response);
+        if (refreshedSession) {
+          return {
+            ok: true as const,
+            user: refreshedSession.user,
+          };
+        }
+      } catch {
+        // Fall through and clear the invalid app session cookie.
+      }
+    }
+
+    appendResponseCookie(response, buildUserSessionClearCookie());
+    return {
+      ok: false as const,
+      statusCode: error instanceof AccountAuthError ? error.statusCode : 401,
+      message: '账号会话已失效，请重新登录。',
+    };
+  }
 }
 
 function resolveAiModel(value: unknown) {
@@ -892,10 +1940,119 @@ function enforceAiTextLimit(value: string, maxChars: number) {
   return `${value.slice(0, maxChars)}\n\n[内容过长，已截断]`;
 }
 
+type AiChatMessageContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail: 'auto' } };
+
 type AiChatMessage = {
   role: 'system' | 'user';
-  content: string;
+  content: string | AiChatMessageContentPart[];
 };
+
+type AiResponseInputContentPart =
+  | { type: 'input_text'; text: string }
+  | { type: 'input_image'; image_url: string; detail: 'auto' };
+
+function normalizeAiChatImageMimeType(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+}
+
+function estimateBase64DecodedBytes(value: string) {
+  const normalized = value.replace(/\s/g, '');
+  const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
+}
+
+function normalizeAiChatImageInput(value: unknown): AiChatImageInput {
+  if (!value || typeof value !== 'object') {
+    throw new AccountAuthError('Invalid AI image input.', 400);
+  }
+
+  const record = value as Record<string, unknown>;
+  const url = normalizeOptionalString(record.url);
+  if (!url) {
+    throw new AccountAuthError('AI image input is missing url.', 400);
+  }
+
+  const alt = normalizeOptionalString(record.alt)?.slice(0, 120);
+
+  if (url.toLowerCase().startsWith('data:')) {
+    const match = /^data:([^;,]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=\s]+)$/i.exec(url);
+    const mimeType = normalizeAiChatImageMimeType(match?.[1]);
+    if (!match || !mimeType || !aiChatAllowedImageTypes.has(mimeType)) {
+      throw new AccountAuthError('AI image must be PNG, JPEG, WebP, or GIF.', 415);
+    }
+
+    if (estimateBase64DecodedBytes(match[2]) > aiChatImageMaxDecodedBytes) {
+      throw new AccountAuthError('单张读图图片不能超过 4 MiB。', 413);
+    }
+
+    return {
+      url,
+      mimeType,
+      ...(alt ? { alt } : {}),
+    };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new AccountAuthError('AI image url is invalid.', 400);
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    throw new AccountAuthError('AI image url must use http or https.', 400);
+  }
+
+  const mimeType = normalizeAiChatImageMimeType(record.mimeType);
+  if (mimeType && !aiChatAllowedImageTypes.has(mimeType)) {
+    throw new AccountAuthError('AI image must be PNG, JPEG, WebP, or GIF.', 415);
+  }
+
+  return {
+    url: parsedUrl.toString(),
+    ...(mimeType ? { mimeType } : {}),
+    ...(alt ? { alt } : {}),
+  };
+}
+
+function normalizeAiChatImages(value: unknown): AiChatImageInput[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new AccountAuthError('AI images must be an array.', 400);
+  }
+
+  if (value.length > aiChatImageMaxCount) {
+    throw new AccountAuthError(`一次最多发送 ${aiChatImageMaxCount.toString()} 张图片给 bot。`, 413);
+  }
+
+  const images: AiChatImageInput[] = [];
+  const seenUrls = new Set<string>();
+  for (const item of value) {
+    const image = normalizeAiChatImageInput(item);
+    if (seenUrls.has(image.url)) {
+      continue;
+    }
+
+    seenUrls.add(image.url);
+    images.push(image);
+  }
+
+  return images;
+}
 
 function decodeHtmlEntity(entity: string) {
   switch (entity) {
@@ -1019,13 +2176,41 @@ function getAiSystemPrompt() {
   return adminConfig.getAiSettingsSnapshot().systemPrompt.trim();
 }
 
-function buildAiMessages(prompt: string): AiChatMessage[] {
+function buildAiChatContent(prompt: string, images: AiChatImageInput[]): AiChatMessage['content'] {
+  if (images.length === 0) {
+    return prompt;
+  }
+
+  return [
+    { type: 'text' as const, text: prompt },
+    ...images.map((image) => ({
+      type: 'image_url' as const,
+      image_url: {
+        url: image.url,
+        detail: 'auto' as const,
+      },
+    })),
+  ];
+}
+
+function buildAiResponseInputContent(prompt: string, images: AiChatImageInput[]): AiResponseInputContentPart[] {
+  return [
+    { type: 'input_text', text: prompt },
+    ...images.map((image) => ({
+      type: 'input_image' as const,
+      image_url: image.url,
+      detail: 'auto' as const,
+    })),
+  ];
+}
+
+function buildAiMessages(prompt: string, images: AiChatImageInput[] = []): AiChatMessage[] {
   const systemPrompt = getAiSystemPrompt();
   return [
     ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
     {
       role: 'user',
-      content: prompt,
+      content: buildAiChatContent(prompt, images),
     },
   ];
 }
@@ -1160,15 +2345,17 @@ async function fetchOpenRouterBalanceSnapshot() {
   };
 }
 
-async function buildAdminStatePayload() {
+async function buildAdminStatePayload(admin: AdminAccountSession) {
   const aiSnapshot = adminConfig.getAiSettingsSnapshot();
   const modelUsage = aiUsage.list();
   const cloudflareBudget = cloudflareAiQuota.getStatus(config.cloudflareAi.dailyNeuronBudget);
   const openrouterBalance = await fetchOpenRouterBalanceSnapshot();
+  const users = await buildAdminUsersPayload();
+  const roles = admin.isSuperAdmin ? await buildAdminRolesPayload() : undefined;
 
   return {
     history: history.getStats(),
-    ai: aiSnapshot,
+    ai: admin.isSuperAdmin ? aiSnapshot : sanitizeAdminAiSettingsSnapshot(aiSnapshot),
     usage: {
       models: modelUsage,
       trendBuckets: aiUsage.listTrendBuckets(24),
@@ -1178,42 +2365,113 @@ async function buildAdminStatePayload() {
       },
       openrouterBalance,
     },
+    users,
+    roles,
+    admin: toAdminSessionPayload(admin),
     serverTime: new Date().toISOString(),
   };
+}
+
+async function buildAdminUsersPayload() {
+  const loadedAt = new Date().toISOString();
+  if (!accounts) {
+    return {
+      configured: false,
+      users: [],
+      loadedAt,
+    };
+  }
+
+  try {
+    return {
+      configured: true,
+      users: await accounts.listUsers(),
+      loadedAt,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      users: [],
+      error: error instanceof Error ? error.message : '用户列表读取失败。',
+      loadedAt,
+    };
+  }
+}
+
+async function buildAdminRolesPayload() {
+  const loadedAt = new Date().toISOString();
+  if (!accounts) {
+    return {
+      configured: false,
+      roles: [],
+      loadedAt,
+    };
+  }
+
+  try {
+    return {
+      configured: true,
+      roles: await accounts.listAdminRoles(config.adminSuperEmails),
+      loadedAt,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      roles: [],
+      error: error instanceof Error ? error.message : '管理员角色列表读取失败。',
+      loadedAt,
+    };
+  }
 }
 
 async function handleAdminLoginRequest(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  if (!config.adminPassword) {
-    writeJson(response, 503, { error: 'Admin login is not configured on this server.' });
+  if (!accounts) {
+    writeJson(response, 503, { error: '管理员账号登录未配置，请先配置 Supabase。' });
     return;
   }
 
-  let payload: { password?: unknown };
+  let payload: { email?: unknown; password?: unknown };
   try {
     const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
-    payload = JSON.parse(buffer.toString('utf8')) as { password?: unknown };
+    payload = JSON.parse(buffer.toString('utf8')) as typeof payload;
   } catch {
     writeJson(response, 400, { error: 'Invalid admin login payload.' });
     return;
   }
 
-  const password = normalizeOptionalString(payload.password);
-  if (!password || password !== config.adminPassword) {
-    writeJson(response, 401, { error: '管理员密码错误。' });
-    return;
-  }
+  try {
+    const accountSession = await accounts.signIn({
+      email: payload.email,
+      password: payload.password,
+    });
+    const admin = await accounts.getAdminUserForAccount(accountSession.user, config.adminSuperEmails);
+    if (!admin) {
+      writeJson(response, 403, { error: '该账号不是管理员账号。' });
+      return;
+    }
 
-  const session = adminSessions.create();
-  appendResponseCookie(response, buildAdminSessionCookie(session.sessionId));
-  const dashboard = await buildAdminStatePayload();
-  writeJson(response, 200, {
-    ok: true,
-    authenticated: true,
-    ...dashboard,
-  });
+    const session = adminSessions.create(admin);
+    appendResponseCookie(response, buildAdminSessionCookie(session.sessionId));
+    appendResponseCookie(response, buildUserSessionCookie(accountSession));
+    const dashboard = await buildAdminStatePayload(admin);
+    writeJson(response, 200, {
+      ok: true,
+      authenticated: true,
+      ...dashboard,
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '管理员登录失败。',
+    });
+  }
 }
 
 function handleAdminLogoutRequest(
@@ -1233,38 +2491,311 @@ function handleAdminSessionRequest(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  const authResult = authenticateAdminRequest(request);
-  if (!authResult.ok) {
-    writeJson(response, 200, { authenticated: false });
+  void authenticateAdminRequest(request, response)
+    .then((authResult) => {
+      if (!authResult.ok) {
+        writeJson(response, 200, { authenticated: false });
+        return undefined;
+      }
+
+      return buildAdminStatePayload(authResult.admin)
+        .then((payload) => {
+          writeJson(response, 200, {
+            authenticated: true,
+            ...payload,
+          });
+        });
+    })
+    .catch((error) => {
+      const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+      writeJson(response, statusCode, {
+        error: error instanceof Error ? error.message : 'Failed to load admin session.',
+      });
+    });
+}
+
+async function readAccountAuthPayload(request: IncomingMessage) {
+  const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+  const payload = JSON.parse(buffer.toString('utf8')) as {
+    email?: unknown;
+    password?: unknown;
+    inviteCode?: unknown;
+  };
+
+  return {
+    email: payload.email,
+    password: payload.password,
+    inviteCode: payload.inviteCode,
+  };
+}
+
+function normalizeInviteCode(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function inviteCodesMatch(input: string, expected: string) {
+  const inputBuffer = Buffer.from(input, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+
+  return (
+    inputBuffer.byteLength === expectedBuffer.byteLength &&
+    timingSafeEqual(inputBuffer, expectedBuffer)
+  );
+}
+
+async function handleAccountLoginRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号登录未配置，请先配置 Supabase。' });
     return;
   }
 
-  void buildAdminStatePayload().then((payload) => {
+  try {
+    const payload = await readAccountAuthPayload(request);
+    const session = await accounts.signIn(payload);
+    appendResponseCookie(response, buildUserSessionCookie(session));
     writeJson(response, 200, {
+      ok: true,
       authenticated: true,
-      ...payload,
+      user: toAccountUserPayload(session.user),
     });
-  }).catch((error) => {
-    writeJson(response, 500, {
-      error: error instanceof Error ? error.message : 'Failed to load admin session.',
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 400, { error: '账号登录请求无效。' });
+  }
+}
+
+async function handleAccountRegisterRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号注册未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  try {
+    const payload = await readAccountAuthPayload(request);
+    const expectedInviteCode = config.accountInviteCode;
+    if (!expectedInviteCode) {
+      writeJson(response, 503, { error: '注册邀请码未配置，请联系管理员。' });
+      return;
+    }
+
+    const inviteCode = normalizeInviteCode(payload.inviteCode);
+    if (!inviteCode || !inviteCodesMatch(inviteCode, expectedInviteCode)) {
+      writeJson(response, 403, { error: '邀请码不正确。' });
+      return;
+    }
+
+    const session = await accounts.register(payload);
+    appendResponseCookie(response, buildUserSessionCookie(session));
+    writeJson(response, 200, {
+      ok: true,
+      authenticated: true,
+      user: toAccountUserPayload(session.user),
     });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 400, { error: '账号注册请求无效。' });
+  }
+}
+
+function handleAccountLogoutRequest(
+  response: ServerResponse,
+) {
+  appendResponseCookie(response, buildUserSessionClearCookie());
+  writeJson(response, 200, { ok: true });
+}
+
+async function handleAccountSessionRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    writeJson(response, 200, { authenticated: false, configured: false });
+    return;
+  }
+
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, 200, { authenticated: false, configured: true });
+    return;
+  }
+
+  writeJson(response, 200, {
+    authenticated: true,
+    configured: true,
+    user: toAccountUserPayload(authResult.user),
   });
+}
+
+async function handleImageQuotaRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  try {
+    const quota = await getImageQuotaStatus(authResult.user);
+    writeJson(response, 200, { quota });
+  } catch (error) {
+    console.error('Image generation quota request failed', {
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 503, { error: '生图额度数据库不可用，请先执行 Supabase 迁移。' });
+  }
+}
+
+async function handleImageHistoryRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  if (!imageGenerationHistory) {
+    writeJson(response, 503, { error: '生图历史未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '12', 10);
+  const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 12, 50));
+  const beforeCreatedAt = url.searchParams.get('beforeCreatedAt')?.trim();
+  const beforeGenerationId = url.searchParams.get('beforeGenerationId')?.trim();
+  const cursor: ImageGenerationCursor | undefined = beforeCreatedAt && beforeGenerationId
+    ? {
+        createdAt: beforeCreatedAt,
+        generationId: beforeGenerationId,
+      }
+    : undefined;
+
+  try {
+    const page = await imageGenerationHistory.listForUser(authResult.user.id, limit, cursor);
+    const quota = await getImageQuotaStatus(authResult.user);
+    const requestBaseUrl = resolveRequestBaseUrl(request);
+    const items = await Promise.all(page.items.map(materializeImageRecordAssets));
+    writeJson(response, 200, {
+      items: items.map((item) => toImageGenerationPayload(item, requestBaseUrl)),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+      quota,
+    });
+  } catch (error) {
+    console.error('Image generation history request failed', {
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 500, { error: '生图历史加载失败。' });
+  }
+}
+
+async function handleAiImageAssetRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  assetRoute: { generationId: string; index: number },
+) {
+  if (!imageGenerationHistory) {
+    writeJson(response, 503, { error: '生图历史未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  try {
+    const record = await imageGenerationHistory.getForUser(
+      authResult.user.id,
+      assetRoute.generationId,
+    );
+    if (!record) {
+      writeJson(response, 404, { error: 'Image asset not found.' });
+      return;
+    }
+
+    const linkedRecord = await materializeImageRecordAssets(record);
+    const image = linkedRecord.images[assetRoute.index];
+    const expectedImageUrl = buildImageAssetRoute(
+      linkedRecord.generationId,
+      assetRoute.index,
+      image?.mimeType ?? 'image/png',
+    );
+    if (!image?.url || image.url !== expectedImageUrl) {
+      writeJson(response, 404, { error: 'Image asset not found.' });
+      return;
+    }
+
+    const storagePath = buildImageAssetPath(
+      authResult.user.id,
+      linkedRecord.generationId,
+      assetRoute.index,
+      image.mimeType,
+    );
+    let fileStat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      fileStat = await fs.stat(storagePath);
+    } catch {
+      writeJson(response, 404, { error: 'Image asset not found.' });
+      return;
+    }
+
+    response.writeHead(200, {
+      'content-type': image.mimeType || 'image/png',
+      'content-length': fileStat.size.toString(),
+      'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(imageAssetFilename(assetRoute.index, image.mimeType))}`,
+      'cache-control': 'private, max-age=86400',
+      'x-content-type-options': 'nosniff',
+    });
+    createReadStream(storagePath).pipe(response);
+  } catch (error) {
+    console.error('Image asset request failed', {
+      generationId: assetRoute.generationId,
+      index: assetRoute.index,
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 500, { error: '图片文件加载失败。' });
+  }
 }
 
 function handleAdminStateRequest(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  const authResult = authenticateAdminRequest(request);
-  if (!authResult.ok) {
-    writeJson(response, authResult.statusCode, { error: authResult.message });
-    return;
-  }
+  void authenticateAdminRequest(request, response).then((authResult) => {
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return undefined;
+    }
 
-  void buildAdminStatePayload().then((payload) => {
-    writeJson(response, 200, payload);
+    return buildAdminStatePayload(authResult.admin).then((payload) => {
+      writeJson(response, 200, payload);
+    });
   }).catch((error) => {
-    writeJson(response, 500, {
+    const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+    writeJson(response, statusCode, {
       error: error instanceof Error ? error.message : 'Failed to build admin dashboard.',
     });
   });
@@ -1274,7 +2805,7 @@ async function handleAdminAiConfigUpdate(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  const authResult = authenticateAdminRequest(request);
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
   if (!authResult.ok) {
     writeJson(response, authResult.statusCode, { error: authResult.message });
     return;
@@ -1298,39 +2829,196 @@ async function handleAdminAiConfigUpdate(
     return;
   }
 
-  const dashboard = await buildAdminStatePayload();
+  const dashboard = await buildAdminStatePayload(authResult.admin);
   writeJson(response, 200, {
     ok: true,
     ...dashboard,
   });
 }
 
-function handleAdminHistoryClear(
+async function handleAdminHistoryClear(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  const authResult = authenticateAdminRequest(request);
+  try {
+    const authResult = await authenticateAdminRequest(request, response);
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return;
+    }
+
+    await history.clearAll();
+    broadcastSnapshots();
+    const dashboard = await buildAdminStatePayload(authResult.admin);
+    writeJson(response, 200, {
+      ok: true,
+      ...dashboard,
+    });
+  } catch (error) {
+    const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+    writeJson(response, statusCode, {
+      error: error instanceof Error ? error.message : 'Failed to rebuild admin dashboard.',
+    });
+  }
+}
+
+function normalizeAdminQuotaInput(value: unknown, fieldLabel: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new AccountAuthError(`${fieldLabel}必须是非负整数。`, 400);
+  }
+
+  return Math.trunc(value);
+}
+
+async function handleAdminUserQuotaUpdate(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = await authenticateAdminRequest(request, response);
   if (!authResult.ok) {
     writeJson(response, authResult.statusCode, { error: authResult.message });
     return;
   }
 
-  void history.clearAll()
-    .then(() => {
-      broadcastSnapshots();
-      return buildAdminStatePayload();
-    })
-    .then((dashboard) => {
-      writeJson(response, 200, {
-        ok: true,
-        ...dashboard,
-      });
-    })
-    .catch((error) => {
-      writeJson(response, 500, {
-        error: error instanceof Error ? error.message : 'Failed to rebuild admin dashboard.',
-      });
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号系统未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  let payload: {
+    userId?: unknown;
+    imageQuotaUsed?: unknown;
+    imagePaidQuotaRemaining?: unknown;
+    imagePaidQuotaUsed?: unknown;
+  };
+
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+    payload = JSON.parse(buffer.toString('utf8')) as typeof payload;
+  } catch {
+    writeJson(response, 400, { error: 'Invalid admin user quota JSON.' });
+    return;
+  }
+
+  const userId = typeof payload.userId === 'string' ? payload.userId.trim() : '';
+  if (!userId) {
+    writeJson(response, 400, { error: '用户 ID 不能为空。' });
+    return;
+  }
+
+  try {
+    const updatedUser = await accounts.updateUserQuota({
+      userId,
+      periodStartedAt: getImageQuotaPeriod().periodStartedAt,
+      imageQuotaUsed: normalizeAdminQuotaInput(payload.imageQuotaUsed, '免费额度已用'),
+      imagePaidQuotaRemaining: normalizeAdminQuotaInput(payload.imagePaidQuotaRemaining, '付费剩余额度'),
+      imagePaidQuotaUsed: normalizeAdminQuotaInput(payload.imagePaidQuotaUsed, '付费已用额度'),
     });
+    const users = await buildAdminUsersPayload();
+
+    writeJson(response, 200, {
+      ok: true,
+      user: updatedUser,
+      users,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '用户额度保存失败。',
+    });
+  }
+}
+
+async function handleAdminRoleCreate(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号系统未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  let payload: { email?: unknown };
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+    payload = JSON.parse(buffer.toString('utf8')) as typeof payload;
+  } catch {
+    writeJson(response, 400, { error: 'Invalid admin role JSON.' });
+    return;
+  }
+
+  try {
+    const role = await accounts.addAdminRole({
+      email: payload.email,
+      superAdminEmails: config.adminSuperEmails,
+    });
+    const roles = await buildAdminRolesPayload();
+    writeJson(response, 200, {
+      ok: true,
+      role,
+      roles,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '管理员添加失败。',
+    });
+  }
+}
+
+async function handleAdminRoleDelete(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+) {
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号系统未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  try {
+    await accounts.removeAdminRole({
+      userId,
+      superAdminEmails: config.adminSuperEmails,
+    });
+    const roles = await buildAdminRolesPayload();
+    writeJson(response, 200, {
+      ok: true,
+      roles,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '管理员删除失败。',
+    });
+  }
 }
 
 function handleAiQuotaRequest(
@@ -1484,19 +3172,41 @@ async function handleAiChatRequest(
     return;
   }
 
-  if (!prompt) {
+  let images: AiChatImageInput[];
+  try {
+    images = normalizeAiChatImages(payload.images);
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 400, { error: 'Invalid AI image input.' });
+    return;
+  }
+
+  const effectivePrompt = prompt || (images.length > 0 ? '请阅读这些图片并说明你看到的内容。' : '');
+
+  if (!effectivePrompt) {
     writeJson(response, 400, { error: 'Missing prompt.' });
     return;
   }
 
-  if (Buffer.byteLength(prompt, 'utf8') > aiPromptMaxBytes) {
+  if (images.length > 0 && config.aiProvider === 'cloudflare') {
+    writeJson(response, 400, {
+      error: '当前 Cloudflare AI 文本通道不支持读图，请在后台切换到 OpenAI 兼容的多模态模型。',
+    });
+    return;
+  }
+
+  if (Buffer.byteLength(effectivePrompt, 'utf8') > aiPromptMaxBytes) {
     writeJson(response, 413, {
       error: 'Prompt exceeds the AI request byte limit.',
     });
     return;
   }
 
-  if (prompt.length > activeAi.maxPromptChars) {
+  if (effectivePrompt.length > activeAi.maxPromptChars) {
     writeJson(response, 413, {
       error: `Prompt exceeds the ${activeAi.maxPromptChars.toString()} character limit.`,
     });
@@ -1504,7 +3214,7 @@ async function handleAiChatRequest(
   }
 
   const aiPrompt = buildAiPrompt({
-    prompt,
+    prompt: effectivePrompt,
     roomId,
     maxPromptChars: activeAi.maxPromptChars,
   });
@@ -1601,7 +3311,7 @@ async function handleAiChatRequest(
     } else {
       let lastFailure: OpenRouterChatFailure | undefined;
       for (const candidateModel of getOpenRouterChatCandidates(model)) {
-        const result = await requestOpenRouterChat(candidateModel, aiPrompt, activeAi.maxOutputTokens);
+        const result = await requestOpenRouterChat(candidateModel, aiPrompt, activeAi.maxOutputTokens, images);
         if (result.ok) {
           if (candidateModel !== model) {
             console.warn('OpenRouter fallback model succeeded', {
@@ -1711,6 +3421,336 @@ async function handleAiChatRequest(
     });
     writeJson(response, 502, { error: `${activeAi.label} request failed.` });
   }
+}
+
+async function runImageGenerationJob(
+  job: ImageGenerationJob,
+  upstreamRequest: AiImageUpstreamRequest,
+) {
+  touchImageGenerationJob(job, 'running');
+
+  if (!imageGenerationHistory) {
+    job.error = '生图历史未配置，请先配置 Supabase。';
+    touchImageGenerationJob(job, 'failed');
+    return;
+  }
+
+  if (!accounts) {
+    job.error = '账号登录未配置，请先配置 Supabase。';
+    touchImageGenerationJob(job, 'failed');
+    return;
+  }
+
+  try {
+    let preflightQuota: AccountImageQuotaStatus;
+    try {
+      preflightQuota = await getImageQuotaStatus(job.user);
+    } catch (error) {
+      console.error('Image generation quota preflight failed', {
+        jobId: job.jobId,
+        userId: job.userId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      job.error = '生图额度数据库不可用，请先执行 Supabase 迁移。';
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    job.quota = preflightQuota;
+    if (preflightQuota.remaining <= 0) {
+      job.error = imageQuotaExhaustedMessage;
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    const {
+      response: imageResponse,
+      payload: imagePayload,
+      attempts: imageAttempts,
+    } = await requestCodexImageWithRetry(job, upstreamRequest);
+
+    if (!imageResponse.ok || !imagePayload || imagePayload.error) {
+      const message = formatCodexImageFailureMessage(imageResponse.status, imagePayload);
+      console.error('Codex image reverse proxy job failed', {
+        jobId: job.jobId,
+        status: imageResponse.status,
+        model: job.model,
+        attempts: imageAttempts,
+        message,
+      });
+      job.error = message;
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    if (imageAttempts > 1) {
+      console.warn('Codex image reverse proxy retry succeeded', {
+        jobId: job.jobId,
+        model: job.model,
+        attempts: imageAttempts,
+      });
+    }
+
+    const extractedImages = extractCodexImageResults(imagePayload);
+    if (extractedImages.length === 0) {
+      console.error('Codex image reverse proxy job returned no image data', {
+        jobId: job.jobId,
+        model: job.model,
+      });
+      job.error = 'Codex image reverse proxy returned no image data.';
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    let images: CodexImageResult[];
+    try {
+      images = await Promise.all(extractedImages.map((image, index) =>
+        image.b64Json
+          ? saveBase64ImageAsset({
+              userId: job.userId,
+              generationId: job.jobId,
+              index,
+              image,
+            })
+          : image,
+      ));
+    } catch (error) {
+      console.error('Generated image asset persistence failed', {
+        jobId: job.jobId,
+        userId: job.userId,
+        model: job.model,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      job.error = '图片已生成，但图片文件保存失败。';
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    let historyItem: ImageGenerationRecord;
+    try {
+      historyItem = await imageGenerationHistory.save({
+        generationId: job.jobId,
+        userId: job.userId,
+        prompt: job.prompt,
+        provider: 'codex-reverse-proxy',
+        model: job.model,
+        size: job.size,
+        quality: job.quality,
+        images,
+        createdAt,
+      });
+    } catch (error) {
+      console.error('Image generation history job persistence failed', {
+        jobId: job.jobId,
+        userId: job.userId,
+        model: job.model,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      job.error = '图片已生成，但生图历史保存失败。';
+      touchImageGenerationJob(job, 'failed');
+      return;
+    }
+
+    let quota: AccountImageQuotaStatus | undefined;
+    try {
+      quota = await accounts.addImageQuotaUsage({
+        user: job.user,
+        period: getImageQuotaPeriod(),
+        limit: config.codexImageAi.dailyFreeQuota,
+        imageCount: images.length,
+      });
+      job.quota = quota;
+    } catch (error) {
+      console.error('Image generation quota refresh failed after success', {
+        jobId: job.jobId,
+        userId: job.userId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    job.result = {
+      provider: 'codex-reverse-proxy',
+      model: job.model,
+      images,
+      createdAt,
+      historyItem,
+      quota,
+    };
+    touchImageGenerationJob(job, 'complete');
+  } catch (error) {
+    console.error('Codex image reverse proxy job errored', {
+      jobId: job.jobId,
+      model: job.model,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    job.error = 'Codex image reverse proxy request failed.';
+    touchImageGenerationJob(job, 'failed');
+  } finally {
+    cleanupImageGenerationJobs();
+  }
+}
+
+function startImageGenerationJob(
+  job: ImageGenerationJob,
+  upstreamRequest: AiImageUpstreamRequest,
+) {
+  setTimeout(() => {
+    void runImageGenerationJob(job, upstreamRequest);
+  }, 0);
+}
+
+async function handleAiImageJobRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  jobId: string,
+) {
+  const normalizedJobId = jobId.trim();
+  if (!normalizedJobId) {
+    writeJson(response, 400, { error: 'Missing image generation job id.' });
+    return;
+  }
+
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  cleanupImageGenerationJobs();
+  const job = imageGenerationJobs.get(normalizedJobId);
+  if (!job || job.userId !== authResult.user.id) {
+    writeJson(response, 404, { error: '生图任务不存在或已过期。' });
+    return;
+  }
+
+  writeJson(response, 200, toImageGenerationJobPayload(job, resolveRequestBaseUrl(request)));
+}
+
+async function handleAiImageRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!imageGenerationHistory) {
+    writeJson(response, 503, { error: '生图历史未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  const authResult = await authenticateAccountRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const configurationError = getCodexImageConfigurationError();
+  if (configurationError) {
+    writeJson(response, 503, { error: configurationError });
+    return;
+  }
+
+  let preparedRequest: AiImagePreparedRequest;
+  try {
+    preparedRequest = await readAiImageRequestPayload(request);
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error:
+        error instanceof RequestBodyTooLargeError
+          ? '图片上传请求体过大。'
+          : 'Invalid AI image request JSON.',
+    });
+    return;
+  }
+
+  const { payload, uploadedImages } = preparedRequest;
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+  if (!prompt) {
+    writeJson(response, 400, { error: 'Missing image prompt.' });
+    return;
+  }
+
+  if (Buffer.byteLength(prompt, 'utf8') > aiPromptMaxBytes) {
+    writeJson(response, 413, { error: 'Image prompt exceeds the AI request byte limit.' });
+    return;
+  }
+
+  if (prompt.length > config.codexImageAi.maxPromptChars) {
+    writeJson(response, 413, {
+      error: `Image prompt exceeds the ${config.codexImageAi.maxPromptChars.toString()} character limit.`,
+    });
+    return;
+  }
+
+  const model = normalizeImageOption(payload.model, config.codexImageAi.model);
+  const size = normalizeImageOption(payload.size, config.codexImageAi.size);
+  const quality = normalizeImageOption(payload.quality, config.codexImageAi.quality);
+
+  try {
+    await imageGenerationHistory.assertReady();
+  } catch (error) {
+    console.error('Image generation history storage is not ready', {
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 503, { error: '生图历史数据库不可用，请先执行 Supabase 迁移。' });
+    return;
+  }
+
+  let quota: AccountImageQuotaStatus;
+  try {
+    quota = await getImageQuotaStatus(authResult.user);
+  } catch (error) {
+    console.error('Image generation quota precheck failed', {
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 503, { error: '生图额度数据库不可用，请先执行 Supabase 迁移。' });
+    return;
+  }
+
+  if (quota.remaining <= 0) {
+    writeJson(response, 429, {
+      error: imageQuotaExhaustedMessage,
+      quota,
+    });
+    return;
+  }
+
+  const upstreamRequest = buildCodexImageRequest({
+    model,
+    prompt,
+    size,
+    quality,
+    uploadedImages,
+  });
+
+  cleanupImageGenerationJobs();
+  const createdAt = new Date().toISOString();
+  const job: ImageGenerationJob = {
+    jobId: randomUUID(),
+    userId: authResult.user.id,
+    user: authResult.user,
+    prompt,
+    model,
+    size,
+    quality,
+    sourceImageCount: uploadedImages.length,
+    status: 'queued',
+    createdAt,
+    updatedAt: createdAt,
+    quota,
+  };
+
+  imageGenerationJobs.set(job.jobId, job);
+  startImageGenerationJob(job, upstreamRequest);
+  writeJson(response, 202, {
+    ...toImageGenerationJobPayload(job, resolveRequestBaseUrl(request)),
+    pollUrl: `/api/ai/image/jobs/${encodeURIComponent(job.jobId)}`,
+  });
 }
 
 function authorizeRoomMember(
@@ -1838,7 +3878,43 @@ const httpServer = createServer((request, response) => {
   }
 
   if (url.pathname === '/api/admin/history/clear' && request.method === 'POST') {
-    handleAdminHistoryClear(request, response);
+    void handleAdminHistoryClear(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/admin/users/quota' && request.method === 'POST') {
+    void handleAdminUserQuotaUpdate(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/admin/roles' && request.method === 'POST') {
+    void handleAdminRoleCreate(request, response);
+    return;
+  }
+
+  const adminRoleDeleteMatch = url.pathname.match(/^\/api\/admin\/roles\/([^/]+)$/);
+  if (adminRoleDeleteMatch && request.method === 'DELETE') {
+    void handleAdminRoleDelete(request, response, decodeURIComponent(adminRoleDeleteMatch[1]));
+    return;
+  }
+
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+    void handleAccountLoginRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/auth/register' && request.method === 'POST') {
+    void handleAccountRegisterRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+    handleAccountLogoutRequest(response);
+    return;
+  }
+
+  if (url.pathname === '/api/auth/session' && request.method === 'GET') {
+    void handleAccountSessionRequest(request, response);
     return;
   }
 
@@ -1849,6 +3925,38 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/ai/chat' && request.method === 'POST') {
     void handleAiChatRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/ai/image/quota' && request.method === 'GET') {
+    void handleImageQuotaRequest(request, response);
+    return;
+  }
+
+  if (url.pathname.startsWith(imageAssetRoutePrefix) && request.method === 'GET') {
+    const assetRoute = parseImageAssetRoute(url.pathname);
+    if (!assetRoute) {
+      writeJson(response, 404, { error: 'Image asset not found.' });
+      return;
+    }
+
+    void handleAiImageAssetRequest(request, response, assetRoute);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/ai/image/jobs/') && request.method === 'GET') {
+    const jobId = decodeURIComponent(url.pathname.slice('/api/ai/image/jobs/'.length));
+    void handleAiImageJobRequest(request, response, jobId);
+    return;
+  }
+
+  if (url.pathname === '/api/ai/image' && request.method === 'POST') {
+    void handleAiImageRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/ai/image/history' && request.method === 'GET') {
+    void handleImageHistoryRequest(request, response, url);
     return;
   }
 

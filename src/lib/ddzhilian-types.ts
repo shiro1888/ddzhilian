@@ -339,12 +339,113 @@ export type TextRecord = {
   createdAt: string
 }
 
+export type AiChatImageInput = {
+  url: string
+  mimeType?: string
+  alt?: string
+}
+
 export type AiChatResponse = {
   response: string
   provider?: 'cloudflare' | 'openrouter'
   model: string
   quota?: AiQuotaStatus
   historyText?: HistoryTextSummary
+}
+
+export type AiImageResult = {
+  b64Json?: string
+  url?: string
+  mimeType: string
+  revisedPrompt?: string
+}
+
+export type AiImageResponse = {
+  provider?: 'codex-reverse-proxy'
+  model: string
+  images: AiImageResult[]
+  createdAt: string
+  historyItem?: AiImageHistoryItem
+  quota?: AiImageQuotaStatus
+}
+
+export type AiImageQuotaStatus = {
+  date: string
+  limit: number
+  used: number
+  remaining: number
+  freeLimit: number
+  freeUsed: number
+  freeRemaining: number
+  paidRemaining: number
+  paidUsed: number
+  totalRemaining: number
+  periodStartedAt: string
+  resetAt: string
+  resetHour: number
+  timezoneOffsetMinutes: number
+}
+
+export type AiImageRequestInput = {
+  prompt: string
+  images?: File[]
+}
+
+export type AiImageJobStatus = 'queued' | 'running' | 'complete' | 'failed'
+
+export type AiImageJobResponse = {
+  jobId: string
+  status: AiImageJobStatus
+  sourceImageCount?: number
+  createdAt: string
+  updatedAt: string
+  error?: string
+  quota?: AiImageQuotaStatus
+  result?: AiImageResponse
+}
+
+export type AiImageHistoryItem = {
+  generationId: string
+  prompt: string
+  provider?: 'codex-reverse-proxy'
+  model: string
+  size: string
+  quality: string
+  images: AiImageResult[]
+  createdAt: string
+}
+
+export type AiImageHistoryCursor = {
+  createdAt: string
+  generationId: string
+}
+
+export type AiImageHistoryPage = {
+  items: AiImageHistoryItem[]
+  hasMore: boolean
+  nextCursor?: AiImageHistoryCursor
+  quota?: AiImageQuotaStatus
+}
+
+export type AiImageQuotaResponse = {
+  quota: AiImageQuotaStatus
+}
+
+export type AiImageHistoryRequestOptions = {
+  limit?: number
+  before?: AiImageHistoryCursor
+}
+
+export type AccountUser = {
+  id: string
+  email: string
+  createdAt?: string
+}
+
+export type AccountSessionResponse = {
+  authenticated: boolean
+  configured?: boolean
+  user?: AccountUser
 }
 
 export type AiModelOption = {
@@ -390,6 +491,7 @@ export type AdminOpenRouterConfig = {
   apiKey: string
   baseUrl: string
   wireApi: AdminOpenAiWireApi
+  reasoningEffort: AdminOpenAiReasoningEffort
   siteUrl: string
   siteName: string
   model: string
@@ -399,6 +501,7 @@ export type AdminOpenRouterConfig = {
 }
 
 export type AdminOpenAiWireApi = 'chat_completions' | 'responses'
+export type AdminOpenAiReasoningEffort = '' | 'low' | 'medium' | 'high'
 
 export type AdminModelToggleItem = {
   id: string
@@ -465,11 +568,62 @@ export type AdminUsageSnapshot = {
   openrouterBalance?: AdminOpenRouterBalance
 }
 
+export type AdminUserSummary = {
+  id: string
+  email: string
+  imageQuotaUsed: number
+  imagePaidQuotaRemaining: number
+  imagePaidQuotaUsed: number
+  imageQuotaPeriodStartedAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type AdminUserQuotaUpdate = {
+  imageQuotaUsed: number
+  imagePaidQuotaRemaining: number
+  imagePaidQuotaUsed: number
+}
+
+export type AdminUsersSnapshot = {
+  configured: boolean
+  users: AdminUserSummary[]
+  error?: string
+  loadedAt: string
+}
+
+export type AdminRole = 'super_admin' | 'admin'
+
+export type AdminRoleSource = 'env' | 'database'
+
+export type AdminSessionInfo = {
+  userId: string
+  email: string
+  role: AdminRole
+  isSuperAdmin: boolean
+}
+
+export type AdminRoleSummary = AdminSessionInfo & {
+  source: AdminRoleSource
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type AdminRolesSnapshot = {
+  configured: boolean
+  roles: AdminRoleSummary[]
+  error?: string
+  loadedAt: string
+}
+
 export type AdminStateResponse = {
   authenticated?: boolean
+  admin?: AdminSessionInfo
   history: AdminHistoryStats
   ai: AdminAiSettings
   usage: AdminUsageSnapshot
+  users?: AdminUsersSnapshot
+  roles?: AdminRolesSnapshot
   serverTime: string
 }
 

@@ -7,7 +7,9 @@ export function generateStaticParams() {
     { slug: ['send'] },
     { slug: ['receive'] },
     { slug: ['text'] },
+    { slug: ['image'] },
     { slug: ['sessions'] },
+    { slug: ['admin'] },
   ]
 }
 

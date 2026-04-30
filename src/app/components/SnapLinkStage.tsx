@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { RoomListItem, UnifiedConversationEntry } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
@@ -207,6 +207,96 @@ function getFileExtension(fileName: string) {
   }
 
   return extension.slice(0, 4).toUpperCase()
+}
+
+function isImageFileEntry(file: SnapLinkFileEntry) {
+  return Boolean(
+    file.mimeType?.toLowerCase().startsWith('image/') ||
+    /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(file.fileName),
+  )
+}
+
+function getImageExtensionFromMimeType(mimeType: string) {
+  switch (mimeType.toLowerCase()) {
+    case 'image/jpeg':
+      return 'jpg'
+    case 'image/png':
+      return 'png'
+    case 'image/gif':
+      return 'gif'
+    case 'image/webp':
+      return 'webp'
+    case 'image/avif':
+      return 'avif'
+    case 'image/svg+xml':
+      return 'svg'
+    default:
+      return 'png'
+  }
+}
+
+function normalizePastedImageFile(file: File, index: number) {
+  if (file.name.trim()) {
+    return file
+  }
+
+  const extension = getImageExtensionFromMimeType(file.type || 'image/png')
+  return new File([file], `snaplink-paste-${Date.now().toString()}-${(index + 1).toString()}.${extension}`, {
+    type: file.type || 'image/png',
+    lastModified: file.lastModified || Date.now(),
+  })
+}
+
+function getClipboardImageFiles(dataTransfer: DataTransfer) {
+  const imageFiles = Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+
+  const files = imageFiles.length > 0
+    ? imageFiles
+    : Array.from(dataTransfer.files).filter((file) => file.type.startsWith('image/'))
+
+  return files.map(normalizePastedImageFile)
+}
+
+function isImageOnlyRichText(value: string) {
+  if (!value || typeof DOMParser === 'undefined') {
+    return false
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  let imageCount = 0
+
+  if (!root) {
+    return false
+  }
+
+  const containsOnlyImages = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return !node.textContent?.trim()
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return true
+    }
+
+    const tagName = node.tagName.toLowerCase()
+    if (tagName === 'img') {
+      imageCount += 1
+      return true
+    }
+
+    if (tagName === 'br') {
+      return true
+    }
+
+    return Array.from(node.childNodes).every(containsOnlyImages)
+  }
+
+  return Array.from(root.childNodes).every(containsOnlyImages) && imageCount > 0
 }
 
 function clampProgress(progress: number) {
@@ -645,6 +735,19 @@ export function SnapLinkStage({
     }
   }
 
+  const handleComposerPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const pastedImageFiles = getClipboardImageFiles(event.clipboardData)
+    if (pastedImageFiles.length === 0) {
+      return
+    }
+
+    event.preventDefault()
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(false)
+    botMentionTriggerRangeRef.current = null
+    onDirectFileSelection(pastedImageFiles)
+  }
+
   const markCodeCopyButton = (button: HTMLButtonElement) => {
     button.classList.add('is-copied')
     button.textContent = '已复制'
@@ -803,6 +906,11 @@ export function SnapLinkStage({
             </span>
           </div>
         </div>
+        {file.previewUrl && isImageFileEntry(file) ? (
+          <div className="dd-snaplink__file-preview">
+            <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
+          </div>
+        ) : null}
         <div
           className="dd-snaplink__file-progress"
           role="progressbar"
@@ -998,6 +1106,8 @@ export function SnapLinkStage({
                       'dd-snaplink__avatar',
                       showSenderIdentity ? '' : 'is-placeholder',
                     ].filter(Boolean).join(' ')
+                    const isImageOnlyMessage =
+                      entry.entryType === 'text' && isImageOnlyRichText(entry.text)
 
                     return (
                       <div key={entry.id} className="dd-snaplink__entry">
@@ -1027,7 +1137,7 @@ export function SnapLinkStage({
                             ) : null}
                             {entry.entryType === 'text' ? (
                               <div
-                                className="dd-snaplink__bubble dd-chatbox__bubble--rich"
+                                className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnlyMessage ? ' is-image-only' : ''}`}
                                 onClick={handleRichBubbleClick}
                                 onContextMenu={(event) => openMessageContextMenu(event, entry, actorIdentity.displayName)}
                                 dangerouslySetInnerHTML={{
@@ -1152,6 +1262,13 @@ export function SnapLinkStage({
                     placeholder="输入消息..."
                     autoComplete="off"
                     onChange={handleDraftChange}
+                    onPaste={handleComposerPaste}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && isBotPanelOpen) {
+                        event.preventDefault()
+                        handleBotMentionSelect()
+                      }
+                    }}
                   />
                   <button
                     ref={emojiTriggerRef}

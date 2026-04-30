@@ -1,40 +1,3 @@
-create table if not exists public.history_texts (
-  history_id text primary key,
-  room_id text not null,
-  session_id text null,
-  is_public boolean not null default false,
-  source_device_id text not null,
-  source_device_name text not null,
-  text text not null,
-  created_at timestamptz not null
-);
-
-create index if not exists history_texts_room_created_idx
-  on public.history_texts (room_id, created_at desc, history_id desc);
-
-create index if not exists history_texts_created_idx
-  on public.history_texts (created_at desc, history_id desc);
-
-create table if not exists public.history_files (
-  history_id text primary key,
-  room_id text not null,
-  session_id text null,
-  is_public boolean not null default false,
-  source_device_id text not null,
-  source_device_name text not null,
-  file_name text not null,
-  size bigint not null check (size >= 0),
-  mime_type text null,
-  created_at timestamptz not null,
-  storage_path text not null
-);
-
-create index if not exists history_files_room_created_idx
-  on public.history_files (room_id, created_at desc, history_id desc);
-
-create index if not exists history_files_created_idx
-  on public.history_files (created_at desc, history_id desc);
-
 create table if not exists public.user_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
@@ -126,16 +89,3 @@ begin
       with check (auth.uid() = user_id);
   end if;
 end $$;
-
-create table if not exists public.admin_roles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  role text not null default 'admin' constraint admin_roles_role_admin_only check (role = 'admin'),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create unique index if not exists admin_roles_email_lower_idx
-  on public.admin_roles (lower(email));
-
-alter table public.admin_roles enable row level security;

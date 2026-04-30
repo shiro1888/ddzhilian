@@ -60,10 +60,13 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 |   |       |-- SendStage.tsx
 |   |       |-- ReceiveStage.tsx
 |   |       |-- TextStage.tsx
+|   |       |-- ImageGenerationStage.tsx
+|   |       |-- ImageAccountGate.tsx
 |   |       |-- SessionsStage.tsx
 |   |       `-- AdminStage.tsx
 |   `-- lib/
 |       |-- use-ddzhilian.ts
+|       |-- use-account-auth.ts
 |       `-- ddzhilian-types.ts
 |-- server/
 |   |-- README.md
@@ -76,6 +79,8 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 |   |   |   |-- room-registry.ts
 |   |   |   |-- session-registry.ts
 |   |   |   |-- history-registry.ts
+|   |   |   |-- account-registry.ts
+|   |   |   |-- image-generation-history-registry.ts
 |   |   |   |-- ui-state-registry.ts
 |   |   |   |-- admin-config-registry.ts
 |   |   |   |-- admin-session-registry.ts
@@ -107,7 +112,8 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 
 ### Frontend state and protocol client
 
-- `src/lib/use-ddzhilian.ts`: main client runtime. WebSocket connection, identity persistence, room/session state, WebRTC/file transfer coordination, history fetch/download, AI requests.
+- `src/lib/use-ddzhilian.ts`: main client runtime. WebSocket connection, identity persistence, room/session state, WebRTC/file transfer coordination, history fetch/download, AI requests, and image history API calls.
+- `src/lib/use-account-auth.ts`: frontend account session helper for `/api/auth/*`, using HttpOnly cookies through the signaling backend.
 - `src/lib/ddzhilian-types.ts`: shared frontend protocol/data types.
 - `src/app/types.ts`: UI-level view and component types.
 - `src/app/config.tsx`: UI config/constants.
@@ -120,16 +126,17 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 - `src/app/components/SendStage.tsx`: send-side transfer view.
 - `src/app/components/ReceiveStage.tsx`: receive-side transfer view.
 - `src/app/components/TextStage.tsx`: long-text and Markdown exchange UI.
+- `src/app/components/ImageGenerationStage.tsx`: standalone chat-style image generation UI backed by the Codex reverse-proxy image endpoint; supports text prompts, multi-image upload previews for image editing, click-to-zoom generated-image preview, on-demand 360 panorama viewing only for generated images whose natural size is landscape 2:1 and whose prompt/history metadata has explicit panorama intent, generated-image edit shortcut back into the existing image-edit composer, animated image-generation loading state, URL-based generated-image display, account-scoped total image quota display with free/paid hover details, account-scoped image history, and lazy loading older image-history pages after the latest prompt/image.
+- `src/app/components/ImageAccountGate.tsx`: `/image` login/register gate for Supabase-backed accounts; registration collects confirm password and invite code.
 - `src/app/components/SessionsStage.tsx`: active session list and state display.
-- `src/app/components/AdminStage.tsx`: admin and AI-related management UI.
+- `src/app/components/AdminStage.tsx`: account-based admin and AI-related management UI, including Supabase email/password admin login, super-admin-only provider/API key configuration, role management for adding/removing normal admins, all-account Supabase Auth user management with editable image quotas, danger-zone, and system-info dashboard widgets; OpenAI-compatible manual API and CLIProxyAPI preset live under provider configuration options; uses Base UI primitives for admin tabs, fields, buttons, inputs, and switches, plus the draggable dashboard component editor with close-to-tray behavior, shared edit/live grid rendering, and per-widget supported ratio sizing.
 - `src/app/components/AppHeader.tsx`: top bar and global actions.
 - `src/app/components/AppSidebar.tsx`: sidebar navigation and brand area.
 - `src/app/components/ContentGrid.tsx`: shared content layout wrapper.
 
 ### Backend entry and protocol
 
-- `server/src/index.ts`: HTTP + WebSocket server entry, request handling, signaling flow, AI proxy endpoints, history download/upload endpoints.
-- `server/src/index.ts`: HTTP + WebSocket server entry, request handling, signaling flow, AI proxy endpoints, history download/upload endpoints, and room recent-24h text context assembly for AI requests.
+- `server/src/index.ts`: HTTP + WebSocket server entry, request handling, signaling flow, account auth endpoints, AI proxy endpoints, history download/upload endpoints, image generation proxying and free-plus-paid quota enforcement, and room recent-24h text context assembly for AI requests.
 - `server/src/config.ts`: environment parsing and backend runtime config.
 - `server/src/protocol.ts`: backend event schema and client-event parsing.
 
@@ -139,6 +146,8 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 - `server/src/registry/room-registry.ts`: room membership and room summaries.
 - `server/src/registry/session-registry.ts`: live connection/session lifecycle.
 - `server/src/registry/history-registry.ts`: persisted history text/file metadata and cleanup.
+- `server/src/registry/account-registry.ts`: Supabase Auth registration/login/session refresh, user profile upsert, `user_profiles` free/paid image-quota counters, and `admin_roles` lookup/add/delete for account-based admin access.
+- `server/src/registry/image-generation-history-registry.ts`: Supabase persistence and cursor paging for per-account generated-image history.
 - `server/src/registry/ui-state-registry.ts`: per-device room UI state such as pin/read markers.
 - `server/src/registry/admin-config-registry.ts`: admin-configurable AI settings snapshot.
 - `server/src/registry/admin-session-registry.ts`: admin login/session state.
@@ -175,7 +184,9 @@ If the task is about:
 - WebSocket protocol or event mismatch: start at `server/src/protocol.ts`, `server/src/index.ts`, and `src/lib/ddzhilian-types.ts`.
 - LAN auto-discovery behavior: start at `server/src/utils/network.ts` and `server/src/registry/device-registry.ts`.
 - AI quota / provider / admin settings: start at `server/src/index.ts`, `admin-config-registry.ts`, `ai-usage-registry.ts`, and `cloudflare-ai-quota.ts`.
-- AI chat room context behavior: start at `server/src/index.ts`; room-scoped AI requests automatically prepend recent 24-hour room text context before sending to the model.
+- AI chat room context / `@bot` image input behavior: start at `src/App.tsx`, `src/lib/use-ddzhilian.ts`, and `server/src/index.ts`; room-scoped AI requests automatically prepend recent 24-hour room text context before sending to the model, and `@bot` can pass inline chat images to OpenAI-compatible multimodal models.
+- AI image generation: start at `src/app/components/ImageAccountGate.tsx`, `src/app/components/ImageGenerationStage.tsx`, `src/lib/use-account-auth.ts`, `src/lib/use-ddzhilian.ts`, `server/src/index.ts`, `server/src/registry/account-registry.ts`, `server/src/registry/image-generation-history-registry.ts`, and `server/src/config.ts`; `/api/ai/image` requires an account cookie, creates an async job, accepts JSON text-to-image or multipart `image[]` edit inputs, enforces the per-account daily free quota plus paid balance stored in `user_profiles` before calling the upstream image API, consumes free quota before paid balance after successful image return, converts upstream `b64_json` images into disk-backed `/api/ai/image/assets/:generationId/:index.png` URLs, `GET /api/ai/image/quota` returns free/paid/total quota, `GET /api/ai/image/jobs/:jobId` polls it, `GET /api/ai/image/history` supports `limit`, `beforeCreatedAt`, and `beforeGenerationId` cursor paging, and completed metadata persists to Supabase.
+- Admin access / API key management: start at `src/app/components/AdminStage.tsx`, `src/App.tsx`, `server/src/index.ts`, `server/src/registry/account-registry.ts`, and `server/src/registry/admin-session-registry.ts`; `/admin` logs in with a Supabase Auth account, `ADMIN_SUPER_EMAILS` grants super-admin access, normal admins live in `admin_roles`, role add/delete and `/api/admin/ai-config` require a super-admin session, and non-super admin state responses strip raw API key values.
 - Deployment / nginx / packaging: start at `deploy/`, `scripts/`, and root `README.md`.
 
 ## Search Strategy

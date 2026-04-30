@@ -27,7 +27,12 @@ dist-ssr
 
 # Local runtime data and ad-hoc artifacts
 .omx/
+.playwright-cli/
+android/test-artifacts/
+deploy-artifacts/
+output/
 server/data/
+tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example

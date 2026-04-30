@@ -52,6 +52,20 @@ export const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'image',
+    label: '生图',
+    hint: '用 gpt-image-2 生成图片',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="14" rx="3" />
+        <path d="m7.5 15 3-3.2 2.3 2.4 1.6-1.8 2.1 2.6" />
+        <path d="M15.5 8.5h.01" />
+        <path d="M6.8 3.8 8 2.5l1.2 1.3" />
+        <path d="m16 21 1.2-1.3 1.2 1.3" />
+      </>
+    ),
+  },
+  {
     id: 'sessions',
     label: '会话记录',
     hint: '搜索当前与历史会话',
@@ -101,6 +115,12 @@ export const viewMeta: Record<NavView, StageMeta> = {
     description: '在设备之间互发消息，或传送长图文内容。',
     primaryAction: '发送',
     secondaryAction: '刷新列表',
+  },
+  image: {
+    title: '图片生成',
+    description: '通过 Codex 反代接入 gpt-image-2，按聊天方式生成图片。',
+    primaryAction: '生成',
+    secondaryAction: '清空',
   },
   sessions: {
     title: '会话记录',
