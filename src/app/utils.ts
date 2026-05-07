@@ -676,18 +676,18 @@ function normalizePlainRichText(value: string) {
     return appleMusicLyricShare
   }
 
-  const mixedHtml = renderMixedTextAndCodeBlocks(value)
-  if (mixedHtml) {
-    return mixedHtml
-  }
-
   if (hasMarkdownFence(value)) {
     return renderMarkdownBlocks(value)
   }
 
   const codeText = normalizeCodeText(value)
-  if (shouldRenderCodeTextAsBlock(codeText)) {
+  if (shouldRenderPlainTextAsSingleCodeBlock(codeText)) {
     return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+  }
+
+  const mixedHtml = renderMixedTextAndCodeBlocks(value)
+  if (mixedHtml) {
+    return mixedHtml
   }
 
   if (hasMarkdownSyntax(value)) {
@@ -1051,14 +1051,15 @@ function shouldRenderAsCodeBlock(value: string, root: Element) {
   }
 
   const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
+  return shouldRenderPlainTextAsSingleCodeBlock(codeText, root.querySelectorAll('span[class], span[style], font[color]').length)
+}
+
+function shouldRenderPlainTextAsSingleCodeBlock(codeText: string, styledSpanCount = 0) {
   if (/^\s*@bot\b/im.test(codeText)) {
     return false
   }
 
-  return shouldRenderCodeTextAsBlock(
-    codeText,
-    root.querySelectorAll('span[class], span[style], font[color]').length,
-  )
+  return shouldRenderCodeTextAsBlock(codeText, styledSpanCount)
 }
 
 function shouldRenderCodeTextAsBlock(codeText: string, styledSpanCount = 0) {
@@ -1153,14 +1154,14 @@ export function sanitizeRichTextHtml(value: string) {
   }
 
   if (!hasChatQuote) {
-    const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
-    if (mixedHtml) {
-      return mixedHtml
-    }
-
     if (shouldRenderAsCodeBlock(value, root)) {
       const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
       return renderCodeBlockHtml(codeText, detectCodeLanguage(codeText))
+    }
+
+    const mixedHtml = renderMixedTextAndCodeBlocks(extractTextWithLineBreaks(root))
+    if (mixedHtml) {
+      return mixedHtml
     }
   }
 
@@ -1340,6 +1341,14 @@ export function sanitizeBotReplyHtml(value: string) {
   }
 
   const plainText = normalizeCodeText(extractTextWithLineBreaks(root))
+  if (hasMarkdownFence(plainText)) {
+    return renderBotMarkdownReply(plainText)
+  }
+
+  if (shouldRenderPlainTextAsSingleCodeBlock(plainText)) {
+    return renderCodeBlockHtml(plainText, detectCodeLanguage(plainText))
+  }
+
   if (hasBotMarkdownSyntax(plainText)) {
     return renderBotMarkdownReply(plainText)
   }
