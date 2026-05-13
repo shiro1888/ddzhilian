@@ -56,6 +56,7 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 |   |       |-- AppSidebar.tsx
 |   |       |-- ContentGrid.tsx
 |   |       |-- ChatConversationStage.tsx
+|   |       |-- ChatAiStage.tsx
 |   |       |-- ConnectStage.tsx
 |   |       |-- SendStage.tsx
 |   |       |-- ReceiveStage.tsx
@@ -63,11 +64,16 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 |   |       |-- ImageGenerationStage.tsx
 |   |       |-- ImageAccountGate.tsx
 |   |       |-- SessionsStage.tsx
-|   |       `-- AdminStage.tsx
+|   |       |-- SnapLinkStage.tsx
+|   |       |-- AdminStage.tsx
+|   |       `-- admin/
 |   `-- lib/
 |       |-- use-ddzhilian.ts
 |       |-- use-account-auth.ts
+|       |-- use-admin.ts
 |       `-- ddzhilian-types.ts
+|-- docs/
+|   `-- IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md
 |-- server/
 |   |-- README.md
 |   |-- src/
@@ -84,7 +90,8 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 |   |   |   |-- ui-state-registry.ts
 |   |   |   |-- admin-config-registry.ts
 |   |   |   |-- admin-session-registry.ts
-|   |   |   `-- ai-usage-registry.ts
+|   |   |   |-- ai-usage-registry.ts
+|   |   |   `-- ai-chat-conversation-registry.ts
 |   |   `-- utils/
 |   |       |-- network.ts
 |   |       |-- id.ts
@@ -117,19 +124,23 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 - `src/lib/ddzhilian-types.ts`: shared frontend protocol/data types.
 - `src/app/types.ts`: UI-level view and component types.
 - `src/app/config.tsx`: UI config/constants.
-- `src/app/utils.ts`: small UI helpers.
+- `src/app/utils.ts`: small UI helpers plus rich-text/Markdown/code-block rendering and copyable code-block HTML generation.
 
 ### Frontend feature components
 
 - `src/app/components/ChatConversationStage.tsx`: main chat workspace, room conversation flow.
-- `src/app/components/ConnectStage.tsx`: device discovery, pairing, and connection entry.
+- `src/app/components/ChatAiStage.tsx`: standalone ChatGPT-style AI chat page at `/chat`; manages account/device-scoped synced AI conversation list, manual rename, search, delete confirmation, image/text attachment input, attachment summaries, branch conversations, Markdown export, pin/archive controls, message rendering, copy actions, stop/regenerate controls, model selection, and full-response assistant display while reusing the existing AI chat request path.
+- `src/app/components/ConnectStage.tsx`: focused device discovery, pairing, and connection entry.
+- `src/app/components/SnapLinkStage.tsx`: lightweight SnapLink room interface for public-room creation/join, file/text conversation, room list, and lobby/top-switch entries that embed the standalone `/chat` AI experience without changing routes.
 - `src/app/components/SendStage.tsx`: send-side transfer view.
 - `src/app/components/ReceiveStage.tsx`: receive-side transfer view.
 - `src/app/components/TextStage.tsx`: long-text and Markdown exchange UI.
 - `src/app/components/ImageGenerationStage.tsx`: standalone chat-style image generation UI backed by the Codex reverse-proxy image endpoint; supports text prompts, multi-image upload previews for image editing, click-to-zoom generated-image preview, on-demand 360 panorama viewing only for generated images whose natural size is landscape 2:1 and whose prompt/history metadata has explicit panorama intent, generated-image edit shortcut back into the existing image-edit composer, animated image-generation loading state, URL-based generated-image display, account-scoped total image quota display with free/paid hover details, account-scoped image history, and lazy loading older image-history pages after the latest prompt/image.
 - `src/app/components/ImageAccountGate.tsx`: `/image` login/register gate for Supabase-backed accounts; registration collects confirm password and invite code.
 - `src/app/components/SessionsStage.tsx`: active session list and state display.
-- `src/app/components/AdminStage.tsx`: account-based admin and AI-related management UI, including Supabase email/password admin login, super-admin-only provider/API key configuration, role management for adding/removing normal admins, all-account Supabase Auth user management with editable image quotas, danger-zone, and system-info dashboard widgets; OpenAI-compatible manual API and CLIProxyAPI preset live under provider configuration options; uses Base UI primitives for admin tabs, fields, buttons, inputs, and switches, plus the draggable dashboard component editor with close-to-tray behavior, shared edit/live grid rendering, and per-widget supported ratio sizing.
+- `src/app/components/AdminStage.tsx`: thin composition entry for the account-based admin console. Admin view state lives in `src/lib/use-admin.ts`, while the UI is split under `src/app/components/admin/` into login/sidebar/topbar, dashboard widgets, provider/model panels, user/role management, toast, skeleton, and CSV-capable table components.
+- `src/app/components/admin/`: split admin console components. High-value files are `DashboardGrid.tsx` for widget visibility/drag/sizing, `DashboardWidgets.tsx` for widget render mapping, `ProviderConfigPanel.tsx` plus manual/CLIProxy panels for OpenAI-compatible configuration, `UserManagement.tsx` for searchable/sortable/paginated quota editing, and `constants.ts` for admin formatting/model/dashboard helpers.
+- `src/lib/use-admin.ts`: admin session, login/logout, AI settings save, history clear, Supabase user quota update, role add/delete, OpenAI-compatible model detection, API error parsing, and admin toast queue.
 - `src/app/components/AppHeader.tsx`: top bar and global actions.
 - `src/app/components/AppSidebar.tsx`: sidebar navigation and brand area.
 - `src/app/components/ContentGrid.tsx`: shared content layout wrapper.
@@ -152,12 +163,17 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 - `server/src/registry/admin-config-registry.ts`: admin-configurable AI settings snapshot.
 - `server/src/registry/admin-session-registry.ts`: admin login/session state.
 - `server/src/registry/ai-usage-registry.ts`: local AI usage accounting.
+- `server/src/registry/ai-chat-conversation-registry.ts`: local per-account/per-device private persistence for standalone `/chat` AI conversations, exposed through authenticated `/api/ai/chat/conversations`.
 
 ### Backend utilities
 
 - `server/src/utils/network.ts`: client network-context detection used by LAN heuristics.
 - `server/src/utils/id.ts`: ID helpers.
 - `server/src/utils/cloudflare-ai-quota.ts`: local Cloudflare AI quota tracking.
+
+### Documentation
+
+- `docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md`: Chinese implementation document for the `/image` feature, covering account-gated API flow, JSON text-to-image requests, multipart `image[]` edit uploads, upstream image API forwarding, async job polling, generated-image asset storage, Supabase `image_generations` history, and account quota behavior.
 
 ### Runtime data and assets
 
@@ -179,14 +195,16 @@ If the task is about:
 - Chat UI / room list / message area: start at `src/app/components/ChatConversationStage.tsx`.
 - Device discovery / pairing / reconnect entry: start at `src/app/components/ConnectStage.tsx` and `src/lib/use-ddzhilian.ts`.
 - File send / receive / progress: start at `src/lib/use-ddzhilian.ts`, `SendStage.tsx`, and `ReceiveStage.tsx`.
-- Markdown / long text behavior: start at `TextStage.tsx` and `use-ddzhilian.ts`.
+- Markdown / long text behavior: start at `TextStage.tsx`, `ChatConversationStage.tsx`, `SnapLinkStage.tsx`, `src/app/utils.ts`, and `use-ddzhilian.ts`; code-block formatting and copy-button HTML live in `src/app/utils.ts`, while click-to-copy handlers live in the chat components.
 - Public room / room state / history: start at `use-ddzhilian.ts`, `server/src/registry/room-registry.ts`, and `server/src/registry/history-registry.ts`.
 - WebSocket protocol or event mismatch: start at `server/src/protocol.ts`, `server/src/index.ts`, and `src/lib/ddzhilian-types.ts`.
 - LAN auto-discovery behavior: start at `server/src/utils/network.ts` and `server/src/registry/device-registry.ts`.
 - AI quota / provider / admin settings: start at `server/src/index.ts`, `admin-config-registry.ts`, `ai-usage-registry.ts`, and `cloudflare-ai-quota.ts`.
-- AI chat room context / `@bot` image input behavior: start at `src/App.tsx`, `src/lib/use-ddzhilian.ts`, and `server/src/index.ts`; room-scoped AI requests automatically prepend recent 24-hour room text context before sending to the model, and `@bot` can pass inline chat images to OpenAI-compatible multimodal models.
+- Standalone AI chat page: start at `src/app/components/ChatAiStage.tsx`, `src/App.tsx`, `src/lib/use-ddzhilian.ts`, `server/src/registry/ai-chat-conversation-registry.ts`, and `src/app/utils.ts`; the page reuses the existing AI chat API and rich text/code-block sanitizer, privately syncs conversation history through authenticated `/api/ai/chat/conversations`, accepts image/text attachments through the existing AI request shape, and SnapLink can embed this same component in-place from its lobby or top conversation switch without navigating to `/chat`.
+- AI chat room context / `@Ai` image and file input behavior: start at `src/App.tsx`, `src/lib/use-ddzhilian.ts`, and `server/src/index.ts`; room-scoped AI requests automatically prepend recent 24-hour room text context before sending to the model, `@Ai` can pass inline chat images to OpenAI-compatible multimodal models, text-like file attachments are read client-side into the bot prompt with size/count limits, the parser still accepts legacy `@bot`, and non-public `bot-chat` rooms remain a backend capability for existing flows but are no longer created by the SnapLink lobby `Chat with Ai` button.
 - AI image generation: start at `src/app/components/ImageAccountGate.tsx`, `src/app/components/ImageGenerationStage.tsx`, `src/lib/use-account-auth.ts`, `src/lib/use-ddzhilian.ts`, `server/src/index.ts`, `server/src/registry/account-registry.ts`, `server/src/registry/image-generation-history-registry.ts`, and `server/src/config.ts`; `/api/ai/image` requires an account cookie, creates an async job, accepts JSON text-to-image or multipart `image[]` edit inputs, enforces the per-account daily free quota plus paid balance stored in `user_profiles` before calling the upstream image API, consumes free quota before paid balance after successful image return, converts upstream `b64_json` images into disk-backed `/api/ai/image/assets/:generationId/:index.png` URLs, `GET /api/ai/image/quota` returns free/paid/total quota, `GET /api/ai/image/jobs/:jobId` polls it, `GET /api/ai/image/history` supports `limit`, `beforeCreatedAt`, and `beforeGenerationId` cursor paging, and completed metadata persists to Supabase.
-- Admin access / API key management: start at `src/app/components/AdminStage.tsx`, `src/App.tsx`, `server/src/index.ts`, `server/src/registry/account-registry.ts`, and `server/src/registry/admin-session-registry.ts`; `/admin` logs in with a Supabase Auth account, `ADMIN_SUPER_EMAILS` grants super-admin access, normal admins live in `admin_roles`, role add/delete and `/api/admin/ai-config` require a super-admin session, and non-super admin state responses strip raw API key values.
+- AI image implementation docs: start at `docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md` for the end-to-end API/upload/return/history/quota flow before changing code.
+- Admin access / API key management: start at `src/lib/use-admin.ts`, `src/app/components/AdminStage.tsx`, `src/app/components/admin/`, `server/src/index.ts`, `server/src/registry/account-registry.ts`, and `server/src/registry/admin-session-registry.ts`; `/admin` logs in with a Supabase Auth account, `ADMIN_SUPER_EMAILS` grants super-admin access, normal admins live in `admin_roles`, role add/delete and `/api/admin/ai-config` require a super-admin session, `/api/admin/ai-config/detect` validates OpenAI-compatible API keys by reading `/models`, and non-super admin state responses strip raw API key values.
 - Deployment / nginx / packaging: start at `deploy/`, `scripts/`, and root `README.md`.
 
 ## Search Strategy

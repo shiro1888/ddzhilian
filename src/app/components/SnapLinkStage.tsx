@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  ChangeEvent,
+  ClipboardEvent,
+  DragEvent,
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import type { RoomListItem, UnifiedConversationEntry } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
@@ -41,6 +49,9 @@ const snapLinkQuickEmojis = [
   '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
 ]
 
+const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
+const snapLinkComposerMaxHeight = 120
+
 type SnapLinkStageProps = {
   isDragging: boolean
   selectedRoomId: string | null
@@ -60,6 +71,7 @@ type SnapLinkStageProps = {
   fileConversationEmptyState: string
   localError: string | null
   errorMessage: string | null
+  aiChatElement: ReactNode
   onRoomJoinDraftChange: (value: string) => void
   onJoinRoomById: (roomId: string) => void
   onCreatePublicRoom: () => void
@@ -109,6 +121,75 @@ function getRichTextPreviewText(value: string) {
   return ''
 }
 
+const clipboardBlockTags = new Set(['blockquote', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'ol', 'p', 'ul'])
+
+function normalizeClipboardPlainText(value: string) {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u200B/g, '')
+    .replace(/\u00a0/g, ' ')
+}
+
+function extractClipboardPlainTextFromNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? ''
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return ''
+  }
+
+  const element = node as HTMLElement
+  const tagName = element.tagName.toLowerCase()
+  if (tagName === 'br') {
+    return '\n'
+  }
+
+  if (tagName === 'img') {
+    return element.getAttribute('alt')?.trim() || '图片'
+  }
+
+  if (tagName === 'pre') {
+    return element.querySelector('code')?.textContent ?? element.textContent ?? ''
+  }
+
+  const childText = Array.from(element.childNodes)
+    .map((child) => extractClipboardPlainTextFromNode(child))
+    .join('')
+
+  if (tagName === 'td' || tagName === 'th') {
+    return `${childText}\t`
+  }
+
+  if (tagName === 'tr') {
+    return `${childText.replace(/\t$/, '')}\n`
+  }
+
+  if (clipboardBlockTags.has(tagName)) {
+    return `${childText}\n`
+  }
+
+  return childText
+}
+
+function getRichTextClipboardText(value: string) {
+  const fallbackText = normalizeClipboardPlainText(value)
+  if (!/[<>]/.test(value) || typeof DOMParser === 'undefined') {
+    return fallbackText
+  }
+
+  const parser = new DOMParser()
+  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
+  const root = documentFragment.body.firstElementChild
+  if (!root) {
+    return fallbackText
+  }
+
+  return normalizeClipboardPlainText(extractClipboardPlainTextFromNode(root))
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '')
+}
+
 async function copyTextToClipboard(value: string) {
   if (navigator.clipboard) {
     try {
@@ -132,7 +213,7 @@ async function copyTextToClipboard(value: string) {
 
 async function copyRichTextToClipboard(value: string) {
   const sanitizedHtml = sanitizeRichTextHtml(value)
-  const plainText = getRichTextPreviewText(value)
+  const plainText = getRichTextClipboardText(value)
 
   if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && sanitizedHtml) {
     try {
@@ -162,14 +243,14 @@ function renderQuoteDraftHtml(quoteDraft: SnapLinkQuoteDraftState) {
 
 function normalizePlainComposerDraft(value: string) {
   if (!/[<>]/.test(value)) {
-    return value.replace(/\s*\n+\s*/g, ' ')
+    return value.replace(/\r\n?/g, '\n')
   }
 
   return extractPlainTextFromRichText(value).replace(/\s*\n+\s*/g, ' ')
 }
 
 function startsWithBotMention(value: string) {
-  return /^@bot(?:$|[\s:：,，])/i.test(value.trimStart())
+  return /^@(?:ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
 }
 
 function createBotMentionDraft(value: string) {
@@ -178,7 +259,7 @@ function createBotMentionDraft(value: string) {
   }
 
   const normalizedDraft = value.trimStart()
-  return normalizedDraft ? `@bot ${normalizedDraft}` : '@bot '
+  return normalizedDraft ? `@Ai ${normalizedDraft}` : '@Ai '
 }
 
 function findBotMentionTriggerStart(value: string, caretPosition: number) {
@@ -353,8 +434,8 @@ function resolveActorIdentity(
 ) {
   if (isBotMessage) {
     return {
-      displayName: 'AI',
-      title: 'AI',
+      displayName: 'DD直连小助手',
+      title: 'DD直连小助手',
       badgeLabel: 'AI',
       avatarLabel: 'AI',
     }
@@ -430,6 +511,7 @@ export function SnapLinkStage({
   fileConversationEmptyState,
   localError,
   errorMessage,
+  aiChatElement,
   onRoomJoinDraftChange,
   onJoinRoomById,
   onCreatePublicRoom,
@@ -449,6 +531,7 @@ export function SnapLinkStage({
   onDrop,
 }: SnapLinkStageProps) {
   const [isLobbyOpen, setIsLobbyOpen] = useState(false)
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false)
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
@@ -456,7 +539,7 @@ export function SnapLinkStage({
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
   const messagesRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const botTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botPanelRef = useRef<HTMLDivElement | null>(null)
   const botMentionTriggerRangeRef = useRef<BotMentionTriggerRange | null>(null)
@@ -484,7 +567,7 @@ export function SnapLinkStage({
       }),
     [roomListItems],
   )
-  const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen
+  const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen
   const plainDraft = normalizePlainComposerDraft(chatDraft)
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
@@ -504,6 +587,18 @@ export function SnapLinkStage({
 
     messages.scrollTop = messages.scrollHeight
   }, [hasActiveRoom, visibleConversationEntries.length])
+
+  useEffect(() => {
+    const input = inputRef.current
+    if (!input) {
+      return
+    }
+
+    input.style.height = 'auto'
+    const nextHeight = Math.min(input.scrollHeight, snapLinkComposerMaxHeight)
+    input.style.height = `${nextHeight.toString()}px`
+    input.style.overflowY = input.scrollHeight > snapLinkComposerMaxHeight ? 'auto' : 'hidden'
+  }, [plainDraft])
 
   useEffect(() => {
     if (!isEmojiPickerOpen) {
@@ -613,8 +708,14 @@ export function SnapLinkStage({
   }, [messageContextMenu])
 
   const handleCreateRoom = () => {
+    setIsAiChatOpen(false)
     setIsLobbyOpen(false)
     onCreatePublicRoom()
+  }
+
+  const handleOpenAiChat = () => {
+    setIsLobbyOpen(false)
+    setIsAiChatOpen(true)
   }
 
   const handleJoinRoom = () => {
@@ -625,10 +726,19 @@ export function SnapLinkStage({
     }
 
     setIsLobbyOpen(false)
+    setIsAiChatOpen(false)
     onJoinRoomById(nextRoomId)
   }
 
   const handleRoomSelection = (roomId: string) => {
+    if (roomId === snapLinkAiChatSelectionValue) {
+      setIsLobbyOpen(false)
+      setIsAiChatOpen(true)
+      return
+    }
+
+    setIsAiChatOpen(false)
+
     if (!roomId) {
       setIsLobbyOpen(true)
       return
@@ -636,6 +746,11 @@ export function SnapLinkStage({
 
     setIsLobbyOpen(false)
     onOpenRoomConversation(roomId)
+  }
+
+  const handleBackToLobby = () => {
+    setIsAiChatOpen(false)
+    setIsLobbyOpen(true)
   }
 
   const handleCopyRoomId = () => {
@@ -658,8 +773,7 @@ export function SnapLinkStage({
     onCopyPublicRoomLink(selectedRoomId)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const submitComposerDraft = () => {
     if (!isSendDisabled) {
       const quoteHtml = quoteDraft ? renderQuoteDraftHtml(quoteDraft) : undefined
       setIsEmojiPickerOpen(false)
@@ -668,6 +782,11 @@ export function SnapLinkStage({
       onSendText(quoteHtml)
       setQuoteDraft(null)
     }
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    submitComposerDraft()
   }
 
   const focusComposerInput = (caretPosition: number) => {
@@ -712,7 +831,7 @@ export function SnapLinkStage({
     focusComposerInput(nextCaretPosition)
   }
 
-  const handleDraftChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.target.value
     const caretPosition = event.target.selectionStart ?? nextDraft.length
     const triggerStart = findBotMentionTriggerStart(nextDraft, caretPosition)
@@ -735,7 +854,7 @@ export function SnapLinkStage({
     }
   }
 
-  const handleComposerPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedImageFiles = getClipboardImageFiles(event.clipboardData)
     if (pastedImageFiles.length === 0) {
       return
@@ -746,6 +865,25 @@ export function SnapLinkStage({
     setIsBotPanelOpen(false)
     botMentionTriggerRangeRef.current = null
     onDirectFileSelection(pastedImageFiles)
+  }
+
+  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+      return
+    }
+
+    if (isBotPanelOpen) {
+      event.preventDefault()
+      handleBotMentionSelect()
+      return
+    }
+
+    if (event.shiftKey) {
+      return
+    }
+
+    event.preventDefault()
+    submitComposerDraft()
   }
 
   const markCodeCopyButton = (button: HTMLButtonElement) => {
@@ -943,10 +1081,11 @@ export function SnapLinkStage({
           {roomListItems.length > 0 ? (
             <select
               aria-label="选择对话"
-              value={hasActiveRoom ? selectedRoomId ?? '' : ''}
+              value={isAiChatOpen ? snapLinkAiChatSelectionValue : hasActiveRoom ? selectedRoomId ?? '' : ''}
               onChange={(event) => handleRoomSelection(event.target.value)}
             >
               <option value="">大厅</option>
+              <option value={snapLinkAiChatSelectionValue}>Chat with AI</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -964,20 +1103,34 @@ export function SnapLinkStage({
               <span>{selectedRoomOnlineCount}</span>
             </span>
           ) : null}
+          {isAiChatOpen ? (
+            <button type="button" onClick={handleBackToLobby}>
+              大厅
+            </button>
+          ) : null}
           <button type="button" onClick={onUseClassicInterface}>
             原界面
           </button>
         </div>
       </header>
 
-      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : 'is-lobby'}`}>
-        <div className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : 'is-lobby'}`}>
-          {!hasActiveRoom ? (
+      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : 'is-lobby'}`}>
+        <div className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : 'is-lobby'}`}>
+          {isAiChatOpen ? (
+            aiChatElement
+          ) : !hasActiveRoom ? (
             <section className="dd-snaplink__lobby" aria-label="ddzhilian 大厅">
               <h1>ddzhilian</h1>
               <p>创建房间或输入连接码加入</p>
               <button type="button" className="dd-snaplink__create" onClick={handleCreateRoom}>
                 创建房间
+              </button>
+              <button
+                type="button"
+                className="dd-snaplink__create dd-snaplink__create--ai"
+                onClick={handleOpenAiChat}
+              >
+                Chat with AI
               </button>
               <div className="dd-snaplink__separator">或输入连接码</div>
               <div className="dd-snaplink__join">
@@ -1210,10 +1363,10 @@ export function SnapLinkStage({
                   ref={botTriggerRef}
                   type="button"
                   className={`dd-snaplink__bot${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
-                  aria-label="询问 bot"
+                  aria-label="询问 DD直连小助手"
                   aria-expanded={isBotPanelOpen}
                   aria-haspopup="dialog"
-                  title="询问 bot"
+                  title="询问 DD直连小助手"
                   disabled={isAiGenerating}
                   onClick={handleBotTriggerClick}
                 >
@@ -1224,14 +1377,14 @@ export function SnapLinkStage({
                     ref={botPanelRef}
                     className="dd-snaplink__bot-panel"
                     role="dialog"
-                    aria-label="@bot 模型选择"
+                    aria-label="@Ai 模型选择"
                   >
                     <button
                       type="button"
                       className="dd-snaplink__bot-option"
                       onClick={handleBotMentionSelect}
                     >
-                      <strong>@bot</strong>
+                      <strong>@Ai</strong>
                       <span>{selectedAiModelLabel} · {aiQuotaLabel}</span>
                     </button>
                     <label className="dd-snaplink__bot-model">
@@ -1255,20 +1408,15 @@ export function SnapLinkStage({
                   </div>
                 ) : null}
                 <div className="dd-snaplink__input-wrap">
-                  <input
+                  <textarea
                     ref={inputRef}
-                    type="text"
                     value={plainDraft}
                     placeholder="输入消息..."
                     autoComplete="off"
+                    rows={1}
                     onChange={handleDraftChange}
                     onPaste={handleComposerPaste}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && isBotPanelOpen) {
-                        event.preventDefault()
-                        handleBotMentionSelect()
-                      }
-                    }}
+                    onKeyDown={handleComposerKeyDown}
                   />
                   <button
                     ref={emojiTriggerRef}

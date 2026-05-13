@@ -3,7 +3,8 @@ export type PairReason =
   | 'short-code'
   | 'pair-link'
   | 'account-auto'
-  | 'lan-discovery';
+  | 'lan-discovery'
+  | 'bot-chat';
 
 export type SessionState = 'connecting' | 'connected' | 'failed' | 'closed';
 
@@ -88,6 +89,7 @@ export interface RoomSummary {
   roomId: string;
   members: RoomMemberSummary[];
   isPublic: boolean;
+  reason: PairReason;
   historyTextCount: number;
   historyTextLatestAt?: string;
   historyTextPreview?: string;
@@ -209,6 +211,10 @@ export type ClientEvent =
       payload?: undefined;
     }
   | {
+      type: 'create-bot-room';
+      payload?: undefined;
+    }
+  | {
       type: 'request-connect';
       payload: { targetDeviceId: string; reason?: PairReason; createNewRoom?: boolean };
     }
@@ -271,6 +277,12 @@ export type ServerEvent =
     }
   | {
       type: 'public-room-created';
+      payload: {
+        roomId: string;
+      };
+    }
+  | {
+      type: 'private-room-created';
       payload: {
         roomId: string;
       };

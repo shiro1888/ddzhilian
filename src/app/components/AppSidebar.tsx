@@ -52,37 +52,12 @@ export function AppSidebar({
         </div>
 
         <nav className="dd-nav" aria-label="功能导航">
-          <button
-            type="button"
-            className="dd-dorm-entry"
-            title="宿舍域名占位"
-            aria-label="宿舍域名入口占位"
-          >
-            <span className="dd-nav__icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4.5 20V9.5L12 4l7.5 5.5V20" />
-                <path d="M8.5 20v-6h7v6" />
-                <path d="M9.5 10.5h5" />
-              </svg>
-            </span>
-            <span className="dd-nav__copy">
-              <strong>宿舍</strong>
-              <span>宿舍域名入口</span>
-            </span>
-          </button>
-
           {visibleNavItems.map((item) => (
             <button
               key={item.id}
               type="button"
               className={effectiveNavView === item.id ? 'is-active' : ''}
+              data-nav-id={item.id}
               title={item.label}
               aria-label={item.label}
               onClick={() => {

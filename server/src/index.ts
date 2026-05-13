@@ -29,6 +29,7 @@ import {
 } from './registry/device-registry.js';
 import { AdminConfigRegistry, type AdminAiSettingsSnapshot } from './registry/admin-config-registry.js';
 import { AdminSessionRegistry } from './registry/admin-session-registry.js';
+import { AiChatConversationRegistry } from './registry/ai-chat-conversation-registry.js';
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
 import { HistoryRegistry } from './registry/history-registry.js';
 import {
@@ -111,6 +112,24 @@ type OpenRouterChatFailure = {
   model: string;
   status: number;
   message?: string;
+};
+type OpenAiCompatibleModelsResponse = {
+  data?: Array<{
+    id?: unknown;
+    name?: unknown;
+  }>;
+  models?: Array<{
+    id?: unknown;
+    name?: unknown;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+type AdminOpenAiCompatibleDetectPayload = {
+  baseUrl?: unknown;
+  apiKey?: unknown;
+  modelId?: unknown;
 };
 type AiChatRequestPayload = {
   prompt?: unknown;
@@ -229,6 +248,10 @@ const adminSessions = new AdminSessionRegistry();
 const aiUsage = new AiUsageRegistry(
   fileURLToPath(new URL('../data/admin/ai-usage.json', import.meta.url)),
 );
+const aiChatConversations = new AiChatConversationRegistry(
+  fileURLToPath(new URL('../data/ai-chat/conversations.json', import.meta.url)),
+);
+await aiChatConversations.load();
 const imageAssetRoot = fileURLToPath(new URL('../data/image-assets', import.meta.url));
 const rooms = new RoomRegistry();
 const sessions = new SessionRegistry();
@@ -311,7 +334,7 @@ function setCorsHeaders(
   response.setHeader('Access-Control-Allow-Origin', origin);
   response.setHeader('Vary', 'Origin');
   response.setHeader('Access-Control-Allow-Credentials', 'true');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   response.setHeader(
     'Access-Control-Allow-Headers',
     'Authorization,Content-Range,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
@@ -827,6 +850,12 @@ function authenticateHistoryRequest(request: {
   };
 }
 
+function getAiChatConversationScope(device: ConnectedDevice) {
+  return device.accountId
+    ? `account:${device.accountId}`
+    : `device:${device.deviceId}`;
+}
+
 function collectCloudflareAiText(value: unknown): string[] {
   if (typeof value === 'string') {
     const text = value.trim();
@@ -1144,6 +1173,68 @@ function formatOpenRouterStatus(model: string) {
   return `当前 AI 提供方为 OpenAI 兼容接口，模型 ${model}。本站不统计该接口额度；实际费用和限额以你的 API 服务账户为准。`;
 }
 
+function normalizeAdminOpenAiCompatibleBaseUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/responses$/i, '')
+    .replace(/\/models$/i, '')
+    .replace(/\/+$/g, '');
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function toOpenAiCompatibleModelOptions(payload: OpenAiCompatibleModelsResponse | null) {
+  const source = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.models)
+      ? payload.models
+      : [];
+  const models = new Map<string, { id: string; label: string }>();
+
+  for (const item of source) {
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!id) {
+      continue;
+    }
+
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    models.set(id, {
+      id,
+      label: name || id,
+    });
+  }
+
+  return [...models.values()];
+}
+
+function createAbortSignal(timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeout),
+  };
+}
+
 function normalizeBotTextValue(value: unknown, fallback: string) {
   if (typeof value !== 'string') {
     return fallback;
@@ -1319,6 +1410,16 @@ async function saveBase64ImageAsset(input: {
     mimeType,
     revisedPrompt: input.image.revisedPrompt,
   };
+}
+
+async function removeImageAssetDirectory(userId: string, generationId: string) {
+  const generationDirectory = join(
+    imageAssetRoot,
+    safeImageAssetSegment(userId),
+    safeImageAssetSegment(generationId),
+  );
+
+  await fs.rm(generationDirectory, { recursive: true, force: true });
 }
 
 async function materializeImageRecordAssets(record: ImageGenerationRecord) {
@@ -2836,6 +2937,86 @@ async function handleAdminAiConfigUpdate(
   });
 }
 
+async function handleAdminAiConfigDetect(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  let payload: AdminOpenAiCompatibleDetectPayload;
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+    payload = JSON.parse(buffer.toString('utf8')) as AdminOpenAiCompatibleDetectPayload;
+  } catch {
+    writeJson(response, 400, { error: 'Invalid OpenAI-compatible detection JSON.' });
+    return;
+  }
+
+  const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(payload.baseUrl);
+  const apiKey = typeof payload.apiKey === 'string' ? payload.apiKey.trim() : '';
+  const requestedModelId = typeof payload.modelId === 'string' ? payload.modelId.trim() : '';
+
+  if (!baseUrl || !apiKey) {
+    writeJson(response, 400, { error: 'Base URL 和 API Key 都需要填写后才能检测模型。' });
+    return;
+  }
+
+  const abort = createAbortSignal(12_000);
+
+  try {
+    const modelsResponse = await fetch(new URL(`${baseUrl}/models`), {
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+      },
+      signal: abort.signal,
+    });
+    const modelsPayload = await modelsResponse.json().catch(() => null) as OpenAiCompatibleModelsResponse | null;
+
+    if (!modelsResponse.ok) {
+      writeJson(response, 502, {
+        error:
+          modelsPayload?.error?.message?.trim() ||
+          `模型检测失败，上游 /models 返回 ${modelsResponse.status.toString()}。`,
+      });
+      return;
+    }
+
+    const models = toOpenAiCompatibleModelOptions(modelsPayload);
+    if (models.length === 0) {
+      writeJson(response, 502, { error: '模型检测失败，上游 /models 没有返回可用模型。' });
+      return;
+    }
+
+    const selectedModelId = requestedModelId
+      ? models.find((model) => model.id === requestedModelId)?.id
+      : models[0]?.id;
+
+    if (requestedModelId && !selectedModelId) {
+      writeJson(response, 400, { error: '当前模型 ID 不在上游返回的真实模型列表中。' });
+      return;
+    }
+
+    writeJson(response, 200, {
+      ok: true,
+      baseUrl,
+      selectedModelId,
+      models,
+    });
+  } catch (error) {
+    writeJson(response, 502, {
+      error: error instanceof Error && error.name === 'AbortError'
+        ? '模型检测超时，请检查 Base URL 是否可访问。'
+        : '模型检测失败，请检查 Base URL、API Key 和网络连通性。',
+    });
+  } finally {
+    abort.clear();
+  }
+}
+
 async function handleAdminHistoryClear(
   request: IncomingMessage,
   response: ServerResponse,
@@ -3045,6 +3226,56 @@ function handleAiQuotaRequest(
   }
 
   writeJson(response, 200, buildAiQuotaPayload(modelSelection.model));
+}
+
+async function handleAiChatConversationsRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const scopeKey = getAiChatConversationScope(authResult.device);
+
+  if (request.method === 'GET') {
+    writeJson(response, 200, {
+      conversations: aiChatConversations.list(scopeKey),
+    });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    let payload: { conversations?: unknown };
+    try {
+      const buffer = await readRequestBuffer(request, { maxBytes: 4 * 1024 * 1024 });
+      payload = JSON.parse(buffer.toString('utf8')) as { conversations?: unknown };
+    } catch {
+      writeJson(response, 400, { error: 'Invalid AI chat conversation JSON.' });
+      return;
+    }
+
+    if (!Array.isArray(payload.conversations)) {
+      writeJson(response, 400, { error: 'Missing conversations.' });
+      return;
+    }
+
+    const conversations = await aiChatConversations.replace(scopeKey, payload.conversations);
+    writeJson(response, 200, { conversations });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    const conversationId = url.searchParams.get('conversationId')?.trim() || undefined;
+    const conversations = await aiChatConversations.delete(scopeKey, conversationId);
+    writeJson(response, 200, { conversations });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed.' });
 }
 
 async function saveAiBotHistoryText(input: {
@@ -3528,6 +3759,7 @@ async function runImageGenerationJob(
     }
 
     let historyItem: ImageGenerationRecord;
+    let historySaved = false;
     try {
       historyItem = await imageGenerationHistory.save({
         generationId: job.jobId,
@@ -3540,6 +3772,7 @@ async function runImageGenerationJob(
         images,
         createdAt,
       });
+      historySaved = true;
     } catch (error) {
       console.error('Image generation history job persistence failed', {
         jobId: job.jobId,
@@ -3547,12 +3780,19 @@ async function runImageGenerationJob(
         model: job.model,
         message: error instanceof Error ? error.message : String(error),
       });
+      await removeImageAssetDirectory(job.userId, job.jobId).catch((cleanupError: unknown) => {
+        console.error('Image generation asset cleanup failed after history persistence error', {
+          jobId: job.jobId,
+          userId: job.userId,
+          message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      });
       job.error = '图片已生成，但生图历史保存失败。';
       touchImageGenerationJob(job, 'failed');
       return;
     }
 
-    let quota: AccountImageQuotaStatus | undefined;
+    let quota: AccountImageQuotaStatus;
     try {
       quota = await accounts.addImageQuotaUsage({
         user: job.user,
@@ -3562,11 +3802,32 @@ async function runImageGenerationJob(
       });
       job.quota = quota;
     } catch (error) {
-      console.error('Image generation quota refresh failed after success', {
+      console.error('Image generation quota refresh failed after history persistence', {
         jobId: job.jobId,
         userId: job.userId,
         message: error instanceof Error ? error.message : String(error),
       });
+      if (historySaved) {
+        await imageGenerationHistory.deleteForUser(job.userId, job.jobId).catch((cleanupError: unknown) => {
+          console.error('Image generation history cleanup failed after quota error', {
+            jobId: job.jobId,
+            userId: job.userId,
+            message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        });
+      }
+      await removeImageAssetDirectory(job.userId, job.jobId).catch((cleanupError: unknown) => {
+        console.error('Image generation asset cleanup failed after quota error', {
+          jobId: job.jobId,
+          userId: job.userId,
+          message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      });
+      job.error = error instanceof AccountAuthError
+        ? error.message
+        : '生图额度扣减失败，请稍后重试。';
+      touchImageGenerationJob(job, 'failed');
+      return;
     }
 
     job.result = {
@@ -3877,6 +4138,11 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
+  if (url.pathname === '/api/admin/ai-config/detect' && request.method === 'POST') {
+    void handleAdminAiConfigDetect(request, response);
+    return;
+  }
+
   if (url.pathname === '/api/admin/history/clear' && request.method === 'POST') {
     void handleAdminHistoryClear(request, response);
     return;
@@ -3925,6 +4191,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/ai/chat' && request.method === 'POST') {
     void handleAiChatRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/ai/chat/conversations') {
+    void handleAiChatConversationsRequest(request, response, url);
     return;
   }
 
@@ -4780,6 +5051,31 @@ function createPublicRoom(deviceId: string) {
   };
 }
 
+function createBotRoom(deviceId: string) {
+  const device = devices.getById(deviceId);
+
+  if (!device) {
+    return {
+      ok: false as const,
+      code: 'DEVICE_NOT_FOUND' as const,
+      message: 'The current device is no longer registered.',
+    };
+  }
+
+  const room = rooms.createRoom({
+    memberIds: [device.deviceId],
+    reason: 'bot-chat',
+    isPublic: false,
+  });
+
+  broadcastSnapshots();
+
+  return {
+    ok: true as const,
+    room,
+  };
+}
+
 function autoJoinLanRoom(deviceId: string) {
   const device = devices.getById(deviceId);
 
@@ -5068,6 +5364,24 @@ function handleEvent(
       return deviceId;
     }
 
+    case 'create-bot-room': {
+      const result = createBotRoom(activeDeviceId);
+
+      if (!result.ok) {
+        emitError(socket, result);
+        return deviceId;
+      }
+
+      send(socket, {
+        type: 'private-room-created',
+        payload: {
+          roomId: result.room.roomId,
+        },
+      });
+
+      return deviceId;
+    }
+
     case 'request-connect': {
       const result = joinRoomViaTarget({
         requesterId: activeDeviceId,
@@ -5078,6 +5392,16 @@ function handleEvent(
 
       if (!result.ok) {
         emitError(socket, result);
+        return deviceId;
+      }
+
+      if (event.payload.createNewRoom && !result.room.isPublic) {
+        send(socket, {
+          type: 'private-room-created',
+          payload: {
+            roomId: result.room.roomId,
+          },
+        });
       }
 
       return deviceId;

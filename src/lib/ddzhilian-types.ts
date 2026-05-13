@@ -4,6 +4,7 @@ export type PairReason =
   | 'pair-link'
   | 'account-auto'
   | 'lan-discovery'
+  | 'bot-chat'
 
 export type SessionState = 'connecting' | 'connected' | 'failed' | 'closed'
 
@@ -63,6 +64,7 @@ export type RoomSummary = {
   roomId: string
   members: RoomMemberSummary[]
   isPublic: boolean
+  reason: PairReason
   historyTextCount: number
   historyTextLatestAt?: string
   historyTextPreview?: string
@@ -176,6 +178,10 @@ export type ClientEvent =
       payload?: undefined
     }
   | {
+      type: 'create-bot-room'
+      payload?: undefined
+    }
+  | {
       type: 'request-connect'
       payload: { targetDeviceId: string; reason?: PairReason; createNewRoom?: boolean }
     }
@@ -237,6 +243,12 @@ export type ServerEvent =
     }
   | {
       type: 'public-room-created'
+      payload: {
+        roomId: string
+      }
+    }
+  | {
+      type: 'private-room-created'
       payload: {
         roomId: string
       }
@@ -351,6 +363,40 @@ export type AiChatResponse = {
   model: string
   quota?: AiQuotaStatus
   historyText?: HistoryTextSummary
+}
+
+export type AiChatConversationMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: string
+  status?: 'streaming' | 'complete' | 'failed' | 'stopped'
+  model?: string
+  attachments?: AiChatMessageAttachmentSummary[]
+}
+
+export type AiChatMessageAttachmentSummary = {
+  id: string
+  kind: 'image' | 'text'
+  name: string
+  size: number
+  mimeType?: string
+  textPreview?: string
+}
+
+export type AiChatConversationRecord = {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  pinned?: boolean
+  archived?: boolean
+  parentConversationId?: string
+  messages: AiChatConversationMessage[]
+}
+
+export type AiChatConversationSyncResponse = {
+  conversations: AiChatConversationRecord[]
 }
 
 export type AiImageResult = {

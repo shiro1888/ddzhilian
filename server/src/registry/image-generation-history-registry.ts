@@ -182,6 +182,18 @@ export class ImageGenerationHistoryRegistry {
     return data ? fromRow(data as PersistedImageGenerationRow) : null;
   }
 
+  async deleteForUser(userId: string, generationId: string): Promise<void> {
+    const { error } = await this.supabaseClient
+      .from(this.imageGenerationsTable)
+      .delete()
+      .eq('user_id', userId)
+      .eq('generation_id', generationId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
   async listForUser(userId: string, limit: number, cursor?: ImageGenerationCursor): Promise<ImageGenerationPage> {
     const pageSize = Math.max(1, Math.min(limit, 100));
     let query = this.supabaseClient

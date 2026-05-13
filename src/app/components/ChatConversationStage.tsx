@@ -542,6 +542,32 @@ export function ChatConversationStage({
     onLoadOlderHistory()
   }
 
+  const scrollConversationViewport = useCallback((position: 'top' | 'bottom', behavior: ScrollBehavior = 'smooth') => {
+    const thread = conversationThreadRef.current
+    if (!thread) {
+      return
+    }
+
+    const threadCanScroll = thread.scrollHeight - thread.clientHeight > 2
+    if (threadCanScroll) {
+      thread.scrollTo({
+        top: position === 'top' ? 0 : thread.scrollHeight,
+        behavior,
+      })
+      return
+    }
+
+    const scrollRoot = document.scrollingElement ?? document.documentElement
+    const targetTop = position === 'top'
+      ? Math.max(0, thread.getBoundingClientRect().top + window.scrollY - 8)
+      : Math.max(0, scrollRoot.scrollHeight - window.innerHeight)
+
+    window.scrollTo({
+      top: targetTop,
+      behavior,
+    })
+  }, [])
+
   useEffect(() => {
     if (!editorRef.current) {
       return
@@ -567,21 +593,13 @@ export function ChatConversationStage({
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const thread = conversationThreadRef.current
-      if (!thread) {
-        return
-      }
-
-      thread.scrollTo({
-        top: thread.scrollHeight,
-        behavior: 'smooth',
-      })
+      scrollConversationViewport('bottom')
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [isSharedPanelOpen, latestConversationEntryId])
+  }, [isSharedPanelOpen, latestConversationEntryId, scrollConversationViewport])
 
   useEffect(() => {
     if (isOlderHistoryLoading) {
@@ -1409,7 +1427,7 @@ export function ChatConversationStage({
     mention.className = 'dd-chatbox__mention'
     mention.contentEditable = 'false'
     mention.dataset.mention = 'bot'
-    mention.textContent = '@bot'
+    mention.textContent = '@Ai'
 
     const caretAnchor = document.createTextNode(' ')
     const insertionSelection = window.getSelection()
@@ -1698,15 +1716,7 @@ export function ChatConversationStage({
   }
 
   const scrollConversationTo = (position: 'top' | 'bottom') => {
-    const thread = conversationThreadRef.current
-    if (!thread) {
-      return
-    }
-
-    thread.scrollTo({
-      top: position === 'top' ? 0 : thread.scrollHeight,
-      behavior: 'smooth',
-    })
+    scrollConversationViewport(position)
   }
 
   const chatboxStyle = {
@@ -2327,7 +2337,7 @@ export function ChatConversationStage({
           )}
 
           {isBotMentionOpen && (
-            <div ref={botMentionRef} className="dd-bot-mention-panel" role="listbox" aria-label="@ bot">
+            <div ref={botMentionRef} className="dd-bot-mention-panel" role="listbox" aria-label="@Ai">
               <button
                 type="button"
                 className="dd-bot-mention-option"
@@ -2336,7 +2346,7 @@ export function ChatConversationStage({
                 onMouseDown={preserveBotMentionSelection}
                 onClick={handleBotMentionSelect}
               >
-                <strong>@bot</strong>
+                <strong>@Ai</strong>
                 <span>{selectedAiModelLabel} · {aiQuotaLabel}</span>
               </button>
               {aiModelOptions.length > 0 && (
@@ -2439,8 +2449,8 @@ export function ChatConversationStage({
               </button>
               <button
                 type="button"
-                aria-label="Insert @bot"
-                title="Insert @bot"
+                aria-label="Insert @Ai"
+                title="Insert @Ai"
                 className={`dd-chatbox__ai-trigger${isAiGenerating ? ' is-loading' : ''}`}
                 disabled={isAiGenerating}
                 onMouseDown={preserveEditorFocus}

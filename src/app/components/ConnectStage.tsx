@@ -9,11 +9,9 @@ type ConnectStageProps = {
   effectiveSelectedPeerId: string | null
   peerStatusById: Map<string, PeerConnectionStatus>
   selfShortCode?: string
-  selfPairToken?: string
   isEditingDeviceName: boolean
   deviceNameDraft: string
   selfDeviceName?: string
-  socketState: string
   onJoinCodeChange: (value: string) => void
   onPrimaryConnect: () => void
   onRequestSnapshot: () => void
@@ -31,11 +29,9 @@ export function ConnectStage({
   effectiveSelectedPeerId,
   peerStatusById,
   selfShortCode,
-  selfPairToken,
   isEditingDeviceName,
   deviceNameDraft,
   selfDeviceName,
-  socketState,
   onJoinCodeChange,
   onPrimaryConnect,
   onRequestSnapshot,
@@ -106,11 +102,11 @@ export function ConnectStage({
           <div className="dd-codecard">
             <p>我的互传码</p>
             <strong>{selfShortCode ?? '------'}</strong>
-            <span>{selfPairToken ? `pairToken: ${selfPairToken}` : '连接成功后会显示互传码和分享令牌。'}</span>
+            <span>另一台设备输入此码即可发起连接。</span>
           </div>
 
           <div className="dd-detailcard">
-            <p>连接提示</p>
+            <p>当前设备</p>
             <ul>
               <li
                 className={`dd-device-name-row${isEditingDeviceName ? ' is-editing' : ''}`}
@@ -155,14 +151,6 @@ export function ConnectStage({
                     <small>点击名称可修改</small>
                   </div>
                 )}
-              </li>
-              <li>
-                <span>连接方式</span>
-                <strong>互传码 / 可见设备列表 / pair token</strong>
-              </li>
-              <li>
-                <span>Socket</span>
-                <strong>{socketState}</strong>
               </li>
             </ul>
           </div>

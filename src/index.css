@@ -54,6 +54,18 @@
   --bubble-self-text: #111111;
   --bubble-peer: #ffffff;
   --bubble-peer-text: #111111;
+  --cc-window: var(--shell-bg);
+  --cc-sidebar: var(--sidebar-bg);
+  --cc-panel: var(--panel-bg);
+  --cc-surface: var(--surface);
+  --cc-divider: var(--line);
+  --cc-divider-soft: var(--line-soft);
+  --cc-text: var(--ink);
+  --cc-text-secondary: var(--ink-soft);
+  --cc-text-tertiary: var(--muted);
+  --cc-hover: var(--row-hover);
+  --cc-active-row: var(--row-active);
+  --cc-green: var(--brand);
 
   --radius-xs: 6px;
   --radius-sm: 8px;

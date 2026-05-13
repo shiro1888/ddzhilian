@@ -134,7 +134,7 @@ npm run dev
 - Cloudflare AI 或 OpenRouter 的文本 AI 代理接口
 - 通过 Codex 反代地址接入 `gpt-image-2` 图片生成与图片编辑接口
 
-更详细的后端协议说明见 [server/README.md](server/README.md)。
+更详细的后端协议说明见 [server/README.md](server/README.md)。生图功能的账号鉴权、API 接入、图片上传、异步返回、图片落盘、历史记录和额度扣减流程见 [docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md](docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md)。
 
 ## 历史内容清理
 
@@ -154,8 +154,8 @@ npm run dev
 
 可选变量：
 
-- `VITE_SIGNALING_WS_URL`：显式指定 WebSocket 信令地址。
-- `VITE_SIGNALING_HTTP_URL`：显式指定历史记录或调试接口 HTTP 地址。
+- `NEXT_PUBLIC_SIGNALING_WS_URL`：显式指定 WebSocket 信令地址。
+- `NEXT_PUBLIC_SIGNALING_HTTP_URL`：显式指定历史记录或调试接口 HTTP 地址。
 
 未设置时，本地开发默认使用 `ws://localhost:8787/ws`；生产环境会基于当前站点地址推导 `/ws`。
 

@@ -38,7 +38,7 @@ type ImageThreadEntry =
       createdAt: string
       status: 'loading' | 'complete' | 'failed'
       generationId?: string
-      image?: AiImageResult
+      images?: AiImageResult[]
       model?: string
       panoramaIntent?: boolean
       error?: string
@@ -234,8 +234,7 @@ function showImageQuotaExhaustedDialog() {
 }
 
 function historyItemToEntries(item: AiImageHistoryItem): ImageThreadEntry[] {
-  const image = item.images[0]
-  if (!image) {
+  if (item.images.length === 0) {
     return []
   }
 
@@ -253,7 +252,7 @@ function historyItemToEntries(item: AiImageHistoryItem): ImageThreadEntry[] {
       createdAt: item.createdAt,
       status: 'complete',
       generationId: item.generationId,
-      image,
+      images: item.images,
       model: item.model,
       panoramaIntent: hasPanoramaIntentText([
         item.prompt,
@@ -261,7 +260,7 @@ function historyItemToEntries(item: AiImageHistoryItem): ImageThreadEntry[] {
         item.model,
         item.size,
         item.quality,
-        image.revisedPrompt,
+        ...item.images.map((image) => image.revisedPrompt),
       ]),
     },
   ]
@@ -559,7 +558,7 @@ export function ImageGenerationStage({
   const latestImageEntryId = entries
     .slice()
     .reverse()
-    .find((entry) => entry.role === 'assistant' && entry.status === 'complete' && entry.image)
+    .find((entry) => entry.role === 'assistant' && entry.status === 'complete' && entry.images?.length)
     ?.id
 
   useEffect(() => {
@@ -810,44 +809,6 @@ export function ImageGenerationStage({
     })
   }
 
-  const prepareGeneratedImageEdit = async (entry: ImageAssistantEntry) => {
-    if (entry.status !== 'complete' || !entry.image || editingImageEntryId) {
-      return
-    }
-
-    setComposerError(null)
-    if (selectedImages.length >= imageUploadMaxFiles) {
-      setComposerError(`最多一次上传 ${imageUploadMaxFiles.toString()} 张图片。`)
-      return
-    }
-
-    setEditingImageEntryId(entry.id)
-    try {
-      const file = await createFileFromGeneratedImage(entry.image, entry.generationId)
-      const previewUrl = URL.createObjectURL(file)
-      previewUrlsRef.current.add(previewUrl)
-      const editDraft: ImageUploadDraft = {
-        id: createEntryId(),
-        name: file.name,
-        previewUrl,
-        file,
-      }
-      setSelectedImages((current) => [...current, editDraft])
-
-      window.requestAnimationFrame(() => {
-        composerTextAreaRef.current?.focus()
-        threadRef.current?.scrollTo({
-          top: threadRef.current.scrollHeight,
-          behavior: 'smooth',
-        })
-      })
-    } catch (error) {
-      setComposerError(error instanceof Error ? error.message : '图片读取失败，无法进入编辑。')
-    } finally {
-      setEditingImageEntryId(null)
-    }
-  }
-
   const loadOlderHistory = async () => {
     if (
       !historyCursor ||
@@ -946,7 +907,6 @@ export function ImageGenerationStage({
         prompt,
         images: imageFiles.length > 0 ? imageFiles : undefined,
       })
-      const image = result.images[0]
 
       if (result.quota) {
         setImageQuota(result.quota)
@@ -962,7 +922,7 @@ export function ImageGenerationStage({
                 ...entry,
                 status: 'complete',
                 generationId: result.historyItem?.generationId,
-                image,
+                images: result.images,
                 model: result.model,
                 createdAt: result.createdAt,
                 panoramaIntent: hasPanoramaIntentText([
@@ -971,7 +931,7 @@ export function ImageGenerationStage({
                   result.model,
                   result.historyItem?.size,
                   result.historyItem?.quality,
-                  image?.revisedPrompt,
+                  ...result.images.map((image) => image.revisedPrompt),
                 ]),
               }
             : entry,
@@ -1095,87 +1055,141 @@ export function ImageGenerationStage({
     </form>
   )
 
-  const renderGeneratedImageCard = (entry: ImageAssistantEntry) => {
-    if (entry.status !== 'complete' || !entry.image) {
-      return null
-    }
-
-    const generatedImage = entry.image
-    const imageSrc = resolveImageSource(generatedImage)
-    if (!imageSrc) {
+  const renderGeneratedImageCards = (entry: ImageAssistantEntry) => {
+    if (entry.status !== 'complete' || !entry.images?.length) {
       return null
     }
 
     const isLatestImage = entry.id === latestImageEntryId
-    const isPreparingThisImageEdit = editingImageEntryId === entry.id
-    const hasPanoramaIntent =
-      entry.panoramaIntent === true ||
-      hasPanoramaIntentText([
-        entry.prompt,
-        entry.generationId,
-        entry.model,
-        generatedImage.revisedPrompt,
-      ])
-    const canViewAsPanorama =
-      hasPanoramaIntent && panoramaEligibleEntryIds[entry.id] === true
-
+    const totalImages = entry.images.length
     return (
-      <figure className="dd-image-card">
-        <div className="dd-image-card__media">
-          <button
-            type="button"
-            className="dd-image-card__image-button"
-            aria-label="放大查看图片"
-            onClick={() => openImagePreview(generatedImage, entry.prompt)}
-          >
-            <img
-              src={imageSrc}
-              alt={entry.prompt}
-              loading={isLatestImage ? 'eager' : 'lazy'}
-              fetchPriority={isLatestImage ? 'high' : 'auto'}
-              decoding="async"
-              onLoad={(event) => {
-                updatePanoramaEligibility(entry.id, event.currentTarget)
-                if (isLatestImage) {
-                  keepThreadPinnedAfterImageLoad()
-                }
-              }}
-            />
-          </button>
-          <div className="dd-image-card__actions" aria-label="图片操作">
-            {canViewAsPanorama ? (
-              <button
-                type="button"
-                onClick={() => openImagePreview(generatedImage, entry.prompt, 'panorama')}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M3 12h18" />
-                  <path d="M12 3a13.5 13.5 0 0 1 0 18" />
-                  <path d="M12 3a13.5 13.5 0 0 0 0 18" />
-                </svg>
-                <span>360</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={isGenerating || Boolean(editingImageEntryId)}
-              onClick={() => {
-                void prepareGeneratedImageEdit(entry)
-              }}
-            >
-              <span>{isPreparingThisImageEdit ? '准备中' : '编辑'}</span>
-            </button>
-          </div>
-        </div>
-        <figcaption>
-          <span>{entry.model || 'gpt-image-2'} · {formatImageTime(entry.createdAt)}</span>
-          <a href={imageSrc} download="gpt-image-2.png">
-            下载
-          </a>
-        </figcaption>
-      </figure>
+      <>
+        {entry.images.map((generatedImage, index) => {
+          const imageSrc = resolveImageSource(generatedImage)
+          if (!imageSrc) {
+            return null
+          }
+
+          const imageEntryId = `${entry.id}-${index.toString()}`
+          const isPreparingThisImageEdit = editingImageEntryId === imageEntryId
+          const hasPanoramaIntent =
+            entry.panoramaIntent === true ||
+            hasPanoramaIntentText([
+              entry.prompt,
+              entry.generationId,
+              entry.model,
+              generatedImage.revisedPrompt,
+            ])
+          const canViewAsPanorama =
+            hasPanoramaIntent && panoramaEligibleEntryIds[imageEntryId] === true
+
+          return (
+            <figure key={imageEntryId} className="dd-image-card">
+              <div className="dd-image-card__media">
+                <button
+                  type="button"
+                  className="dd-image-card__image-button"
+                  aria-label="放大查看图片"
+                  onClick={() => openImagePreview(generatedImage, entry.prompt)}
+                >
+                  <img
+                    src={imageSrc}
+                    alt={entry.prompt}
+                    loading={isLatestImage ? 'eager' : 'lazy'}
+                    fetchPriority={isLatestImage ? 'high' : 'auto'}
+                    decoding="async"
+                    onLoad={(event) => {
+                      updatePanoramaEligibility(imageEntryId, event.currentTarget)
+                      if (isLatestImage) {
+                        keepThreadPinnedAfterImageLoad()
+                      }
+                    }}
+                  />
+                </button>
+                <div className="dd-image-card__actions" aria-label="图片操作">
+                  {canViewAsPanorama ? (
+                    <button
+                      type="button"
+                      onClick={() => openImagePreview(generatedImage, entry.prompt, 'panorama')}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M3 12h18" />
+                        <path d="M12 3a13.5 13.5 0 0 1 0 18" />
+                        <path d="M12 3a13.5 13.5 0 0 0 0 18" />
+                      </svg>
+                      <span>360</span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={isGenerating || Boolean(editingImageEntryId)}
+                    onClick={() => {
+                      void prepareGeneratedImageEdit({
+                        ...entry,
+                        id: imageEntryId,
+                        images: [generatedImage],
+                      })
+                    }}
+                  >
+                    <span>{isPreparingThisImageEdit ? '准备中' : '编辑'}</span>
+                  </button>
+                </div>
+              </div>
+              <figcaption>
+                <span>
+                  {entry.model || 'gpt-image-2'}
+                  {totalImages > 1 ? ` · ${index + 1}/${totalImages}` : ''}
+                  {' · '}
+                  {formatImageTime(entry.createdAt)}
+                </span>
+                <a href={imageSrc} download={`gpt-image-2-${index + 1}.png`}>
+                  下载
+                </a>
+              </figcaption>
+            </figure>
+          )
+        })}
+      </>
     )
+  }
+
+  const prepareGeneratedImageEdit = async (entry: ImageAssistantEntry) => {
+    if (entry.status !== 'complete' || !entry.images?.[0] || editingImageEntryId) {
+      return
+    }
+
+    setComposerError(null)
+    if (selectedImages.length >= imageUploadMaxFiles) {
+      setComposerError(`最多一次上传 ${imageUploadMaxFiles.toString()} 张图片。`)
+      return
+    }
+
+    setEditingImageEntryId(entry.id)
+    try {
+      const file = await createFileFromGeneratedImage(entry.images[0], entry.generationId)
+      const previewUrl = URL.createObjectURL(file)
+      previewUrlsRef.current.add(previewUrl)
+      const editDraft: ImageUploadDraft = {
+        id: createEntryId(),
+        name: file.name,
+        previewUrl,
+        file,
+      }
+      setSelectedImages((current) => [...current, editDraft])
+
+      window.requestAnimationFrame(() => {
+        composerTextAreaRef.current?.focus()
+        threadRef.current?.scrollTo({
+          top: threadRef.current.scrollHeight,
+          behavior: 'smooth',
+        })
+      })
+    } catch (error) {
+      setComposerError(error instanceof Error ? error.message : '图片读取失败，无法进入编辑。')
+    } finally {
+      setEditingImageEntryId(null)
+    }
   }
 
   return (
@@ -1285,7 +1299,7 @@ export function ImageGenerationStage({
                         </div>
                       ) : null}
 
-                      {renderGeneratedImageCard(entry)}
+                      {renderGeneratedImageCards(entry)}
                     </div>
                   </article>
                 ),

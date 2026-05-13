@@ -7,6 +7,7 @@ export const viewPaths: Record<NavView, string> = {
   send: '/send',
   receive: '/receive',
   text: '/text',
+  chat: '/chat',
   image: '/image',
   sessions: '/sessions',
   admin: '/admin',

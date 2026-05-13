@@ -284,6 +284,7 @@ export class DeviceRegistry {
             online: true,
           })),
         isPublic: room.isPublic,
+        reason: room.reason,
         historyTextCount: textStats.count,
         historyTextLatestAt: textStats.latestAt,
         historyTextPreview: textStats.latestPreview,

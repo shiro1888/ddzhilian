@@ -156,8 +156,8 @@ Public rooms and regular rooms share the same temporary file-history rules:
 
 Optional variables:
 
-- `VITE_SIGNALING_WS_URL`: explicit WebSocket URL for the signaling server.
-- `VITE_SIGNALING_HTTP_URL`: explicit HTTP base URL for history or debug requests.
+- `NEXT_PUBLIC_SIGNALING_WS_URL`: explicit WebSocket URL for the signaling server.
+- `NEXT_PUBLIC_SIGNALING_HTTP_URL`: explicit HTTP base URL for history or debug requests.
 
 When these are not set, local development uses `ws://localhost:8787/ws`, and production derives `/ws` from the current site origin.
 

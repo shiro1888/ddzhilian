@@ -1,6 +1,8 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type {
   AiChatImageInput,
+  AiChatConversationRecord,
+  AiChatConversationSyncResponse,
   AiChatResponse,
   AiImageHistoryPage,
   AiImageHistoryRequestOptions,
@@ -47,11 +49,7 @@ const binaryChunkDecoder = new TextDecoder()
 
 function readPublicEnv(name: 'SIGNALING_WS_URL' | 'SIGNALING_HTTP_URL') {
   const env = process.env as Record<string, string | undefined>
-  return (
-    env[`NEXT_PUBLIC_${name}`]?.trim() ||
-    env[`VITE_${name}`]?.trim() ||
-    ''
-  )
+  return env[`NEXT_PUBLIC_${name}`]?.trim() || ''
 }
 
 function delay(ms: number) {
@@ -398,6 +396,8 @@ function reasonLabel(reason: LiveSession['reason']) {
       return '账号自动'
     case 'lan-discovery':
       return '同网发现'
+    case 'bot-chat':
+      return 'DD直连小助手'
     case 'manual':
       return '手动'
   }
@@ -441,6 +441,7 @@ export function useDdzhilian() {
   const [transferItems, setTransferItems] = useState<TransferItem[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastCreatedPublicRoomId, setLastCreatedPublicRoomId] = useState<string | null>(null)
+  const [lastCreatedPrivateRoomId, setLastCreatedPrivateRoomId] = useState<string | null>(null)
 
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
@@ -448,6 +449,8 @@ export function useDdzhilian() {
   const reconnectCallbacksRef = useRef<Array<() => void>>([])
   const identityRef = useRef<StoredIdentity>(localIdentity)
   const selfRef = useRef<DirectorySnapshotPayload['self'] | null>(null)
+  const roomsByIdRef = useRef<Record<string, RoomSummary>>({})
+  const restorablePublicRoomIdRef = useRef<string | null>(null)
   const rtcConfigRef = useRef<RTCConfiguration | null>(null)
   const peerConnectionsRef = useRef(new Map<string, RTCPeerConnection>())
   const dataChannelsRef = useRef(new Map<string, RTCDataChannel>())
@@ -512,6 +515,10 @@ export function useDdzhilian() {
   }, [self])
 
   useEffect(() => {
+    roomsByIdRef.current = roomsById
+  }, [roomsById])
+
+  useEffect(() => {
     sessionsRef.current = sessionsById
   }, [sessionsById])
 
@@ -547,6 +554,85 @@ export function useDdzhilian() {
 
     socket.send(JSON.stringify(event))
   }
+
+  const sendJoinRoomEvent = (roomId: string) => {
+    const normalizedRoomId = roomId.trim()
+    if (!normalizedRoomId) {
+      return
+    }
+
+    sendEvent({
+      type: 'join-room',
+      payload: {
+        roomId: normalizedRoomId,
+      },
+    })
+  }
+
+  const trackPublicRoomFromSnapshot = (snapshot: DirectorySnapshotPayload) => {
+    const publicRoom = snapshot.rooms.find((room) => room.isPublic)
+    if (publicRoom) {
+      restorablePublicRoomIdRef.current = publicRoom.roomId
+    }
+  }
+
+  const restorePublicRoomMembership = (snapshot: DirectorySnapshotPayload) => {
+    const publicRoom = snapshot.rooms.find((room) => room.isPublic)
+    const roomId = publicRoom?.roomId ?? restorablePublicRoomIdRef.current
+    if (!roomId) {
+      return
+    }
+
+    if (publicRoom?.members.some((member) => member.deviceId === snapshot.self.deviceId)) {
+      return
+    }
+
+    sendJoinRoomEvent(roomId)
+  }
+
+  const waitForRoomSocketReady = (roomId: string) =>
+    new Promise<void>((resolve) => {
+      const normalizedRoomId = roomId.trim()
+      if (!normalizedRoomId) {
+        resolve()
+        return
+      }
+
+      const joinAndRefresh = () => {
+        sendJoinRoomEvent(normalizedRoomId)
+        sendEvent({
+          type: 'request-snapshot',
+          payload: undefined,
+        })
+        resolve()
+      }
+
+      const socket = socketRef.current
+      if (socket?.readyState === WebSocket.OPEN) {
+        joinAndRefresh()
+        return
+      }
+
+      let settled = false
+      const timeoutId = window.setTimeout(() => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        resolve()
+      }, 5_000)
+
+      reconnectSocket(() => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        window.clearTimeout(timeoutId)
+        joinAndRefresh()
+      })
+    })
 
   const updateTransfer = (transferId: string, patch: Partial<TransferItem>) => {
     startTransition(() => {
@@ -754,6 +840,7 @@ export function useDdzhilian() {
 
   const applySnapshot = (snapshot: DirectorySnapshotPayload) => {
     rtcConfigRef.current = snapshot.rtcConfig
+    trackPublicRoomFromSnapshot(snapshot)
 
     const nextIdentity: StoredIdentity = {
       ...identityRef.current,
@@ -1423,6 +1510,7 @@ export function useDdzhilian() {
       applySnapshot(event.payload)
       setSocketState('open')
       setErrorMessage(null)
+      restorePublicRoomMembership(event.payload)
 
       const reconnectCallbacks = reconnectCallbacksRef.current
       reconnectCallbacksRef.current = []
@@ -1511,6 +1599,11 @@ export function useDdzhilian() {
 
     if (event.type === 'public-room-created') {
       setLastCreatedPublicRoomId(event.payload.roomId)
+      return
+    }
+
+    if (event.type === 'private-room-created') {
+      setLastCreatedPrivateRoomId(event.payload.roomId)
       return
     }
 
@@ -2303,6 +2396,13 @@ export function useDdzhilian() {
     })
   }
 
+  const createBotRoom = () => {
+    sendEvent({
+      type: 'create-bot-room',
+      payload: undefined,
+    })
+  }
+
   const requestConnect = (
     targetDeviceId: string,
     options: PairReason | { reason?: PairReason; createNewRoom?: boolean } = 'manual',
@@ -2590,11 +2690,16 @@ export function useDdzhilian() {
       let response = await postRoomText(activeSelf)
 
       if (response.status === 401 || response.status === 403) {
-        requestSnapshot()
+        const room = roomsByIdRef.current[roomId]
+        if (room?.isPublic) {
+          await waitForRoomSocketReady(roomId)
+        } else {
+          requestSnapshot()
+        }
         await delay(1_200)
 
         const refreshedSelf = selfRef.current
-        if (refreshedSelf?.historyAuthToken && refreshedSelf.historyAuthToken !== activeSelf.historyAuthToken) {
+        if (refreshedSelf?.historyAuthToken) {
           response = await postRoomText(refreshedSelf)
         }
       }
@@ -2711,6 +2816,7 @@ export function useDdzhilian() {
       createdAt?: string
       model?: string
       images?: AiChatImageInput[]
+      signal?: AbortSignal
     },
   ): Promise<AiChatResponse> => {
     const activeSelf = selfRef.current
@@ -2741,6 +2847,7 @@ export function useDdzhilian() {
         model: options?.model,
         images,
       }),
+      signal: options?.signal,
     })
 
     if (!response.ok) {
@@ -2768,6 +2875,101 @@ export function useDdzhilian() {
       quota: payload.quota,
       historyText: payload.historyText,
     }
+  }
+
+  const listAiChatConversations = async (): Promise<AiChatConversationRecord[]> => {
+    const activeSelf = selfRef.current
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 会话同步授权。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat/conversations`, {
+      method: 'GET',
+      headers: buildHistoryAuthHeaders(activeSelf),
+    })
+
+    if (!response.ok) {
+      const message = await readApiError(
+        response,
+        `AI chat conversations request failed with status ${response.status.toString()}`,
+      )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
+    }
+
+    const payload = await response.json() as Partial<AiChatConversationSyncResponse>
+    return Array.isArray(payload.conversations) ? payload.conversations : []
+  }
+
+  const saveAiChatConversations = async (
+    conversations: AiChatConversationRecord[],
+  ): Promise<AiChatConversationRecord[]> => {
+    const activeSelf = selfRef.current
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 会话同步授权。')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat/conversations`, {
+      method: 'PUT',
+      headers: {
+        ...buildHistoryAuthHeaders(activeSelf),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ conversations }),
+    })
+
+    if (!response.ok) {
+      const message = await readApiError(
+        response,
+        `AI chat conversations save failed with status ${response.status.toString()}`,
+      )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
+    }
+
+    const payload = await response.json() as Partial<AiChatConversationSyncResponse>
+    return Array.isArray(payload.conversations) ? payload.conversations : conversations
+  }
+
+  const deleteAiChatConversation = async (
+    conversationId?: string,
+  ): Promise<AiChatConversationRecord[]> => {
+    const activeSelf = selfRef.current
+    if (!activeSelf?.historyAuthToken) {
+      throw new Error('当前设备尚未完成 AI 会话同步授权。')
+    }
+
+    const query = conversationId
+      ? `?conversationId=${encodeURIComponent(conversationId)}`
+      : ''
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat/conversations${query}`, {
+      method: 'DELETE',
+      headers: buildHistoryAuthHeaders(activeSelf),
+    })
+
+    if (!response.ok) {
+      const message = await readApiError(
+        response,
+        `AI chat conversation delete failed with status ${response.status.toString()}`,
+      )
+
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
+    }
+
+    const payload = await response.json() as Partial<AiChatConversationSyncResponse>
+    return Array.isArray(payload.conversations) ? payload.conversations : []
   }
 
   const generateImage = async (
@@ -3280,9 +3482,11 @@ export function useDdzhilian() {
     historyTextPaginationByRoomId,
     errorMessage,
     lastCreatedPublicRoomId,
+    lastCreatedPrivateRoomId,
     pairByShortCode,
     joinRoom,
     createPublicRoom,
+    createBotRoom,
     reconnectSocket,
     requestConnect,
     disconnectSession,
@@ -3309,6 +3513,9 @@ export function useDdzhilian() {
       void fetchRoomHistoryTexts(roomId, 'older')
     },
     askAi,
+    listAiChatConversations,
+    saveAiChatConversations,
+    deleteAiChatConversation,
     generateImage,
     getImageQuota,
     listImageHistory,

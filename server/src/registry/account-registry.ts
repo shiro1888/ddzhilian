@@ -91,6 +91,7 @@ type UserProfileQuotaRow = {
   image_quota_used: number | null;
   image_paid_quota_remaining: number | null;
   image_paid_quota_used: number | null;
+  updated_at: string | null;
 };
 
 type UserProfileAdminRow = UserProfileQuotaRow & {
@@ -108,7 +109,7 @@ type AdminRoleRow = {
 };
 
 const userProfileQuotaSelect =
-  'user_id,image_quota_period_started_at,image_quota_used,image_paid_quota_remaining,image_paid_quota_used' as const;
+  'user_id,image_quota_period_started_at,image_quota_used,image_paid_quota_remaining,image_paid_quota_used,updated_at' as const;
 const userProfileAdminSelect =
   'user_id,email,image_quota_period_started_at,image_quota_used,image_paid_quota_remaining,image_paid_quota_used,created_at,updated_at' as const;
 const adminRoleSelect = 'user_id,email,role,created_at,updated_at' as const;
@@ -209,6 +210,25 @@ function buildImageQuotaStatus(
     paidRemaining: normalizedPaidRemaining,
     paidUsed: normalizeQuotaUsed(paidUsed),
     totalRemaining,
+  };
+}
+
+function readQuotaSnapshot(
+  row: UserProfileQuotaRow,
+  period: AccountImageQuotaPeriod,
+  limit: number,
+) {
+  const freeUsed = isSameQuotaPeriod(row.image_quota_period_started_at, period.periodStartedAt)
+    ? normalizeQuotaUsed(row.image_quota_used)
+    : 0;
+  const paidRemaining = normalizeQuotaUsed(row.image_paid_quota_remaining);
+  const paidUsed = normalizeQuotaUsed(row.image_paid_quota_used);
+
+  return {
+    status: buildImageQuotaStatus(period, limit, freeUsed, paidRemaining, paidUsed),
+    freeUsed,
+    paidRemaining,
+    paidUsed,
   };
 }
 
@@ -382,17 +402,13 @@ export class AccountRegistry {
     limit: number;
   }) {
     const row = await this.readProfileQuota(input.user);
-    const used = isSameQuotaPeriod(row.image_quota_period_started_at, input.period.periodStartedAt)
-      ? normalizeQuotaUsed(row.image_quota_used)
-      : 0;
-    const paidRemaining = normalizeQuotaUsed(row.image_paid_quota_remaining);
-    const paidUsed = normalizeQuotaUsed(row.image_paid_quota_used);
+    const snapshot = readQuotaSnapshot(row, input.period, input.limit);
 
     if (!isSameQuotaPeriod(row.image_quota_period_started_at, input.period.periodStartedAt)) {
-      await this.writeProfileQuota(input.user.id, input.period.periodStartedAt, used);
+      await this.writeProfileQuota(input.user.id, input.period.periodStartedAt, snapshot.freeUsed);
     }
 
-    return buildImageQuotaStatus(input.period, input.limit, used, paidRemaining, paidUsed);
+    return snapshot.status;
   }
 
   async addImageQuotaUsage(input: {
@@ -402,39 +418,47 @@ export class AccountRegistry {
     imageCount: number;
   }) {
     const imageCount = Math.max(0, Math.trunc(input.imageCount));
-    const current = await this.getImageQuotaStatus({
-      user: input.user,
-      period: input.period,
-      limit: input.limit,
-    });
-
     if (imageCount === 0) {
-      return current;
+      return this.getImageQuotaStatus({
+        user: input.user,
+        period: input.period,
+        limit: input.limit,
+      });
     }
 
-    if (imageCount > current.totalRemaining) {
-      throw new AccountAuthError('总额度已耗尽。', 429);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const row = await this.readProfileQuota(input.user);
+      const snapshot = readQuotaSnapshot(row, input.period, input.limit);
+
+      if (imageCount > snapshot.status.totalRemaining) {
+        throw new AccountAuthError('总额度已耗尽。', 429);
+      }
+
+      const freeUsage = Math.min(imageCount, snapshot.status.freeRemaining);
+      const paidUsage = imageCount - freeUsage;
+      const nextRow = await this.tryWriteProfileQuotaAtomically({
+        userId: input.user.id,
+        expectedUpdatedAt: row.updated_at,
+        nextPeriodStartedAt: input.period.periodStartedAt,
+        nextFreeUsed: snapshot.freeUsed + freeUsage,
+        nextPaidRemaining: snapshot.paidRemaining - paidUsage,
+        nextPaidUsed: snapshot.paidUsed + paidUsage,
+      });
+
+      if (!nextRow) {
+        continue;
+      }
+
+      return buildImageQuotaStatus(
+        input.period,
+        input.limit,
+        normalizeQuotaUsed(nextRow.image_quota_used),
+        normalizeQuotaUsed(nextRow.image_paid_quota_remaining),
+        normalizeQuotaUsed(nextRow.image_paid_quota_used),
+      );
     }
 
-    const freeUsage = Math.min(imageCount, current.freeRemaining);
-    const paidUsage = imageCount - freeUsage;
-    const row = await this.writeProfileQuota(
-      input.user.id,
-      input.period.periodStartedAt,
-      current.freeUsed + freeUsage,
-      {
-        remaining: current.paidRemaining - paidUsage,
-        used: current.paidUsed + paidUsage,
-      },
-    );
-
-    return buildImageQuotaStatus(
-      input.period,
-      input.limit,
-      normalizeQuotaUsed(row.image_quota_used),
-      normalizeQuotaUsed(row.image_paid_quota_remaining),
-      normalizeQuotaUsed(row.image_paid_quota_used),
-    );
+    throw new AccountAuthError('账号额度更新冲突，请重试。', 409);
   }
 
   async listUsers(limit?: number): Promise<AdminAccountUserSummary[]> {
@@ -853,5 +877,40 @@ export class AccountRegistry {
     }
 
     return data as UserProfileQuotaRow;
+  }
+
+  private async tryWriteProfileQuotaAtomically(input: {
+    userId: string;
+    expectedUpdatedAt: string | null;
+    nextPeriodStartedAt: string;
+    nextFreeUsed: number;
+    nextPaidRemaining: number;
+    nextPaidUsed: number;
+  }): Promise<UserProfileQuotaRow | null> {
+    const expectedUpdatedAt = input.expectedUpdatedAt?.trim();
+    if (!expectedUpdatedAt) {
+      throw new AccountAuthError('账号额度状态缺少 updated_at，无法安全更新。', 500);
+    }
+
+    const nextUpdatedAt = new Date().toISOString();
+    const { data, error } = await this.serviceRoleClient
+      .from(this.userProfilesTable)
+      .update({
+        image_quota_period_started_at: input.nextPeriodStartedAt,
+        image_quota_used: Math.max(0, Math.trunc(input.nextFreeUsed)),
+        image_paid_quota_remaining: Math.max(0, Math.trunc(input.nextPaidRemaining)),
+        image_paid_quota_used: Math.max(0, Math.trunc(input.nextPaidUsed)),
+        updated_at: nextUpdatedAt,
+      })
+      .eq('user_id', input.userId)
+      .eq('updated_at', expectedUpdatedAt)
+      .select(userProfileQuotaSelect)
+      .maybeSingle();
+
+    if (error) {
+      throw new AccountAuthError(error.message || '账号额度保存失败。', 500);
+    }
+
+    return data ? data as UserProfileQuotaRow : null;
   }
 }

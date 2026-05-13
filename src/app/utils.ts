@@ -442,17 +442,8 @@ function renderMarkdownInline(value: string) {
   return restoreMarkdownPlaceholders(linkifyPlainTextUrls(text), placeholders)
 }
 
-function renderMarkdownFenceHtml(codeText: string, language: string, useCopyableBlock: boolean) {
-  if (useCopyableBlock) {
-    return renderCodeBlockHtml(codeText, language)
-  }
-
-  const languageLabel = detectCodeLanguage(codeText, language)
-  return [
-    `<pre data-language="${escapeHtml(languageLabel)}">`,
-    `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
-    '</pre>',
-  ].join('')
+function renderMarkdownFenceHtml(codeText: string, language: string) {
+  return renderCodeBlockHtml(codeText, language)
 }
 
 function renderMarkdownBlocks(value: string) {
@@ -489,8 +480,7 @@ function renderMarkdownBlocks(value: string) {
         index += 1
       }
 
-      const isStandaloneCodeBlock = lines.filter((line) => line.trim()).length === codeLines.filter((line) => line.trim()).length + 2
-      blocks.push(renderMarkdownFenceHtml(codeLines.join('\n').trimEnd(), language, isStandaloneCodeBlock))
+      blocks.push(renderMarkdownFenceHtml(codeLines.join('\n').trimEnd(), language))
       continue
     }
 
@@ -558,7 +548,7 @@ function isLikelyCodeLine(line: string) {
     return false
   }
 
-  if (/^@bot\b/i.test(trimmedLine)) {
+  if (/^@(ai|bot)\b/i.test(trimmedLine)) {
     return false
   }
 
@@ -599,7 +589,7 @@ function splitMixedLine(line: string) {
     return []
   }
 
-  const botCodeMatch = /^(@bot)\s+(.*)$/i.exec(trimmedLine)
+  const botCodeMatch = /^(@(?:ai|bot))\s+(.*)$/i.exec(trimmedLine)
   if (botCodeMatch && isLikelyCodeLine(botCodeMatch[2])) {
     return [
       { type: 'text' as const, value: botCodeMatch[1] },
@@ -1055,7 +1045,7 @@ function shouldRenderAsCodeBlock(value: string, root: Element) {
 }
 
 function shouldRenderPlainTextAsSingleCodeBlock(codeText: string, styledSpanCount = 0) {
-  if (/^\s*@bot\b/im.test(codeText)) {
+  if (/^\s*@(ai|bot)\b/im.test(codeText)) {
     return false
   }
 
@@ -1220,8 +1210,14 @@ export function sanitizeRichTextHtml(value: string) {
       const classLanguage = Array.from(node.classList)
         .find((className) => /^(language|lang)-[\w#+.-]+$/i.test(className))
         ?.replace(/^(language|lang)-/i, '')
-      const explicitLanguage = node.getAttribute('data-language')?.trim() || classLanguage || ''
-      const codeText = normalizeCodeText(extractTextWithLineBreaks(node))
+      const codeElement = node.querySelector('code')
+      const codeClassLanguage = codeElement
+        ? Array.from(codeElement.classList)
+            .find((className) => /^(language|lang)-[\w#+.-]+$/i.test(className))
+            ?.replace(/^(language|lang)-/i, '')
+        : ''
+      const explicitLanguage = node.getAttribute('data-language')?.trim() || classLanguage || codeClassLanguage || ''
+      const codeText = normalizeCodeText(codeElement?.textContent ?? extractTextWithLineBreaks(node))
       return renderCodeBlockHtml(codeText, explicitLanguage)
     }
 

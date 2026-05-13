@@ -6,18 +6,12 @@ type ContentGridProps = {
   selectedRoomId: string | null
   isContentRailCollapsed: boolean
   isMobileConversationListVisible: boolean
-  connectionActionLabel: string
-  connectionActionDisabled: boolean
-  connectAllDisabled: boolean
   isEditingDeviceName: boolean
   deviceNameDraft: string
   selfDeviceName?: string
   onRoomJoinDraftChange: (value: string) => void
   onDeviceNameDraftChange: (value: string) => void
   onJoinRoom: () => void
-  onConnectionAction: () => void
-  onConnectAllDevices: () => void
-  onCreateNewConversation: () => void
   onCreatePublicRoom: () => void
   onCopyPublicRoomLink: (roomId: string) => void
   onBeginEditDeviceName: () => void
@@ -33,18 +27,12 @@ export function ContentGrid({
   selectedRoomId,
   isContentRailCollapsed,
   isMobileConversationListVisible,
-  connectionActionLabel,
-  connectionActionDisabled,
-  connectAllDisabled,
   isEditingDeviceName,
   deviceNameDraft,
   selfDeviceName,
   onRoomJoinDraftChange,
   onDeviceNameDraftChange,
   onJoinRoom,
-  onConnectionAction,
-  onConnectAllDevices,
-  onCreateNewConversation,
   onCreatePublicRoom,
   onCopyPublicRoomLink,
   onBeginEditDeviceName,
@@ -195,42 +183,6 @@ export function ContentGrid({
           )}
         </div>
 
-        <div className="dd-content-grid__utility">
-          <details className="dd-connection-layer dd-connection-layer--settings">
-            <summary className="dd-connection-layer__summary">
-              <span>连接设置</span>
-              <strong>{selfDeviceName ?? '正在连接...'}</strong>
-            </summary>
-            <div className="dd-connection-layer__body">
-              <div className="dd-connection-layer__actions">
-                <button
-                  type="button"
-                  className="dd-button dd-button--primary"
-                  onClick={onConnectionAction}
-                  disabled={connectionActionDisabled}
-                >
-                  {connectionActionLabel}
-                </button>
-                <button
-                  type="button"
-                  className="dd-button dd-button--dark"
-                  onClick={onConnectAllDevices}
-                  disabled={connectAllDisabled}
-                >
-                  连接全部设备
-                </button>
-                <button
-                  type="button"
-                  className="dd-button dd-button--dark"
-                  onClick={onCreateNewConversation}
-                  disabled={connectionActionDisabled}
-                >
-                  创建新对话
-                </button>
-              </div>
-            </div>
-          </details>
-        </div>
       </section>
     </section>
   )

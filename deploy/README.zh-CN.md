@@ -16,7 +16,7 @@
 
 3. 前端构建时配置后端地址。
    - 前后端同域：不需要额外配置，默认 `/ws` 和 `/api`。
-   - 前后端分域：设置 `VITE_SIGNALING_WS_URL` 和 `VITE_SIGNALING_HTTP_URL`。
+   - 前后端分域：设置 `NEXT_PUBLIC_SIGNALING_WS_URL` 和 `NEXT_PUBLIC_SIGNALING_HTTP_URL`。
 
 ## 静态托管头
 

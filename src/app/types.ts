@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 export type TransferMode = 'file' | 'text'
 export type SessionStatus = 'waiting' | 'active' | 'completed'
-export type NavView = 'connect' | 'send' | 'receive' | 'text' | 'image' | 'sessions' | 'admin'
+export type NavView = 'connect' | 'send' | 'receive' | 'text' | 'chat' | 'image' | 'sessions' | 'admin'
 export type InterfaceMode = 'classic' | 'snaplink'
 export type TextMode = 'long' | 'chat'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
