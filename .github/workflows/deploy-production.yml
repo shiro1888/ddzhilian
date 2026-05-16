@@ -27,7 +27,9 @@ env:
 
 jobs:
   validate-and-deploy:
+    if: github.repository == '707LTeam/ddzhilian'
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - name: Check out repository

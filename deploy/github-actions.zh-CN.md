@@ -18,9 +18,11 @@
 7. 服务器执行 `nginx -t`，通过后 reload nginx。
 8. 服务器检查公网 `https://ddzhilian.com/health`。
 
+当前部署 job 只在主仓库 `707LTeam/ddzhilian` 执行。镜像仓库 `CGR-MIX/ddzhilian` 可以同步代码，但不会同时部署到同一台服务器，避免两个仓库的 Actions 互相抢发布。
+
 ## GitHub Secrets
 
-在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 中添加：
+在主仓库 `707LTeam/ddzhilian` 的 `Settings -> Secrets and variables -> Actions` 中添加。也可以放在名为 `production` 的 Environment 下；workflow 已绑定 `environment: production`。
 
 | 名称 | 必填 | 说明 |
 | --- | --- | --- |
