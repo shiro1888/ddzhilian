@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createReadStream, promises as fs } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
@@ -17,6 +17,7 @@ import {
 import {
   AccountAuthError,
   type AdminAccountSession,
+  type AccountImageQuotaReservation,
   type AccountImageQuotaPeriod,
   type AccountImageQuotaStatus,
   AccountRegistry,
@@ -140,11 +141,33 @@ type AiChatRequestPayload = {
   kind?: unknown;
   model?: unknown;
   images?: unknown;
+  webSearch?: unknown;
 };
 type AiChatImageInput = {
   url: string;
   mimeType?: string;
   alt?: string;
+};
+type AiWebSearchSource = {
+  title: string;
+  url: string;
+  snippet?: string;
+  engine?: string;
+  publishedAt?: string;
+};
+type AiWebSearchContext = {
+  query: string;
+  sources: AiWebSearchSource[];
+};
+type SearxngSearchResponse = {
+  results?: Array<{
+    title?: unknown;
+    url?: unknown;
+    content?: unknown;
+    engine?: unknown;
+    publishedDate?: unknown;
+    published_date?: unknown;
+  }>;
 };
 type AiImageRequestPayload = {
   prompt?: unknown;
@@ -170,6 +193,9 @@ type CodexImageUpstreamResult = {
   response: Response;
   payload: CodexImageGenerationResponse | null;
   attempts: number;
+};
+type CodexImageUpstreamAttemptResult = CodexImageUpstreamResult & {
+  attempt: number;
 };
 type ImageGenerationJobStatus = 'queued' | 'running' | 'complete' | 'failed';
 type CodexImageGenerationResponse = {
@@ -201,6 +227,7 @@ type ImageGenerationJob = {
   size: string;
   quality: string;
   sourceImageCount: number;
+  quotaReservation?: AccountImageQuotaReservation;
   status: ImageGenerationJobStatus;
   createdAt: string;
   updatedAt: string;
@@ -232,8 +259,10 @@ const accounts = config.supabase
   ? new AccountRegistry({
       url: config.supabase.url,
       serviceRoleKey: config.supabase.serviceRoleKey,
+      authKey: config.supabase.authKey,
       userProfilesTable: config.supabase.userProfilesTable,
       adminRolesTable: config.supabase.adminRolesTable,
+      emailRedirectTo: config.supabase.authEmailRedirectUrl,
     })
   : undefined;
 const imageGenerationHistory = config.supabase
@@ -272,19 +301,20 @@ const aiImageMultipartRequestMaxBytes = 32 * 1024 * 1024;
 const aiImageUploadMaxFiles = 8;
 const aiImageUploadMaxFileBytes = 8 * 1024 * 1024;
 const aiImageAllowedUploadTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const aiImageMaxDimensionPx = 2000;
+const aiImageDimensionStepPx = 16;
 const imageAssetRoutePrefix = '/api/ai/image/assets/';
 const imageGenerationJobRetentionMs = 30 * 60 * 1000;
 const imageGenerationJobMaxCount = 200;
 const codexImageRetryStatusCodes = new Set([502, 504, 524]);
-const codexImageMaxAttempts = 3;
-const codexImageRetryBaseDelayMs = 3_000;
 const aiRoomContextWindowMs = 24 * 60 * 60 * 1000;
 const aiRoomContextMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 const adminSessionCookieName = 'ddzhilian_admin_session';
 const userSessionCookieName = 'ddzhilian_user_session';
-const imageQuotaExhaustedMessage = '总额度已耗尽。';
+const accountAuthConfirmDefaultPath = '/image';
+const accountAuthConfirmErrorPath = '/auth/confirm';
 const openRouterFallbackModelIds = [
   'inclusionai/ling-2.6-flash:free',
   'inclusionai/ling-2.6-1t:free',
@@ -396,6 +426,18 @@ function writeJson(
   response.end(JSON.stringify(payload));
 }
 
+function writeRedirect(
+  response: ServerResponse,
+  location: string,
+  statusCode = 303,
+) {
+  response.writeHead(statusCode, {
+    location,
+    'cache-control': 'no-store',
+  });
+  response.end();
+}
+
 function readBearerToken(value: string | string[] | undefined) {
   const headerValue = Array.isArray(value) ? value[0] : value;
   const trimmedValue = headerValue?.trim();
@@ -444,6 +486,44 @@ function resolveRequestBaseUrl(request: IncomingMessage) {
     ?.trim() || readHeaderString(request.headers.host)?.trim();
 
   return host ? `${protocol}://${host}` : '';
+}
+
+function normalizeLocalRedirectTarget(
+  value: string | null | undefined,
+  request: IncomingMessage,
+  fallbackPath = accountAuthConfirmDefaultPath,
+) {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return fallbackPath;
+  }
+
+  if (trimmedValue.startsWith('/') && !trimmedValue.startsWith('//')) {
+    return trimmedValue;
+  }
+
+  try {
+    const requestBaseUrl = resolveRequestBaseUrl(request);
+    if (!requestBaseUrl) {
+      return fallbackPath;
+    }
+
+    const requestOrigin = new URL(requestBaseUrl).origin;
+    const candidate = new URL(trimmedValue);
+    if (candidate.origin !== requestOrigin) {
+      return fallbackPath;
+    }
+
+    return `${candidate.pathname}${candidate.search}${candidate.hash}`;
+  } catch {
+    return fallbackPath;
+  }
+}
+
+function buildAccountConfirmErrorRedirect(message: string) {
+  const url = new URL(accountAuthConfirmErrorPath, 'http://localhost');
+  url.searchParams.set('error_description', message);
+  return `${url.pathname}${url.search}`;
 }
 
 function readMultipartBoundary(contentType: string | undefined) {
@@ -1252,6 +1332,60 @@ function normalizeImageOption(value: unknown, fallback: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function normalizeImageDimensionForUpstream(value: number) {
+  const roundedValue = Math.round(value / aiImageDimensionStepPx) * aiImageDimensionStepPx;
+  return Math.max(
+    aiImageDimensionStepPx,
+    Math.min(aiImageMaxDimensionPx, roundedValue),
+  );
+}
+
+function normalizeImageSizeOption(value: unknown, fallback: string) {
+  const rawSize = normalizeImageOption(value, fallback);
+  const normalizedSize = rawSize.trim().toLowerCase();
+
+  if (normalizedSize === 'auto') {
+    return {
+      ok: true as const,
+      size: 'auto',
+    };
+  }
+
+  const match = normalizedSize.match(/^(\d{1,5})(?:px)?\s*[x*]\s*(\d{1,5})(?:px)?$/);
+  if (!match) {
+    return {
+      ok: false as const,
+      error: '图片尺寸必须是 auto 或 WIDTHxHEIGHT 格式。',
+    };
+  }
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return {
+      ok: false as const,
+      error: '图片尺寸必须大于 0。',
+    };
+  }
+
+  if (width > aiImageMaxDimensionPx || height > aiImageMaxDimensionPx) {
+    return {
+      ok: false as const,
+      error: `图片最大尺寸是 ${aiImageMaxDimensionPx.toString()}x${aiImageMaxDimensionPx.toString()}。`,
+    };
+  }
+
+  return {
+    ok: true as const,
+    size: `${normalizeImageDimensionForUpstream(width).toString()}x${normalizeImageDimensionForUpstream(height).toString()}`,
+  };
+}
+
 function getImageQuotaPeriod(now = new Date()): AccountImageQuotaPeriod {
   const timezoneOffsetMs = config.codexImageAi.quotaTimezoneOffsetMinutes * 60 * 1000;
   const shiftedNow = new Date(now.getTime() + timezoneOffsetMs);
@@ -1274,6 +1408,13 @@ function getImageQuotaPeriod(now = new Date()): AccountImageQuotaPeriod {
     resetAt: new Date(periodEndsAtShiftedMs - timezoneOffsetMs).toISOString(),
     resetHour: config.codexImageAi.quotaResetHour,
     timezoneOffsetMinutes: config.codexImageAi.quotaTimezoneOffsetMinutes,
+  };
+}
+
+function getImageQuotaPeriodForReservation(reservation: AccountImageQuotaReservation) {
+  return {
+    ...getImageQuotaPeriod(),
+    periodStartedAt: reservation.periodStartedAt,
   };
 }
 
@@ -1304,6 +1445,187 @@ function imageAssetExtension(mimeType: string) {
     case 'image/png':
     default:
       return 'png';
+  }
+}
+
+type ImageDimensions = {
+  width: number;
+  height: number;
+};
+
+function isImageDimensionValue(value: number) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function normalizeImageDimensions(dimensions: ImageDimensions | null) {
+  return dimensions &&
+    isImageDimensionValue(dimensions.width) &&
+    isImageDimensionValue(dimensions.height)
+    ? dimensions
+    : null;
+}
+
+function readPngDimensions(bytes: Buffer): ImageDimensions | null {
+  if (
+    bytes.byteLength < 24 ||
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47 ||
+    bytes[4] !== 0x0d ||
+    bytes[5] !== 0x0a ||
+    bytes[6] !== 0x1a ||
+    bytes[7] !== 0x0a ||
+    bytes.toString('ascii', 12, 16) !== 'IHDR'
+  ) {
+    return null;
+  }
+
+  return normalizeImageDimensions({
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  });
+}
+
+function isJpegStartOfFrameMarker(marker: number) {
+  return marker >= 0xc0 &&
+    marker <= 0xcf &&
+    marker !== 0xc4 &&
+    marker !== 0xc8 &&
+    marker !== 0xcc;
+}
+
+function isJpegStandaloneMarker(marker: number) {
+  return marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7);
+}
+
+function readJpegDimensions(bytes: Buffer): ImageDimensions | null {
+  if (bytes.byteLength < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    return null;
+  }
+
+  let offset = 2;
+  while (offset < bytes.byteLength) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    while (offset < bytes.byteLength && bytes[offset] === 0xff) {
+      offset += 1;
+    }
+
+    if (offset >= bytes.byteLength) {
+      return null;
+    }
+
+    const marker = bytes[offset];
+    offset += 1;
+
+    if (marker === 0xd9 || marker === 0xda) {
+      return null;
+    }
+
+    if (isJpegStandaloneMarker(marker)) {
+      continue;
+    }
+
+    if (offset + 2 > bytes.byteLength) {
+      return null;
+    }
+
+    const segmentLength = bytes.readUInt16BE(offset);
+    if (segmentLength < 2 || offset + segmentLength > bytes.byteLength) {
+      return null;
+    }
+
+    if (isJpegStartOfFrameMarker(marker)) {
+      if (offset + 7 > bytes.byteLength) {
+        return null;
+      }
+
+      return normalizeImageDimensions({
+        height: bytes.readUInt16BE(offset + 3),
+        width: bytes.readUInt16BE(offset + 5),
+      });
+    }
+
+    offset += segmentLength;
+  }
+
+  return null;
+}
+
+function readUInt24LE(bytes: Buffer, offset: number) {
+  return bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+}
+
+function readWebpDimensions(bytes: Buffer): ImageDimensions | null {
+  if (
+    bytes.byteLength < 20 ||
+    bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+    bytes.toString('ascii', 8, 12) !== 'WEBP'
+  ) {
+    return null;
+  }
+
+  let offset = 12;
+  while (offset + 8 <= bytes.byteLength) {
+    const chunkType = bytes.toString('ascii', offset, offset + 4);
+    const chunkSize = bytes.readUInt32LE(offset + 4);
+    const dataOffset = offset + 8;
+    if (dataOffset + chunkSize > bytes.byteLength) {
+      return null;
+    }
+
+    if (chunkType === 'VP8X' && chunkSize >= 10) {
+      return normalizeImageDimensions({
+        width: readUInt24LE(bytes, dataOffset + 4) + 1,
+        height: readUInt24LE(bytes, dataOffset + 7) + 1,
+      });
+    }
+
+    if (chunkType === 'VP8L' && chunkSize >= 5 && bytes[dataOffset] === 0x2f) {
+      const byte1 = bytes[dataOffset + 1];
+      const byte2 = bytes[dataOffset + 2];
+      const byte3 = bytes[dataOffset + 3];
+      const byte4 = bytes[dataOffset + 4];
+      return normalizeImageDimensions({
+        width: ((byte2 & 0x3f) << 8) + byte1 + 1,
+        height: ((byte4 & 0x0f) << 10) + (byte3 << 2) + ((byte2 & 0xc0) >> 6) + 1,
+      });
+    }
+
+    if (
+      chunkType === 'VP8 ' &&
+      chunkSize >= 10 &&
+      bytes[dataOffset + 3] === 0x9d &&
+      bytes[dataOffset + 4] === 0x01 &&
+      bytes[dataOffset + 5] === 0x2a
+    ) {
+      return normalizeImageDimensions({
+        width: bytes.readUInt16LE(dataOffset + 6) & 0x3fff,
+        height: bytes.readUInt16LE(dataOffset + 8) & 0x3fff,
+      });
+    }
+
+    offset = dataOffset + chunkSize + (chunkSize % 2);
+  }
+
+  return null;
+}
+
+function readImageDimensions(bytes: Buffer, mimeType: string) {
+  switch (mimeType.toLowerCase()) {
+    case 'image/png':
+      return readPngDimensions(bytes);
+    case 'image/jpeg':
+    case 'image/jpg':
+      return readJpegDimensions(bytes);
+    case 'image/webp':
+      return readWebpDimensions(bytes);
+    default:
+      return readPngDimensions(bytes) ?? readJpegDimensions(bytes) ?? readWebpDimensions(bytes);
   }
 }
 
@@ -1380,6 +1702,9 @@ function toPublicImagePayload(image: ImageGenerationImage, requestBaseUrl: strin
     url: toPublicImageUrl(image.url, requestBaseUrl),
     mimeType: image.mimeType,
     revisedPrompt: image.revisedPrompt,
+    byteSize: image.byteSize,
+    width: image.width,
+    height: image.height,
   };
 }
 
@@ -1396,6 +1721,7 @@ async function saveBase64ImageAsset(input: {
   const mimeType = input.image.mimeType || 'image/png';
   const storagePath = buildImageAssetPath(input.userId, input.generationId, input.index, mimeType);
   const bytes = Buffer.from(normalizeImageBase64(input.image.b64Json), 'base64');
+  const dimensions = readImageDimensions(bytes, mimeType);
   if (bytes.byteLength === 0) {
     throw new Error('Generated image base64 payload is empty.');
   }
@@ -1409,6 +1735,9 @@ async function saveBase64ImageAsset(input: {
     url: buildImageAssetRoute(input.generationId, input.index, mimeType),
     mimeType,
     revisedPrompt: input.image.revisedPrompt,
+    byteSize: bytes.byteLength,
+    width: dimensions?.width,
+    height: dimensions?.height,
   };
 }
 
@@ -1443,6 +1772,9 @@ async function materializeImageRecordAssets(record: ImageGenerationRecord) {
       url: image.url,
       mimeType: image.mimeType,
       revisedPrompt: image.revisedPrompt,
+      byteSize: image.byteSize,
+      width: image.width,
+      height: image.height,
     };
   }));
 
@@ -1495,12 +1827,6 @@ function toArrayBufferBackedBytes(buffer: Buffer) {
   const bytes = new Uint8Array(buffer.byteLength);
   bytes.set(buffer);
   return bytes;
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 function buildCodexImageRequest(input: {
@@ -1558,92 +1884,154 @@ function shouldRetryCodexImageStatus(status: number) {
   return codexImageRetryStatusCodes.has(status);
 }
 
-function getCodexImageRetryDelayMs(attempt: number) {
-  return codexImageRetryBaseDelayMs * attempt;
+async function requestCodexImageAttempt(
+  job: ImageGenerationJob,
+  upstreamRequest: AiImageUpstreamRequest,
+  endpoint: URL,
+  attempt: number,
+  parallelRequests: number,
+  controller: AbortController,
+): Promise<CodexImageUpstreamAttemptResult> {
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: upstreamRequest.headers,
+      body: upstreamRequest.createBody(),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      console.error('Codex image reverse proxy request threw', {
+        jobId: job.jobId,
+        baseUrl: config.codexImageAi.baseUrl,
+        endpointKind: upstreamRequest.endpointKind,
+        model: job.model,
+        attempt,
+        parallelRequests,
+        durationMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  const payload = await response.json().catch(() => null) as
+    | CodexImageGenerationResponse
+    | null;
+  const durationMs = Date.now() - startedAt;
+
+  console.info('Codex image reverse proxy request completed', {
+    jobId: job.jobId,
+    baseUrl: config.codexImageAi.baseUrl,
+    endpointKind: upstreamRequest.endpointKind,
+    status: response.status,
+    ok: response.ok,
+    model: job.model,
+    attempt,
+    parallelRequests,
+    durationMs,
+  });
+
+  return {
+    response,
+    payload,
+    attempt,
+    attempts: attempt,
+  };
 }
 
-async function requestCodexImageWithRetry(
+async function requestCodexImageWithRace(
   job: ImageGenerationJob,
   upstreamRequest: AiImageUpstreamRequest,
 ): Promise<CodexImageUpstreamResult> {
   const endpoint = buildCodexImageEndpoint(upstreamRequest.endpointKind);
-  const baseUrl = config.codexImageAi.baseUrl;
-  let lastResponse: Response | undefined;
-  let lastPayload: CodexImageGenerationResponse | null = null;
+  const parallelRequests = config.codexImageAi.parallelRequests;
+  const controllers = Array.from({ length: parallelRequests }, () => new AbortController());
 
-  for (let attempt = 1; attempt <= codexImageMaxAttempts; attempt += 1) {
-    const startedAt = Date.now();
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: upstreamRequest.headers,
-        body: upstreamRequest.createBody(),
-      });
-    } catch (error) {
-      console.error('Codex image reverse proxy request threw', {
-        jobId: job.jobId,
-        baseUrl,
-        endpointKind: upstreamRequest.endpointKind,
-        model: job.model,
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let pendingRequests = parallelRequests;
+    let lastRetryableResponse: CodexImageUpstreamAttemptResult | undefined;
+    let lastError: unknown;
+
+    const settle = (callback: () => void) => {
+      settled = true;
+      for (const controller of controllers) {
+        if (!controller.signal.aborted) {
+          controller.abort();
+        }
+      }
+      callback();
+    };
+
+    const finishFailureIfComplete = () => {
+      if (pendingRequests > 0 || settled) {
+        return;
+      }
+
+      if (lastRetryableResponse) {
+        resolve({
+          response: lastRetryableResponse.response,
+          payload: lastRetryableResponse.payload,
+          attempts: parallelRequests,
+        });
+        return;
+      }
+
+      reject(lastError ?? new Error('Codex image reverse proxy request did not run.'));
+    };
+
+    controllers.forEach((controller, index) => {
+      const attempt = index + 1;
+      void requestCodexImageAttempt(
+        job,
+        upstreamRequest,
+        endpoint,
         attempt,
-        maxAttempts: codexImageMaxAttempts,
-        durationMs: Date.now() - startedAt,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        parallelRequests,
+        controller,
+      )
+        .then((result) => {
+          if (settled) {
+            return;
+          }
 
-    const payload = await response.json().catch(() => null) as
-      | CodexImageGenerationResponse
-      | null;
-    const durationMs = Date.now() - startedAt;
+          pendingRequests -= 1;
 
-    lastResponse = response;
-    lastPayload = payload;
+          if (result.response.ok || !shouldRetryCodexImageStatus(result.response.status)) {
+            settle(() => resolve({
+              response: result.response,
+              payload: result.payload,
+              attempts: result.attempt,
+            }));
+            return;
+          }
 
-    console.info('Codex image reverse proxy request completed', {
-      jobId: job.jobId,
-      baseUrl,
-      endpointKind: upstreamRequest.endpointKind,
-      status: response.status,
-      ok: response.ok,
-      model: job.model,
-      attempt,
-      maxAttempts: codexImageMaxAttempts,
-      durationMs,
+          lastRetryableResponse = result;
+          console.warn('Codex image reverse proxy race attempt failed', {
+            jobId: job.jobId,
+            baseUrl: config.codexImageAi.baseUrl,
+            endpointKind: upstreamRequest.endpointKind,
+            status: result.response.status,
+            model: job.model,
+            attempt,
+            parallelRequests,
+          });
+          finishFailureIfComplete();
+        })
+        .catch((error) => {
+          if (settled) {
+            return;
+          }
+
+          pendingRequests -= 1;
+          lastError = error;
+          finishFailureIfComplete();
+        });
     });
-
-    if (response.ok || !shouldRetryCodexImageStatus(response.status) || attempt >= codexImageMaxAttempts) {
-      return {
-        response,
-        payload,
-        attempts: attempt,
-      };
-    }
-
-    console.warn('Codex image reverse proxy request will retry', {
-      jobId: job.jobId,
-      baseUrl,
-      endpointKind: upstreamRequest.endpointKind,
-      status: response.status,
-      model: job.model,
-      attempt,
-      maxAttempts: codexImageMaxAttempts,
-      durationMs,
-    });
-    await wait(getCodexImageRetryDelayMs(attempt));
-  }
-
-  if (!lastResponse) {
-    throw new Error('Codex image reverse proxy request did not run.');
-  }
-
-  return {
-    response: lastResponse,
-    payload: lastPayload,
-    attempts: codexImageMaxAttempts,
-  };
+  });
 }
 
 function formatCodexImageError(payload: CodexImageGenerationResponse | null) {
@@ -1793,6 +2181,44 @@ async function authenticateAdminRequest(
     ok: false as const,
     statusCode: 401,
     message: '管理员账号会话已失效。',
+  };
+}
+
+async function authenticateLinkedAdminRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<AdminAuthResult> {
+  const adminAuth = await authenticateAdminRequest(request, response);
+  if (adminAuth.ok) {
+    return adminAuth;
+  }
+
+  const accountAuth = await authenticateAccountRequest(request, response);
+  if (!accountAuth.ok) {
+    return adminAuth;
+  }
+
+  if (!accounts) {
+    return {
+      ok: false as const,
+      statusCode: 503,
+      message: '管理员账号登录未配置，请先配置 Supabase。',
+    };
+  }
+
+  const admin = await accounts.getAdminUserForAccount(accountAuth.user, config.adminSuperEmails);
+  if (!admin) {
+    return {
+      ok: false as const,
+      statusCode: 403,
+      message: '该账号不是管理员账号。',
+    };
+  }
+
+  return {
+    ok: true as const,
+    sessionId: `account:${accountAuth.user.id}`,
+    admin,
   };
 }
 
@@ -2241,6 +2667,161 @@ function buildRoomContextText(roomId: string, maxChars: number) {
   return contextLines.join('\n\n');
 }
 
+function normalizeAiWebSearchQuery(prompt: string) {
+  return prompt
+    .split(/\n\n下面是用户上传的文本附件内容，请作为上下文参考：/)[0]
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
+}
+
+function normalizeSearchText(value: unknown, maxChars: number) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const text = value.replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, maxChars) : undefined;
+}
+
+function normalizeSearchUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return undefined;
+    }
+
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeSearxngResults(payload: SearxngSearchResponse | null) {
+  const sources: AiWebSearchSource[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const result of payload?.results ?? []) {
+    const url = normalizeSearchUrl(result.url);
+    if (!url || seenUrls.has(url)) {
+      continue;
+    }
+
+    const title = normalizeSearchText(result.title, 120) ?? url;
+    sources.push({
+      title,
+      url,
+      snippet: normalizeSearchText(result.content, 360),
+      engine: normalizeSearchText(result.engine, 60),
+      publishedAt:
+        normalizeSearchText(result.publishedDate, 40) ??
+        normalizeSearchText(result.published_date, 40),
+    });
+    seenUrls.add(url);
+
+    if (sources.length >= config.webSearch.maxResults) {
+      break;
+    }
+  }
+
+  return sources;
+}
+
+async function fetchSearxngWebSearch(query: string): Promise<AiWebSearchContext> {
+  const endpoint = new URL(`${config.webSearch.searxngBaseUrl}/search`);
+  endpoint.searchParams.set('q', query);
+  endpoint.searchParams.set('format', 'json');
+  endpoint.searchParams.set('safesearch', config.webSearch.safeSearch.toString());
+
+  if (config.webSearch.categories) {
+    endpoint.searchParams.set('categories', config.webSearch.categories);
+  }
+
+  if (config.webSearch.language) {
+    endpoint.searchParams.set('language', config.webSearch.language);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.webSearch.timeoutMs);
+
+  try {
+    const searchResponse = await fetch(endpoint, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    });
+    const payload = await searchResponse.json().catch(() => null) as SearxngSearchResponse | null;
+
+    if (!searchResponse.ok) {
+      throw new Error(`SearXNG request failed with status ${searchResponse.status.toString()}.`);
+    }
+
+    return {
+      query,
+      sources: normalizeSearxngResults(payload),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildAiPromptWithWebSearch(
+  prompt: string,
+  webSearch: AiWebSearchContext,
+  maxPromptChars: number,
+) {
+  const header = [
+    '以下是服务端通过 SearXNG 返回的联网搜索结果。请把它们作为可引用资料，不要编造搜索结果中不存在的事实。',
+    '如果搜索结果不足以确认问题，请明确说明无法从搜索结果确认。回答里需要尽量标明来源标题或链接。',
+    '',
+    '[联网搜索结果开始]',
+  ].join('\n');
+  const footer = [
+    '[联网搜索结果结束]',
+    '',
+    '[当前用户问题]',
+    prompt,
+  ].join('\n');
+  const availableChars = Math.max(0, maxPromptChars - header.length - footer.length - 4);
+  let usedChars = 0;
+  const sourceBlocks: string[] = [];
+
+  for (const [index, source] of webSearch.sources.entries()) {
+    const block = [
+      `[${(index + 1).toString()}] ${source.title}`,
+      `URL: ${source.url}`,
+      source.publishedAt ? `时间: ${source.publishedAt}` : '',
+      source.snippet ? `摘要: ${source.snippet}` : '',
+    ].filter(Boolean).join('\n');
+    const nextChars = usedChars + block.length + 2;
+
+    if (sourceBlocks.length > 0 && nextChars > availableChars) {
+      break;
+    }
+
+    if (sourceBlocks.length === 0 && block.length > availableChars) {
+      continue;
+    }
+
+    sourceBlocks.push(block);
+    usedChars = nextChars;
+  }
+
+  const searchText = sourceBlocks.length > 0
+    ? sourceBlocks.join('\n\n')
+    : '本次搜索没有返回可用结果。';
+
+  return [
+    header,
+    searchText,
+    footer,
+  ].join('\n');
+}
+
 function buildAiPrompt(input: { prompt: string; roomId?: string; maxPromptChars: number }) {
   if (!input.roomId) {
     return input.prompt;
@@ -2451,6 +3032,7 @@ async function buildAdminStatePayload(admin: AdminAccountSession) {
   const modelUsage = aiUsage.list();
   const cloudflareBudget = cloudflareAiQuota.getStatus(config.cloudflareAi.dailyNeuronBudget);
   const openrouterBalance = await fetchOpenRouterBalanceSnapshot();
+  const onlineDevices = buildAdminOnlineDevicesPayload();
   const users = await buildAdminUsersPayload();
   const roles = admin.isSuperAdmin ? await buildAdminRolesPayload() : undefined;
 
@@ -2466,10 +3048,36 @@ async function buildAdminStatePayload(admin: AdminAccountSession) {
       },
       openrouterBalance,
     },
+    onlineDevices,
     users,
     roles,
     admin: toAdminSessionPayload(admin),
     serverTime: new Date().toISOString(),
+  };
+}
+
+function toAdminOnlineDevicePayload(device: ConnectedDevice) {
+  return {
+    deviceId: device.deviceId,
+    deviceName: device.deviceName,
+    platform: device.platform,
+    accountId: device.accountId,
+    autoConnect: device.autoConnect,
+    discoverable: device.discoverable,
+    allowShortCode: device.allowShortCode,
+    roomCount: rooms.listForDevice(device.deviceId).length,
+    sessionCount: sessions.listForDevice(device.deviceId).length,
+    lastSeenAt: device.lastSeenAt,
+  };
+}
+
+function buildAdminOnlineDevicesPayload() {
+  return {
+    devices: devices
+      .list()
+      .map(toAdminOnlineDevicePayload)
+      .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)),
+    loadedAt: new Date().toISOString(),
   };
 }
 
@@ -2615,33 +3223,45 @@ function handleAdminSessionRequest(
     });
 }
 
+function handleAdminPermissionsRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  void authenticateLinkedAdminRequest(request, response)
+    .then((authResult) => {
+      if (!authResult.ok) {
+        writeJson(response, 200, {
+          authenticated: false,
+          canRecallAnyMessage: false,
+        });
+        return;
+      }
+
+      writeJson(response, 200, {
+        authenticated: true,
+        canRecallAnyMessage: true,
+        admin: toAdminSessionPayload(authResult.admin),
+      });
+    })
+    .catch((error) => {
+      const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+      writeJson(response, statusCode, {
+        error: error instanceof Error ? error.message : 'Failed to load admin permissions.',
+      });
+    });
+}
+
 async function readAccountAuthPayload(request: IncomingMessage) {
   const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
   const payload = JSON.parse(buffer.toString('utf8')) as {
     email?: unknown;
     password?: unknown;
-    inviteCode?: unknown;
   };
 
   return {
     email: payload.email,
     password: payload.password,
-    inviteCode: payload.inviteCode,
   };
-}
-
-function normalizeInviteCode(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function inviteCodesMatch(input: string, expected: string) {
-  const inputBuffer = Buffer.from(input, 'utf8');
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-
-  return (
-    inputBuffer.byteLength === expectedBuffer.byteLength &&
-    timingSafeEqual(inputBuffer, expectedBuffer)
-  );
 }
 
 async function handleAccountLoginRequest(
@@ -2683,24 +3303,14 @@ async function handleAccountRegisterRequest(
 
   try {
     const payload = await readAccountAuthPayload(request);
-    const expectedInviteCode = config.accountInviteCode;
-    if (!expectedInviteCode) {
-      writeJson(response, 503, { error: '注册邀请码未配置，请联系管理员。' });
-      return;
-    }
-
-    const inviteCode = normalizeInviteCode(payload.inviteCode);
-    if (!inviteCode || !inviteCodesMatch(inviteCode, expectedInviteCode)) {
-      writeJson(response, 403, { error: '邀请码不正确。' });
-      return;
-    }
-
-    const session = await accounts.register(payload);
-    appendResponseCookie(response, buildUserSessionCookie(session));
+    const registration = await accounts.register(payload);
     writeJson(response, 200, {
       ok: true,
-      authenticated: true,
-      user: toAccountUserPayload(session.user),
+      authenticated: false,
+      requiresEmailConfirmation: true,
+      email: registration.email,
+      message: '注册请求已提交，请先打开邮箱确认链接，然后再登录。',
+      user: registration.user ? toAccountUserPayload(registration.user) : undefined,
     });
   } catch (error) {
     if (error instanceof AccountAuthError) {
@@ -2709,6 +3319,44 @@ async function handleAccountRegisterRequest(
     }
 
     writeJson(response, 400, { error: '账号注册请求无效。' });
+  }
+}
+
+async function handleAccountConfirmRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const nextPath = normalizeLocalRedirectTarget(
+    url.searchParams.get('next') || url.searchParams.get('redirect_to'),
+    request,
+  );
+
+  if (!accounts) {
+    writeRedirect(response, buildAccountConfirmErrorRedirect('账号确认未配置，请先配置 Supabase。'));
+    return;
+  }
+
+  try {
+    const session = await accounts.confirmEmail({
+      tokenHash:
+        url.searchParams.get('token_hash') ||
+        url.searchParams.get('tokenHash') ||
+        url.searchParams.get('token'),
+      type: url.searchParams.get('type'),
+    });
+
+    if (session) {
+      appendResponseCookie(response, buildUserSessionCookie(session));
+    }
+
+    writeRedirect(response, nextPath);
+  } catch (error) {
+    appendResponseCookie(response, buildUserSessionClearCookie());
+    const message = error instanceof AccountAuthError
+      ? error.message
+      : '邮箱确认链接无效或已过期。';
+    writeRedirect(response, buildAccountConfirmErrorRedirect(message));
   }
 }
 
@@ -3051,6 +3699,75 @@ function normalizeAdminQuotaInput(value: unknown, fieldLabel: string) {
   return Math.trunc(value);
 }
 
+function normalizeAdminDeviceNameInput(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new AccountAuthError('设备名称不能为空。', 400);
+  }
+
+  const deviceName = value.trim();
+  if (!deviceName) {
+    throw new AccountAuthError('设备名称不能为空。', 400);
+  }
+
+  return deviceName.slice(0, 80);
+}
+
+async function handleAdminOnlineDeviceRename(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = await authenticateAdminRequest(request, response);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  let payload: {
+    deviceId?: unknown;
+    deviceName?: unknown;
+  };
+
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+    payload = JSON.parse(buffer.toString('utf8')) as typeof payload;
+  } catch {
+    writeJson(response, 400, { error: 'Invalid admin online device JSON.' });
+    return;
+  }
+
+  const deviceId = typeof payload.deviceId === 'string' ? payload.deviceId.trim() : '';
+  if (!deviceId) {
+    writeJson(response, 400, { error: '设备 ID 不能为空。' });
+    return;
+  }
+
+  try {
+    const deviceName = normalizeAdminDeviceNameInput(payload.deviceName);
+    const updatedDevice = devices.update(deviceId, { deviceName });
+    if (!updatedDevice) {
+      writeJson(response, 404, { error: '该设备已离线，无法修改名称。' });
+      return;
+    }
+
+    broadcastSnapshots();
+    writeJson(response, 200, {
+      ok: true,
+      device: toAdminOnlineDevicePayload(updatedDevice),
+      onlineDevices: buildAdminOnlineDevicesPayload(),
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '设备名称保存失败。',
+    });
+  }
+}
+
 async function handleAdminUserQuotaUpdate(
   request: IncomingMessage,
   response: ServerResponse,
@@ -3355,6 +4072,7 @@ async function handleAiChatRequest(
   const historyId = normalizeOptionalString(payload.historyId) ?? randomUUID();
   const createdAt = normalizeCreatedAt(payload.createdAt);
   const kind = payload.kind === 'quota' ? 'quota' : 'chat';
+  const shouldUseWebSearch = kind === 'chat' && payload.webSearch === true;
   const modelSelection = resolveAiModel(payload.model);
   if (!modelSelection.ok) {
     writeJson(response, 400, { error: modelSelection.message });
@@ -3430,6 +4148,13 @@ async function handleAiChatRequest(
     return;
   }
 
+  if (shouldUseWebSearch && !config.webSearch.enabled) {
+    writeJson(response, 503, {
+      error: '联网搜索未启用。请先在后端配置 AI_WEB_SEARCH_ENABLED=true 和 SEARXNG_BASE_URL。',
+    });
+    return;
+  }
+
   if (Buffer.byteLength(effectivePrompt, 'utf8') > aiPromptMaxBytes) {
     writeJson(response, 413, {
       error: 'Prompt exceeds the AI request byte limit.',
@@ -3444,8 +4169,47 @@ async function handleAiChatRequest(
     return;
   }
 
+  let promptForAi = effectivePrompt;
+  let webSearchContext: AiWebSearchContext | undefined;
+  if (shouldUseWebSearch) {
+    const searchQuery = normalizeAiWebSearchQuery(effectivePrompt);
+    if (!searchQuery) {
+      writeJson(response, 400, { error: '联网搜索需要明确的文本问题。' });
+      return;
+    }
+
+    try {
+      webSearchContext = await fetchSearxngWebSearch(searchQuery);
+      promptForAi = buildAiPromptWithWebSearch(
+        effectivePrompt,
+        webSearchContext,
+        activeAi.maxPromptChars,
+      );
+    } catch (error) {
+      console.error('SearXNG web search failed', {
+        message: error instanceof Error ? error.message : undefined,
+      });
+      writeJson(response, 502, { error: '联网搜索请求失败，请检查 SearXNG 服务是否可用并启用了 JSON format。' });
+      return;
+    }
+  }
+
+  if (Buffer.byteLength(promptForAi, 'utf8') > aiPromptMaxBytes) {
+    writeJson(response, 413, {
+      error: 'Prompt plus web search context exceeds the AI request byte limit.',
+    });
+    return;
+  }
+
+  if (promptForAi.length > activeAi.maxPromptChars) {
+    writeJson(response, 413, {
+      error: `Prompt plus web search context exceeds the ${activeAi.maxPromptChars.toString()} character limit.`,
+    });
+    return;
+  }
+
   const aiPrompt = buildAiPrompt({
-    prompt: effectivePrompt,
+    prompt: promptForAi,
     roomId,
     maxPromptChars: activeAi.maxPromptChars,
   });
@@ -3633,6 +4397,7 @@ async function handleAiChatRequest(
       model,
       quota: buildAiQuotaPayload(model),
       historyText: saved?.ok ? saved.text : undefined,
+      webSearch: webSearchContext,
     });
   } catch (error) {
     if (quotaReservation) {
@@ -3673,32 +4438,11 @@ async function runImageGenerationJob(
   }
 
   try {
-    let preflightQuota: AccountImageQuotaStatus;
-    try {
-      preflightQuota = await getImageQuotaStatus(job.user);
-    } catch (error) {
-      console.error('Image generation quota preflight failed', {
-        jobId: job.jobId,
-        userId: job.userId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      job.error = '生图额度数据库不可用，请先执行 Supabase 迁移。';
-      touchImageGenerationJob(job, 'failed');
-      return;
-    }
-
-    job.quota = preflightQuota;
-    if (preflightQuota.remaining <= 0) {
-      job.error = imageQuotaExhaustedMessage;
-      touchImageGenerationJob(job, 'failed');
-      return;
-    }
-
     const {
       response: imageResponse,
       payload: imagePayload,
       attempts: imageAttempts,
-    } = await requestCodexImageWithRetry(job, upstreamRequest);
+    } = await requestCodexImageWithRace(job, upstreamRequest);
 
     if (!imageResponse.ok || !imagePayload || imagePayload.error) {
       const message = formatCodexImageFailureMessage(imageResponse.status, imagePayload);
@@ -3794,12 +4538,20 @@ async function runImageGenerationJob(
 
     let quota: AccountImageQuotaStatus;
     try {
-      quota = await accounts.addImageQuotaUsage({
-        user: job.user,
-        period: getImageQuotaPeriod(),
-        limit: config.codexImageAi.dailyFreeQuota,
-        imageCount: images.length,
-      });
+      quota = job.quotaReservation
+        ? await accounts.confirmImageQuotaReservation({
+            user: job.user,
+            reservation: job.quotaReservation,
+            period: getImageQuotaPeriodForReservation(job.quotaReservation),
+            limit: config.codexImageAi.dailyFreeQuota,
+            imageCount: images.length,
+          })
+        : await accounts.addImageQuotaUsage({
+            user: job.user,
+            period: getImageQuotaPeriod(),
+            limit: config.codexImageAi.dailyFreeQuota,
+            imageCount: images.length,
+          });
       job.quota = quota;
     } catch (error) {
       console.error('Image generation quota refresh failed after history persistence', {
@@ -3848,6 +4600,23 @@ async function runImageGenerationJob(
     job.error = 'Codex image reverse proxy request failed.';
     touchImageGenerationJob(job, 'failed');
   } finally {
+    if (job.status === 'failed' && accounts && job.quotaReservation) {
+      try {
+        job.quota = await accounts.releaseImageQuotaReservation({
+          user: job.user,
+          reservation: job.quotaReservation,
+          period: getImageQuotaPeriodForReservation(job.quotaReservation),
+          limit: config.codexImageAi.dailyFreeQuota,
+        });
+      } catch (error) {
+        console.error('Image generation quota reservation release failed', {
+          jobId: job.jobId,
+          userId: job.userId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     cleanupImageGenerationJobs();
   }
 }
@@ -3894,6 +4663,12 @@ async function handleAiImageRequest(
 ) {
   if (!imageGenerationHistory) {
     writeJson(response, 503, { error: '生图历史未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  const accountRegistry = accounts;
+  if (!accountRegistry) {
+    writeJson(response, 503, { error: '账号登录未配置，请先配置 Supabase。' });
     return;
   }
 
@@ -3947,7 +4722,13 @@ async function handleAiImageRequest(
   }
 
   const model = normalizeImageOption(payload.model, config.codexImageAi.model);
-  const size = normalizeImageOption(payload.size, config.codexImageAi.size);
+  const sizeResult = normalizeImageSizeOption(payload.size, config.codexImageAi.size);
+  if (!sizeResult.ok) {
+    writeJson(response, 400, { error: sizeResult.error });
+    return;
+  }
+
+  const size = sizeResult.size;
   const quality = normalizeImageOption(payload.quality, config.codexImageAi.quality);
 
   try {
@@ -3961,26 +4742,6 @@ async function handleAiImageRequest(
     return;
   }
 
-  let quota: AccountImageQuotaStatus;
-  try {
-    quota = await getImageQuotaStatus(authResult.user);
-  } catch (error) {
-    console.error('Image generation quota precheck failed', {
-      userId: authResult.user.id,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    writeJson(response, 503, { error: '生图额度数据库不可用，请先执行 Supabase 迁移。' });
-    return;
-  }
-
-  if (quota.remaining <= 0) {
-    writeJson(response, 429, {
-      error: imageQuotaExhaustedMessage,
-      quota,
-    });
-    return;
-  }
-
   const upstreamRequest = buildCodexImageRequest({
     model,
     prompt,
@@ -3990,9 +4751,37 @@ async function handleAiImageRequest(
   });
 
   cleanupImageGenerationJobs();
-  const createdAt = new Date().toISOString();
+  const createdAtDate = new Date();
+  const createdAt = createdAtDate.toISOString();
+  const jobId = randomUUID();
+  let quota: AccountImageQuotaStatus;
+  let quotaReservation: AccountImageQuotaReservation;
+  try {
+    const reservationResult = await accountRegistry.reserveImageQuota({
+      user: authResult.user,
+      period: getImageQuotaPeriod(createdAtDate),
+      limit: config.codexImageAi.dailyFreeQuota,
+      imageCount: 1,
+      reservationId: jobId,
+      expiresAt: new Date(createdAtDate.getTime() + imageGenerationJobRetentionMs).toISOString(),
+    });
+    quota = reservationResult.quota;
+    quotaReservation = reservationResult.reservation;
+  } catch (error) {
+    const statusCode = error instanceof AccountAuthError ? error.statusCode : 503;
+    const message = error instanceof AccountAuthError
+      ? error.message
+      : '生图额度数据库不可用，请先执行 Supabase 迁移。';
+    console.error('Image generation quota reservation failed', {
+      userId: authResult.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, statusCode, { error: message });
+    return;
+  }
+
   const job: ImageGenerationJob = {
-    jobId: randomUUID(),
+    jobId,
     userId: authResult.user.id,
     user: authResult.user,
     prompt,
@@ -4000,6 +4789,7 @@ async function handleAiImageRequest(
     size,
     quality,
     sourceImageCount: uploadedImages.length,
+    quotaReservation,
     status: 'queued',
     createdAt,
     updatedAt: createdAt,
@@ -4093,6 +4883,85 @@ function authorizeSessionMember(
   };
 }
 
+async function authorizeHistoryTextRecall(
+  request: IncomingMessage,
+  response: ServerResponse,
+  device: ConnectedDevice,
+  record: { sourceDeviceId: string },
+) {
+  if (record.sourceDeviceId === device.deviceId) {
+    return {
+      ok: true as const,
+      scope: 'source-device' as const,
+    };
+  }
+
+  const adminAuth = await authenticateLinkedAdminRequest(request, response);
+  if (adminAuth.ok) {
+    return {
+      ok: true as const,
+      scope: 'admin' as const,
+    };
+  }
+
+  return {
+    ok: false as const,
+    statusCode: 403,
+    message: 'Only the source device or an admin can recall this text.',
+  };
+}
+
+async function handleHistoryTextDeleteRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  historyId: string,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const record = history.getTextById(historyId);
+  if (!record) {
+    writeJson(response, 200, { ok: true, deleted: false });
+    return;
+  }
+
+  try {
+    const recallAccess = await authorizeHistoryTextRecall(
+      request,
+      response,
+      authResult.device,
+      record,
+    );
+
+    if (!recallAccess.ok) {
+      writeJson(response, recallAccess.statusCode, { error: recallAccess.message });
+      return;
+    }
+
+    if (recallAccess.scope === 'source-device') {
+      const roomAccess = authorizeRoomMember(authResult.device, record.roomId);
+      if (!roomAccess.ok) {
+        writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+        return;
+      }
+    }
+
+    const deleted = await history.deleteText(historyId);
+    writeJson(response, 200, { ok: true, deleted });
+    if (deleted) {
+      broadcastSnapshots();
+    }
+  } catch (error) {
+    const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+    writeJson(response, statusCode, {
+      error: error instanceof Error ? error.message : 'History text recall failed.',
+    });
+  }
+}
+
 const httpServer = createServer((request, response) => {
   if (!request.url) {
     response.writeHead(404).end();
@@ -4128,6 +4997,11 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
+  if (url.pathname === '/api/admin/permissions' && request.method === 'GET') {
+    handleAdminPermissionsRequest(request, response);
+    return;
+  }
+
   if (url.pathname === '/api/admin/state' && request.method === 'GET') {
     handleAdminStateRequest(request, response);
     return;
@@ -4145,6 +5019,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/admin/history/clear' && request.method === 'POST') {
     void handleAdminHistoryClear(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/admin/online-devices/name' && request.method === 'POST') {
+    void handleAdminOnlineDeviceRename(request, response);
     return;
   }
 
@@ -4171,6 +5050,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/auth/register' && request.method === 'POST') {
     void handleAccountRegisterRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/auth/confirm' && request.method === 'GET') {
+    void handleAccountConfirmRequest(request, response, url);
     return;
   }
 
@@ -4467,41 +5351,7 @@ const httpServer = createServer((request, response) => {
     const historyId = decodeURIComponent(
       url.pathname.slice('/api/history/text/'.length),
     );
-    const authResult = authenticateHistoryRequest(request);
-    if (!authResult.ok) {
-      writeJson(response, authResult.statusCode, { error: authResult.message });
-      return;
-    }
-
-    const record = history.getTextById(historyId);
-    if (!record) {
-      writeJson(response, 200, { ok: true, deleted: false });
-      return;
-    }
-
-    if (record.sourceDeviceId !== authResult.device.deviceId) {
-      writeJson(response, 403, { error: 'Only the source device can recall this text.' });
-      return;
-    }
-
-    const roomAccess = authorizeRoomMember(authResult.device, record.roomId);
-    if (!roomAccess.ok) {
-      writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
-      return;
-    }
-
-    void history.deleteText(historyId)
-      .then((deleted) => {
-        writeJson(response, 200, { ok: true, deleted });
-        if (deleted) {
-          broadcastSnapshots();
-        }
-      })
-      .catch((error) => {
-        writeJson(response, 500, {
-          error: error instanceof Error ? error.message : 'History text recall failed.',
-        });
-      });
+    void handleHistoryTextDeleteRequest(request, response, historyId);
     return;
   }
 

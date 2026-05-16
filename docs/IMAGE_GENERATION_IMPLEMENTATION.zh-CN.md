@@ -80,6 +80,7 @@ SUPABASE_IMAGE_GENERATIONS_TABLE=image_generations
 - `20260429133000_account_image_history.sql`：创建 `user_profiles` 与 `image_generations`。
 - `20260430152000_user_image_quota.sql`：补充每日免费额度字段。
 - `20260430165000_user_image_paid_quota.sql`：补充付费额度字段。
+- `20260514152000_image_quota_reservations.sql`：创建 `image_quota_reservations` 和数据库级额度预占 / 确认 / 释放函数。
 
 ### 上游图片 API 配置
 
@@ -92,6 +93,7 @@ CODEX_IMAGE_MODEL=gpt-image-2
 CODEX_IMAGE_SIZE=auto
 CODEX_IMAGE_QUALITY=auto
 CODEX_IMAGE_MAX_PROMPT_CHARS=4000
+CODEX_IMAGE_PARALLEL_REQUESTS=2
 CODEX_IMAGE_DAILY_FREE_QUOTA=3
 CODEX_IMAGE_QUOTA_RESET_HOUR=4
 CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES=480
@@ -141,7 +143,7 @@ Cookie: ddzhilian_user_session=...
 | --- | --- | --- |
 | `prompt` | 是 | 图片生成或修改提示词 |
 | `model` | 否 | 不传则使用 `CODEX_IMAGE_MODEL` |
-| `size` | 否 | 不传则使用 `CODEX_IMAGE_SIZE` |
+| `size` | 否 | 不传则使用 `CODEX_IMAGE_SIZE`；`/image` 前端按所选比例把分辨率解释为最长边 1080 / 1440 / 2000；显式 `WIDTHxHEIGHT` 会在后端归一到最接近的 16 倍数后再转发上游 |
 | `quality` | 否 | 不传则使用 `CODEX_IMAGE_QUALITY` |
 | `image[]` | 否 | 参考图文件；存在时走图片编辑接口 |
 
@@ -225,6 +227,8 @@ GET /api/ai/image/jobs/:jobId
 Cookie: ddzhilian_user_session=...
 ```
 
+前端允许在已有任务生成中继续提交下一条提示词；每次提交都会创建一个独立任务并独立轮询。后端在创建新任务前通过 Supabase `reserve_image_quota(...)` 写入 `image_quota_reservations`，在数据库事务内锁定当前账号的 `user_profiles` 行并预占额度。这样即使后端将来变成多进程或多实例，也会共享同一份数据库预占状态，避免等待期间超过账号剩余额度继续启动上游请求。单个任务会按 `CODEX_IMAGE_PARALLEL_REQUESTS` 同时发起上游请求，默认 2 路并发，先成功的结果会被采用，其余本地请求会被中止；该策略能缩短 524 超时链路，但会增加上游请求压力。
+
 任务完成时返回：
 
 ```json
@@ -238,7 +242,10 @@ Cookie: ddzhilian_user_session=...
       {
         "url": "https://ddzhilian.com/api/ai/image/assets/uuid/0.png",
         "mimeType": "image/png",
-        "revisedPrompt": "..."
+        "revisedPrompt": "...",
+        "byteSize": 1048576,
+        "width": 1024,
+        "height": 1024
       }
     ],
     "createdAt": "2026-05-03T00:00:30.000Z",
@@ -252,7 +259,10 @@ Cookie: ddzhilian_user_session=...
       "images": [
         {
           "url": "https://ddzhilian.com/api/ai/image/assets/uuid/0.png",
-          "mimeType": "image/png"
+          "mimeType": "image/png",
+          "byteSize": 1048576,
+          "width": 1024,
+          "height": 1024
         }
       ],
       "createdAt": "2026-05-03T00:00:30.000Z"
@@ -278,10 +288,11 @@ Cookie: ddzhilian_user_session=...
 当前后端对 `b64_json` 的处理是：
 
 1. 解码 base64。
-2. 根据 MIME 类型生成扩展名，默认 `png`。
-3. 保存到 `server/data/image-assets/<userId>/<generationId>/<index>.<ext>`。
-4. 将返回给前端的图片地址改为 `/api/ai/image/assets/:generationId/:index.png`。
-5. 写入 Supabase 历史时保存 URL、MIME 类型和 revised prompt，不把 base64 作为前端响应长期返回。
+2. 读取文件字节数，并从 PNG/JPEG/WebP 文件头解析实际像素宽高。
+3. 根据 MIME 类型生成扩展名，默认 `png`。
+4. 保存到 `server/data/image-assets/<userId>/<generationId>/<index>.<ext>`。
+5. 将返回给前端的图片地址改为 `/api/ai/image/assets/:generationId/:index.png`。
+6. 写入 Supabase 历史时保存 URL、MIME 类型、revised prompt、文件字节数和像素宽高，不把 base64 作为前端响应长期返回。
 
 图片文件访问接口：
 
@@ -297,7 +308,7 @@ Cookie: ddzhilian_user_session=...
 - 只有历史记录属于当前账号，且图片 URL 与请求路径匹配时，才读取磁盘文件。
 - 响应头包含 `Content-Type`、`Content-Disposition: inline`、`Cache-Control: private` 和 `X-Content-Type-Options: nosniff`。
 
-如果上游直接返回外部 `url`，后端会保留该 URL；只有 `b64_json` 会被落盘成本站鉴权图片 URL。
+如果上游直接返回外部 `url`，后端会保留该 URL；只有 `b64_json` 会被落盘成本站鉴权图片 URL。外部 URL 不会被额外下载探测，因此 `byteSize`、`width`、`height` 可能为空。
 
 ## 9. 生图历史
 
@@ -312,7 +323,7 @@ Cookie: ddzhilian_user_session=...
 | `model` | 实际使用模型 |
 | `size` | 实际使用尺寸 |
 | `quality` | 实际使用质量 |
-| `images` | JSON 数组，保存图片 URL、MIME 类型、revised prompt |
+| `images` | JSON 数组，保存图片 URL、MIME 类型、revised prompt、可用时的 `byteSize`、`width`、`height` |
 | `created_at` | 生成完成时间 |
 
 分页接口：
@@ -349,6 +360,18 @@ GET /api/ai/image/history?limit=12&beforeCreatedAt=...&beforeGenerationId=...
 | `image_paid_quota_remaining` | 付费剩余额度 |
 | `image_paid_quota_used` | 付费已用额度 |
 
+额度预占表：`public.image_quota_reservations`
+
+| 字段 | 说明 |
+| --- | --- |
+| `reservation_id` | 生图任务 ID，主键 |
+| `user_id` | Supabase Auth 用户 ID |
+| `period_started_at` | 本次预占对应的免费额度周期 |
+| `free_count` | 本次预占的免费额度张数 |
+| `paid_count` | 本次预占的付费额度张数 |
+| `status` | `active`、`confirmed`、`released` 或 `expired` |
+| `expires_at` | 后端异常退出后的预占过期时间 |
+
 额度接口：
 
 ```http
@@ -360,9 +383,12 @@ Cookie: ddzhilian_user_session=...
 
 - `freeLimit`
 - `freeUsed`
+- `freeReserved`
 - `freeRemaining`
 - `paidRemaining`
 - `paidUsed`
+- `paidReserved`
+- `totalReserved`
 - `totalRemaining`
 - `periodStartedAt`
 - `resetAt`
@@ -371,11 +397,12 @@ Cookie: ddzhilian_user_session=...
 
 扣减规则：
 
-1. 创建任务前只做额度预检查。
-2. 后台任务真正拿到图片并保存历史后，才扣减额度。
-3. 优先消耗每日免费额度。
-4. 免费额度不足时，再消耗付费额度。
-5. 默认每日 04:00 刷新免费额度，时区偏移默认 `480` 分钟。
+1. 创建任务前先调用数据库函数预占 1 张额度。
+2. 后台任务真正拿到图片并保存历史后，调用数据库函数确认预占并扣减额度。
+3. 任务失败、上游失败、图片保存失败或历史保存失败时，释放该任务的预占额度。
+4. 优先预占和消耗每日免费额度。
+5. 免费额度不足时，再预占和消耗付费额度。
+6. 默认每日 04:00 刷新免费额度，时区偏移默认 `480` 分钟。
 
 ## 11. 错误处理和重试
 
@@ -421,6 +448,6 @@ Cookie: ddzhilian_user_session=...
 - 不要把生成图片 base64 长期返回给浏览器；当前实现会把 base64 落盘后返回 URL。
 - 如果上游直接返回外部图片 URL，该 URL 当前会原样返回，访问控制取决于上游；如需统一本站鉴权，需要增加“下载外链并落盘”的后端流程。
 - 修改上传字段名时，需要同步前端 `image[]` 和后端 multipart 解析逻辑。
-- 修改额度逻辑时，要保持“成功返回图片后才扣减”的行为，否则失败请求会误扣额度。
+- 修改额度逻辑时，要保持“创建任务先预占、成功保存历史后确认扣减、失败释放预占”的闭环，否则失败请求会误占或误扣额度。
 - 修改历史分页时，要保留 `createdAt + generationId` 双游标，避免同时间记录分页不稳定。
-- 当前额度扣减是应用层读写逻辑；如果后续出现高并发购买或批量生图，需要考虑 Supabase RPC 或数据库事务来保证额度扣减的原子性。
+- 当前生图任务创建使用 Supabase 数据库函数做额度预占，已覆盖多后端实例并发创建任务的主要风险；如果后续接入购买、退款或批量生图，还需要把对应资金和额度变更也纳入数据库事务。

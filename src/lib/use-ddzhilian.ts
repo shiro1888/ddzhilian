@@ -47,6 +47,10 @@ const IMAGE_JOB_POLL_TIMEOUT_MS = 15 * 60 * 1000
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
+type RecallTextOptions = {
+  canRecallAny?: boolean
+}
+
 function readPublicEnv(name: 'SIGNALING_WS_URL' | 'SIGNALING_HTTP_URL') {
   const env = process.env as Record<string, string | undefined>
   return env[`NEXT_PUBLIC_${name}`]?.trim() || ''
@@ -590,29 +594,21 @@ export function useDdzhilian() {
     sendJoinRoomEvent(roomId)
   }
 
-  const waitForRoomSocketReady = (roomId: string) =>
-    new Promise<void>((resolve) => {
-      const normalizedRoomId = roomId.trim()
-      if (!normalizedRoomId) {
-        resolve()
-        return
-      }
+  const isHistoryAuthExpiredResponse = async (response: Response) => {
+    if (response.status !== 401) {
+      return false
+    }
 
-      const joinAndRefresh = () => {
-        sendJoinRoomEvent(normalizedRoomId)
-        sendEvent({
-          type: 'request-snapshot',
-          payload: undefined,
-        })
-        resolve()
-      }
+    try {
+      const message = await readApiError(response.clone(), HISTORY_AUTH_EXPIRED_MESSAGE)
+      return isHistoryAuthExpiredError(response.status, message)
+    } catch {
+      return false
+    }
+  }
 
-      const socket = socketRef.current
-      if (socket?.readyState === WebSocket.OPEN) {
-        joinAndRefresh()
-        return
-      }
-
+  const waitForHistoryAuthorizationRefresh = (roomId?: string) =>
+    new Promise<DirectorySnapshotPayload['self'] | null>((resolve) => {
       let settled = false
       const timeoutId = window.setTimeout(() => {
         if (settled) {
@@ -620,19 +616,60 @@ export function useDdzhilian() {
         }
 
         settled = true
-        resolve()
-      }, 5_000)
+        resolve(selfRef.current)
+      }, 6_000)
 
       reconnectSocket(() => {
-        if (settled) {
-          return
+        if (roomId) {
+          sendJoinRoomEvent(roomId)
         }
 
-        settled = true
-        window.clearTimeout(timeoutId)
-        joinAndRefresh()
+        sendEvent({
+          type: 'request-snapshot',
+          payload: undefined,
+        })
+
+        window.setTimeout(() => {
+          if (settled) {
+            return
+          }
+
+          settled = true
+          window.clearTimeout(timeoutId)
+          resolve(selfRef.current)
+        }, 150)
       })
     })
+
+  const fetchWithHistoryAuthRetry = async (
+    createRequest: (requestSelf: DirectorySnapshotPayload['self']) => Promise<Response>,
+    options?: {
+      roomId?: string
+    },
+  ) => {
+    const requestSelf = selfRef.current
+    if (!requestSelf?.historyAuthToken) {
+      return {
+        response: null,
+        self: null,
+      }
+    }
+
+    let response = await createRequest(requestSelf)
+    let responseSelf = requestSelf
+    if (await isHistoryAuthExpiredResponse(response)) {
+      const refreshedSelf = await waitForHistoryAuthorizationRefresh(options?.roomId)
+      if (refreshedSelf?.historyAuthToken) {
+        responseSelf = refreshedSelf
+        response = await createRequest(refreshedSelf)
+      }
+    }
+
+    return {
+      response,
+      self: responseSelf,
+    }
+  }
 
   const updateTransfer = (transferId: string, patch: Partial<TransferItem>) => {
     startTransition(() => {
@@ -840,6 +877,7 @@ export function useDdzhilian() {
 
   const applySnapshot = (snapshot: DirectorySnapshotPayload) => {
     rtcConfigRef.current = snapshot.rtcConfig
+    selfRef.current = snapshot.self
     trackPublicRoomFromSnapshot(snapshot)
 
     const nextIdentity: StoredIdentity = {
@@ -2687,21 +2725,9 @@ export function useDdzhilian() {
           createdAt,
         }),
       })
-      let response = await postRoomText(activeSelf)
-
-      if (response.status === 401 || response.status === 403) {
-        const room = roomsByIdRef.current[roomId]
-        if (room?.isPublic) {
-          await waitForRoomSocketReady(roomId)
-        } else {
-          requestSnapshot()
-        }
-        await delay(1_200)
-
-        const refreshedSelf = selfRef.current
-        if (refreshedSelf?.historyAuthToken) {
-          response = await postRoomText(refreshedSelf)
-        }
+      const { response, self: responseSelf } = await fetchWithHistoryAuthRetry(postRoomText, { roomId })
+      if (!response) {
+        throw new Error('当前设备尚未完成历史记录授权。')
       }
 
       if (!response.ok) {
@@ -2714,8 +2740,8 @@ export function useDdzhilian() {
         historyId,
         roomId,
         isPublic: true,
-        sourceDeviceId: activeSelf.deviceId,
-        sourceDeviceName: activeSelf.deviceName,
+        sourceDeviceId: responseSelf?.deviceId ?? activeSelf.deviceId,
+        sourceDeviceName: responseSelf?.deviceName ?? activeSelf.deviceName,
         text,
         createdAt,
       }
@@ -2746,21 +2772,53 @@ export function useDdzhilian() {
     }
   }
 
-  const recallText = async (recordId: string) => {
+  const recallText = async (recordId: string, options?: RecallTextOptions) => {
+    const canRecallAny = options?.canRecallAny === true
     const activeSelf = selfRef.current
     const localRecord = textRecordsRef.current.find((record) => record.id === recordId)
     const historyRecord = historyTextsRef.current.find((record) => record.historyId === recordId)
+    const isRemoteLocalRecord = Boolean(localRecord && !localRecord.fromSelf)
+    const isRemoteHistoryRecord = Boolean(historyRecord && historyRecord.sourceDeviceId !== activeSelf?.deviceId)
+    const requiresAdminAuthorization = canRecallAny && (isRemoteLocalRecord || isRemoteHistoryRecord)
 
-    if (localRecord && !localRecord.fromSelf) {
+    if (!canRecallAny && isRemoteLocalRecord) {
       throw new Error('只能撤回自己发送的消息。')
     }
 
-    if (historyRecord && historyRecord.sourceDeviceId !== activeSelf?.deviceId) {
+    if (!canRecallAny && isRemoteHistoryRecord) {
       throw new Error('只能撤回自己发送的消息。')
     }
 
     const roomId = localRecord?.roomId ?? historyRecord?.roomId
     const directSessionId = localRecord?.sessionId || historyRecord?.sessionId
+    const deleteStoredHistoryText = async () => {
+      const { response } = await fetchWithHistoryAuthRetry((requestSelf) =>
+        fetch(`${API_BASE_URL}/api/history/text/${encodeURIComponent(recordId)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: buildHistoryAuthHeaders(requestSelf),
+        }), {
+          roomId,
+        })
+
+      if (!response) {
+        return false
+      }
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error(await readApiError(response, '消息撤回失败。'))
+      }
+
+      return true
+    }
+
+    if (requiresAdminAuthorization) {
+      const didRequestStoredDelete = await deleteStoredHistoryText()
+      if (!didRequestStoredDelete) {
+        throw new Error('当前设备尚未完成消息撤回授权。')
+      }
+    }
+
     const recallMessage: ChannelMessage = {
       type: 'text-recall',
       id: recordId,
@@ -2787,15 +2845,8 @@ export function useDdzhilian() {
       }
     }
 
-    if (activeSelf?.historyAuthToken) {
-      const response = await fetch(`${API_BASE_URL}/api/history/text/${encodeURIComponent(recordId)}`, {
-        method: 'DELETE',
-        headers: buildHistoryAuthHeaders(activeSelf),
-      })
-
-      if (!response.ok && response.status !== 404) {
-        throw new Error(`History text recall failed with status ${response.status.toString()}`)
-      }
+    if (!requiresAdminAuthorization) {
+      await deleteStoredHistoryText()
     }
 
     archivedTextHistoryIdsRef.current.delete(recordId)
@@ -2816,6 +2867,7 @@ export function useDdzhilian() {
       createdAt?: string
       model?: string
       images?: AiChatImageInput[]
+      webSearch?: boolean
       signal?: AbortSignal
     },
   ): Promise<AiChatResponse> => {
@@ -2846,6 +2898,7 @@ export function useDdzhilian() {
         createdAt: options?.createdAt,
         model: options?.model,
         images,
+        webSearch: options?.webSearch === true,
       }),
       signal: options?.signal,
     })
@@ -2874,6 +2927,7 @@ export function useDdzhilian() {
       model: typeof payload.model === 'string' ? payload.model : '',
       quota: payload.quota,
       historyText: payload.historyText,
+      webSearch: payload.webSearch,
     }
   }
 
@@ -2984,6 +3038,9 @@ export function useDdzhilian() {
       ? input.trim()
       : input.prompt.trim()
     const referenceImages = typeof input === 'string' ? [] : input.images ?? []
+    const requestModel = options?.model ?? (typeof input === 'string' ? undefined : input.model)
+    const requestSize = options?.size ?? (typeof input === 'string' ? undefined : input.size)
+    const requestQuality = options?.quality ?? (typeof input === 'string' ? undefined : input.quality)
 
     if (!normalizedPrompt) {
       throw new Error('请输入图片提示词。')
@@ -2993,25 +3050,25 @@ export function useDdzhilian() {
       ? new FormData()
       : JSON.stringify({
           prompt: normalizedPrompt,
-          model: options?.model,
-          size: options?.size,
-          quality: options?.quality,
+          model: requestModel,
+          size: requestSize,
+          quality: requestQuality,
         })
     const headers: Record<string, string> = {}
 
     if (body instanceof FormData) {
       body.append('prompt', normalizedPrompt)
 
-      if (options?.model) {
-        body.append('model', options.model)
+      if (requestModel) {
+        body.append('model', requestModel)
       }
 
-      if (options?.size) {
-        body.append('size', options.size)
+      if (requestSize) {
+        body.append('size', requestSize)
       }
 
-      if (options?.quality) {
-        body.append('quality', options.quality)
+      if (requestQuality) {
+        body.append('quality', requestQuality)
       }
 
       for (const image of referenceImages) {

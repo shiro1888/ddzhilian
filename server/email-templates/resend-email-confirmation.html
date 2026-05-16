@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>确认你的 {{brandName}} 账号</title>
+  </head>
+  <body style="margin:0;background:#f4f7f5;color:#16221b;font-family:Microsoft YaHei,PingFang SC,Hiragino Sans GB,Arial,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+      点击按钮确认你的邮箱，启用 {{brandName}} 账号。
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7f5;">
+      <tr>
+        <td align="center" style="padding:36px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8e2;border-radius:8px;">
+            <tr>
+              <td style="padding:28px 28px 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="font-size:14px;font-weight:700;color:#07a85a;">
+                      {{brandName}}
+                    </td>
+                    <td align="right" style="font-size:12px;color:#8a988f;">
+                      邮箱确认
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 28px 0;">
+                <h1 style="margin:0;font-size:24px;line-height:1.35;color:#16221b;font-weight:700;">
+                  确认你的邮箱
+                </h1>
+                <p style="margin:14px 0 0;font-size:15px;line-height:1.8;color:#5c6a62;">
+                  你好，{{recipientEmail}}。请确认这是你的邮箱地址。确认后，你就可以使用 {{brandName}} 的账号登录和相关功能。
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 28px 8px;">
+                <a href="{{actionUrl}}" style="display:inline-block;background:#07a85a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;line-height:1;padding:14px 22px;border-radius:8px;">
+                  确认邮箱
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;">
+                <p style="margin:0;font-size:13px;line-height:1.75;color:#7b8980;">
+                  如果按钮无法打开，请复制下面的链接到浏览器：
+                </p>
+                <p style="margin:8px 0 0;font-size:12px;line-height:1.7;color:#5c6a62;word-break:break-all;">
+                  {{actionUrl}}
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 28px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #edf2ee;">
+                  <tr>
+                    <td style="padding-top:16px;font-size:12px;line-height:1.7;color:#9aa6a0;">
+                      如果不是你发起的注册，可以忽略这封邮件。{{brandName}} 不会在邮件中索要密码或验证码。
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:8px;font-size:12px;line-height:1.7;color:#9aa6a0;">
+                      需要帮助请联系 {{supportEmail}}。© {{currentYear}} {{brandName}}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -6,7 +6,11 @@ type ImageAccountGateProps = {
   isSubmitting: boolean
   error: string | null
   onLogin: (email: string, password: string) => Promise<unknown>
-  onRegister: (email: string, password: string, inviteCode: string) => Promise<unknown>
+  onRegister: (email: string, password: string) => Promise<{
+    email?: string
+    message?: string
+    requiresEmailConfirmation?: boolean
+  }>
 }
 
 type AccountMode = 'login' | 'register'
@@ -22,19 +26,20 @@ export function ImageAccountGate({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [localNotice, setLocalNotice] = useState<string | null>(null)
   const isBusy = isLoading || isSubmitting
   const isRegistering = mode === 'register'
   const canSubmit =
     !isBusy &&
     email.trim().length > 0 &&
     password.length >= 8 &&
-    (!isRegistering || (confirmPassword.length > 0 && inviteCode.trim().length > 0))
+    (!isRegistering || confirmPassword.length > 0)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLocalError(null)
+    setLocalNotice(null)
 
     if (!email.trim()) {
       setLocalError('请输入邮箱。')
@@ -56,16 +61,18 @@ export function ImageAccountGate({
       return
     }
 
-    if (isRegistering && !inviteCode.trim()) {
-      setLocalError('请输入邀请码。')
-      return
-    }
-
     try {
       if (mode === 'login') {
         await onLogin(email.trim(), password)
       } else {
-        await onRegister(email.trim(), password, inviteCode.trim())
+        const result = await onRegister(email.trim(), password)
+        setMode('login')
+        setPassword('')
+        setConfirmPassword('')
+        setLocalNotice(
+          result.message ||
+          `确认邮件已发送到 ${result.email || email.trim()}，请先完成邮箱确认后再登录。`,
+        )
       }
     } catch (submitError) {
       setLocalError(submitError instanceof Error ? submitError.message : '账号请求失败。')
@@ -86,8 +93,8 @@ export function ImageAccountGate({
             onClick={() => {
               setMode('login')
               setLocalError(null)
+              setLocalNotice(null)
               setConfirmPassword('')
-              setInviteCode('')
             }}
           >
             登录
@@ -99,8 +106,8 @@ export function ImageAccountGate({
             onClick={() => {
               setMode('register')
               setLocalError(null)
+              setLocalNotice(null)
               setConfirmPassword('')
-              setInviteCode('')
             }}
           >
             注册
@@ -133,16 +140,6 @@ export function ImageAccountGate({
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
           ) : null}
-          {isRegistering ? (
-            <input
-              type="text"
-              autoComplete="off"
-              placeholder="邀请码"
-              value={inviteCode}
-              disabled={isBusy}
-              onChange={(event) => setInviteCode(event.target.value)}
-            />
-          ) : null}
           <button
             type="submit"
             className="dd-button dd-button--primary"
@@ -151,6 +148,7 @@ export function ImageAccountGate({
             {isSubmitting ? '处理中...' : mode === 'login' ? '登录' : '创建账号'}
           </button>
         </form>
+        {localNotice ? <p className="dd-success-note">{localNotice}</p> : null}
         {localError || error ? <p className="dd-error-note">{localError ?? error}</p> : null}
       </div>
     </section>

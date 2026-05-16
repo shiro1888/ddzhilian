@@ -42,15 +42,6 @@ export function AppSidebar({
       </div>
 
       <div className="dd-sidebar__menu" id="dd-primary-nav">
-        <div className="dd-sidebar__actions">
-          <button type="button" onClick={() => onViewChange('connect')}>
-            新会话
-          </button>
-          <button type="button" className="is-secondary" onClick={() => onViewChange('text')}>
-            对话
-          </button>
-        </div>
-
         <nav className="dd-nav" aria-label="功能导航">
           {visibleNavItems.map((item) => (
             <button

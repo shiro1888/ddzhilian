@@ -4,6 +4,8 @@ import type {
   AdminAiSettings,
   AdminCloudflareConfig,
   AdminHistoryStats,
+  AdminOnlineDeviceNameUpdate,
+  AdminOnlineDevicesSnapshot,
   AdminOpenRouterConfig,
   AdminRolesSnapshot,
   AdminSessionInfo,
@@ -25,6 +27,7 @@ import { DashboardWidgetContent } from './admin/DashboardWidgets'
 import { ModelsWorkspace } from './admin/ModelsWorkspace'
 import { ProvidersWorkspace } from './admin/ProvidersWorkspace'
 import { RoleManagementWorkspace } from './admin/RoleManagement'
+import { OnlineDevicesWorkspace } from './admin/OnlineDevices'
 import { UserManagementWorkspace } from './admin/UserManagement'
 import {
   buildBusinessKpiCards,
@@ -43,6 +46,7 @@ type AdminStageProps = {
   isAdminLoginTransitioning: boolean
   isAdminSaving: boolean
   isAdminClearingHistory: boolean
+  isAdminRenamingOnlineDevice: boolean
   isAdminUpdatingUser: boolean
   isAdminUpdatingRole: boolean
   adminError: string | null
@@ -50,6 +54,7 @@ type AdminStageProps = {
   historyStats: AdminHistoryStats | null
   aiSettings: AdminAiSettings | null
   usage: AdminUsageSnapshot | null
+  onlineDevices: AdminOnlineDevicesSnapshot | null
   users: AdminUsersSnapshot | null
   roles: AdminRolesSnapshot | null
   onAdminEmailDraftChange: (value: string) => void
@@ -70,6 +75,7 @@ type AdminStageProps = {
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onSave: () => void
   onClearHistory: () => void
+  onOnlineDeviceRename: (input: AdminOnlineDeviceNameUpdate) => Promise<void>
   onUserQuotaUpdate: (userId: string, quota: AdminUserQuotaUpdate) => Promise<void>
   onRoleCreate: (email: string) => Promise<void>
   onRoleDelete: (userId: string) => Promise<void>
@@ -85,6 +91,7 @@ export function AdminStage({
   isAdminLoginTransitioning,
   isAdminSaving,
   isAdminClearingHistory,
+  isAdminRenamingOnlineDevice,
   isAdminUpdatingUser,
   isAdminUpdatingRole,
   adminError,
@@ -92,6 +99,7 @@ export function AdminStage({
   historyStats,
   aiSettings,
   usage,
+  onlineDevices,
   users,
   roles,
   onAdminEmailDraftChange,
@@ -106,6 +114,7 @@ export function AdminStage({
   onOpenRouterModelsDetect,
   onSave,
   onClearHistory,
+  onOnlineDeviceRename,
   onUserQuotaUpdate,
   onRoleCreate,
   onRoleDelete,
@@ -328,6 +337,14 @@ export function AdminStage({
               ) : (
                 <p className="dd-admin-user-message">当前账号没有 API 密钥管理权限。</p>
               )}
+            </Tabs.Panel>
+
+            <Tabs.Panel className="dd-admin-section-panel" value="online" keepMounted>
+              <OnlineDevicesWorkspace
+                onlineDevices={onlineDevices}
+                isRenamingDevice={isAdminRenamingOnlineDevice}
+                onDeviceRename={onOnlineDeviceRename}
+              />
             </Tabs.Panel>
 
             <Tabs.Panel className="dd-admin-section-panel" value="users" keepMounted>

@@ -1,145 +1,3 @@
-create table if not exists public.history_texts (
-  history_id text primary key,
-  room_id text not null,
-  session_id text null,
-  is_public boolean not null default false,
-  source_device_id text not null,
-  source_device_name text not null,
-  text text not null,
-  created_at timestamptz not null
-);
-
-create index if not exists history_texts_room_created_idx
-  on public.history_texts (room_id, created_at desc, history_id desc);
-
-create index if not exists history_texts_created_idx
-  on public.history_texts (created_at desc, history_id desc);
-
-create table if not exists public.history_files (
-  history_id text primary key,
-  room_id text not null,
-  session_id text null,
-  is_public boolean not null default false,
-  source_device_id text not null,
-  source_device_name text not null,
-  file_name text not null,
-  size bigint not null check (size >= 0),
-  mime_type text null,
-  created_at timestamptz not null,
-  storage_path text not null
-);
-
-create index if not exists history_files_room_created_idx
-  on public.history_files (room_id, created_at desc, history_id desc);
-
-create index if not exists history_files_created_idx
-  on public.history_files (created_at desc, history_id desc);
-
-create table if not exists public.user_profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  image_quota_period_started_at timestamptz null,
-  image_quota_used integer not null default 0 constraint user_profiles_image_quota_used_nonnegative check (image_quota_used >= 0),
-  image_paid_quota_remaining integer not null default 0 constraint user_profiles_image_paid_quota_remaining_nonnegative check (image_paid_quota_remaining >= 0),
-  image_paid_quota_used integer not null default 0 constraint user_profiles_image_paid_quota_used_nonnegative check (image_paid_quota_used >= 0),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-alter table public.user_profiles enable row level security;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'user_profiles'
-      and policyname = 'user_profiles_select_own'
-  ) then
-    create policy user_profiles_select_own on public.user_profiles
-      for select to authenticated
-      using (auth.uid() = user_id);
-  end if;
-
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'user_profiles'
-      and policyname = 'user_profiles_insert_own'
-  ) then
-    create policy user_profiles_insert_own on public.user_profiles
-      for insert to authenticated
-      with check (auth.uid() = user_id);
-  end if;
-
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'user_profiles'
-      and policyname = 'user_profiles_update_own'
-  ) then
-    create policy user_profiles_update_own on public.user_profiles
-      for update to authenticated
-      using (auth.uid() = user_id)
-      with check (auth.uid() = user_id);
-  end if;
-end $$;
-
-create table if not exists public.image_generations (
-  generation_id text primary key,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  prompt text not null,
-  provider text not null,
-  model text not null,
-  size text not null,
-  quality text not null,
-  images jsonb not null,
-  created_at timestamptz not null
-);
-
-create index if not exists image_generations_user_created_idx
-  on public.image_generations (user_id, created_at desc, generation_id desc);
-
-alter table public.image_generations enable row level security;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'image_generations'
-      and policyname = 'image_generations_select_own'
-  ) then
-    create policy image_generations_select_own on public.image_generations
-      for select to authenticated
-      using (auth.uid() = user_id);
-  end if;
-
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'image_generations'
-      and policyname = 'image_generations_insert_own'
-  ) then
-    create policy image_generations_insert_own on public.image_generations
-      for insert to authenticated
-      with check (auth.uid() = user_id);
-  end if;
-end $$;
-
-create table if not exists public.admin_roles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  role text not null default 'admin' constraint admin_roles_role_admin_only check (role = 'admin'),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create unique index if not exists admin_roles_email_lower_idx
-  on public.admin_roles (lower(email));
-
-alter table public.admin_roles enable row level security;
-
 create table if not exists public.image_quota_reservations (
   reservation_id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -157,60 +15,6 @@ create index if not exists image_quota_reservations_user_status_idx
   on public.image_quota_reservations (user_id, status, expires_at);
 
 alter table public.image_quota_reservations enable row level security;
-
-create or replace function public.image_quota_status_for_user(
-  p_user_id uuid,
-  p_period_started_at timestamptz,
-  p_free_limit integer
-) returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_profile public.user_profiles%rowtype;
-  v_active_free integer := 0;
-  v_active_paid integer := 0;
-begin
-  update public.image_quota_reservations
-    set status = 'expired',
-        updated_at = now()
-    where user_id = p_user_id
-      and status = 'active'
-      and expires_at <= now();
-
-  select *
-    into v_profile
-    from public.user_profiles
-    where user_id = p_user_id;
-
-  if not found then
-    raise exception 'IMAGE_QUOTA_PROFILE_NOT_FOUND';
-  end if;
-
-  select
-    coalesce(sum(free_count), 0)::integer,
-    coalesce(sum(paid_count), 0)::integer
-    into v_active_free, v_active_paid
-    from public.image_quota_reservations
-    where user_id = p_user_id
-      and status = 'active'
-      and period_started_at = p_period_started_at
-      and expires_at > now();
-
-  return jsonb_build_object(
-    'freeUsed', case
-      when v_profile.image_quota_period_started_at = p_period_started_at
-      then coalesce(v_profile.image_quota_used, 0)
-      else 0
-    end,
-    'paidRemaining', coalesce(v_profile.image_paid_quota_remaining, 0),
-    'paidUsed', coalesce(v_profile.image_paid_quota_used, 0),
-    'freeReserved', v_active_free,
-    'paidReserved', v_active_paid
-  );
-end;
-$$;
 
 create or replace function public.reserve_image_quota(
   p_user_id uuid,
@@ -361,6 +165,60 @@ begin
       'paidCount', v_reserve_paid,
       'expiresAt', p_expires_at
     )
+  );
+end;
+$$;
+
+create or replace function public.image_quota_status_for_user(
+  p_user_id uuid,
+  p_period_started_at timestamptz,
+  p_free_limit integer
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.user_profiles%rowtype;
+  v_active_free integer := 0;
+  v_active_paid integer := 0;
+begin
+  update public.image_quota_reservations
+    set status = 'expired',
+        updated_at = now()
+    where user_id = p_user_id
+      and status = 'active'
+      and expires_at <= now();
+
+  select *
+    into v_profile
+    from public.user_profiles
+    where user_id = p_user_id;
+
+  if not found then
+    raise exception 'IMAGE_QUOTA_PROFILE_NOT_FOUND';
+  end if;
+
+  select
+    coalesce(sum(free_count), 0)::integer,
+    coalesce(sum(paid_count), 0)::integer
+    into v_active_free, v_active_paid
+    from public.image_quota_reservations
+    where user_id = p_user_id
+      and status = 'active'
+      and period_started_at = p_period_started_at
+      and expires_at > now();
+
+  return jsonb_build_object(
+    'freeUsed', case
+      when v_profile.image_quota_period_started_at = p_period_started_at
+      then coalesce(v_profile.image_quota_used, 0)
+      else 0
+    end,
+    'paidRemaining', coalesce(v_profile.image_paid_quota_remaining, 0),
+    'paidUsed', coalesce(v_profile.image_paid_quota_used, 0),
+    'freeReserved', v_active_free,
+    'paidReserved', v_active_paid
   );
 end;
 $$;

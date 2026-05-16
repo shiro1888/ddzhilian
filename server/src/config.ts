@@ -22,6 +22,7 @@ const defaultAiSystemPrompt = [
   'You are an isolated chat assistant inside ddzhilian.',
   'You cannot access this website source code, files, database, server environment variables, user devices, network services, or admin tools.',
   'You cannot execute code, make HTTP requests, change site configuration, or perform actions outside generating this text response.',
+  'If the server includes web search results in the current prompt, you may use only those provided results and cite their sources; do not claim you can independently browse the web.',
   'Do not ask users for passwords, API tokens, private keys, cookies, or other secrets.',
   'If a user asks you to operate the website, read secrets, bypass permissions, or perform security-sensitive actions, refuse briefly and explain that you can only provide text guidance.',
   'When the user asks for a long response, prefer Markdown formatting with clear structure.',
@@ -42,6 +43,7 @@ const defaultAiSystemPrompt = [
 export type AiProvider = 'cloudflare' | 'openrouter';
 export type OpenAiCompatibleWireApi = 'chat_completions' | 'responses';
 export type OpenAiCompatibleReasoningEffort = '' | 'low' | 'medium' | 'high';
+export type SearxngSafeSearchLevel = 0 | 1 | 2;
 
 export type AiModelOption = {
   id: string;
@@ -59,7 +61,6 @@ export interface ServerConfig {
   publicWsUrl: string;
   allowedOrigins: string[];
   adminSuperEmails: string[];
-  accountInviteCode?: string;
   debugStateApiEnabled: boolean;
   debugStateApiToken?: string;
   pingIntervalMs: number;
@@ -72,14 +73,25 @@ export interface ServerConfig {
   supabase?: {
     url: string;
     serviceRoleKey: string;
+    authKey?: string;
     historyFilesTable: string;
     historyTextsTable: string;
     userProfilesTable: string;
     imageGenerationsTable: string;
     adminRolesTable: string;
+    authEmailRedirectUrl?: string;
   };
   aiProvider: AiProvider;
   aiSystemPrompt: string;
+  webSearch: {
+    enabled: boolean;
+    searxngBaseUrl: string;
+    maxResults: number;
+    timeoutMs: number;
+    safeSearch: SearxngSafeSearchLevel;
+    language?: string;
+    categories?: string;
+  };
   rtcConfig: {
     iceServers: Array<{
       urls: string | string[];
@@ -118,6 +130,7 @@ export interface ServerConfig {
     size: string;
     quality: string;
     maxPromptChars: number;
+    parallelRequests: number;
     dailyFreeQuota: number;
     quotaResetHour: number;
     quotaTimezoneOffsetMinutes: number;
@@ -139,6 +152,45 @@ function readNumber(name: string, fallback: number) {
 function readIntegerInRange(name: string, fallback: number, min: number, max: number) {
   const value = Math.trunc(readNumber(name, fallback));
   return Math.min(max, Math.max(min, value));
+}
+
+function readBoolean(name: string, fallback: boolean) {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) {
+    return fallback;
+  }
+
+  if (raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on') {
+    return true;
+  }
+
+  if (raw === 'false' || raw === '0' || raw === 'no' || raw === 'off') {
+    return false;
+  }
+
+  return fallback;
+}
+
+function readSearxngSafeSearchLevel(name: string, fallback: SearxngSafeSearchLevel): SearxngSafeSearchLevel {
+  const value = readIntegerInRange(name, fallback, 0, 2);
+  return value === 0 || value === 1 || value === 2 ? value : fallback;
+}
+
+function normalizeHttpBaseUrl(value: string, fallback: string) {
+  const candidate = value.trim() || fallback;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return fallback;
+    }
+
+    parsed.pathname = parsed.pathname.replace(/\/+$/g, '');
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/g, '');
+  } catch {
+    return fallback;
+  }
 }
 
 function readHistoryRetentionMs(name: string, fallback: number) {
@@ -289,6 +341,10 @@ function derivePublicHttpBaseUrl(publicWsUrl: string) {
   }
 }
 
+function joinUrlPath(baseUrl: string | undefined, path: string) {
+  return baseUrl ? `${baseUrl.replace(/\/$/, '')}${path}` : undefined;
+}
+
 export function loadConfig(): ServerConfig {
   const host = process.env.HOST || '0.0.0.0';
   const port = readNumber('PORT', 8787);
@@ -328,7 +384,6 @@ export function loadConfig(): ServerConfig {
     publicWsUrl,
     allowedOrigins: [...allowedOrigins],
     adminSuperEmails: readStringList('ADMIN_SUPER_EMAILS').map((email) => email.toLowerCase()),
-    accountInviteCode: process.env.ACCOUNT_INVITE_CODE?.trim() || undefined,
     debugStateApiEnabled: process.env.ENABLE_DEBUG_STATE_API === 'true',
     debugStateApiToken: process.env.DEBUG_STATE_API_TOKEN?.trim() || undefined,
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
@@ -343,15 +398,34 @@ export function loadConfig(): ServerConfig {
         ? {
             url: process.env.SUPABASE_URL.trim(),
             serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY.trim(),
+            authKey:
+              process.env.SUPABASE_AUTH_KEY?.trim() ||
+              process.env.SUPABASE_ANON_KEY?.trim() ||
+              undefined,
             historyFilesTable: process.env.SUPABASE_HISTORY_FILES_TABLE?.trim() || 'history_files',
             historyTextsTable: process.env.SUPABASE_HISTORY_TEXTS_TABLE?.trim() || 'history_texts',
             userProfilesTable: process.env.SUPABASE_USER_PROFILES_TABLE?.trim() || 'user_profiles',
             imageGenerationsTable: process.env.SUPABASE_IMAGE_GENERATIONS_TABLE?.trim() || 'image_generations',
             adminRolesTable: process.env.SUPABASE_ADMIN_ROLES_TABLE?.trim() || 'admin_roles',
+            authEmailRedirectUrl:
+              process.env.SUPABASE_AUTH_EMAIL_REDIRECT_URL?.trim() ||
+              joinUrlPath(publicHttpBaseUrl, '/auth/confirm'),
           }
         : undefined,
     aiProvider: readAiProvider(),
     aiSystemPrompt: process.env.AI_SYSTEM_PROMPT?.trim() || defaultAiSystemPrompt,
+    webSearch: {
+      enabled: readBoolean('AI_WEB_SEARCH_ENABLED', false),
+      searxngBaseUrl: normalizeHttpBaseUrl(
+        process.env.SEARXNG_BASE_URL || 'http://127.0.0.1:8080',
+        'http://127.0.0.1:8080',
+      ),
+      maxResults: readIntegerInRange('SEARXNG_MAX_RESULTS', 5, 1, 10),
+      timeoutMs: readIntegerInRange('SEARXNG_TIMEOUT_MS', 8000, 1000, 30000),
+      safeSearch: readSearxngSafeSearchLevel('SEARXNG_SAFE_SEARCH', 1),
+      language: process.env.SEARXNG_LANGUAGE?.trim() || undefined,
+      categories: process.env.SEARXNG_CATEGORIES?.trim() || 'general',
+    },
     rtcConfig: {
       iceServers: turnUrls.length > 0
         ? [
@@ -406,9 +480,10 @@ export function loadConfig(): ServerConfig {
         undefined,
       baseUrl: normalizeOpenAiImageBaseUrl(codexImageBaseUrl),
       model: process.env.CODEX_IMAGE_MODEL?.trim() || 'gpt-image-2',
-      size: process.env.CODEX_IMAGE_SIZE?.trim() || 'auto',
+      size: process.env.CODEX_IMAGE_SIZE?.trim() || '2000x2000',
       quality: process.env.CODEX_IMAGE_QUALITY?.trim() || 'auto',
       maxPromptChars: Math.max(1, readNumber('CODEX_IMAGE_MAX_PROMPT_CHARS', 4000)),
+      parallelRequests: readIntegerInRange('CODEX_IMAGE_PARALLEL_REQUESTS', 2, 1, 4),
       dailyFreeQuota: Math.max(0, Math.trunc(readNumber('CODEX_IMAGE_DAILY_FREE_QUOTA', 3))),
       quotaResetHour: readIntegerInRange('CODEX_IMAGE_QUOTA_RESET_HOUR', 4, 0, 23),
       quotaTimezoneOffsetMinutes: readIntegerInRange(

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent } from 'react'
+import type { ChangeEvent, CompositionEvent as ReactCompositionEvent, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import type {
   AiChatConversationMessage,
   AiChatConversationRecord,
@@ -60,6 +60,7 @@ type ChatAiStageProps = {
     options?: {
       model?: string
       images?: AiChatImageInput[]
+      webSearch?: boolean
       signal?: AbortSignal
     },
   ) => Promise<AiChatResponse>
@@ -284,6 +285,14 @@ function formatFileSize(size: number) {
   return `${Math.max(1, Math.round(size / 1024)).toString()} KB`
 }
 
+function formatSourceHostname(url: string) {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
+}
+
 function getFileExtension(name: string) {
   return name.split('.').pop()?.toLowerCase() ?? ''
 }
@@ -467,6 +476,7 @@ export function ChatAiStage({
   const [draft, setDraft] = useState('')
   const [searchDraft, setSearchDraft] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false)
   const [attachments, setAttachments] = useState<ChatAiAttachment[]>([])
   const [localError, setLocalError] = useState<string | null>(null)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
@@ -479,6 +489,7 @@ export function ChatAiStage({
   const hasLoadedRemoteRef = useRef(false)
   const isApplyingRemoteRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const isDraftComposingRef = useRef(false)
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
@@ -866,6 +877,7 @@ export function ChatAiStage({
     prompt: string,
     assistantMessageId: string,
     images: AiChatImageInput[],
+    webSearch: boolean,
   ) => {
     const controller = new AbortController()
     const generation = { conversationId, messageId: assistantMessageId, controller }
@@ -876,6 +888,7 @@ export function ChatAiStage({
       const answer = await onAskAi(prompt, {
         model: selectedAiModel || undefined,
         images,
+        webSearch,
         signal: controller.signal,
       })
 
@@ -888,6 +901,7 @@ export function ChatAiStage({
         content: answer.response,
         status: 'complete',
         model: answer.model || message.model,
+        webSearch: answer.webSearch,
       }))
     } catch (error) {
       if (controller.signal.aborted) {
@@ -927,6 +941,7 @@ export function ChatAiStage({
       attachmentsForRequest,
     )
     const images = buildImageInputs(attachmentsForRequest)
+    const shouldUseWebSearch = isWebSearchEnabled && Boolean(normalizedPrompt)
     const now = new Date().toISOString()
     const assistantMessageId = createId('ai-message')
     const nextMessages: ChatAiMessage[] = [
@@ -959,21 +974,38 @@ export function ChatAiStage({
 
     setDraft('')
     setAttachments([])
-    void requestAssistantResponse(activeConversation.id, promptWithFiles, assistantMessageId, images)
+    void requestAssistantResponse(activeConversation.id, promptWithFiles, assistantMessageId, images, shouldUseWebSearch)
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isDraftComposingRef.current) {
+      return
+    }
+
     sendPrompt(trimmedDraft)
   }
 
   const handleDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || isDraftComposingRef.current) {
       return
     }
 
     event.preventDefault()
     sendPrompt(trimmedDraft)
+  }
+
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(event.target.value)
+  }
+
+  const handleDraftCompositionStart = () => {
+    isDraftComposingRef.current = true
+  }
+
+  const handleDraftCompositionEnd = (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+    isDraftComposingRef.current = false
+    setDraft(event.currentTarget.value)
   }
 
   const handleStopGeneration = () => {
@@ -1023,7 +1055,13 @@ export function ChatAiStage({
       }
     })
 
-    void requestAssistantResponse(activeConversation.id, lastUserMessage.content, assistantMessageId, [])
+    void requestAssistantResponse(
+      activeConversation.id,
+      lastUserMessage.content,
+      assistantMessageId,
+      [],
+      isWebSearchEnabled,
+    )
   }
 
   const handleRichMessageClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -1259,6 +1297,15 @@ export function ChatAiStage({
                       )}
                     </select>
                   </label>
+                  <label className="dd-ai-chat__toggle-field">
+                    <input
+                      type="checkbox"
+                      checked={isWebSearchEnabled}
+                      disabled={isGenerating}
+                      onChange={(event) => setIsWebSearchEnabled(event.currentTarget.checked)}
+                    />
+                    <span>联网搜索</span>
+                  </label>
                 </details>
                 <button type="button" onClick={handleRegenerate} disabled={isGenerating || !activeConversation?.messages.length}>
                   重新生成
@@ -1343,6 +1390,18 @@ export function ChatAiStage({
                       ))}
                     </div>
                   ) : null}
+                  {message.webSearch?.sources.length ? (
+                    <div className="dd-ai-chat__sources" aria-label="联网搜索来源">
+                      <strong>来源</strong>
+                      {message.webSearch.sources.map((source) => (
+                        <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                          <span>{source.title}</span>
+                          <small>{formatSourceHostname(source.url)}</small>
+                          {source.snippet ? <em>{source.snippet}</em> : null}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="dd-ai-chat__message-actions">
                     <button type="button" onClick={() => handleCopyMessage(message)}>
                       复制
@@ -1408,7 +1467,9 @@ export function ChatAiStage({
               value={draft}
               placeholder="给 DD直连 AI 发送消息"
               rows={attachments.length > 0 ? 2 : 3}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={handleDraftChange}
+              onCompositionStart={handleDraftCompositionStart}
+              onCompositionEnd={handleDraftCompositionEnd}
               onKeyDown={handleDraftKeyDown}
             />
           </div>

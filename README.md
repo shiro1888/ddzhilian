@@ -92,12 +92,13 @@ The signaling server listens on `http://0.0.0.0:8787` by default and exposes Web
 
 The frontend uses browser history routes. Main routes include:
 
-- `/connect`
 - `/send`
 - `/receive`
 - `/text`
 - `/image`
 - `/sessions`
+
+The legacy `/connect` path is kept as a redirect to `/text`; it is not shown as a primary navigation entry.
 
 The current product shape centers on the chat-desktop experience. File sending and receiving flows fold back into the conversation workspace.
 
@@ -176,14 +177,30 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `HISTORY_PAGE_SIZE`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
 - `SUPABASE_HISTORY_FILES_TABLE`
 - `SUPABASE_HISTORY_TEXTS_TABLE`
 - `SUPABASE_USER_PROFILES_TABLE`
 - `SUPABASE_IMAGE_GENERATIONS_TABLE`
 - `SUPABASE_ADMIN_ROLES_TABLE`
+- `SUPABASE_AUTH_EMAIL_REDIRECT_URL`
+- `RESEND_API_KEY`
+- `RESEND_TEST_FROM`
+- `RESEND_TEST_TO`
+- `RESEND_TEST_SUBJECT`
+- `RESEND_TEST_ACTION_URL`
+- `RESEND_TEST_BRAND_NAME`
+- `RESEND_TEST_SUPPORT_EMAIL`
+- `RESEND_TEST_TEMPLATE_PATH`
 - `ADMIN_SUPER_EMAILS`
-- `ACCOUNT_INVITE_CODE`
 - `AI_PROVIDER`
+- `AI_WEB_SEARCH_ENABLED`
+- `SEARXNG_BASE_URL`
+- `SEARXNG_MAX_RESULTS`
+- `SEARXNG_TIMEOUT_MS`
+- `SEARXNG_SAFE_SEARCH`
+- `SEARXNG_LANGUAGE`
+- `SEARXNG_CATEGORIES`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
 - `CLOUDFLARE_AI_MODEL`
@@ -206,6 +223,7 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `CODEX_IMAGE_SIZE`
 - `CODEX_IMAGE_QUALITY`
 - `CODEX_IMAGE_MAX_PROMPT_CHARS`
+- `CODEX_IMAGE_PARALLEL_REQUESTS`
 - `CODEX_IMAGE_DAILY_FREE_QUOTA`
 - `CODEX_IMAGE_QUOTA_RESET_HOUR`
 - `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`
@@ -216,7 +234,9 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 
 Do not commit real secrets, tokens, or passwords to the repository.
 
-If you enable Supabase-backed history metadata, account-gated image generation, or admin role management, apply [supabase/schema.sql](supabase/schema.sql) or the SQL under [supabase/migrations](supabase/migrations), then set the matching backend environment variables in `server/.env`. Set production super-admin emails through `ADMIN_SUPER_EMAILS`; do not hardcode emails or secrets in source.
+If you enable Supabase-backed history metadata, account-gated image generation, or admin role management, apply [supabase/schema.sql](supabase/schema.sql) or the SQL under [supabase/migrations](supabase/migrations), then set the matching backend environment variables in `server/.env`. Image generation quota admission depends on the `image_quota_reservations` migration for database-level reservation before upstream calls. Account registration sends a Supabase confirmation email and does not create an app session before confirmation. Set production super-admin emails through `ADMIN_SUPER_EMAILS` and the auth callback URL through `SUPABASE_AUTH_EMAIL_REDIRECT_URL`; do not hardcode emails or secrets in source.
+
+To enable AI web search, deploy a SearXNG instance that allows `format=json`, then set `AI_WEB_SEARCH_ENABLED=true` and `SEARXNG_BASE_URL` in the backend environment. When the `/chat` advanced web-search toggle is enabled, the backend queries SearXNG first and injects the result snippets plus source URLs into the AI prompt. Normal chat requests without the toggle keep the existing behavior.
 
 ## Build And Check
 

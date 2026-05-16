@@ -6,7 +6,6 @@ import { AdminStage } from './app/components/AdminStage'
 import { AppHeader } from './app/components/AppHeader'
 import { AppSidebar } from './app/components/AppSidebar'
 import { ChatAiStage } from './app/components/ChatAiStage'
-import { ConnectStage } from './app/components/ConnectStage'
 import { ContentGrid } from './app/components/ContentGrid'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
@@ -46,6 +45,7 @@ import type {
 } from './lib/ddzhilian-types'
 import { useAccountAuth } from './lib/use-account-auth'
 import { useAdmin } from './lib/use-admin'
+import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
 const ChatConversationStage = lazy(() =>
@@ -417,13 +417,13 @@ function App() {
   const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
   const activeView = resolveViewFromPathname(location.pathname)
   const isAdminView = activeView === 'admin'
-  const isSnapLinkMode = !isAdminView && interfaceMode === 'snaplink'
+  const isAiChatView = activeView === 'chat'
+  const isSnapLinkMode = !isAdminView && (interfaceMode === 'snaplink' || isAiChatView)
   const isChatDesktopTheme = true
-  const visibleNavItems = navItems.filter((item) => !['send', 'receive', 'sessions', 'admin'].includes(item.id))
+  const visibleNavItems = navItems.filter((item) => !['connect', 'send', 'receive', 'sessions', 'admin'].includes(item.id))
   const effectiveNavView: NavView =
     activeView === 'send' || activeView === 'receive' || activeView === 'sessions' ? 'text' : activeView
   const isImageView = activeView === 'image'
-  const isAiChatView = activeView === 'chat'
   const isStandaloneView = isImageView || isAiChatView
   const isAdminProtectedView = isAdminView
   const {
@@ -435,12 +435,14 @@ function App() {
     isAdminLoginTransitioning,
     isAdminSaving,
     isAdminClearingHistory,
+    isAdminRenamingOnlineDevice,
     isAdminUpdatingUser,
     isAdminUpdatingRole,
     adminError,
     adminHistoryStats,
     adminAiSettings,
     adminUsage,
+    adminOnlineDevices,
     adminUsers,
     adminRoles,
     adminToasts,
@@ -456,10 +458,16 @@ function App() {
     handleAdminOpenRouterModelsDetect,
     handleAdminSave,
     handleAdminClearHistory,
+    handleAdminOnlineDeviceRename,
     handleAdminUserQuotaUpdate,
     handleAdminRoleCreate,
     handleAdminRoleDelete,
   } = useAdmin({ enabled: isAdminProtectedView })
+  const imageAccount = useAccountAuth()
+  const { canRecallAnyMessage } = useAdminPermissions({
+    enabled: !isAdminProtectedView,
+    refreshKey: imageAccount.user?.id ?? '',
+  })
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const hasConnectionSnapshotRef = useRef(false)
   const attachmentDraftsRef = useRef<AttachmentDraft[]>([])
@@ -491,7 +499,6 @@ function App() {
     joinRoom,
     createPublicRoom,
     reconnectSocket,
-    requestConnect,
     requestSnapshot,
     updateSettings,
     updateRoomState,
@@ -518,8 +525,6 @@ function App() {
     stateToUiStatus,
     reasonLabel,
   } = useDdzhilian()
-  const imageAccount = useAccountAuth()
-
   useEffect(() => {
     window.localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, interfaceMode)
   }, [interfaceMode])
@@ -1526,22 +1531,6 @@ function App() {
     setIsEditingDeviceName(false)
   }
 
-  const handlePrimaryConnect = () => {
-    setLocalError(null)
-
-    if (joinCode.trim()) {
-      pairByShortCode(joinCode)
-      return
-    }
-
-    if (effectiveSelectedPeerId) {
-      requestConnect(effectiveSelectedPeerId)
-      return
-    }
-
-    setLocalError('请输入互传码，或先从在线设备里选择一个目标。')
-  }
-
   const handleJoinRoomByIdValue = (roomId: string) => {
     const nextRoomId = roomId.trim().toUpperCase()
     if (!nextRoomId) {
@@ -1850,7 +1839,7 @@ function App() {
     const recordId = entryId.startsWith('text-') ? entryId.slice('text-'.length) : entryId
 
     try {
-      await recallText(recordId)
+      await recallText(recordId, { canRecallAny: canRecallAnyMessage })
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '消息撤回失败。')
@@ -2057,6 +2046,7 @@ function App() {
           void handleSendText(quoteHtml)
         }}
         onRecallText={handleRecallText}
+        canRecallAnyMessage={canRecallAnyMessage}
         onRemoveAttachment={removeAttachment}
         onLoadOlderHistory={() => {
           if (selectedRoom) {
@@ -2145,6 +2135,7 @@ function App() {
       isAdminLoginTransitioning={isAdminLoginTransitioning}
       isAdminSaving={isAdminSaving}
       isAdminClearingHistory={isAdminClearingHistory}
+      isAdminRenamingOnlineDevice={isAdminRenamingOnlineDevice}
       isAdminUpdatingUser={isAdminUpdatingUser}
       isAdminUpdatingRole={isAdminUpdatingRole}
       adminError={adminError}
@@ -2152,6 +2143,7 @@ function App() {
       historyStats={adminHistoryStats}
       aiSettings={adminAiSettings}
       usage={adminUsage}
+      onlineDevices={adminOnlineDevices}
       users={adminUsers}
       roles={adminRoles}
       onAdminEmailDraftChange={setAdminEmailDraft}
@@ -2166,6 +2158,7 @@ function App() {
       onOpenRouterModelsDetect={handleAdminOpenRouterModelsDetect}
       onSave={handleAdminSave}
       onClearHistory={handleAdminClearHistory}
+      onOnlineDeviceRename={handleAdminOnlineDeviceRename}
       onUserQuotaUpdate={handleAdminUserQuotaUpdate}
       onRoleCreate={handleAdminRoleCreate}
       onRoleDelete={handleAdminRoleDelete}
@@ -2194,6 +2187,7 @@ function App() {
           kind: 'chat',
           model: options?.model,
           images: options?.images,
+          webSearch: options?.webSearch,
           signal: options?.signal,
         })}
       onListConversations={listAiChatConversations}
@@ -2207,6 +2201,7 @@ function App() {
     return (
       <SnapLinkStage
         isDragging={isDragging}
+        shouldOpenAiChat={isAiChatView}
         selectedRoomId={effectiveSelectedRoomId}
         selectedConversationName={selectedConversationName}
         activeTransferLabel={activeTransferLabel}
@@ -2242,6 +2237,7 @@ function App() {
           void handleSendText(quoteHtml)
         }}
         onRecallText={handleRecallText}
+        canRecallAnyMessage={canRecallAnyMessage}
         onRetryTransfer={retryTransfer}
         onCancelTransfer={cancelTransfer}
         onUseClassicInterface={() => setInterfaceMode('classic')}
@@ -2302,27 +2298,7 @@ function App() {
             />
             <Route
               path="/connect"
-              element={
-                <ConnectStage
-                  joinCode={joinCode}
-                  currentMeta={currentMeta}
-                  onlinePeers={onlinePeers}
-                  effectiveSelectedPeerId={effectiveSelectedPeerId}
-                  peerStatusById={peerStatusById}
-                  selfShortCode={self?.shortCode}
-                  isEditingDeviceName={isEditingDeviceName}
-                  deviceNameDraft={deviceNameDraft}
-                  selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
-                  onJoinCodeChange={setJoinCode}
-                  onPrimaryConnect={handlePrimaryConnect}
-                  onRequestSnapshot={requestSnapshot}
-                  onSelectPeer={setSelectedPeerId}
-                  onBeginEditDeviceName={beginEditDeviceName}
-                  onDeviceNameDraftChange={setDeviceNameDraft}
-                  onSaveDeviceName={saveDeviceName}
-                  onCancelEditDeviceName={cancelEditDeviceName}
-                />
-              }
+              element={<Navigate to={pathForView('text')} replace />}
             />
             <Route path="/send" element={sendRouteElement} />
             <Route path="/receive" element={receiveRouteElement} />

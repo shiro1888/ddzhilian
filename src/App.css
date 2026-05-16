@@ -6,6 +6,115 @@
   color: var(--ink-soft);
 }
 
+.dd-auth-confirm {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 24px;
+  background: var(--shell-bg);
+  color: var(--ink);
+}
+
+.dd-auth-confirm__panel {
+  display: grid;
+  gap: 22px;
+  width: min(100%, 480px);
+  padding: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dd-auth-confirm__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.dd-auth-confirm__brand img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.dd-auth-confirm__status {
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: var(--radius-xs);
+  background: var(--panel-muted-soft);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dd-auth-confirm__status.is-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.dd-auth-confirm__status.is-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.dd-auth-confirm__copy {
+  display: grid;
+  gap: 10px;
+}
+
+.dd-auth-confirm__copy h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.7rem;
+  line-height: 1.2;
+}
+
+.dd-auth-confirm__copy p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.96rem;
+  line-height: 1.75;
+}
+
+.dd-auth-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.dd-auth-confirm__primary,
+.dd-auth-confirm__secondary,
+.dd-auth-confirm__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.94rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.dd-auth-confirm__primary {
+  background: var(--button-primary-bg);
+  color: var(--button-contrast);
+}
+
+.dd-auth-confirm__secondary {
+  background: var(--button-neutral-bg);
+  color: var(--ink);
+}
+
+.dd-auth-confirm__link {
+  padding-inline: 6px;
+  color: var(--link);
+}
+
 .dd-sidebar {
   position: sticky;
   top: 0;
@@ -362,6 +471,10 @@
 
 .dd-error-note {
   color: var(--danger) !important;
+}
+
+.dd-success-note {
+  color: var(--success) !important;
 }
 
 .dd-header__status {
@@ -5469,6 +5582,34 @@
   min-width: 1120px;
 }
 
+.dd-admin-online-table {
+  min-width: 1060px;
+}
+
+.dd-admin-online-name-input {
+  width: min(260px, 100%);
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid rgba(170, 185, 173, 0.42);
+  border-radius: 10px;
+  background: #fafcf9;
+  color: var(--ink);
+  font: inherit;
+}
+
+.dd-admin-online-status-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dd-admin-online-account {
+  display: inline-block;
+  max-width: 220px;
+  overflow-wrap: anywhere;
+}
+
 .dd-admin-role-create {
   display: grid;
   grid-template-columns: minmax(220px, 360px) auto minmax(120px, 1fr);
@@ -8886,6 +9027,29 @@ textarea:focus-visible,
 }
 
 @media (max-width: 480px) {
+  .dd-auth-confirm {
+    padding: 16px;
+  }
+
+  .dd-auth-confirm__panel {
+    padding: 24px;
+  }
+
+  .dd-auth-confirm__copy h1 {
+    font-size: 1.45rem;
+  }
+
+  .dd-auth-confirm__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dd-auth-confirm__primary,
+  .dd-auth-confirm__secondary,
+  .dd-auth-confirm__link {
+    width: 100%;
+  }
+
   .dd-brand {
     gap: 10px;
   }
@@ -9910,6 +10074,54 @@ textarea:focus-visible,
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dd-ai-chat__sources {
+  display: grid;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--ai-snap-border);
+  border-radius: 9px;
+  background: var(--ai-snap-bg);
+  font-size: 11.5px;
+}
+
+.dd-ai-chat__sources > strong {
+  color: var(--ai-snap-muted);
+  font-size: 11px;
+}
+
+.dd-ai-chat__sources a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  color: var(--ai-snap-ink-soft);
+  text-decoration: none;
+}
+
+.dd-ai-chat__sources a:hover span {
+  text-decoration: underline;
+}
+
+.dd-ai-chat__sources span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-ai-chat__sources small,
+.dd-ai-chat__sources em {
+  color: var(--ai-snap-muted);
+  font-style: normal;
+}
+
+.dd-ai-chat__sources em {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .dd-ai-chat__message.is-user .dd-ai-chat__message-actions {
@@ -11106,11 +11318,14 @@ textarea:focus-visible,
 .dd-image-composer__box {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "input submit"
+    "tools submit";
   align-items: end;
-  gap: 10px;
+  gap: 10px 12px;
   min-width: 0;
-  padding: 12px;
+  padding: 14px 14px 12px 18px;
   border: 1px solid var(--line-soft);
   border-radius: 28px;
   background: #ffffff;
@@ -11118,6 +11333,7 @@ textarea:focus-visible,
 }
 
 .dd-image-composer textarea {
+  grid-area: input;
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -11137,9 +11353,167 @@ textarea:focus-visible,
   color: var(--muted);
 }
 
+.dd-image-composer__tools {
+  grid-area: tools;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
 .dd-image-composer__attach,
+.dd-image-composer__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dd-image-composer__attach {
+  cursor: pointer;
+}
+
+.dd-image-composer__dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.dd-image-composer__select {
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.dd-image-composer__select:hover:not(:disabled),
+.dd-image-composer__dropdown.is-open .dd-image-composer__select {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.dd-image-composer__select span,
+.dd-image-composer__option small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.dd-image-composer__select strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.dd-image-composer__select svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 160ms ease;
+}
+
+.dd-image-composer__dropdown.is-open .dd-image-composer__select svg {
+  transform: rotate(180deg);
+}
+
+.dd-image-composer__dropdown-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 45;
+  display: grid;
+  gap: 3px;
+  min-width: 178px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+}
+
+.dd-image-composer__dropdown.is-resolution .dd-image-composer__dropdown-menu {
+  right: 0;
+  left: auto;
+  min-width: 196px;
+}
+
+.dd-image-composer__option {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.dd-image-composer__option:hover,
+.dd-image-composer__option.is-selected {
+  background: #f1f5f9;
+}
+
+.dd-image-composer__option > span:not(.dd-image-composer__option-icon) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dd-image-composer__option strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-image-composer__option small {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-image-composer__option-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 5px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.dd-image-composer__option > svg {
+  width: 16px;
+  height: 16px;
+  color: #16a34a;
+}
+
 .dd-image-composer__submit {
   display: grid;
+  grid-area: submit;
   place-items: center;
   width: 34px;
   height: 34px;
@@ -11148,18 +11522,24 @@ textarea:focus-visible,
   cursor: pointer;
 }
 
-.dd-image-composer__attach {
-  border: 1px solid var(--line-soft);
-  background: #ffffff;
-  color: var(--ink);
-}
-
 .dd-image-composer__submit {
+  align-self: end;
   background: #111111;
   color: #ffffff;
 }
 
-.dd-image-composer__attach:disabled,
+.dd-image-composer__attach:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.dd-image-composer__select.is-disabled,
+.dd-image-composer__select:disabled {
+  opacity: 0.62;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .dd-image-composer__submit:disabled {
   background: #d1d5db;
   color: #ffffff;
@@ -11167,6 +11547,7 @@ textarea:focus-visible,
 }
 
 .dd-image-composer__attach svg,
+.dd-image-composer__select svg,
 .dd-image-composer__submit svg {
   width: 18px;
   height: 18px;
@@ -11437,9 +11818,12 @@ textarea:focus-visible,
   .dd-image-composer__box {
     width: 100%;
     max-width: 100%;
-    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    grid-template-areas:
+      "input submit"
+      "tools tools";
     gap: 8px;
-    padding: 9px;
+    padding: 10px;
     border-radius: 22px;
   }
 
@@ -11447,7 +11831,29 @@ textarea:focus-visible,
     max-height: 112px;
   }
 
+  .dd-image-composer__tools {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .dd-image-composer__tools::-webkit-scrollbar {
+    display: none;
+  }
+
   .dd-image-composer__attach,
+  .dd-image-composer__select {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .dd-image-composer__dropdown-menu {
+    max-width: calc(100vw - 28px);
+  }
+
   .dd-image-composer__submit {
     width: 32px;
     height: 32px;
@@ -13474,6 +13880,24 @@ textarea:focus-visible,
   min-height: 30px;
   border: 1px solid var(--ai-snap-border);
   background: var(--ai-snap-bg);
+}
+
+.dd-ai-chat__toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 0 0;
+  color: var(--ai-snap-ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dd-ai-chat__toggle-field input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ai-snap-green);
 }
 
 .dd-ai-chat__more-menu button {

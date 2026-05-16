@@ -7,6 +7,9 @@ export interface ImageGenerationImage {
   url?: string;
   mimeType: string;
   revisedPrompt?: string;
+  byteSize?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface ImageGenerationRecord {
@@ -50,6 +53,12 @@ type PersistedImageGenerationRow = {
   created_at: string;
 };
 
+function normalizePositiveInteger(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 function normalizeImageEntries(value: unknown): ImageGenerationImage[] {
   if (!Array.isArray(value)) {
     return [];
@@ -81,6 +90,9 @@ function normalizeImageEntries(value: unknown): ImageGenerationImage[] {
       revisedPrompt: typeof candidate.revisedPrompt === 'string' && candidate.revisedPrompt.trim()
         ? candidate.revisedPrompt.trim()
         : undefined,
+      byteSize: normalizePositiveInteger(candidate.byteSize),
+      width: normalizePositiveInteger(candidate.width),
+      height: normalizePositiveInteger(candidate.height),
     }];
   });
 }

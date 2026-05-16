@@ -22,6 +22,7 @@ function AdminNavIcon({ name }: { name: AdminNavIconName }) {
     log: <path d="M7 4h8l3 3v13H7V4ZM14 4v4h4M9 12h6M9 16h6" />,
     logout: <path d="M10 5H6v14h4M14 8l4 4-4 4M8 12h10" />,
     model: <path d="M12 4l7 4v8l-7 4-7-4V8l7-4ZM5 8l7 4 7-4M12 12v8" />,
+    online: <path d="M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM3 21a7 7 0 0 1 14 0M18 9h3M19.5 7.5v3M17 17h4M17 21h4" />,
     provider: <path d="M6 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.5 7l2.2 9M15.5 7l-2.2 9" />,
     role: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0M16 13l2 2 3-4" />,
     settings: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4" />,

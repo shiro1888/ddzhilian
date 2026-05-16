@@ -90,12 +90,13 @@ npm run dev
 
 前端使用浏览器历史路由，主要入口包括：
 
-- `/connect`
 - `/send`
 - `/receive`
 - `/text`
 - `/image`
 - `/sessions`
+
+旧的 `/connect` 路径会重定向到 `/text`，不再作为主导航入口显示。
 
 当前产品形态以聊天桌面体验为主，文件发送和接收流程会收敛到对话工作区。
 
@@ -173,14 +174,30 @@ npm run dev
 - `HISTORY_MAX_BYTES`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
 - `SUPABASE_HISTORY_FILES_TABLE`
 - `SUPABASE_HISTORY_TEXTS_TABLE`
 - `SUPABASE_USER_PROFILES_TABLE`
 - `SUPABASE_IMAGE_GENERATIONS_TABLE`
 - `SUPABASE_ADMIN_ROLES_TABLE`
+- `SUPABASE_AUTH_EMAIL_REDIRECT_URL`
+- `RESEND_API_KEY`
+- `RESEND_TEST_FROM`
+- `RESEND_TEST_TO`
+- `RESEND_TEST_SUBJECT`
+- `RESEND_TEST_ACTION_URL`
+- `RESEND_TEST_BRAND_NAME`
+- `RESEND_TEST_SUPPORT_EMAIL`
+- `RESEND_TEST_TEMPLATE_PATH`
 - `ADMIN_SUPER_EMAILS`
-- `ACCOUNT_INVITE_CODE`
 - `AI_PROVIDER`
+- `AI_WEB_SEARCH_ENABLED`
+- `SEARXNG_BASE_URL`
+- `SEARXNG_MAX_RESULTS`
+- `SEARXNG_TIMEOUT_MS`
+- `SEARXNG_SAFE_SEARCH`
+- `SEARXNG_LANGUAGE`
+- `SEARXNG_CATEGORIES`
 - `CLOUDFLARE_AI_ACCOUNT_ID`
 - `CLOUDFLARE_AI_API_TOKEN`
 - `CLOUDFLARE_AI_MODEL`
@@ -203,6 +220,7 @@ npm run dev
 - `CODEX_IMAGE_SIZE`
 - `CODEX_IMAGE_QUALITY`
 - `CODEX_IMAGE_MAX_PROMPT_CHARS`
+- `CODEX_IMAGE_PARALLEL_REQUESTS`
 - `CODEX_IMAGE_DAILY_FREE_QUOTA`
 - `CODEX_IMAGE_QUOTA_RESET_HOUR`
 - `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`
@@ -213,7 +231,9 @@ npm run dev
 
 不要把真实密钥、令牌或密码提交到仓库。
 
-如果启用 Supabase 历史元数据、账号生图历史或后台管理员角色，需要先执行 [supabase/schema.sql](supabase/schema.sql) 或 [supabase/migrations](supabase/migrations) 下的 SQL，再配置后端环境变量。生产环境中把你的超级管理员邮箱写入 `ADMIN_SUPER_EMAILS`，不要把邮箱或密钥硬编码进源码。
+如果启用 Supabase 历史元数据、账号生图历史或后台管理员角色，需要先执行 [supabase/schema.sql](supabase/schema.sql) 或 [supabase/migrations](supabase/migrations) 下的 SQL，再配置后端环境变量。生图额度准入依赖 `image_quota_reservations` 迁移，用于在调用上游前做数据库级额度预占。账号注册会发送 Supabase 确认邮件，确认前不会创建站内登录会话；生产环境中把你的超级管理员邮箱写入 `ADMIN_SUPER_EMAILS`，把邮箱确认回跳地址写入 `SUPABASE_AUTH_EMAIL_REDIRECT_URL`，不要把邮箱或密钥硬编码进源码。
+
+如果要启用 AI 联网搜索，先部署一个 SearXNG 实例并确认它允许 `format=json`，然后在后端配置 `AI_WEB_SEARCH_ENABLED=true` 和 `SEARXNG_BASE_URL`。前端 `/chat` 的高级设置里打开“联网搜索”后，请求会先由后端查询 SearXNG，再把搜索结果和来源链接注入 AI prompt；普通未开启搜索的聊天不受影响。
 
 ## 构建与检查
 

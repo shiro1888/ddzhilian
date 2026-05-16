@@ -3,6 +3,8 @@ import type {
   AdminAiSettings,
   AdminCloudflareConfig,
   AdminHistoryStats,
+  AdminOnlineDeviceNameUpdate,
+  AdminOnlineDevicesSnapshot,
   AdminOpenAiReasoningEffort,
   AdminOpenRouterConfig,
   AdminRolesSnapshot,
@@ -89,6 +91,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
   const [isAdminLoginTransitioning, setIsAdminLoginTransitioning] = useState(false)
   const [isAdminSaving, setIsAdminSaving] = useState(false)
   const [isAdminClearingHistory, setIsAdminClearingHistory] = useState(false)
+  const [isAdminRenamingOnlineDevice, setIsAdminRenamingOnlineDevice] = useState(false)
   const [isAdminUpdatingUser, setIsAdminUpdatingUser] = useState(false)
   const [isAdminUpdatingRole, setIsAdminUpdatingRole] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
@@ -96,6 +99,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
   const [adminHistoryStats, setAdminHistoryStats] = useState<AdminHistoryStats | null>(null)
   const [adminAiSettings, setAdminAiSettings] = useState<AdminAiSettings | null>(null)
   const [adminUsage, setAdminUsage] = useState<AdminUsageSnapshot | null>(null)
+  const [adminOnlineDevices, setAdminOnlineDevices] = useState<AdminOnlineDevicesSnapshot | null>(null)
   const [adminUsers, setAdminUsers] = useState<AdminUsersSnapshot | null>(null)
   const [adminRoles, setAdminRoles] = useState<AdminRolesSnapshot | null>(null)
   const [adminToasts, setAdminToasts] = useState<AdminToast[]>([])
@@ -129,6 +133,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     setAdminHistoryStats(null)
     setAdminAiSettings(null)
     setAdminUsage(null)
+    setAdminOnlineDevices(null)
     setAdminUsers(null)
     setAdminRoles(null)
   }
@@ -184,6 +189,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminHistoryStats(payload.history ?? null)
         setAdminAiSettings(payload.ai ?? null)
         setAdminUsage(payload.usage ?? null)
+        setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? null)
       } catch (error) {
@@ -250,6 +256,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminHistoryStats(payload.history)
         setAdminAiSettings(payload.ai)
         setAdminUsage(payload.usage)
+        setAdminOnlineDevices(payload.onlineDevices)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? null)
         setIsAdminLoginTransitioning(true)
@@ -388,6 +395,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
           ai: AdminAiSettings
           history: AdminHistoryStats
           usage?: AdminUsageSnapshot
+          onlineDevices?: AdminOnlineDevicesSnapshot
           users?: AdminUsersSnapshot
           roles?: AdminRolesSnapshot
         }>
@@ -397,6 +405,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminAiSettings(payload.ai)
         setAdminHistoryStats(payload.history)
         setAdminUsage(payload.usage ?? null)
+        setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? adminRoles)
         pushAdminToast('success', 'AI 配置已保存。')
@@ -435,6 +444,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
           admin?: AdminSessionInfo
           history: AdminHistoryStats
           usage?: AdminUsageSnapshot
+          onlineDevices?: AdminOnlineDevicesSnapshot
           users?: AdminUsersSnapshot
           roles?: AdminRolesSnapshot
         }>
@@ -443,6 +453,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminSession(payload.admin ?? adminSession)
         setAdminHistoryStats(payload.history)
         setAdminUsage(payload.usage ?? null)
+        setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? adminRoles)
         pushAdminToast('success', '历史记录已清空。')
@@ -452,6 +463,47 @@ export function useAdmin({ enabled }: UseAdminOptions) {
       })
       .finally(() => {
         setIsAdminClearingHistory(false)
+      })
+  }
+
+  const handleAdminOnlineDeviceRename = ({ deviceId, deviceName }: AdminOnlineDeviceNameUpdate) => {
+    if (!isAdminAuthenticated) {
+      const message = '请先登录后台。'
+      setAdminErrorMessage(message)
+      return Promise.reject(new Error(message))
+    }
+
+    setIsAdminRenamingOnlineDevice(true)
+    setAdminError(null)
+
+    return fetch(`${resolveAdminApiBaseUrl()}/api/admin/online-devices/name`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ deviceId, deviceName }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '在线设备名称保存失败。'))
+        }
+
+        return response.json() as Promise<{
+          onlineDevices?: AdminOnlineDevicesSnapshot
+        }>
+      })
+      .then((payload) => {
+        setAdminOnlineDevices(payload.onlineDevices ?? null)
+        pushAdminToast('success', '在线设备名称已保存。')
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '在线设备名称保存失败。'
+        setAdminErrorMessage(message)
+        throw new Error(message)
+      })
+      .finally(() => {
+        setIsAdminRenamingOnlineDevice(false)
       })
   }
 
@@ -583,12 +635,14 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     isAdminLoginTransitioning,
     isAdminSaving,
     isAdminClearingHistory,
+    isAdminRenamingOnlineDevice,
     isAdminUpdatingUser,
     isAdminUpdatingRole,
     adminError,
     adminHistoryStats,
     adminAiSettings,
     adminUsage,
+    adminOnlineDevices,
     adminUsers,
     adminRoles,
     adminToasts,
@@ -604,6 +658,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     handleAdminOpenRouterModelsDetect,
     handleAdminSave,
     handleAdminClearHistory,
+    handleAdminOnlineDeviceRename,
     handleAdminUserQuotaUpdate,
     handleAdminRoleCreate,
     handleAdminRoleDelete,

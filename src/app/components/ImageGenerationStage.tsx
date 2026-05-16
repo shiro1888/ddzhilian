@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ChangeEvent, CompositionEvent as ReactCompositionEvent, FormEvent, KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { BufferGeometry, Material, Texture, WebGLRenderer } from 'three'
 import type {
@@ -40,12 +40,31 @@ type ImageThreadEntry =
       generationId?: string
       images?: AiImageResult[]
       model?: string
+      durationMs?: number
       panoramaIntent?: boolean
       error?: string
     }
 
 type ImageAssistantEntry = Extract<ImageThreadEntry, { role: 'assistant' }>
 type ImagePreviewMode = 'image' | 'panorama'
+
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
+type ImageAspectRatioOption = {
+  value: string
+  label: string
+  caption: string
+  width: number
+  height: number
+}
+
+type ImageResolutionOption = {
+  value: string
+  label: string
+  caption: string
+}
+
+type ImageComposerMenu = 'aspectRatio' | 'resolution'
 
 type ImageGenerationStageProps = {
   isReady: boolean
@@ -96,8 +115,11 @@ const imageHistoryInitialLimit = 1
 const imageHistoryPageSize = 8
 const imageUploadMaxFiles = 8
 const imageUploadMaxFileBytes = 8 * 1024 * 1024
+const imageGenerationMaxDimension = 2000
+const imageGenerationDimensionStep = 16
 const acceptedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const imageQuotaExhaustedMessage = '总额度已耗尽。'
+const imageAutoSizeValue = 'auto'
 const panoramaAspectRatio = 2
 const panoramaAspectRatioTolerance = 0.02
 const panoramaIntentPatterns = [
@@ -111,6 +133,24 @@ const panoramaIntentPatterns = [
   /\bvr\b/i,
   /虚拟现实/,
 ]
+const imageAspectRatioOptions = [
+  { value: imageAutoSizeValue, label: imageAutoSizeValue, caption: '自动尺寸', width: 1, height: 1 },
+  { value: '1:1', label: '1:1', caption: '正方形', width: 1, height: 1 },
+  { value: '16:9', label: '16:9', caption: '横版', width: 16, height: 9 },
+  { value: '9:16', label: '9:16', caption: '竖版', width: 9, height: 16 },
+  { value: '4:3', label: '4:3', caption: '标准横版', width: 4, height: 3 },
+  { value: '3:4', label: '3:4', caption: '标准竖版', width: 3, height: 4 },
+  { value: '2:1', label: '2:1', caption: '全景横版', width: 2, height: 1 },
+] as const satisfies readonly ImageAspectRatioOption[]
+const imageResolutionOptions = [
+  { value: imageAutoSizeValue, label: imageAutoSizeValue, caption: '自动' },
+  { value: '1080', label: '1K', caption: '1080px' },
+  { value: '1440', label: '2K', caption: '1440px' },
+  { value: '2000', label: '4K', caption: '2000px' },
+] as const satisfies readonly ImageResolutionOption[]
+
+type ImageAspectRatio = (typeof imageAspectRatioOptions)[number]['value']
+type ImageResolution = (typeof imageResolutionOptions)[number]['value']
 
 function createEntryId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -147,6 +187,57 @@ function hasPanoramaIntentText(values: Array<string | undefined>) {
 
     return panoramaIntentPatterns.some((pattern) => pattern.test(normalizedValue))
   })
+}
+
+function syncImageComposerTextAreaHeight(textarea: HTMLTextAreaElement) {
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight.toString()}px`
+}
+
+function resolveImageAspectRatioOption(value: ImageAspectRatio) {
+  return imageAspectRatioOptions.find((option) => option.value === value) ?? imageAspectRatioOptions[0]
+}
+
+function resolveImageResolutionOption(value: ImageResolution) {
+  return (
+    imageResolutionOptions.find((option) => option.value === value) ??
+    imageResolutionOptions[imageResolutionOptions.length - 1]
+  )
+}
+
+function resolveImageResolutionValue(value: ImageResolution) {
+  if (value === imageAutoSizeValue) {
+    return imageGenerationMaxDimension
+  }
+
+  const option = resolveImageResolutionOption(value)
+  return Math.min(Number(option?.value ?? imageGenerationMaxDimension), imageGenerationMaxDimension)
+}
+
+function normalizeImageDimension(value: number) {
+  const roundedValue = Math.round(value / imageGenerationDimensionStep) * imageGenerationDimensionStep
+  return Math.max(
+    imageGenerationDimensionStep,
+    Math.min(imageGenerationMaxDimension, roundedValue),
+  )
+}
+
+function buildImageSizeOption(aspectRatio: ImageAspectRatio, resolution: ImageResolution) {
+  if (aspectRatio === imageAutoSizeValue || resolution === imageAutoSizeValue) {
+    return imageAutoSizeValue
+  }
+
+  const ratioOption = resolveImageAspectRatioOption(aspectRatio)
+  const longestSide = resolveImageResolutionValue(resolution)
+  const widthDominant = ratioOption.width >= ratioOption.height
+  const width = widthDominant
+    ? longestSide
+    : normalizeImageDimension(longestSide * ratioOption.width / ratioOption.height)
+  const height = widthDominant
+    ? normalizeImageDimension(longestSide * ratioOption.height / ratioOption.width)
+    : longestSide
+
+  return `${width.toString()}x${height.toString()}`
 }
 
 function resolveImageFileExtension(mimeType: string) {
@@ -201,6 +292,29 @@ function formatImageTime(value: string) {
   })
 }
 
+function formatImageDuration(durationMs: number | undefined) {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    return ''
+  }
+
+  if (durationMs < 1000) {
+    return '小于1秒'
+  }
+
+  const totalSeconds = Math.round(durationMs / 1000)
+  if (totalSeconds < 60) {
+    return `${totalSeconds.toString()}秒`
+  }
+
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (seconds === 0) {
+    return `${minutes.toString()}分钟`
+  }
+
+  return `${minutes.toString()}分${seconds.toString()}秒`
+}
+
 function formatImageSize(bytes: number) {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -209,24 +323,37 @@ function formatImageSize(bytes: number) {
   return `${Math.max(1, Math.round(bytes / 1024)).toString()} KB`
 }
 
-function formatImageQuotaLabel(quota: AiImageQuotaStatus | null, isLoading: boolean) {
+function formatImageQuotaLabel(
+  quota: AiImageQuotaStatus | null,
+  isLoading: boolean,
+  localPendingCount: number,
+) {
   if (quota) {
-    return `额度 ${quota.totalRemaining.toString()}`
+    return `额度 ${Math.max(0, quota.totalRemaining - localPendingCount).toString()}`
   }
 
   return isLoading ? '额度 ...' : '额度 --'
 }
 
-function buildImageQuotaTitle(quota: AiImageQuotaStatus | null) {
+function buildImageQuotaTitle(
+  quota: AiImageQuotaStatus | null,
+  reservedCount: number,
+) {
   if (!quota) {
     return '生图额度加载中'
   }
 
-  return [
+  const items = [
     `免费 ${quota.freeRemaining.toString()}/${quota.freeLimit.toString()} 张`,
     `付费 ${quota.paidRemaining.toString()} 张`,
     `免费额度每日 ${quota.resetHour.toString().padStart(2, '0')}:00 刷新`,
-  ].join('，')
+  ]
+
+  if (reservedCount > 0) {
+    items.unshift(`进行中 ${reservedCount.toString()} 张`)
+  }
+
+  return items.join('，')
 }
 
 function showImageQuotaExhaustedDialog() {
@@ -531,8 +658,11 @@ export function ImageGenerationStage({
 }: ImageGenerationStageProps) {
   const [draft, setDraft] = useState('')
   const [selectedImages, setSelectedImages] = useState<ImageUploadDraft[]>([])
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<ImageAspectRatio>(imageAutoSizeValue)
+  const [selectedResolution, setSelectedResolution] = useState<ImageResolution>(imageAutoSizeValue)
+  const [openComposerMenu, setOpenComposerMenu] = useState<ImageComposerMenu | null>(null)
   const [entries, setEntries] = useState<ImageThreadEntry[]>([])
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [activeGenerationCount, setActiveGenerationCount] = useState(0)
   const [isLoadingInitialHistory, setIsLoadingInitialHistory] = useState(true)
   const [isLoadingOlderHistory, setIsLoadingOlderHistory] = useState(false)
   const [historyCursor, setHistoryCursor] = useState<AiImageHistoryCursor | undefined>()
@@ -548,18 +678,36 @@ export function ImageGenerationStage({
   const threadRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const composerTextAreaRef = useRef<HTMLTextAreaElement | null>(null)
+  const composerControlsRef = useRef<HTMLDivElement | null>(null)
+  const isComposerComposingRef = useRef(false)
   const previewUrlsRef = useRef<Set<string>>(new Set())
   const olderHistoryLoadingRef = useRef(false)
   const pendingScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  const quotaRefreshRequestIdRef = useRef(0)
   const hasEntries = entries.length > 0
   const isLoadingHistory = isLoadingInitialHistory || isLoadingOlderHistory
-  const canSubmit = isReady && !isGenerating && draft.trim().length > 0
-  const isImageQuotaExhausted = imageQuota ? imageQuota.remaining <= 0 : false
+  const serverReservedImageQuota = imageQuota?.totalReserved ?? 0
+  const localPendingImageQuota = Math.max(0, activeGenerationCount - serverReservedImageQuota)
+  const reservedImageQuota = serverReservedImageQuota + localPendingImageQuota
+  const availableImageQuota = imageQuota
+    ? Math.max(0, imageQuota.totalRemaining - localPendingImageQuota)
+    : undefined
+  const isImageQuotaExhausted = availableImageQuota !== undefined && availableImageQuota <= 0
+  const canSubmit = isReady && draft.trim().length > 0 && !editingImageEntryId && !isImageQuotaExhausted
   const latestImageEntryId = entries
     .slice()
     .reverse()
     .find((entry) => entry.role === 'assistant' && entry.status === 'complete' && entry.images?.length)
     ?.id
+  const selectedImageSize = buildImageSizeOption(selectedAspectRatio, selectedResolution)
+  const selectedResolutionOption = resolveImageResolutionOption(selectedResolution)
+  const selectedResolutionLabel = selectedResolutionOption.label
+  const selectedResolutionCaption = selectedResolutionOption.caption
+  const composerPlaceholder = !isReady
+    ? '正在连接服务'
+    : activeGenerationCount > 0
+      ? '可继续描述下一张图片'
+      : '描述或编辑图片'
 
   useEffect(() => {
     const previewUrls = previewUrlsRef.current
@@ -575,17 +723,19 @@ export function ImageGenerationStage({
 
   useEffect(() => {
     let isCancelled = false
+    const requestId = quotaRefreshRequestIdRef.current + 1
+    quotaRefreshRequestIdRef.current = requestId
     setIsImageQuotaLoading(true)
 
     void onGetImageQuota()
       .then((quota) => {
-        if (!isCancelled) {
+        if (!isCancelled && quotaRefreshRequestIdRef.current === requestId) {
           setImageQuota(quota)
         }
       })
       .catch(() => undefined)
       .finally(() => {
-        if (!isCancelled) {
+        if (!isCancelled && quotaRefreshRequestIdRef.current === requestId) {
           setIsImageQuotaLoading(false)
         }
       })
@@ -637,16 +787,82 @@ export function ImageGenerationStage({
     }
   }, [onListImageHistory])
 
+  useEffect(() => {
+    if (!openComposerMenu) {
+      return undefined
+    }
+
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && composerControlsRef.current?.contains(target)) {
+        return
+      }
+
+      setOpenComposerMenu(null)
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenComposerMenu(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openComposerMenu])
+
+  useEffect(() => {
+    if (!isReady) {
+      setOpenComposerMenu(null)
+    }
+  }, [isReady])
+
+  useIsomorphicLayoutEffect(() => {
+    const textarea = composerTextAreaRef.current
+    if (!textarea) {
+      return
+    }
+
+    syncImageComposerTextAreaHeight(textarea)
+  }, [draft, hasEntries])
+
+  useEffect(() => {
+    const handleResize = () => {
+      const textarea = composerTextAreaRef.current
+      if (!textarea) {
+        return
+      }
+
+      syncImageComposerTextAreaHeight(textarea)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
   const refreshImageQuota = async () => {
+    const requestId = quotaRefreshRequestIdRef.current + 1
+    quotaRefreshRequestIdRef.current = requestId
     setIsImageQuotaLoading(true)
 
     try {
       const quota = await onGetImageQuota()
-      setImageQuota(quota)
-      setIsImageQuotaLoading(false)
+      if (quotaRefreshRequestIdRef.current === requestId) {
+        setImageQuota(quota)
+        setIsImageQuotaLoading(false)
+      }
       return quota
     } catch {
-      setIsImageQuotaLoading(false)
+      if (quotaRefreshRequestIdRef.current === requestId) {
+        setIsImageQuotaLoading(false)
+      }
       return null
     }
   }
@@ -861,9 +1077,13 @@ export function ImageGenerationStage({
 
   const submitPrompt = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
+    if (isComposerComposingRef.current) {
+      return
+    }
+
     const prompt = draft.trim()
 
-    if (!prompt || !isReady || isGenerating) {
+    if (!prompt || !isReady || editingImageEntryId) {
       return
     }
 
@@ -900,20 +1120,19 @@ export function ImageGenerationStage({
     setDraft('')
     setSelectedImages([])
     setComposerError(null)
-    setIsGenerating(true)
+    setOpenComposerMenu(null)
+    setActiveGenerationCount((count) => count + 1)
 
+    const generationStartedAtMs = Date.now()
     try {
       const result = await onGenerateImage({
         prompt,
         images: imageFiles.length > 0 ? imageFiles : undefined,
+        size: selectedImageSize,
       })
+      const generationDurationMs = Math.max(0, Date.now() - generationStartedAtMs)
 
-      if (result.quota) {
-        setImageQuota(result.quota)
-        setIsImageQuotaLoading(false)
-      } else {
-        void refreshImageQuota()
-      }
+      void refreshImageQuota()
 
       setEntries((current) =>
         current.map((entry) =>
@@ -924,6 +1143,7 @@ export function ImageGenerationStage({
                 generationId: result.historyItem?.generationId,
                 images: result.images,
                 model: result.model,
+                durationMs: generationDurationMs,
                 createdAt: result.createdAt,
                 panoramaIntent: hasPanoramaIntentText([
                   prompt,
@@ -941,8 +1161,9 @@ export function ImageGenerationStage({
       const message = error instanceof Error ? error.message : '图片生成失败。'
       if (message === imageQuotaExhaustedMessage) {
         showImageQuotaExhaustedDialog()
-        void refreshImageQuota()
       }
+
+      void refreshImageQuota()
 
       setEntries((current) =>
         current.map((entry) =>
@@ -956,15 +1177,40 @@ export function ImageGenerationStage({
         ),
       )
     } finally {
-      setIsGenerating(false)
+      setActiveGenerationCount((count) => Math.max(0, count - 1))
     }
   }
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.nativeEvent.isComposing &&
+      !isComposerComposingRef.current
+    ) {
       event.preventDefault()
       void submitPrompt()
     }
+  }
+
+  const handleComposerDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(event.target.value)
+
+    if (!isComposerComposingRef.current) {
+      syncImageComposerTextAreaHeight(event.target)
+    }
+  }
+
+  const handleComposerCompositionStart = () => {
+    isComposerComposingRef.current = true
+  }
+
+  const handleComposerCompositionEnd = (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+    isComposerComposingRef.current = false
+    setDraft(event.currentTarget.value)
+    syncImageComposerTextAreaHeight(event.currentTarget)
   }
 
   const renderAttachmentStrip = (
@@ -997,7 +1243,7 @@ export function ImageGenerationStage({
   const renderComposer = (placement: 'empty' | 'thread') => (
     <form className={`dd-image-composer is-${placement}`} onSubmit={submitPrompt}>
       {selectedImages.length > 0
-        ? renderAttachmentStrip(selectedImages, { removable: !isGenerating })
+        ? renderAttachmentStrip(selectedImages, { removable: !editingImageEntryId })
         : null}
       <div className="dd-image-composer__box">
         <input
@@ -1006,38 +1252,133 @@ export function ImageGenerationStage({
           accept="image/png,image/jpeg,image/webp"
           multiple
           hidden
-          disabled={!isReady || isGenerating || Boolean(editingImageEntryId)}
+          disabled={!isReady || Boolean(editingImageEntryId)}
           onChange={handleImageInputChange}
         />
-        <button
-          type="button"
-          className="dd-image-composer__attach"
-          disabled={
-            !isReady ||
-            isGenerating ||
-            Boolean(editingImageEntryId) ||
-            selectedImages.length >= imageUploadMaxFiles
-          }
-          aria-label="上传图片"
-          title="上传图片"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" />
-            <path d="m8 15 2.4-2.4a1.4 1.4 0 0 1 2 0L16 16" />
-            <path d="m14 14 1-1a1.4 1.4 0 0 1 2 0L20 16" />
-            <path d="M8.5 8.5h.01" />
-          </svg>
-        </button>
         <textarea
           ref={composerTextAreaRef}
           value={draft}
           rows={1}
-          placeholder={isReady ? '描述或编辑图片' : '正在连接服务'}
-          disabled={!isReady || isGenerating}
-          onChange={(event) => setDraft(event.target.value)}
+          placeholder={composerPlaceholder}
+          disabled={!isReady || Boolean(editingImageEntryId)}
+          onChange={handleComposerDraftChange}
+          onCompositionStart={handleComposerCompositionStart}
+          onCompositionEnd={handleComposerCompositionEnd}
           onKeyDown={handleComposerKeyDown}
         />
+        <div ref={composerControlsRef} className="dd-image-composer__tools" aria-label="图片生成选项">
+          <button
+            type="button"
+            className="dd-image-composer__attach"
+            disabled={
+              !isReady ||
+              Boolean(editingImageEntryId) ||
+              selectedImages.length >= imageUploadMaxFiles
+            }
+            aria-label="添加参考图"
+            title="添加参考图"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" />
+              <path d="m8 15 2.4-2.4a1.4 1.4 0 0 1 2 0L16 16" />
+              <path d="m14 14 1-1a1.4 1.4 0 0 1 2 0L20 16" />
+              <path d="M8.5 8.5h.01" />
+            </svg>
+            <span>{selectedImages.length > 0 ? `参考图 ${selectedImages.length.toString()}` : '参考图'}</span>
+          </button>
+          <div className={`dd-image-composer__dropdown${openComposerMenu === 'aspectRatio' ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="dd-image-composer__select"
+              disabled={!isReady || Boolean(editingImageEntryId)}
+              aria-label={`比例 ${selectedAspectRatio}`}
+              aria-haspopup="listbox"
+              aria-expanded={openComposerMenu === 'aspectRatio'}
+              title={`当前比例：${selectedAspectRatio}`}
+              onClick={() => setOpenComposerMenu((menu) => (menu === 'aspectRatio' ? null : 'aspectRatio'))}
+            >
+              <span>比例</span>
+              <strong>{selectedAspectRatio}</strong>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {openComposerMenu === 'aspectRatio' ? (
+              <div className="dd-image-composer__dropdown-menu" role="listbox" aria-label="选择图片比例">
+                {imageAspectRatioOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selectedAspectRatio === option.value}
+                    className={`dd-image-composer__option${selectedAspectRatio === option.value ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedAspectRatio(option.value)
+                      setOpenComposerMenu(null)
+                    }}
+                  >
+                    <span className="dd-image-composer__option-icon" aria-hidden="true">{option.label}</span>
+                    <span>
+                      <strong>{option.caption}</strong>
+                      <small>{option.label}</small>
+                    </span>
+                    {selectedAspectRatio === option.value ? (
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m5 13 4 4L19 7" />
+                      </svg>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className={`dd-image-composer__dropdown is-resolution${openComposerMenu === 'resolution' ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="dd-image-composer__select"
+              disabled={!isReady || Boolean(editingImageEntryId)}
+              aria-label={`分辨率 ${selectedResolutionLabel}，最长边 ${selectedResolutionCaption}`}
+              aria-haspopup="listbox"
+              aria-expanded={openComposerMenu === 'resolution'}
+              title={`最长边：${selectedResolutionCaption}`}
+              onClick={() => setOpenComposerMenu((menu) => (menu === 'resolution' ? null : 'resolution'))}
+            >
+              <span>分辨率</span>
+              <strong>{selectedResolutionLabel}</strong>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {openComposerMenu === 'resolution' ? (
+              <div className="dd-image-composer__dropdown-menu" role="listbox" aria-label="选择图片分辨率">
+                {imageResolutionOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selectedResolution === option.value}
+                    className={`dd-image-composer__option${selectedResolution === option.value ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedResolution(option.value)
+                      setOpenComposerMenu(null)
+                    }}
+                  >
+                    <span className="dd-image-composer__option-icon" aria-hidden="true">{option.label}</span>
+                    <span>
+                      <strong>{option.caption}</strong>
+                    </span>
+                    {selectedResolution === option.value ? (
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m5 13 4 4L19 7" />
+                      </svg>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
         <button
           type="submit"
           className="dd-image-composer__submit"
@@ -1072,6 +1413,7 @@ export function ImageGenerationStage({
 
           const imageEntryId = `${entry.id}-${index.toString()}`
           const isPreparingThisImageEdit = editingImageEntryId === imageEntryId
+          const durationLabel = formatImageDuration(entry.durationMs)
           const hasPanoramaIntent =
             entry.panoramaIntent === true ||
             hasPanoramaIntentText([
@@ -1123,7 +1465,7 @@ export function ImageGenerationStage({
                   ) : null}
                   <button
                     type="button"
-                    disabled={isGenerating || Boolean(editingImageEntryId)}
+                    disabled={Boolean(editingImageEntryId)}
                     onClick={() => {
                       void prepareGeneratedImageEdit({
                         ...entry,
@@ -1142,6 +1484,7 @@ export function ImageGenerationStage({
                   {totalImages > 1 ? ` · ${index + 1}/${totalImages}` : ''}
                   {' · '}
                   {formatImageTime(entry.createdAt)}
+                  {durationLabel ? ` · 耗时 ${durationLabel}` : ''}
                 </span>
                 <a href={imageSrc} download={`gpt-image-2-${index + 1}.png`}>
                   下载
@@ -1201,9 +1544,9 @@ export function ImageGenerationStage({
             <span className="dd-image-stage__email">{userEmail}</span>
             <span
               className={`dd-image-stage__quota${isImageQuotaExhausted ? ' is-empty' : ''}`}
-              title={buildImageQuotaTitle(imageQuota)}
+              title={buildImageQuotaTitle(imageQuota, reservedImageQuota)}
             >
-              {formatImageQuotaLabel(imageQuota, isImageQuotaLoading)}
+              {formatImageQuotaLabel(imageQuota, isImageQuotaLoading, localPendingImageQuota)}
             </span>
             <button type="button" onClick={() => { void onLogout() }}>
               退出

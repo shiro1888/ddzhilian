@@ -37,7 +37,6 @@ async function submitAccountCredentials(
   endpoint: '/api/auth/login' | '/api/auth/register',
   email: string,
   password: string,
-  inviteCode?: string,
 ) {
   const response = await fetch(`${ACCOUNT_API_BASE_URL}${endpoint}`, {
     method: 'POST',
@@ -45,7 +44,7 @@ async function submitAccountCredentials(
     headers: {
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ email, password, inviteCode }),
+    body: JSON.stringify({ email, password }),
   })
 
   if (!response.ok) {
@@ -53,11 +52,11 @@ async function submitAccountCredentials(
   }
 
   const payload = await response.json() as AccountSessionResponse
-  if (!payload.authenticated || !payload.user) {
+  if (endpoint === '/api/auth/login' && (!payload.authenticated || !payload.user)) {
     throw new Error('账号会话创建失败。')
   }
 
-  return payload.user
+  return payload
 }
 
 export function useAccountAuth() {
@@ -98,7 +97,12 @@ export function useAccountAuth() {
     setError(null)
 
     try {
-      const nextUser = await submitAccountCredentials('/api/auth/login', email, password)
+      const payload = await submitAccountCredentials('/api/auth/login', email, password)
+      const nextUser = payload.user
+      if (!payload.authenticated || !nextUser) {
+        throw new Error('账号会话创建失败。')
+      }
+
       setUser(nextUser)
       return nextUser
     } catch (loginError) {
@@ -110,14 +114,19 @@ export function useAccountAuth() {
     }
   }, [])
 
-  const register = useCallback(async (email: string, password: string, inviteCode: string) => {
+  const register = useCallback(async (email: string, password: string) => {
     setIsSubmitting(true)
     setError(null)
 
     try {
-      const nextUser = await submitAccountCredentials('/api/auth/register', email, password, inviteCode)
-      setUser(nextUser)
-      return nextUser
+      const payload = await submitAccountCredentials('/api/auth/register', email, password)
+      if (payload.authenticated && payload.user) {
+        setUser(payload.user)
+        return payload
+      }
+
+      setUser(null)
+      return payload
     } catch (registerError) {
       const message = registerError instanceof Error ? registerError.message : '账号注册失败。'
       setError(message)

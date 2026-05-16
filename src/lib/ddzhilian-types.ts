@@ -357,12 +357,24 @@ export type AiChatImageInput = {
   alt?: string
 }
 
+export type AiWebSearchSource = {
+  title: string
+  url: string
+  snippet?: string
+  engine?: string
+  publishedAt?: string
+}
+
 export type AiChatResponse = {
   response: string
   provider?: 'cloudflare' | 'openrouter'
   model: string
   quota?: AiQuotaStatus
   historyText?: HistoryTextSummary
+  webSearch?: {
+    query: string
+    sources: AiWebSearchSource[]
+  }
 }
 
 export type AiChatConversationMessage = {
@@ -373,6 +385,10 @@ export type AiChatConversationMessage = {
   status?: 'streaming' | 'complete' | 'failed' | 'stopped'
   model?: string
   attachments?: AiChatMessageAttachmentSummary[]
+  webSearch?: {
+    query: string
+    sources: AiWebSearchSource[]
+  }
 }
 
 export type AiChatMessageAttachmentSummary = {
@@ -404,6 +420,9 @@ export type AiImageResult = {
   url?: string
   mimeType: string
   revisedPrompt?: string
+  byteSize?: number
+  width?: number
+  height?: number
 }
 
 export type AiImageResponse = {
@@ -422,9 +441,12 @@ export type AiImageQuotaStatus = {
   remaining: number
   freeLimit: number
   freeUsed: number
+  freeReserved: number
   freeRemaining: number
   paidRemaining: number
   paidUsed: number
+  paidReserved: number
+  totalReserved: number
   totalRemaining: number
   periodStartedAt: string
   resetAt: string
@@ -435,6 +457,9 @@ export type AiImageQuotaStatus = {
 export type AiImageRequestInput = {
   prompt: string
   images?: File[]
+  model?: string
+  size?: string
+  quality?: string
 }
 
 export type AiImageJobStatus = 'queued' | 'running' | 'complete' | 'failed'
@@ -491,6 +516,9 @@ export type AccountUser = {
 export type AccountSessionResponse = {
   authenticated: boolean
   configured?: boolean
+  email?: string
+  message?: string
+  requiresEmailConfirmation?: boolean
   user?: AccountUser
 }
 
@@ -614,6 +642,29 @@ export type AdminUsageSnapshot = {
   openrouterBalance?: AdminOpenRouterBalance
 }
 
+export type AdminOnlineDeviceSummary = {
+  deviceId: string
+  deviceName: string
+  platform: string
+  accountId?: string
+  autoConnect: boolean
+  discoverable: boolean
+  allowShortCode: boolean
+  roomCount: number
+  sessionCount: number
+  lastSeenAt: string
+}
+
+export type AdminOnlineDevicesSnapshot = {
+  devices: AdminOnlineDeviceSummary[]
+  loadedAt: string
+}
+
+export type AdminOnlineDeviceNameUpdate = {
+  deviceId: string
+  deviceName: string
+}
+
 export type AdminUserSummary = {
   id: string
   email: string
@@ -668,9 +719,16 @@ export type AdminStateResponse = {
   history: AdminHistoryStats
   ai: AdminAiSettings
   usage: AdminUsageSnapshot
+  onlineDevices: AdminOnlineDevicesSnapshot
   users?: AdminUsersSnapshot
   roles?: AdminRolesSnapshot
   serverTime: string
+}
+
+export type AdminPermissionsResponse = {
+  authenticated: boolean
+  canRecallAnyMessage: boolean
+  admin?: AdminSessionInfo
 }
 
 export type ReceivedFile = {

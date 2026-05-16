@@ -22,7 +22,7 @@ export const CLIPROXYAPI_PRESET = {
   reasoningEffort: 'high' as const,
 }
 
-export type AdminSection = 'dashboard' | 'models' | 'providers' | 'users' | 'roles'
+export type AdminSection = 'dashboard' | 'models' | 'providers' | 'online' | 'users' | 'roles'
 
 export type ManualOpenAiApiDraft = {
   label: string
@@ -49,6 +49,7 @@ export type AdminNavIconName =
   | 'limit'
   | 'log'
   | 'model'
+  | 'online'
   | 'provider'
   | 'role'
   | 'settings'
@@ -255,7 +256,14 @@ export type TrendPoint = {
 }
 
 export function isAdminSection(value: unknown): value is AdminSection {
-  return value === 'dashboard' || value === 'models' || value === 'providers' || value === 'users' || value === 'roles'
+  return (
+    value === 'dashboard' ||
+    value === 'models' ||
+    value === 'providers' ||
+    value === 'online' ||
+    value === 'users' ||
+    value === 'roles'
+  )
 }
 
 export function isProviderConfigOption(value: unknown): value is ProviderConfigOption {
@@ -487,6 +495,11 @@ export const ADMIN_SECTION_META: Record<AdminSection, { title: string; subtitle:
     subtitle: '配置 AI 提供方、System Prompt、API Key 和模型检测。',
     eyebrow: 'Provider',
   },
+  online: {
+    title: '在线人员',
+    subtitle: '查看当前在线设备，并修改前台显示名称。',
+    eyebrow: 'Online',
+  },
   users: {
     title: '用户',
     subtitle: '查看账号、额度和图片生成配额。',
@@ -524,6 +537,12 @@ export const ADMIN_PRIMARY_NAV_ITEMS: Array<{
     description: '密钥、检测、Prompt',
     icon: 'provider',
     superAdminOnly: true,
+  },
+  {
+    section: 'online',
+    label: '在线',
+    description: '设备与名称',
+    icon: 'online',
   },
   {
     section: 'users',

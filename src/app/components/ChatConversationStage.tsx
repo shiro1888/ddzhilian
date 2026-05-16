@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ChangeEvent, ClipboardEvent, DragEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AttachmentDraft, FileConversationEntry, SharedContentTab, UnifiedConversationEntry } from '../types'
@@ -258,6 +258,7 @@ type ChatConversationStageProps = {
   onCancelTransfer: (id: string) => void
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
+  canRecallAnyMessage: boolean
   onRemoveAttachment: (id: string) => void
   onLoadOlderHistory: () => void
   onAiModelChange: (modelId: string) => void
@@ -402,6 +403,7 @@ export function ChatConversationStage({
   onCancelTransfer,
   onSendText,
   onRecallText,
+  canRecallAnyMessage,
   onRemoveAttachment,
   onLoadOlderHistory,
   onAiModelChange,
@@ -435,6 +437,7 @@ export function ChatConversationStage({
   const conversationThreadRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLDivElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
+  const isEditorComposingRef = useRef(false)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botMentionRef = useRef<HTMLDivElement | null>(null)
   const colorPaletteRef = useRef<HTMLDivElement | null>(null)
@@ -573,9 +576,19 @@ export function ChatConversationStage({
       return
     }
 
+    if (isEditorComposingRef.current) {
+      return
+    }
+
     const nextHtml = chatDraft || ''
     const currentHtml = editorRef.current.innerHTML
-    if (currentHtml !== nextHtml && normalizeEditorHtml(currentHtml) !== nextHtml) {
+    const currentNormalizedHtml = normalizeEditorHtml(currentHtml)
+    const isEditorFocused = document.activeElement === editorRef.current
+    if (isEditorFocused && nextHtml && currentNormalizedHtml !== nextHtml) {
+      return
+    }
+
+    if (currentHtml !== nextHtml && currentNormalizedHtml !== nextHtml) {
       editorRef.current.innerHTML = nextHtml
     }
 
@@ -956,14 +969,16 @@ export function ChatConversationStage({
   }, [messageContextMenu])
 
   const syncDraftFromEditor = () => {
+    if (isEditorComposingRef.current) {
+      return
+    }
+
     const normalizedHtml = normalizeEditorHtml(editorRef.current?.innerHTML ?? '')
     const plainText = editorRef.current?.innerText.replace(/\u00a0/g, ' ') ?? ''
     const nextIsBotMentionOpen = /(^|\s)@$/.test(plainText)
 
-    startTransition(() => {
-      onChatDraftChange(normalizedHtml)
-      setIsBotMentionOpen((current) => (current === nextIsBotMentionOpen ? current : nextIsBotMentionOpen))
-    })
+    onChatDraftChange(normalizedHtml)
+    setIsBotMentionOpen((current) => (current === nextIsBotMentionOpen ? current : nextIsBotMentionOpen))
   }
 
   const preserveEditorFocus = (event: ReactMouseEvent<HTMLElement>) => {
@@ -1236,7 +1251,7 @@ export function ChatConversationStage({
   }
 
   const recallContextMessage = () => {
-    if (!messageContextMenu?.fromSelf) {
+    if (!messageContextMenu || (!messageContextMenu.fromSelf && !canRecallAnyMessage)) {
       return
     }
 
@@ -1545,6 +1560,21 @@ export function ChatConversationStage({
       pendingBotMentionBackspaceRepairRef.current = false
       repairBotMentionCaretAfterBackspace()
     }
+
+    if (isEditorComposingRef.current) {
+      return
+    }
+
+    syncDraftFromEditor()
+  }
+
+  const handleEditorCompositionStart = () => {
+    isEditorComposingRef.current = true
+    setIsBotMentionOpen(false)
+  }
+
+  const handleEditorCompositionEnd = () => {
+    isEditorComposingRef.current = false
     syncDraftFromEditor()
   }
 
@@ -2377,8 +2407,14 @@ export function ChatConversationStage({
               data-placeholder="输入消息"
               onClick={handleInlineImageClick}
               onInput={handleEditorInput}
+              onCompositionStart={handleEditorCompositionStart}
+              onCompositionEnd={handleEditorCompositionEnd}
               onPaste={handleEditorPaste}
               onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || isEditorComposingRef.current) {
+                  return
+                }
+
                 pendingBotMentionBackspaceRepairRef.current =
                   event.key === 'Backspace' && shouldRepairBotMentionCaretOnBackspace()
 
@@ -2591,8 +2627,8 @@ export function ChatConversationStage({
             <button
               type="button"
               role="menuitem"
-              disabled={!messageContextMenu.fromSelf}
-              title={messageContextMenu.fromSelf ? '撤回这条消息' : '只能撤回自己发送的消息'}
+              disabled={!messageContextMenu.fromSelf && !canRecallAnyMessage}
+              title={messageContextMenu.fromSelf || canRecallAnyMessage ? '撤回这条消息' : '只能撤回自己发送的消息'}
               onClick={recallContextMessage}
             >
               撤回

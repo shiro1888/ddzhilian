@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
+  CompositionEvent as ReactCompositionEvent,
   DragEvent,
   FormEvent,
   MouseEvent as ReactMouseEvent,
@@ -42,6 +43,11 @@ type SnapLinkQuoteDraftState = {
   html: string
 }
 
+type SnapLinkImagePreviewState = {
+  src: string
+  alt: string
+}
+
 const snapLinkQuickEmojis = [
   '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
   '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
@@ -52,8 +58,20 @@ const snapLinkQuickEmojis = [
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
 const snapLinkComposerMaxHeight = 120
 
+function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) {
+    return
+  }
+
+  textarea.style.height = 'auto'
+  const nextHeight = Math.min(textarea.scrollHeight, snapLinkComposerMaxHeight)
+  textarea.style.height = `${nextHeight.toString()}px`
+  textarea.style.overflowY = textarea.scrollHeight > snapLinkComposerMaxHeight ? 'auto' : 'hidden'
+}
+
 type SnapLinkStageProps = {
   isDragging: boolean
+  shouldOpenAiChat?: boolean
   selectedRoomId: string | null
   selectedConversationName: string
   activeTransferLabel: string
@@ -82,6 +100,7 @@ type SnapLinkStageProps = {
   onDirectFileSelection: (files: File[]) => void
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
+  canRecallAnyMessage: boolean
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
   onUseClassicInterface: () => void
@@ -494,6 +513,7 @@ function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entry
 
 export function SnapLinkStage({
   isDragging,
+  shouldOpenAiChat = false,
   selectedRoomId,
   selectedConversationName,
   activeTransferLabel,
@@ -522,6 +542,7 @@ export function SnapLinkStage({
   onDirectFileSelection,
   onSendText,
   onRecallText,
+  canRecallAnyMessage,
   onRetryTransfer,
   onCancelTransfer,
   onUseClassicInterface,
@@ -530,16 +551,20 @@ export function SnapLinkStage({
   onDragLeave,
   onDrop,
 }: SnapLinkStageProps) {
-  const [isLobbyOpen, setIsLobbyOpen] = useState(false)
-  const [isAiChatOpen, setIsAiChatOpen] = useState(false)
+  const [isLobbyOpen, setIsLobbyOpen] = useState(!shouldOpenAiChat)
+  const [isAiChatOpen, setIsAiChatOpen] = useState(shouldOpenAiChat)
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
+  const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
+  const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const isComposerComposingRef = useRef(false)
+  const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
   const botTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botPanelRef = useRef<HTMLDivElement | null>(null)
   const botMentionTriggerRangeRef = useRef<BotMentionTriggerRange | null>(null)
@@ -569,6 +594,7 @@ export function SnapLinkStage({
   )
   const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen
   const plainDraft = normalizePlainComposerDraft(chatDraft)
+
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
   const visibleConversationEntries = useMemo(
@@ -589,16 +615,25 @@ export function SnapLinkStage({
   }, [hasActiveRoom, visibleConversationEntries.length])
 
   useEffect(() => {
-    const input = inputRef.current
-    if (!input) {
+    if (isComposerComposingRef.current) {
       return
     }
 
-    input.style.height = 'auto'
-    const nextHeight = Math.min(input.scrollHeight, snapLinkComposerMaxHeight)
-    input.style.height = `${nextHeight.toString()}px`
-    input.style.overflowY = input.scrollHeight > snapLinkComposerMaxHeight ? 'auto' : 'hidden'
-  }, [plainDraft])
+    const nextDraft = normalizePlainComposerDraft(chatDraft)
+    const input = inputRef.current
+    const isInputFocused = document.activeElement === input
+    if (isInputFocused && nextDraft && nextDraft !== draftValueRef.current) {
+      return
+    }
+
+    draftValueRef.current = nextDraft
+
+    if (input && input.value !== nextDraft) {
+      input.value = nextDraft
+    }
+
+    syncSnapLinkComposerTextAreaHeight(input)
+  }, [chatDraft])
 
   useEffect(() => {
     if (!isEmojiPickerOpen) {
@@ -707,6 +742,24 @@ export function SnapLinkStage({
     }
   }, [messageContextMenu])
 
+  useEffect(() => {
+    if (!imagePreview) {
+      return undefined
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setImagePreview(null)
+        setIsImagePreviewZoomed(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [imagePreview])
+
   const handleCreateRoom = () => {
     setIsAiChatOpen(false)
     setIsLobbyOpen(false)
@@ -774,6 +827,10 @@ export function SnapLinkStage({
   }
 
   const submitComposerDraft = () => {
+    if (isComposerComposingRef.current) {
+      return
+    }
+
     if (!isSendDisabled) {
       const quoteHtml = quoteDraft ? renderQuoteDraftHtml(quoteDraft) : undefined
       setIsEmojiPickerOpen(false)
@@ -801,43 +858,13 @@ export function SnapLinkStage({
     })
   }
 
-  const handleBotTriggerClick = () => {
-    botMentionTriggerRangeRef.current = null
-    setIsEmojiPickerOpen(false)
-    setIsBotPanelOpen(true)
-    focusComposerInput(plainDraft.length)
-  }
+  const getComposerDraft = () => inputRef.current?.value ?? draftValueRef.current
 
-  const handleBotMentionSelect = () => {
-    const nextDraft = createBotMentionDraftFromTrigger(plainDraft, botMentionTriggerRangeRef.current)
+  const commitComposerDraft = (nextDraft: string, caretPosition: number) => {
+    draftValueRef.current = nextDraft
     onChatDraftChange(nextDraft)
-    setIsEmojiPickerOpen(false)
-    setIsBotPanelOpen(false)
-    botMentionTriggerRangeRef.current = null
-    focusComposerInput(nextDraft.length)
-  }
 
-  const handleEmojiInsert = (emoji: string) => {
-    const input = inputRef.current
-    const selectionStart = input?.selectionStart ?? plainDraft.length
-    const selectionEnd = input?.selectionEnd ?? plainDraft.length
-    const nextDraft = `${plainDraft.slice(0, selectionStart)}${emoji}${plainDraft.slice(selectionEnd)}`
-    const nextCaretPosition = selectionStart + emoji.length
-
-    onChatDraftChange(nextDraft)
-    setIsEmojiPickerOpen(false)
-    setIsBotPanelOpen(false)
-    botMentionTriggerRangeRef.current = null
-    focusComposerInput(nextCaretPosition)
-  }
-
-  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    const nextDraft = event.target.value
-    const caretPosition = event.target.selectionStart ?? nextDraft.length
     const triggerStart = findBotMentionTriggerStart(nextDraft, caretPosition)
-
-    onChatDraftChange(nextDraft)
-
     if (triggerStart !== null) {
       botMentionTriggerRangeRef.current = {
         start: triggerStart,
@@ -854,6 +881,66 @@ export function SnapLinkStage({
     }
   }
 
+  const handleBotTriggerClick = () => {
+    botMentionTriggerRangeRef.current = null
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(true)
+    focusComposerInput(getComposerDraft().length)
+  }
+
+  const handleBotMentionSelect = () => {
+    const nextDraft = createBotMentionDraftFromTrigger(getComposerDraft(), botMentionTriggerRangeRef.current)
+    commitComposerDraft(nextDraft, nextDraft.length)
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(false)
+    botMentionTriggerRangeRef.current = null
+    focusComposerInput(nextDraft.length)
+  }
+
+  const handleEmojiInsert = (emoji: string) => {
+    const input = inputRef.current
+    const currentDraft = getComposerDraft()
+    const selectionStart = input?.selectionStart ?? currentDraft.length
+    const selectionEnd = input?.selectionEnd ?? currentDraft.length
+    const nextDraft = `${currentDraft.slice(0, selectionStart)}${emoji}${currentDraft.slice(selectionEnd)}`
+    const nextCaretPosition = selectionStart + emoji.length
+
+    commitComposerDraft(nextDraft, nextCaretPosition)
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(false)
+    botMentionTriggerRangeRef.current = null
+    focusComposerInput(nextCaretPosition)
+  }
+
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const nextDraft = event.target.value
+    const caretPosition = event.target.selectionStart ?? nextDraft.length
+
+    draftValueRef.current = nextDraft
+    syncSnapLinkComposerTextAreaHeight(event.target)
+
+    if (isComposerComposingRef.current) {
+      return
+    }
+
+    commitComposerDraft(nextDraft, caretPosition)
+  }
+
+  const handleDraftCompositionStart = (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+    isComposerComposingRef.current = true
+    draftValueRef.current = event.currentTarget.value
+    botMentionTriggerRangeRef.current = null
+    setIsBotPanelOpen(false)
+  }
+
+  const handleDraftCompositionEnd = (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+    isComposerComposingRef.current = false
+    const nextDraft = event.currentTarget.value
+    const caretPosition = event.currentTarget.selectionStart ?? nextDraft.length
+    commitComposerDraft(nextDraft, caretPosition)
+    syncSnapLinkComposerTextAreaHeight(event.currentTarget)
+  }
+
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedImageFiles = getClipboardImageFiles(event.clipboardData)
     if (pastedImageFiles.length === 0) {
@@ -868,7 +955,7 @@ export function SnapLinkStage({
   }
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || isComposerComposingRef.current) {
       return
     }
 
@@ -884,6 +971,29 @@ export function SnapLinkStage({
 
     event.preventDefault()
     submitComposerDraft()
+  }
+
+  const openImagePreview = (src: string, alt = '图片预览') => {
+    if (!src) {
+      return
+    }
+
+    setIsImagePreviewZoomed(false)
+    setImagePreview({ src, alt })
+  }
+
+  const closeImagePreview = () => {
+    setImagePreview(null)
+    setIsImagePreviewZoomed(false)
+  }
+
+  const openInlineImageFromTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLImageElement)) {
+      return false
+    }
+
+    openImagePreview(target.currentSrc || target.src, target.alt || '图片预览')
+    return true
   }
 
   const markCodeCopyButton = (button: HTMLButtonElement) => {
@@ -904,17 +1014,23 @@ export function SnapLinkStage({
     }
 
     const copyButton = target.closest<HTMLButtonElement>('.dd-code-copy')
-    if (!copyButton || !event.currentTarget.contains(copyButton)) {
+    if (copyButton && event.currentTarget.contains(copyButton)) {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
+      if (codeText) {
+        void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
+      }
+      return
+    }
+
+    if (!openInlineImageFromTarget(target)) {
       return
     }
 
     event.preventDefault()
     event.stopPropagation()
-
-    const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
-    if (codeText) {
-      void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
-    }
   }
 
   const openMessageContextMenu = (
@@ -967,7 +1083,7 @@ export function SnapLinkStage({
         text: quoteText,
         html: quoteHtml,
       })
-      focusComposerInput(plainDraft.length)
+      focusComposerInput(getComposerDraft().length)
     }
     setMessageContextMenu(null)
   }
@@ -987,7 +1103,7 @@ export function SnapLinkStage({
   }
 
   const recallContextMessage = () => {
-    if (!messageContextMenu?.fromSelf) {
+    if (!messageContextMenu || (!messageContextMenu.fromSelf && !canRecallAnyMessage)) {
       return
     }
 
@@ -1410,11 +1526,13 @@ export function SnapLinkStage({
                 <div className="dd-snaplink__input-wrap">
                   <textarea
                     ref={inputRef}
-                    value={plainDraft}
+                    defaultValue={plainDraft}
                     placeholder="输入消息..."
                     autoComplete="off"
                     rows={1}
                     onChange={handleDraftChange}
+                    onCompositionStart={handleDraftCompositionStart}
+                    onCompositionEnd={handleDraftCompositionEnd}
                     onPaste={handleComposerPaste}
                     onKeyDown={handleComposerKeyDown}
                   />
@@ -1474,6 +1592,45 @@ export function SnapLinkStage({
         </div>
       </main>
       </section>
+      {imagePreview && createPortal(
+        <div
+          className={`dd-image-preview-dialog${isImagePreviewZoomed ? ' is-zoomed' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="图片预览"
+        >
+          <button
+            type="button"
+            className="dd-image-preview-dialog__backdrop"
+            aria-label="关闭图片预览"
+            onClick={closeImagePreview}
+          />
+          <div className="dd-image-preview-dialog__panel">
+            <div className="dd-image-preview-dialog__titlebar">
+              <span>{imagePreview.alt}</span>
+              <button
+                type="button"
+                className="dd-image-preview-dialog__close"
+                aria-label="关闭图片预览"
+                onClick={closeImagePreview}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dd-image-preview-dialog__body">
+              <button
+                type="button"
+                className="dd-image-preview-dialog__image-button"
+                aria-label={isImagePreviewZoomed ? '缩小图片' : '放大图片'}
+                onClick={() => setIsImagePreviewZoomed((current) => !current)}
+              >
+                <img src={imagePreview.src} alt={imagePreview.alt} />
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
       {messageContextMenu && createPortal(
         <div
           className="dd-message-menu"
@@ -1496,8 +1653,8 @@ export function SnapLinkStage({
           <button
             type="button"
             role="menuitem"
-            disabled={!messageContextMenu.fromSelf}
-            title={messageContextMenu.fromSelf ? '撤回这条消息' : '只能撤回自己发送的消息'}
+            disabled={!messageContextMenu.fromSelf && !canRecallAnyMessage}
+            title={messageContextMenu.fromSelf || canRecallAnyMessage ? '撤回这条消息' : '只能撤回自己发送的消息'}
             onClick={recallContextMessage}
           >
             撤回

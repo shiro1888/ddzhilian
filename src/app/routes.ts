@@ -1,6 +1,6 @@
 import type { NavView } from './types'
 
-export const DEFAULT_VIEW: NavView = 'connect'
+export const DEFAULT_VIEW: NavView = 'text'
 
 export const viewPaths: Record<NavView, string> = {
   connect: '/connect',
@@ -18,7 +18,7 @@ export function pathForView(view: NavView) {
 }
 
 export function resolveViewFromPathname(pathname: string): NavView {
-  const normalizedPath = pathname === '/' ? viewPaths[DEFAULT_VIEW] : pathname
+  const normalizedPath = pathname === '/' || pathname === viewPaths.connect ? viewPaths[DEFAULT_VIEW] : pathname
 
   for (const [view, path] of Object.entries(viewPaths) as Array<[NavView, string]>) {
     if (normalizedPath === path) {

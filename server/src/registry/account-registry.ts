@@ -56,10 +56,21 @@ export type AccountImageQuotaStatus = AccountImageQuotaPeriod & {
   remaining: number;
   freeLimit: number;
   freeUsed: number;
+  freeReserved: number;
   freeRemaining: number;
   paidRemaining: number;
   paidUsed: number;
+  paidReserved: number;
+  totalReserved: number;
   totalRemaining: number;
+};
+
+export type AccountImageQuotaReservation = {
+  reservationId: string;
+  periodStartedAt: string;
+  freeCount: number;
+  paidCount: number;
+  expiresAt: string;
 };
 
 export interface AccountSession {
@@ -69,11 +80,27 @@ export interface AccountSession {
   expiresAt?: number;
 }
 
+export interface AccountRegistrationResult {
+  email: string;
+  requiresEmailConfirmation: true;
+  user?: AccountUserSummary;
+}
+
+export type AccountEmailConfirmType =
+  | 'signup'
+  | 'invite'
+  | 'magiclink'
+  | 'recovery'
+  | 'email_change'
+  | 'email';
+
 export interface AccountRegistryOptions {
   url: string;
   serviceRoleKey: string;
+  authKey?: string;
   userProfilesTable: string;
   adminRolesTable: string;
+  emailRedirectTo?: string;
 }
 
 export class AccountAuthError extends Error {
@@ -100,6 +127,21 @@ type UserProfileAdminRow = UserProfileQuotaRow & {
   updated_at: string | null;
 };
 
+type ImageQuotaReservationRpcPayload = {
+  freeUsed?: unknown;
+  paidRemaining?: unknown;
+  paidUsed?: unknown;
+  freeReserved?: unknown;
+  paidReserved?: unknown;
+  reservation?: {
+    reservationId?: unknown;
+    periodStartedAt?: unknown;
+    freeCount?: unknown;
+    paidCount?: unknown;
+    expiresAt?: unknown;
+  };
+};
+
 type AdminRoleRow = {
   user_id: string;
   email: string | null;
@@ -113,6 +155,7 @@ const userProfileQuotaSelect =
 const userProfileAdminSelect =
   'user_id,email,image_quota_period_started_at,image_quota_used,image_paid_quota_remaining,image_paid_quota_used,created_at,updated_at' as const;
 const adminRoleSelect = 'user_id,email,role,created_at,updated_at' as const;
+const imageQuotaReservationsTable = 'image_quota_reservations';
 const supabaseAuthUsersPageSize = 100;
 const userProfilesBatchSize = 100;
 
@@ -136,6 +179,35 @@ function validatePassword(password: unknown) {
   return typeof password === 'string' && password.length >= 8 && password.length <= 128;
 }
 
+function normalizeEmailConfirmType(value: unknown): AccountEmailConfirmType {
+  const normalized = typeof value === 'string' && value.trim()
+    ? value.trim()
+    : 'email';
+  const allowedTypes: readonly AccountEmailConfirmType[] = [
+    'signup',
+    'invite',
+    'magiclink',
+    'recovery',
+    'email_change',
+    'email',
+  ];
+
+  if (allowedTypes.includes(normalized as AccountEmailConfirmType)) {
+    return normalized as AccountEmailConfirmType;
+  }
+
+  throw new AccountAuthError('邮箱确认链接类型无效。', 400);
+}
+
+function normalizeEmailConfirmTokenHash(value: unknown) {
+  const tokenHash = typeof value === 'string' ? value.trim() : '';
+  if (!tokenHash || tokenHash.length > 512) {
+    throw new AccountAuthError('邮箱确认链接无效或已过期。', 400);
+  }
+
+  return tokenHash;
+}
+
 function toUserSummary(user: User): AccountUserSummary {
   return {
     id: user.id,
@@ -157,6 +229,21 @@ function toAccountSession(session: Session): AccountSession {
   };
 }
 
+function hasConfirmedEmail(user: User) {
+  const candidate = user as User & {
+    confirmed_at?: string | null;
+    email_confirmed_at?: string | null;
+  };
+
+  return Boolean(candidate.email_confirmed_at || candidate.confirmed_at);
+}
+
+function assertConfirmedEmail(user: User) {
+  if (!hasConfirmedEmail(user)) {
+    throw new AccountAuthError('请先打开确认邮件完成邮箱验证，然后再登录。', 403);
+  }
+}
+
 function getSupabaseErrorStatus(error: unknown) {
   const candidate = error as { status?: unknown };
   return typeof candidate.status === 'number' ? candidate.status : undefined;
@@ -166,6 +253,19 @@ function normalizeQuotaUsed(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.trunc(value))
     : 0;
+}
+
+function normalizeQuotaCount(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value));
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
+  }
+
+  return 0;
 }
 
 function normalizeEditableQuota(value: unknown, fieldLabel: string) {
@@ -192,12 +292,19 @@ function buildImageQuotaStatus(
   freeUsed: number,
   paidRemaining: number,
   paidUsed: number,
+  reserved: {
+    free: number;
+    paid: number;
+  } = { free: 0, paid: 0 },
 ): AccountImageQuotaStatus {
   const normalizedFreeLimit = Math.max(0, Math.trunc(freeLimit));
   const normalizedFreeUsed = normalizeQuotaUsed(freeUsed);
-  const freeRemaining = Math.max(0, normalizedFreeLimit - normalizedFreeUsed);
+  const freeReserved = normalizeQuotaCount(reserved.free);
+  const paidReserved = normalizeQuotaCount(reserved.paid);
+  const freeRemaining = Math.max(0, normalizedFreeLimit - normalizedFreeUsed - freeReserved);
   const normalizedPaidRemaining = normalizeQuotaUsed(paidRemaining);
-  const totalRemaining = freeRemaining + normalizedPaidRemaining;
+  const availablePaidRemaining = Math.max(0, normalizedPaidRemaining - paidReserved);
+  const totalRemaining = freeRemaining + availablePaidRemaining;
 
   return {
     ...period,
@@ -206,9 +313,12 @@ function buildImageQuotaStatus(
     remaining: totalRemaining,
     freeLimit: normalizedFreeLimit,
     freeUsed: normalizedFreeUsed,
+    freeReserved,
     freeRemaining,
-    paidRemaining: normalizedPaidRemaining,
+    paidRemaining: availablePaidRemaining,
     paidUsed: normalizeQuotaUsed(paidUsed),
+    paidReserved,
+    totalReserved: freeReserved + paidReserved,
     totalRemaining,
   };
 }
@@ -217,6 +327,10 @@ function readQuotaSnapshot(
   row: UserProfileQuotaRow,
   period: AccountImageQuotaPeriod,
   limit: number,
+  reserved: {
+    free: number;
+    paid: number;
+  } = { free: 0, paid: 0 },
 ) {
   const freeUsed = isSameQuotaPeriod(row.image_quota_period_started_at, period.periodStartedAt)
     ? normalizeQuotaUsed(row.image_quota_used)
@@ -225,11 +339,87 @@ function readQuotaSnapshot(
   const paidUsed = normalizeQuotaUsed(row.image_paid_quota_used);
 
   return {
-    status: buildImageQuotaStatus(period, limit, freeUsed, paidRemaining, paidUsed),
+    status: buildImageQuotaStatus(period, limit, freeUsed, paidRemaining, paidUsed, reserved),
     freeUsed,
     paidRemaining,
     paidUsed,
   };
+}
+
+function normalizeImageQuotaReservation(value: ImageQuotaReservationRpcPayload['reservation']) {
+  const reservationId = typeof value?.reservationId === 'string' ? value.reservationId.trim() : '';
+  const periodStartedAt = typeof value?.periodStartedAt === 'string' ? value.periodStartedAt.trim() : '';
+  const expiresAt = typeof value?.expiresAt === 'string' ? value.expiresAt.trim() : '';
+
+  if (!reservationId || !periodStartedAt || !expiresAt) {
+    throw new AccountAuthError('数据库未返回有效的生图额度预占记录。', 500);
+  }
+
+  return {
+    reservationId,
+    periodStartedAt,
+    freeCount: normalizeQuotaCount(value?.freeCount),
+    paidCount: normalizeQuotaCount(value?.paidCount),
+    expiresAt,
+  };
+}
+
+function buildQuotaStatusFromReservationPayload(
+  payload: ImageQuotaReservationRpcPayload,
+  period: AccountImageQuotaPeriod,
+  limit: number,
+) {
+  return buildImageQuotaStatus(
+    period,
+    limit,
+    normalizeQuotaCount(payload.freeUsed),
+    normalizeQuotaCount(payload.paidRemaining),
+    normalizeQuotaCount(payload.paidUsed),
+    {
+      free: normalizeQuotaCount(payload.freeReserved),
+      paid: normalizeQuotaCount(payload.paidReserved),
+    },
+  );
+}
+
+function normalizeReservationRpcPayload(data: unknown): ImageQuotaReservationRpcPayload {
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data) as unknown;
+      return normalizeReservationRpcPayload(parsed);
+    } catch {
+      throw new AccountAuthError('数据库返回的额度预占结果无效。', 500);
+    }
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new AccountAuthError('数据库返回的额度预占结果无效。', 500);
+  }
+
+  return data as ImageQuotaReservationRpcPayload;
+}
+
+function toImageQuotaReservationError(error: unknown, fallback: string) {
+  const candidate = error as { message?: unknown };
+  const message = typeof candidate.message === 'string'
+    ? candidate.message
+    : error instanceof Error
+      ? error.message
+      : String(error);
+
+  if (/IMAGE_QUOTA_EXHAUSTED/i.test(message)) {
+    return new AccountAuthError('总额度已耗尽。', 429);
+  }
+
+  if (/IMAGE_QUOTA_RESERVATION_NOT_ACTIVE|IMAGE_QUOTA_RESERVATION_NOT_FOUND/i.test(message)) {
+    return new AccountAuthError('生图额度预占已失效，请重新提交。', 409);
+  }
+
+  if (/reserve_image_quota|confirm_image_quota_reservation|release_image_quota_reservation|image_quota_reservations|function|schema cache|does not exist/i.test(message)) {
+    return new AccountAuthError('生图额度预占数据库不可用，请先执行 Supabase 迁移。', 503);
+  }
+
+  return new AccountAuthError(message || fallback, 500);
 }
 
 function toAdminUserSummary(user: User, profile?: UserProfileAdminRow): AdminAccountUserSummary {
@@ -292,15 +482,18 @@ export class AccountRegistry {
 
   private readonly adminRolesTable: string;
 
+  private readonly emailRedirectTo?: string;
+
   constructor(options: AccountRegistryOptions) {
     this.serviceRoleClient = createClient(options.url, options.serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    this.authClient = createClient(options.url, options.serviceRoleKey, {
+    this.authClient = createClient(options.url, options.authKey || options.serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     this.userProfilesTable = options.userProfilesTable;
     this.adminRolesTable = options.adminRolesTable;
+    this.emailRedirectTo = options.emailRedirectTo;
   }
 
   async assertReady() {
@@ -314,7 +507,7 @@ export class AccountRegistry {
     }
   }
 
-  async register(input: { email: unknown; password: unknown }) {
+  async register(input: { email: unknown; password: unknown }): Promise<AccountRegistrationResult> {
     const email = normalizeEmail(input.email);
     if (!validateEmail(email)) {
       throw new AccountAuthError('请输入有效的邮箱地址。', 400);
@@ -327,26 +520,36 @@ export class AccountRegistry {
     const password = input.password as string;
     await this.assertReady();
 
-    const { data, error } = await this.serviceRoleClient.auth.admin.createUser({
+    const { data, error } = await this.authClient.auth.signUp({
       email,
       password,
-      email_confirm: true,
+      options: this.emailRedirectTo
+        ? {
+            emailRedirectTo: this.emailRedirectTo,
+          }
+        : undefined,
     });
 
     if (error) {
-      const statusCode = /already|registered|exists/i.test(error.message) ? 409 : (getSupabaseErrorStatus(error) ?? 400);
+      const statusCode = /already|registered|exists/i.test(error.message)
+        ? 409
+        : (getSupabaseErrorStatus(error) ?? 400);
       throw new AccountAuthError(error.message || '账号注册失败。', statusCode);
     }
 
-    try {
-      return await this.signIn({ email, password });
-    } catch (signInError) {
+    if (data.session) {
       if (data.user?.id) {
         await this.serviceRoleClient.auth.admin.deleteUser(data.user.id).catch(() => undefined);
       }
 
-      throw signInError;
+      throw new AccountAuthError('Supabase 邮箱确认未启用，请先在 Authentication 的 Email provider 中开启 Confirm email。', 503);
     }
+
+    return {
+      email,
+      requiresEmailConfirmation: true,
+      user: data.user ? toUserSummary(data.user) : undefined,
+    };
   }
 
   async signIn(input: { email: unknown; password: unknown }) {
@@ -362,10 +565,59 @@ export class AccountRegistry {
       password: input.password,
     });
 
-    if (error || !data.session) {
-      throw new AccountAuthError(error?.message || '邮箱或密码不正确。', getSupabaseErrorStatus(error) ?? 401);
+    if (error) {
+      const isEmailNotConfirmed = /email.*not.*confirm/i.test(error.message);
+      const isInvalidCredentials = /invalid.*login.*credentials/i.test(error.message);
+      const message = isEmailNotConfirmed
+        ? '请先打开确认邮件完成邮箱验证，然后再登录。'
+        : isInvalidCredentials
+          ? '邮箱或密码不正确。'
+          : (error.message || '邮箱或密码不正确。');
+      const statusCode = isEmailNotConfirmed
+        ? 403
+        : isInvalidCredentials
+          ? 401
+          : (getSupabaseErrorStatus(error) ?? 401);
+      throw new AccountAuthError(message, statusCode);
     }
 
+    if (!data.session) {
+      throw new AccountAuthError('邮箱或密码不正确。', 401);
+    }
+
+    assertConfirmedEmail(data.session.user);
+    const accountSession = toAccountSession(data.session);
+    await this.upsertProfile(accountSession.user);
+    return accountSession;
+  }
+
+  async confirmEmail(input: {
+    tokenHash: unknown;
+    type: unknown;
+  }): Promise<AccountSession | undefined> {
+    const tokenHash = normalizeEmailConfirmTokenHash(input.tokenHash);
+    const type = normalizeEmailConfirmType(input.type);
+
+    const { data, error } = await this.authClient.auth.verifyOtp({
+      token_hash: tokenHash,
+      type,
+    });
+
+    if (error) {
+      throw new AccountAuthError(error.message || '邮箱确认链接无效或已过期。', getSupabaseErrorStatus(error) ?? 400);
+    }
+
+    if (!data.user) {
+      throw new AccountAuthError('邮箱确认链接无效或已过期。', 400);
+    }
+
+    if (!data.session) {
+      assertConfirmedEmail(data.user);
+      await this.upsertProfile(toUserSummary(data.user));
+      return undefined;
+    }
+
+    assertConfirmedEmail(data.session.user);
     const accountSession = toAccountSession(data.session);
     await this.upsertProfile(accountSession.user);
     return accountSession;
@@ -377,6 +629,7 @@ export class AccountRegistry {
       throw new AccountAuthError(error?.message || '账号会话已失效。', getSupabaseErrorStatus(error) ?? 401);
     }
 
+    assertConfirmedEmail(data.user);
     const user = toUserSummary(data.user);
     await this.upsertProfile(user);
     return user;
@@ -391,6 +644,7 @@ export class AccountRegistry {
       throw new AccountAuthError(error?.message || '账号会话刷新失败。', getSupabaseErrorStatus(error) ?? 401);
     }
 
+    assertConfirmedEmail(data.session.user);
     const accountSession = toAccountSession(data.session);
     await this.upsertProfile(accountSession.user);
     return accountSession;
@@ -402,13 +656,104 @@ export class AccountRegistry {
     limit: number;
   }) {
     const row = await this.readProfileQuota(input.user);
-    const snapshot = readQuotaSnapshot(row, input.period, input.limit);
+    const reserved = await this.readActiveImageQuotaReservationTotals(input.user.id, input.period.periodStartedAt);
+    const snapshot = readQuotaSnapshot(row, input.period, input.limit, reserved);
 
     if (!isSameQuotaPeriod(row.image_quota_period_started_at, input.period.periodStartedAt)) {
       await this.writeProfileQuota(input.user.id, input.period.periodStartedAt, snapshot.freeUsed);
     }
 
     return snapshot.status;
+  }
+
+  async reserveImageQuota(input: {
+    user: AccountUserSummary;
+    period: AccountImageQuotaPeriod;
+    limit: number;
+    imageCount: number;
+    reservationId: string;
+    expiresAt: string;
+  }) {
+    const imageCount = Math.max(0, Math.trunc(input.imageCount));
+    if (imageCount <= 0) {
+      throw new AccountAuthError('生图额度预占数量必须大于 0。', 400);
+    }
+
+    await this.upsertProfile(input.user);
+
+    const { data, error } = await this.serviceRoleClient.rpc('reserve_image_quota', {
+      p_user_id: input.user.id,
+      p_email: input.user.email,
+      p_period_started_at: input.period.periodStartedAt,
+      p_free_limit: input.limit,
+      p_image_count: imageCount,
+      p_reservation_id: input.reservationId,
+      p_expires_at: input.expiresAt,
+    });
+
+    if (error) {
+      throw toImageQuotaReservationError(error, '生图额度预占失败。');
+    }
+
+    const payload = normalizeReservationRpcPayload(data);
+    return {
+      quota: buildQuotaStatusFromReservationPayload(payload, input.period, input.limit),
+      reservation: normalizeImageQuotaReservation(payload.reservation),
+    };
+  }
+
+  async confirmImageQuotaReservation(input: {
+    user: AccountUserSummary;
+    reservation: AccountImageQuotaReservation;
+    period: AccountImageQuotaPeriod;
+    limit: number;
+    imageCount: number;
+  }) {
+    const { data, error } = await this.serviceRoleClient.rpc('confirm_image_quota_reservation', {
+      p_user_id: input.user.id,
+      p_reservation_id: input.reservation.reservationId,
+      p_free_limit: input.limit,
+      p_image_count: Math.max(0, Math.trunc(input.imageCount)),
+    });
+
+    if (error) {
+      throw toImageQuotaReservationError(error, '生图额度确认失败。');
+    }
+
+    return buildQuotaStatusFromReservationPayload(
+      normalizeReservationRpcPayload(data),
+      {
+        ...input.period,
+        periodStartedAt: input.reservation.periodStartedAt,
+      },
+      input.limit,
+    );
+  }
+
+  async releaseImageQuotaReservation(input: {
+    user: AccountUserSummary;
+    reservation: AccountImageQuotaReservation;
+    period: AccountImageQuotaPeriod;
+    limit: number;
+  }) {
+    const { data, error } = await this.serviceRoleClient.rpc('release_image_quota_reservation', {
+      p_user_id: input.user.id,
+      p_reservation_id: input.reservation.reservationId,
+      p_free_limit: input.limit,
+    });
+
+    if (error) {
+      throw toImageQuotaReservationError(error, '生图额度预占释放失败。');
+    }
+
+    return buildQuotaStatusFromReservationPayload(
+      normalizeReservationRpcPayload(data),
+      {
+        ...input.period,
+        periodStartedAt: input.reservation.periodStartedAt,
+      },
+      input.limit,
+    );
   }
 
   async addImageQuotaUsage(input: {
@@ -839,6 +1184,31 @@ export class AccountRegistry {
     }
 
     return data as UserProfileQuotaRow;
+  }
+
+  private async readActiveImageQuotaReservationTotals(
+    userId: string,
+    periodStartedAt: string,
+  ) {
+    const { data, error } = await this.serviceRoleClient
+      .from(imageQuotaReservationsTable)
+      .select('free_count,paid_count')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .eq('period_started_at', periodStartedAt)
+      .gt('expires_at', new Date().toISOString());
+
+    if (error) {
+      throw toImageQuotaReservationError(error, '生图额度预占读取失败。');
+    }
+
+    return (data ?? []).reduce(
+      (totals, row) => ({
+        free: totals.free + normalizeQuotaCount((row as { free_count?: unknown }).free_count),
+        paid: totals.paid + normalizeQuotaCount((row as { paid_count?: unknown }).paid_count),
+      }),
+      { free: 0, paid: 0 },
+    );
   }
 
   private async writeProfileQuota(
