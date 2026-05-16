@@ -1,0 +1,137 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ddzhilian-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+  DEPLOY_FRONTEND_DIR: ${{ vars.DEPLOY_FRONTEND_DIR || '/opt/ddzhilian-frontend' }}
+  DEPLOY_FRONTEND_BACKUP_ROOT: ${{ vars.DEPLOY_FRONTEND_BACKUP_ROOT || '/opt/ddzhilian-frontend-backups' }}
+  DEPLOY_BACKEND_DIR: ${{ vars.DEPLOY_BACKEND_DIR || '/opt/ddzhilian-server' }}
+  DEPLOY_BACKEND_BACKUP_ROOT: ${{ vars.DEPLOY_BACKEND_BACKUP_ROOT || '/opt/ddzhilian-server-backups' }}
+  DEPLOY_BACKEND_SERVICE: ${{ vars.DEPLOY_BACKEND_SERVICE || 'ddzhilian-server.service' }}
+  DEPLOY_BACKEND_HEALTH_URL: ${{ vars.DEPLOY_BACKEND_HEALTH_URL || 'http://127.0.0.1:8787/health' }}
+  DEPLOY_PUBLIC_HEALTH_URL: ${{ vars.DEPLOY_PUBLIC_HEALTH_URL || 'https://ddzhilian.com/health' }}
+  DEPLOY_RELEASE_ROOT: ${{ vars.DEPLOY_RELEASE_ROOT || '/tmp/ddzhilian-actions' }}
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Validate frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build:compressed
+
+      - name: Validate backend
+        run: |
+          npm ci --include=dev --prefix server
+          npm run build --prefix server
+
+      - name: Stage deployment artifacts
+        run: |
+          rm -rf deploy-artifacts/github-actions
+          mkdir -p deploy-artifacts/github-actions/frontend deploy-artifacts/github-actions/backend
+
+          rsync -a --delete out/ deploy-artifacts/github-actions/frontend/
+          rsync -a --delete server/dist/ deploy-artifacts/github-actions/backend/dist/
+          cp server/package.json server/package-lock.json deploy-artifacts/github-actions/backend/
+
+          if [ -d server/email-templates ]; then
+            rsync -a --delete server/email-templates/ deploy-artifacts/github-actions/backend/email-templates/
+          fi
+
+          if [ -d server/scripts ]; then
+            rsync -a --delete server/scripts/ deploy-artifacts/github-actions/backend/scripts/
+          fi
+
+          touch deploy-artifacts/github-actions/.ddzhilian-release
+
+      - name: Prepare SSH key
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required for production deployment."
+              exit 1
+            fi
+          done
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+      - name: Deploy on VPS
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
+          release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote_release="${DEPLOY_RELEASE_ROOT%/}/$release_id"
+          ssh_options=(-i "$HOME/.ssh/deploy_key" -p "$DEPLOY_PORT" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+
+          ssh "${ssh_options[@]}" "$ssh_target" "mkdir -p $(printf '%q' "$remote_release")"
+          rsync -az --delete \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            deploy-artifacts/github-actions/ \
+            "$ssh_target:$remote_release/"
+
+          remote_command=""
+          for name in \
+            DEPLOY_RELEASE_DIR \
+            DEPLOY_FRONTEND_DIR \
+            DEPLOY_FRONTEND_BACKUP_ROOT \
+            DEPLOY_BACKEND_DIR \
+            DEPLOY_BACKEND_BACKUP_ROOT \
+            DEPLOY_BACKEND_SERVICE \
+            DEPLOY_BACKEND_HEALTH_URL \
+            DEPLOY_PUBLIC_HEALTH_URL; do
+            if [ "$name" = "DEPLOY_RELEASE_DIR" ]; then
+              value="$remote_release"
+            else
+              value="${!name:-}"
+            fi
+            if [ -n "$value" ]; then
+              remote_command="$remote_command $name=$(printf '%q' "$value")"
+            fi
+          done
+
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "$DEPLOY_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "$remote_command bash -s" < scripts/deploy-uploaded-artifacts.sh

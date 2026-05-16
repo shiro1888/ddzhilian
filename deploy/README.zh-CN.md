@@ -63,3 +63,14 @@ out/
 2. 看 `assets/*.js` 和 `assets/*.css` 是否命中 CDN、是否 `immutable`。
 3. 看是否返回 `br` 或 `gzip`。
 4. 看 `/ws` 的连接耗时：它影响“在线设备”出现，但不应该阻塞页面框架渲染。
+
+## GitHub 自动部署
+
+仓库已提供 GitHub Actions 自动部署入口：
+
+- `.github/workflows/deploy-production.yml`
+- `scripts/deploy-uploaded-artifacts.sh`
+
+默认行为是推送 `main` 分支后，GitHub Actions 构建前后端产物，通过 SSH/rsync 上传到现有 VPS，更新 `/opt/ddzhilian-frontend` 与 `/opt/ddzhilian-server`，重启 `ddzhilian-server.service` 并验证 nginx/health。
+
+配置 GitHub Secrets、Variables 和服务器权限时，参考 `deploy/github-actions.zh-CN.md`。
