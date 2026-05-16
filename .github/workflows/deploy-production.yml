@@ -93,6 +93,10 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null; then
+            echo "::error::DEPLOY_SSH_KEY is not a valid OpenSSH private key. Paste the full private key into an Actions Secret."
+            exit 1
+          fi
 
       - name: Deploy on VPS
         env:
@@ -102,13 +106,51 @@ jobs:
           ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
           release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           remote_release="${DEPLOY_RELEASE_ROOT%/}/$release_id"
-          ssh_options=(-i "$HOME/.ssh/deploy_key" -p "$DEPLOY_PORT" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          ssh_options=(
+            -i "$HOME/.ssh/deploy_key"
+            -p "$DEPLOY_PORT"
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+          rsync_ssh="ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
 
-          ssh "${ssh_options[@]}" "$ssh_target" "mkdir -p $(printf '%q' "$remote_release")"
-          rsync -az --delete \
-            -e "ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
-            deploy-artifacts/github-actions/ \
-            "$ssh_target:$remote_release/"
+          ssh_with_retry() {
+            local label="$1"
+            shift
+
+            for attempt in 1 2 3; do
+              echo "$label attempt $attempt"
+              if ssh "${ssh_options[@]}" "$ssh_target" "$@"; then
+                return 0
+              fi
+              sleep $((attempt * 5))
+            done
+
+            echo "::error::$label failed after 3 attempts."
+            return 1
+          }
+
+          rsync_with_retry() {
+            for attempt in 1 2 3; do
+              echo "Upload artifacts attempt $attempt"
+              if rsync -az --delete \
+                -e "$rsync_ssh" \
+                deploy-artifacts/github-actions/ \
+                "$ssh_target:$remote_release/"; then
+                return 0
+              fi
+              sleep $((attempt * 5))
+            done
+
+            echo "::error::Artifact upload failed after 3 attempts."
+            return 1
+          }
+
+          ssh_with_retry "Create remote release directory" "mkdir -p $(printf '%q' "$remote_release")"
+          rsync_with_retry
 
           remote_command=""
           for name in \
@@ -130,10 +172,13 @@ jobs:
             fi
           done
 
-          ssh \
-            -i ~/.ssh/deploy_key \
-            -p "$DEPLOY_PORT" \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "$remote_command bash -s" < scripts/deploy-uploaded-artifacts.sh
+          for attempt in 1 2 3; do
+            echo "Run remote deploy script attempt $attempt"
+            if ssh "${ssh_options[@]}" "$ssh_target" "$remote_command bash -s" < scripts/deploy-uploaded-artifacts.sh; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+
+          echo "::error::Remote deploy script failed after 3 attempts."
+          exit 1

@@ -19,6 +19,7 @@
 8. 服务器检查公网 `https://ddzhilian.com/health`。
 
 当前部署 job 只在主仓库 `707LTeam/ddzhilian` 执行。镜像仓库 `CGR-MIX/ddzhilian` 可以同步代码，但不会同时部署到同一台服务器，避免两个仓库的 Actions 互相抢发布。
+SSH 连接、产物上传和远程部署脚本执行都有 3 次重试；如果私钥格式粘贴错误，`Prepare SSH key` 会先给出明确错误。
 
 ## GitHub Secrets
 
