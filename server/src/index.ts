@@ -4883,11 +4883,12 @@ function authorizeSessionMember(
   };
 }
 
-async function authorizeHistoryTextRecall(
+async function authorizeHistoryRecordRecall(
   request: IncomingMessage,
   response: ServerResponse,
   device: ConnectedDevice,
   record: { sourceDeviceId: string },
+  resourceLabel: 'text' | 'file',
 ) {
   if (record.sourceDeviceId === device.deviceId) {
     return {
@@ -4907,7 +4908,7 @@ async function authorizeHistoryTextRecall(
   return {
     ok: false as const,
     statusCode: 403,
-    message: 'Only the source device or an admin can recall this text.',
+    message: `Only the source device or an admin can recall this ${resourceLabel}.`,
   };
 }
 
@@ -4929,11 +4930,12 @@ async function handleHistoryTextDeleteRequest(
   }
 
   try {
-    const recallAccess = await authorizeHistoryTextRecall(
+    const recallAccess = await authorizeHistoryRecordRecall(
       request,
       response,
       authResult.device,
       record,
+      'text',
     );
 
     if (!recallAccess.ok) {
@@ -4958,6 +4960,58 @@ async function handleHistoryTextDeleteRequest(
     const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
     writeJson(response, statusCode, {
       error: error instanceof Error ? error.message : 'History text recall failed.',
+    });
+  }
+}
+
+async function handleHistoryFileDeleteRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  historyId: string,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const record = history.getById(historyId);
+  if (!record) {
+    writeJson(response, 200, { ok: true, deleted: false });
+    return;
+  }
+
+  try {
+    const recallAccess = await authorizeHistoryRecordRecall(
+      request,
+      response,
+      authResult.device,
+      record,
+      'file',
+    );
+
+    if (!recallAccess.ok) {
+      writeJson(response, recallAccess.statusCode, { error: recallAccess.message });
+      return;
+    }
+
+    if (recallAccess.scope === 'source-device') {
+      const roomAccess = authorizeRoomMember(authResult.device, record.roomId);
+      if (!roomAccess.ok) {
+        writeJson(response, roomAccess.statusCode, { error: roomAccess.message });
+        return;
+      }
+    }
+
+    const deleted = await history.deleteFile(historyId);
+    writeJson(response, 200, { ok: true, deleted });
+    if (deleted) {
+      broadcastSnapshots();
+    }
+  } catch (error) {
+    const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+    writeJson(response, statusCode, {
+      error: error instanceof Error ? error.message : 'History file recall failed.',
     });
   }
 }
@@ -5352,6 +5406,14 @@ const httpServer = createServer((request, response) => {
       url.pathname.slice('/api/history/text/'.length),
     );
     void handleHistoryTextDeleteRequest(request, response, historyId);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/history/file/') && request.method === 'DELETE') {
+    const historyId = decodeURIComponent(
+      url.pathname.slice('/api/history/file/'.length),
+    );
+    void handleHistoryFileDeleteRequest(request, response, historyId);
     return;
   }
 

@@ -1,28 +1,16 @@
-import { lazy, startTransition, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { navItems, viewMeta } from './app/config'
+import { startTransition, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { DragEvent } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminStage } from './app/components/AdminStage'
-import { AppHeader } from './app/components/AppHeader'
-import { AppSidebar } from './app/components/AppSidebar'
 import { ChatAiStage } from './app/components/ChatAiStage'
-import { ContentGrid } from './app/components/ContentGrid'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
-import { ReceiveStage } from './app/components/ReceiveStage'
-import { SendStage } from './app/components/SendStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
-import { TextStage } from './app/components/TextStage'
-import { DEFAULT_VIEW, pathForView, resolveViewFromPathname } from './app/routes'
+import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
-  AttachmentDraft,
   ConversationNotice,
-  InterfaceMode,
   NavView,
   RoomListItem,
-  SessionArtifact,
-  SharedContentTab,
-  UiSession,
   UnifiedConversationEntry,
 } from './app/types'
 import {
@@ -33,7 +21,6 @@ import {
   formatFileSize,
   formatRelativeTime,
   hasRichTextImage,
-  renderImageFilesAsInlineHtml,
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
@@ -47,45 +34,6 @@ import { useAccountAuth } from './lib/use-account-auth'
 import { useAdmin } from './lib/use-admin'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
-
-const ChatConversationStage = lazy(() =>
-  import('./app/components/ChatConversationStage').then((module) => ({
-    default: module.ChatConversationStage,
-  })),
-)
-
-const AI_READABLE_FILE_MAX_COUNT = 4
-const AI_READABLE_FILE_MAX_BYTES = 96 * 1024
-const AI_READABLE_FILE_MAX_CHARS = 6_000
-const AI_READABLE_FILE_TOTAL_MAX_CHARS = 18_000
-const AI_READABLE_FILE_MIME_TYPES = new Set([
-  'application/javascript',
-  'application/json',
-  'application/ld+json',
-  'application/sql',
-  'application/typescript',
-  'application/x-httpd-php',
-  'application/x-javascript',
-  'application/x-python-code',
-  'application/x-sh',
-  'application/xhtml+xml',
-  'application/xml',
-  'text/csv',
-  'text/html',
-  'text/javascript',
-  'text/markdown',
-  'text/plain',
-  'text/tab-separated-values',
-  'text/typescript',
-  'text/x-c',
-  'text/x-c++',
-  'text/x-java-source',
-  'text/x-python',
-  'text/x-shellscript',
-  'text/xml',
-])
-const AI_READABLE_FILE_NAME_PATTERN =
-  /\.(?:c|cc|conf|cpp|cs|css|csv|go|h|hpp|htm|html|ini|java|js|json|jsx|kt|log|md|mjs|php|properties|py|rb|rs|sh|sql|srt|svg|toml|ts|tsx|txt|vue|xml|yaml|yml)$/i
 
 function isPreviewableMediaType(mimeType?: string) {
   return Boolean(mimeType?.startsWith('image/') || mimeType?.startsWith('video/'))
@@ -104,18 +52,6 @@ function resolveMediaPreviewKind(mimeType: string | undefined, fileName: string)
   }
 
   return null
-}
-
-function resolveAttachmentKind(file: File): AttachmentDraft['kind'] {
-  if (file.type.startsWith('image/')) {
-    return 'image'
-  }
-
-  if (file.type.startsWith('video/')) {
-    return 'video'
-  }
-
-  return 'file'
 }
 
 type HistoryDownloadProgressState = {
@@ -161,12 +97,6 @@ function readRoomIdFromSearch(search: string) {
   return new URLSearchParams(search).get('room')?.trim().toUpperCase() || null
 }
 
-function buildPublicRoomUrl(roomId: string) {
-  const url = new URL(pathForView('text'), window.location.origin)
-  url.searchParams.set('room', roomId)
-  return url.toString()
-}
-
 function isBotChatRoom(room: Pick<RoomSummary, 'reason'> | null | undefined) {
   return room?.reason === 'bot-chat'
 }
@@ -200,93 +130,6 @@ function buildAiBotPrompt(question: string, quotedText: string, imageCount: numb
     '',
     '用户问题：',
     `${normalizedQuestion || '请阅读并回应这段引用内容。'}${imageInstruction}${fileInstruction}`,
-  ].join('\n')
-}
-
-function normalizeAiReadableFileType(file: File) {
-  return file.type.trim().toLowerCase()
-}
-
-function canReadFileAsAiText(file: File) {
-  const mimeType = normalizeAiReadableFileType(file)
-  return (
-    mimeType.startsWith('text/') ||
-    AI_READABLE_FILE_MIME_TYPES.has(mimeType) ||
-    AI_READABLE_FILE_NAME_PATTERN.test(file.name)
-  )
-}
-
-function formatAiFileName(file: File) {
-  return file.name.replace(/\s+/g, ' ').trim() || '未命名文件'
-}
-
-function trimAiFileText(value: string, maxChars: number) {
-  return value
-    .replace(/\r\n?/g, '\n')
-    .replaceAll('\u0000', '')
-    .trim()
-    .slice(0, maxChars)
-}
-
-async function buildAiReadableFileContext(files: File[]) {
-  if (files.length === 0) {
-    return ''
-  }
-
-  if (files.length > AI_READABLE_FILE_MAX_COUNT) {
-    throw new Error(`AI 一次最多读取 ${AI_READABLE_FILE_MAX_COUNT.toString()} 个文件。`)
-  }
-
-  const unsupportedFiles = files.filter((file) => !canReadFileAsAiText(file))
-  if (unsupportedFiles.length > 0) {
-    throw new Error(`AI 当前只能读取文本类文件，不支持：${unsupportedFiles.map(formatAiFileName).join('、')}。`)
-  }
-
-  const oversizedFile = files.find((file) => file.size > AI_READABLE_FILE_MAX_BYTES)
-  if (oversizedFile) {
-    throw new Error(
-      `AI 当前只能读取 ${Math.round(AI_READABLE_FILE_MAX_BYTES / 1024).toString()}KB 以内的文本文件：${formatAiFileName(oversizedFile)} 过大。`,
-    )
-  }
-
-  const sections: string[] = []
-  let remainingChars = AI_READABLE_FILE_TOTAL_MAX_CHARS
-
-  for (const file of files) {
-    if (remainingChars <= 0) {
-      break
-    }
-
-    const fileText = trimAiFileText(await file.text(), Math.min(AI_READABLE_FILE_MAX_CHARS, remainingChars))
-    if (!fileText) {
-      sections.push(`文件：${formatAiFileName(file)}\n类型：${normalizeAiReadableFileType(file) || 'unknown'}\n内容为空。`)
-      continue
-    }
-
-    remainingChars -= fileText.length
-    sections.push([
-      `文件：${formatAiFileName(file)}`,
-      `类型：${normalizeAiReadableFileType(file) || 'unknown'}`,
-      `大小：${formatFileSize(file.size)}`,
-      '内容：',
-      fileText,
-    ].join('\n'))
-  }
-
-  const truncatedNotice = remainingChars <= 0 ? '\n\n[部分文件内容已因长度限制被截断。]' : ''
-  return `${sections.join('\n\n---\n\n')}${truncatedNotice}`
-}
-
-function appendAiFileContextToPrompt(prompt: string, fileContext: string) {
-  if (!fileContext.trim()) {
-    return prompt
-  }
-
-  return [
-    prompt.trim() || '请阅读这些文件并回答。',
-    '',
-    '附件文件内容：',
-    fileContext,
   ].join('\n')
 }
 
@@ -363,19 +206,8 @@ function extractAiChatImagesFromRichText(value: string): AiChatImageInput[] {
   return images
 }
 
-const INTERFACE_MODE_STORAGE_KEY = 'ddzhilian-interface-mode'
 const AI_CHAT_IMAGE_MAX_COUNT = 4
 const AI_CHAT_ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-
-function readStoredInterfaceMode(): InterfaceMode {
-  if (typeof window === 'undefined') {
-    return 'classic'
-  }
-
-  return window.localStorage.getItem(INTERFACE_MODE_STORAGE_KEY) === 'snaplink'
-    ? 'snaplink'
-    : 'classic'
-}
 
 function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
@@ -385,46 +217,25 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const fileInputId = useId()
-  const [interfaceMode, setInterfaceMode] = useState<InterfaceMode>(readStoredInterfaceMode)
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
-  const [isContentRailCollapsed, setIsContentRailCollapsed] = useState(false)
-  const [isCompactMobileViewport, setIsCompactMobileViewport] = useState(false)
-  const [isMobileConversationListVisible, setIsMobileConversationListVisible] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [joinCode, setJoinCode] = useState('')
-  const [textMode, setTextMode] = useState<'long' | 'chat'>('long')
-  const [draftText, setDraftText] = useState('')
   const [chatDraft, setChatDraft] = useState('')
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
-  const [isEditingDeviceName, setIsEditingDeviceName] = useState(false)
-  const [deviceNameDraft, setDeviceNameDraft] = useState('')
-  const [sessionArtifacts, setSessionArtifacts] = useState<Record<string, SessionArtifact>>({})
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
   const [selectedAiModel, setSelectedAiModel] = useState('')
-  const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
   const [historyDownloadProgressById, setHistoryDownloadProgressById] = useState<
     Record<string, HistoryDownloadProgressState>
   >({})
-  const [isSharedPanelOpen, setIsSharedPanelOpen] = useState(false)
-  const [sharedContentTab, setSharedContentTab] = useState<SharedContentTab>('chat')
   const activeView = resolveViewFromPathname(location.pathname)
   const isAdminView = activeView === 'admin'
   const isAiChatView = activeView === 'chat'
-  const isSnapLinkMode = !isAdminView && (interfaceMode === 'snaplink' || isAiChatView)
-  const isChatDesktopTheme = true
-  const visibleNavItems = navItems.filter((item) => !['connect', 'send', 'receive', 'sessions', 'admin'].includes(item.id))
-  const effectiveNavView: NavView =
-    activeView === 'send' || activeView === 'receive' || activeView === 'sessions' ? 'text' : activeView
   const isImageView = activeView === 'image'
-  const isStandaloneView = isImageView || isAiChatView
   const isAdminProtectedView = isAdminView
   const {
     adminEmailDraft,
@@ -470,19 +281,16 @@ function App() {
   })
   const previousConnectionStatusesRef = useRef<Record<string, 'connecting' | 'connected' | 'failed' | 'closed'>>({})
   const hasConnectionSnapshotRef = useRef(false)
-  const attachmentDraftsRef = useRef<AttachmentDraft[]>([])
   const joinedRoomLinkRef = useRef<string | null>(null)
   const handledPublicRoomRef = useRef<string | null>(null)
   const handledPrivateRoomRef = useRef<string | null>(null)
 
   const {
-    socketState,
     self,
     localIdentity,
     onlinePeers,
     rooms,
     roomStates,
-    preferences,
     sessions,
     connectionStates,
     connectedTargets,
@@ -491,18 +299,13 @@ function App() {
     receivedFiles,
     historyFiles,
     historyTexts,
-    historyTextPaginationByRoomId,
     errorMessage,
     lastCreatedPublicRoomId,
     lastCreatedPrivateRoomId,
-    pairByShortCode,
     joinRoom,
     createPublicRoom,
-    reconnectSocket,
-    requestSnapshot,
     updateSettings,
     updateRoomState,
-    updatePreferences,
     createTransferItems,
     retryTransfer,
     cancelTransfer,
@@ -510,9 +313,9 @@ function App() {
     startPendingTransfers,
     sendText,
     recallText,
+    recallFile,
     sendRoomText,
     ensureRoomHistoryLoaded,
-    loadOlderRoomHistoryTexts,
     askAi,
     listAiChatConversations,
     saveAiChatConversations,
@@ -522,12 +325,7 @@ function App() {
     listImageHistory,
     getAiQuota,
     sendRoomFiles,
-    stateToUiStatus,
-    reasonLabel,
   } = useDdzhilian()
-  useEffect(() => {
-    window.localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, interfaceMode)
-  }, [interfaceMode])
 
   useEffect(() => {
     const nextAccountId = imageAccount.user?.id ?? ''
@@ -581,18 +379,6 @@ function App() {
   }, [getAiQuota, self?.historyAuthToken])
 
   useEffect(() => {
-    attachmentDraftsRef.current = attachmentDrafts
-  }, [attachmentDrafts])
-
-  useEffect(() => {
-    return () => {
-      for (const attachment of attachmentDraftsRef.current) {
-        URL.revokeObjectURL(attachment.objectUrl)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
     const roomId = readRoomIdFromSearch(location.search)
     if (!roomId || !self || joinedRoomLinkRef.current === roomId) {
       return
@@ -616,7 +402,7 @@ function App() {
     handledPublicRoomRef.current = lastCreatedPublicRoomId
     setPendingRoomSelectionId(lastCreatedPublicRoomId)
     setSelectedRoomId(lastCreatedPublicRoomId)
-    setLocalError('已进入世界对话，可复制入口链接分享。')
+    setLocalError(null)
 
     if (activeView !== 'text') {
       navigate(pathForView('text'))
@@ -637,21 +423,6 @@ function App() {
       navigate(pathForView('text'))
     }
   }, [activeView, lastCreatedPrivateRoomId, navigate])
-
-  const effectiveSelectedPeerId =
-    onlinePeers.some((peer) => peer.deviceId === selectedPeerId)
-      ? selectedPeerId
-      : (onlinePeers[0]?.deviceId ?? null)
-
-  const latestTextBySession = new Map<string, (typeof textRecords)[number]>()
-  for (const record of textRecords) {
-    latestTextBySession.set(record.sessionId, record)
-  }
-
-  const latestFileBySession = new Map<string, (typeof receivedFiles)[number]>()
-  for (const file of receivedFiles) {
-    latestFileBySession.set(file.sessionId, file)
-  }
 
   const roomById = useMemo(
     () => new Map(rooms.map((room) => [room.roomId, room] as const)),
@@ -676,51 +447,12 @@ function App() {
     sessionPeerNameById.set(session.sessionId, session.peer?.deviceName ?? session.peerId)
   }
 
-  const uiSessions: UiSession[] = sessions.map((session) => {
-    const file = latestFileBySession.get(session.sessionId)
-    const text = latestTextBySession.get(session.sessionId)
-    const artifact = sessionArtifacts[session.sessionId]
-    const kind = artifact?.kind ?? session.kind ?? (text ? 'text' : 'file')
-    const textPreview = text ? extractPlainTextFromRichText(text.text) : ''
-    const summary =
-      artifact?.summary ??
-      (file
-        ? `${file.name} · ${formatFileSize(file.size)}`
-        : text
-          ? `${Math.max(1, textPreview.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${textPreview.slice(0, 18)}`
-          : `${session.peer?.deviceName ?? session.peerId} · Room ${session.roomId} · ${session.state === 'connected' ? '可传输' : '等待连接'}`)
-
-    return {
-      id: session.sessionId,
-      roomId: session.roomId,
-      kind,
-      source: session.initiator ? self?.deviceName ?? '当前设备' : session.peer?.deviceName ?? session.peerId,
-      target: session.initiator ? session.peer?.deviceName ?? session.peerId : self?.deviceName ?? '当前设备',
-      summary,
-      updatedAt: formatRelativeTime(session.updatedAt),
-      status: stateToUiStatus(session.state),
-      expiresIn:
-        session.state === 'connected'
-          ? '连接中'
-          : session.state === 'connecting'
-            ? '等待建立'
-            : '已关闭',
-      via: reasonLabel(session.reason) ?? '自动连接',
-      canTransfer: session.state === 'connected' && session.channelState === 'open',
-    }
-  })
-
-  const uiSessionById = new Map(uiSessions.map((session) => [session.id, session] as const))
-
   const effectiveSelectedRoomId =
     selectedRoomId && roomById.has(selectedRoomId)
       ? selectedRoomId
       : (rooms[0]?.roomId ?? null)
   const selectedRoom = effectiveSelectedRoomId ? roomById.get(effectiveSelectedRoomId) ?? null : null
   const isSelectedBotRoom = isBotChatRoom(selectedRoom)
-  const selectedRoomHistoryPagination = selectedRoom
-    ? historyTextPaginationByRoomId[selectedRoom.roomId]
-    : undefined
   const selectedRoomMemberNames =
     selectedRoom?.members
       .filter((member) => member.deviceId !== self?.deviceId)
@@ -735,6 +467,10 @@ function App() {
         onlinePeers.some((peer) => peer.deviceId === member.deviceId),
     )?.deviceId ??
     null
+  const effectiveSelectedPeerId =
+    selectedPeerId && onlinePeers.some((peer) => peer.deviceId === selectedPeerId)
+      ? selectedPeerId
+      : (onlinePeers[0]?.deviceId ?? null)
   const selectedDevicePeer = selectedRoom
     ? onlinePeers.find((peer) => peer.deviceId === selectedRoomPeerId) ?? null
     : onlinePeers.find((peer) => peer.deviceId === effectiveSelectedPeerId) ?? null
@@ -768,14 +504,10 @@ function App() {
     const frameId = window.requestAnimationFrame(() => {
       setSelectedRoomId(room.roomId)
       const firstPeer = room.members.find((member) => member.deviceId !== self.deviceId)
-      const latestSession = sessions
-        .filter((session) => session.roomId === room.roomId)
-        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
 
       if (firstPeer) {
         setSelectedPeerId(firstPeer.deviceId)
       }
-      setSelectedSessionId(latestSession?.sessionId ?? null)
 
       setPendingRoomSelectionId(null)
     })
@@ -785,47 +517,7 @@ function App() {
     }
   }, [pendingRoomSelectionId, roomById, self, sessions])
 
-  const filteredSessions = uiSessions.filter((session) => {
-    if (activeView === 'receive' && session.kind !== 'file') {
-      return false
-    }
-
-    if (activeView === 'send' && session.kind !== 'file') {
-      return false
-    }
-
-    if (activeView === 'text' && session.kind !== 'text') {
-      return false
-    }
-
-    return true
-  })
-
-  const effectiveSelectedSessionId =
-    uiSessions.some((session) => session.id === selectedSessionId) ? selectedSessionId : (uiSessions[0]?.id ?? null)
-
-  const selectedUiSession =
-    filteredSessions.find((session) => session.id === effectiveSelectedSessionId) ??
-    uiSessions.find((session) => session.id === effectiveSelectedSessionId) ??
-    filteredSessions[0] ??
-    uiSessions[0]
-
-  const effectiveSelectedTargetSessionId =
-    connectedTargets.some((target) => target.sessionId === selectedSessionId)
-      ? selectedSessionId
-      : connectedTargets.length === 1
-        ? connectedTargets[0].sessionId
-        : null
-
-  const activeTransferTarget =
-    connectedTargets.find((target) => target.sessionId === effectiveSelectedTargetSessionId) ??
-    (connectedTargets.length === 1 ? connectedTargets[0] : null)
-
-  const receivedCompletedFiles = receivedFiles.filter((file) => file.completed)
-  const receivedPendingFiles = receivedFiles.filter((file) => !file.completed)
   const selfName = self?.deviceName ?? localIdentity.deviceName
-  const isChatConversationView =
-    isChatDesktopTheme && (activeView === 'send' || activeView === 'receive' || activeView === 'text')
 
   const peerStatusById = new Map<string, 'connecting' | 'connected' | 'failed' | 'closed'>()
   for (const state of Object.values(connectionStates)) {
@@ -848,44 +540,17 @@ function App() {
     : selectedDevicePeer
       ? connectedTargets.filter((target) => target.peerId === selectedDevicePeer.deviceId)
       : []
-  const selectedConversationTitle = isChatDesktopTheme
-    ? isSelectedBotRoom
-      ? 'DD直连小助手'
-      : selectedRoom?.isPublic
-      ? '世界对话'
-      : selectedRoom && selectedRoomMemberNames.length > 0
-      ? selectedRoomMemberNames.length <= 3
-        ? selectedRoomMemberNames.join('、')
-        : `${selectedRoomMemberNames.slice(0, 3).join('、')} 等 ${selectedRoomMemberNames.length} 位成员`
-      : selectedRoom
-        ? `Room ${selectedRoom.roomId}`
-        : selectedDevicePeer?.deviceName ?? '设备对话'
-    : selectedUiSession
-      ? selectedUiSession.source === selfName
-        ? selectedUiSession.target
-        : selectedUiSession.source
-      : '当前会话'
-  const selectedConversationName = isChatDesktopTheme
-    ? selectedConversationTitle
-    : selectedUiSession
-      ? selectedUiSession.source === selfName
-        ? selectedUiSession.target
-        : selectedUiSession.source
-      : '当前会话'
-  const currentMeta = isChatConversationView
-    ? {
-        title: selectedConversationName,
-        description: selectedRoom
-          ? isSelectedBotRoom
-            ? 'DD直连小助手 · 私密聊天 · 不公开'
-            : `${selectedRoom.isPublic ? '世界对话 · ' : ''}${selectedRoom.members.length} 位成员 · 已连接 ${selectedRoomConnectedTargets.length} 台设备`
-          : selectedDevicePeer
-            ? `${selectedDevicePeer.platform} · 互传码 ${selectedDevicePeer.shortCode} · ${deviceConnectionLabel(selectedDeviceStatus)}`
-            : '选择一个已有对话开始查看。',
-        primaryAction: '发送',
-        secondaryAction: '加入会话',
-      }
-    : viewMeta[activeView]
+  const selectedConversationName = isSelectedBotRoom
+    ? 'DD直连小助手'
+    : selectedRoom?.isPublic
+    ? '世界对话'
+    : selectedRoom && selectedRoomMemberNames.length > 0
+    ? selectedRoomMemberNames.length <= 3
+      ? selectedRoomMemberNames.join('、')
+      : `${selectedRoomMemberNames.slice(0, 3).join('、')} 等 ${selectedRoomMemberNames.length} 位成员`
+    : selectedRoom
+      ? `Room ${selectedRoom.roomId}`
+      : selectedDevicePeer?.deviceName ?? '设备对话'
 
   const connectingTargetCount = Object.values(connectionStates).filter(
     (state) => state.status === 'connecting',
@@ -893,33 +558,15 @@ function App() {
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const activeTransferLabel =
-    isChatDesktopTheme && selectedRoom
+    selectedRoom
       ? `${selectedConversationName} · ${selectedRoomConnectedTargets.length} 台已连接设备`
-      : isChatDesktopTheme && selectedDevicePeer
+      : selectedDevicePeer
         ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
-        : activeTransferTarget?.peerName ??
-          (connectedTargets.length > 1
-            ? '所有已连接设备'
-            : onlinePeers.length > 0 && connectingTargetCount > 0
-              ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-              : onlinePeers.length > 0
-                ? '当前没有可接收文件的已连接设备'
-                : '暂无已连接设备')
-
-  const fileSenderEmptyState =
-    isChatDesktopTheme && selectedRoom
-      ? selectedConnectedTarget
-        ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedConversationName} 建立直连，也可以先把文件保存到当前对话。`
-      : isChatDesktopTheme && selectedDevicePeer
-        ? selectedConnectedTarget
-          ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-          : `还没有与 ${selectedDevicePeer.deviceName} 建立直连。`
-      : connectedTargets.length === 0
-        ? onlinePeers.length > 0 && connectingTargetCount > 0
+        : onlinePeers.length > 0 && connectingTargetCount > 0
           ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-          : '当前没有可接收文件的已连接设备'
-        : '请选择文件后发送到所有已连接设备'
+          : onlinePeers.length > 0
+            ? '当前没有可接收文件的已连接设备'
+            : '暂无已连接设备'
 
   const visibleTransferItems = transferItems.filter(
     (item) => item.status !== 'cancelled',
@@ -930,26 +577,24 @@ function App() {
     ),
   )
   const visibleTransferItemsForConversation =
-    isChatDesktopTheme && effectiveSelectedRoomId
+    effectiveSelectedRoomId
       ? visibleTransferItems.filter(
           (item) =>
             item.roomId === effectiveSelectedRoomId ||
             (item.sessionId ? selectedConversationSessionIds.has(item.sessionId) : false),
         )
-      : isChatDesktopTheme && selectedDevicePeer
+      : selectedDevicePeer
         ? visibleTransferItems.filter((item) => item.targetDeviceId === selectedDevicePeer.deviceId)
       : visibleTransferItems
   const receivedFilesForConversation =
-    isChatDesktopTheme && effectiveSelectedRoomId
+    effectiveSelectedRoomId
       ? receivedFiles.filter((file) => selectedConversationSessionIds.has(file.sessionId))
       : receivedFiles
   const conversationNoticesForConversation =
-    isChatDesktopTheme && effectiveSelectedRoomId
+    effectiveSelectedRoomId
       ? conversationNotices.filter((notice) => selectedConversationSessionIds.has(notice.sessionId))
       : conversationNotices
-  const activeConversationRoomId = isChatDesktopTheme
-    ? effectiveSelectedRoomId
-    : selectedUiSession?.roomId ?? null
+  const activeConversationRoomId = effectiveSelectedRoomId
   const localHistoryIds = new Set<string>()
   for (const item of visibleTransferItemsForConversation) {
     localHistoryIds.add(item.historyId)
@@ -996,22 +641,17 @@ function App() {
       : []
   const sortedChatRecordsForConversation = collapseBroadcastTextRecords(
     [
-      ...(isChatDesktopTheme && effectiveSelectedRoomId
+      ...(effectiveSelectedRoomId
         ? sortedChatRecords.filter(
             (record) =>
               record.roomId === effectiveSelectedRoomId ||
               selectedConversationSessionIds.has(record.sessionId),
           )
-        : selectedUiSession
-          ? sortedChatRecords.filter((record) => record.sessionId === selectedUiSession.id)
-          : sortedChatRecords),
+        : sortedChatRecords),
       ...historyTextRecordsForConversation,
     ].sort(
       (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
     ),
-  )
-  const hasRunnableTransfers = visibleTransferItemsForConversation.some((item) =>
-    ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status),
   )
   const groupedTransferItemsForConversation = [
     ...visibleTransferItemsForConversation
@@ -1117,6 +757,7 @@ function App() {
   const fileConversationEntries = [
     ...groupedTransferItemsForConversation.map((item) => ({
       id: item.id,
+      historyId: item.historyId,
       sessionId: item.sessionId,
       kind: 'outgoing' as const,
       fromSelf: true,
@@ -1136,9 +777,11 @@ function App() {
           : item.status !== 'completed'
             ? ('cancel' as const)
             : undefined,
+      canRecall: item.status === 'completed',
     })),
     ...receivedFilesForConversation.map((file) => ({
       id: `incoming-${file.id}`,
+      historyId: file.historyId,
       sessionId: file.sessionId,
       kind: 'incoming' as const,
       fromSelf: false,
@@ -1156,12 +799,14 @@ function App() {
       progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
       downloadUrl: file.objectUrl,
       downloadName: file.name,
+      canRecall: Boolean(file.historyId && canRecallAnyMessage),
     })),
     ...historyFilesForConversation.map((file) => {
       const downloadProgress = historyDownloadProgressById[file.historyId]
 
       return {
         id: `history-${file.historyId}`,
+        historyId: file.historyId,
         sessionId: file.sessionId,
         kind: file.sourceDeviceId === self?.deviceId ? ('outgoing' as const) : ('incoming' as const),
         fromSelf: file.sourceDeviceId === self?.deviceId,
@@ -1179,6 +824,7 @@ function App() {
         downloadName: file.fileName,
         onDownload: () => handleHistoryFileDownload(file),
         isDownloadDisabled: Boolean(downloadProgress),
+        canRecall: file.sourceDeviceId === self?.deviceId || canRecallAnyMessage,
       }
     }),
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
@@ -1244,15 +890,13 @@ function App() {
       : '选择一个已有对话后，消息和文件会显示在这里。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
-    hasRichTextImage(chatDraft) ||
-    attachmentDrafts.length > 0
+    hasRichTextImage(chatDraft)
   const hasChatTextDraft =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft)
   const canSendRoomContentWithoutConnection =
-    isChatDesktopTheme &&
     Boolean(selectedRoom) &&
-    (hasChatTextDraft || attachmentDrafts.length > 0)
+    hasChatTextDraft
   const aiQuotaLabel = aiQuotaStatus
     ? aiQuotaStatus.provider === 'openrouter'
       ? (aiQuotaStatus.limitLabel ?? 'OpenAI 兼容接口')
@@ -1264,9 +908,6 @@ function App() {
     aiQuotaStatus?.model ||
     'AI 模型'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
-  const runnableTransferIds = visibleTransferItemsForConversation
-    .filter((item) => ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status))
-    .map((item) => item.id)
   const sessionRoomIdById = new Map(sessions.map((session) => [session.sessionId, session.roomId] as const))
   const roomListItems: RoomListItem[] = rooms
     .map((room) => {
@@ -1275,7 +916,6 @@ function App() {
         .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
       const roomSessionIds = new Set(roomSessions.map((session) => session.sessionId))
       const latestSession = roomSessions[0]
-      const latestUiSession = latestSession ? uiSessionById.get(latestSession.sessionId) : undefined
       const memberNames = room.members
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
@@ -1338,13 +978,9 @@ function App() {
       const updatedAt = latestEvent?.createdAt ?? latestSession?.updatedAt ?? room.updatedAt
       const previewText =
         latestEvent?.previewText ??
-        (latestUiSession
-          ? latestUiSession.kind === 'file'
-            ? `[文件] ${latestUiSession.summary}`
-            : latestUiSession.summary
-          : isBotChatRoom(room)
-            ? 'DD直连小助手'
-            : room.isPublic
+        (isBotChatRoom(room)
+          ? 'DD直连小助手'
+          : room.isPublic
             ? '世界对话，可通过链接加入'
             : '暂无消息')
       const onlineCount = room.members.filter(
@@ -1418,7 +1054,9 @@ function App() {
         id: `${record.id}-link-${index.toString()}`,
         url: link.url,
         label: link.label,
-        sourceName: record.fromSelf ? selfName : sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+        sourceName: record.fromSelf
+          ? selfName
+          : record.senderName?.trim() || sessionPeerNameById.get(record.sessionId) || '对方设备',
         createdAt: record.createdAt,
       })),
     ),
@@ -1470,65 +1108,11 @@ function App() {
     previousConnectionStatusesRef.current = currentStatuses
   }, [connectionStates])
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return
-    }
-
-    const mediaQuery = window.matchMedia('(max-width: 1024px)')
-    const applyViewportState = (matches: boolean) => {
-      setIsCompactMobileViewport(matches)
-      setIsMobileConversationListVisible((current) => (matches ? current : false))
-    }
-
-    applyViewportState(mediaQuery.matches)
-
-    const handleChange = (event: MediaQueryListEvent) => {
-      applyViewportState(event.matches)
-    }
-
-    mediaQuery.addEventListener('change', handleChange)
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (activeView === 'send' || activeView === 'receive' || activeView === 'sessions') {
-      navigate(pathForView('text'), { replace: true })
-    }
-  }, [activeView, navigate])
-
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
       navigate(pathForView(view))
-      setIsContentRailCollapsed(false)
-      setIsMobileNavOpen(false)
-      setIsEditingDeviceName(false)
       setLocalError(null)
     })
-  }
-
-  const beginEditDeviceName = () => {
-    setDeviceNameDraft(self?.deviceName ?? localIdentity.deviceName)
-    setIsEditingDeviceName(true)
-  }
-
-  const cancelEditDeviceName = () => {
-    setIsEditingDeviceName(false)
-    setDeviceNameDraft('')
-  }
-
-  const saveDeviceName = () => {
-    const nextName = deviceNameDraft.trim()
-    if (!nextName) {
-      setLocalError('设备名不能为空。')
-      return
-    }
-
-    updateSettings({ deviceName: nextName })
-    setLocalError(null)
-    setIsEditingDeviceName(false)
   }
 
   const handleJoinRoomByIdValue = (roomId: string) => {
@@ -1545,87 +1129,6 @@ function App() {
 
     if (activeView !== 'text') {
       handleViewChange('text')
-    }
-  }
-
-  const handleJoinRoomById = () => {
-    handleJoinRoomByIdValue(joinRoomIdDraft)
-  }
-
-  const addAttachmentFiles = (files: File[]) => {
-    if (files.length === 0) {
-      return
-    }
-
-    const inlineImageFiles = files.filter((file) => file.type.startsWith('image/'))
-    const attachmentFiles = files.filter((file) => !file.type.startsWith('image/'))
-
-    if (inlineImageFiles.length > 0) {
-      void renderImageFilesAsInlineHtml(inlineImageFiles).then((imageHtml) => {
-        if (!imageHtml) {
-          return
-        }
-
-        setChatDraft((current) => current ? `${current}<br />${imageHtml}` : imageHtml)
-        setSharedContentTab('chat')
-        setLocalError(null)
-      })
-    }
-
-    if (attachmentFiles.length === 0) {
-      return
-    }
-
-    const drafts = attachmentFiles.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      objectUrl: URL.createObjectURL(file),
-      kind: resolveAttachmentKind(file),
-      name: file.name,
-      size: file.size,
-      mimeType: file.type || undefined,
-    }))
-
-    setAttachmentDrafts((current) => [...current, ...drafts])
-    setSharedContentTab('chat')
-    setLocalError(null)
-  }
-
-  const removeAttachment = (id: string) => {
-    setAttachmentDrafts((current) => {
-      const removed = current.find((attachment) => attachment.id === id)
-      if (removed) {
-        URL.revokeObjectURL(removed.objectUrl)
-      }
-
-      return current.filter((attachment) => attachment.id !== id)
-    })
-  }
-
-  const clearAttachments = () => {
-    setAttachmentDrafts((current) => {
-      for (const attachment of current) {
-        URL.revokeObjectURL(attachment.objectUrl)
-      }
-
-      return []
-    })
-  }
-
-  const handleSendFiles = async () => {
-    if (visibleTransferItemsForConversation.length === 0) {
-      setLocalError('请先选择文件。')
-      return
-    }
-
-    try {
-      await startPendingTransfers(
-        isChatDesktopTheme ? runnableTransferIds : undefined,
-        null,
-      )
-      setLocalError(null)
-    } catch (error) {
-      setLocalError(error instanceof Error ? error.message : '文件发送失败。')
     }
   }
 
@@ -1668,8 +1171,6 @@ function App() {
           null,
         )
       }
-
-      clearAttachments()
       setLocalError(null)
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文件发送失败。')
@@ -1677,22 +1178,20 @@ function App() {
   }
 
   const handleSendText = async (quoteHtml = '') => {
-    const draftSource = isChatDesktopTheme ? chatDraft : textMode === 'chat' ? chatDraft : draftText
+    const draftSource = chatDraft
     const rawText = quoteHtml ? `${quoteHtml}${draftSource}` : draftSource
     const draftPlainText = extractPlainTextFromRichText(draftSource).trim()
     const quotedText = quoteHtml ? extractPlainTextFromRichText(quoteHtml).trim() : ''
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
     const hasImageContent = hasRichTextImage(rawText)
     const hasTextPayload = normalizedText.length > 0 || hasImageContent
-    const attachmentFiles = attachmentDrafts.map((attachment) => attachment.file)
     const parsedAiBotQuestion = parseAiBotPrompt(draftPlainText)
     const aiBotQuestion = parsedAiBotQuestion ?? (isSelectedBotRoom ? draftPlainText : null)
     const aiBotImages = aiBotQuestion === null ? [] : extractAiChatImagesFromRichText(rawText)
-    const aiBotAttachmentFiles = aiBotQuestion === null ? [] : attachmentFiles
     const aiBotPrompt = aiBotQuestion === null
       ? null
-      : buildAiBotPrompt(aiBotQuestion, quotedText, aiBotImages.length, aiBotAttachmentFiles.length)
-    if (!hasTextPayload && attachmentFiles.length === 0) {
+      : buildAiBotPrompt(aiBotQuestion, quotedText, aiBotImages.length, 0)
+    if (!hasTextPayload) {
       setLocalError('请输入要发送的内容。')
       return
     }
@@ -1701,26 +1200,19 @@ function App() {
       aiBotQuestion !== null &&
       aiBotQuestion.length === 0 &&
       !quotedText &&
-      aiBotImages.length === 0 &&
-      aiBotAttachmentFiles.length === 0
+      aiBotImages.length === 0
     ) {
       setLocalError('请输入要问 @Ai 的问题。')
       return
     }
 
-    const isPublicRoom = isChatDesktopTheme && Boolean(selectedRoom?.isPublic)
+    const isPublicRoom = Boolean(selectedRoom?.isPublic)
     const shouldSendRoomContentThroughHistory =
-      isChatDesktopTheme &&
       Boolean(selectedRoom) &&
       (isPublicRoom || selectedRoomConnectedTargets.length === 0)
 
-    if (isChatDesktopTheme) {
-      if (selectedRoomConnectedTargets.length === 0 && !shouldSendRoomContentThroughHistory) {
-        setLocalError('先与当前选中的设备建立连接，再发送消息。')
-        return
-      }
-    } else if (connectedTargets.length === 0) {
-      setLocalError('先建立一个已连接会话，再发送长文本。')
+    if (selectedRoomConnectedTargets.length === 0 && !shouldSendRoomContentThroughHistory) {
+      setLocalError('先与当前选中的设备建立连接，再发送消息。')
       return
     }
 
@@ -1728,18 +1220,8 @@ function App() {
       const recordId = crypto.randomUUID()
       const createdAt = new Date().toISOString()
       const isAiBotQuotaPrompt = aiBotQuestion !== null && isAiQuotaPrompt(aiBotQuestion)
-      const aiBotFileContext =
-        aiBotPrompt !== null && !isAiBotQuotaPrompt
-          ? await buildAiReadableFileContext(aiBotAttachmentFiles)
-          : ''
-      const aiBotPromptWithFiles =
-        aiBotPrompt !== null
-          ? appendAiFileContextToPrompt(aiBotPrompt, aiBotFileContext)
-          : null
 
-      const targets = isChatDesktopTheme
-        ? selectedRoomConnectedTargets
-        : connectedTargets
+      const targets = selectedRoomConnectedTargets
 
       if (hasTextPayload) {
         const textPayload = rawText
@@ -1760,58 +1242,19 @@ function App() {
         }
       }
 
-      if (attachmentFiles.length > 0) {
-        if (shouldSendRoomContentThroughHistory && selectedRoom) {
-          await sendRoomFiles(
-            selectedRoom.roomId,
-            attachmentDrafts.map((attachment) => ({
-              id: attachment.id,
-              file: attachment.file,
-            })),
-          )
-        } else {
-          const created = createTransferItems(attachmentFiles, selectedConversationTransferSessionIds)
-          await startPendingTransfers(
-            created.map((item) => item.id),
-            null,
-          )
-        }
-      }
-
-      setSessionArtifacts((previous) => {
-        const next = { ...previous }
-        for (const target of targets) {
-          next[target.session.sessionId] = {
-            kind: attachmentFiles.length > 0 && !hasTextPayload ? 'file' : 'text',
-            summary: normalizedText
-              ? `${Math.max(1, normalizedText.split(/\r?\n/).filter(Boolean).length)} 行文本 · ${normalizedText.slice(0, 18)}`
-              : hasImageContent ? '图片消息' : '文件消息',
-          }
-        }
-        return next
-      })
-
-      if (isChatDesktopTheme || textMode === 'chat') {
-        setChatDraft('')
-      } else {
-        setDraftText('')
-      }
-      clearAttachments()
+      setChatDraft('')
       setLocalError(null)
 
       if (aiBotPrompt !== null) {
         setIsAiGenerating(true)
         try {
-          const botRoomId =
-            isChatDesktopTheme
-              ? effectiveSelectedRoomId
-              : selectedUiSession?.roomId ?? null
+          const botRoomId = effectiveSelectedRoomId
 
           if (!botRoomId) {
             throw new Error('当前对话尚未建立房间，无法同步 AI 回复。')
           }
 
-          const answer = await askAi(aiBotPromptWithFiles ?? aiBotPrompt, {
+          const answer = await askAi(aiBotPrompt, {
             roomId: botRoomId,
             replyToName: self?.deviceName ?? localIdentity.deviceName,
             kind: isAiBotQuotaPrompt ? 'quota' : 'chat',
@@ -1847,51 +1290,16 @@ function App() {
     }
   }
 
-  const handleJoinCode = () => {
-    if (!joinCode.trim()) {
-      setLocalError('请输入互传码。')
-      return
-    }
+  const handleRecallFile = async (entryId: string) => {
+    const historyId = entryId.startsWith('file-') ? entryId.slice('file-'.length) : entryId
 
-    pairByShortCode(joinCode)
-    setLocalError(null)
-  }
-
-  const handleNewFiles = (files: File[]) => {
-    if (files.length === 0) {
-      return
+    try {
+      await recallFile(historyId, { canRecallAny: canRecallAnyMessage })
+      setLocalError(null)
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '文件撤回失败。')
+      throw error
     }
-
-    if (isChatDesktopTheme && selectedConversationTransferSessionIds.length === 0) {
-      setLocalError('先加入当前对话，再发送文件。')
-      return
-    }
-
-    const created = createTransferItems(
-      files,
-      isChatDesktopTheme ? selectedConversationTransferSessionIds : selectedConnectedTarget?.sessionId ?? null,
-    )
-    if (!isChatDesktopTheme) {
-      handleViewChange('send')
-    }
-    void startPendingTransfers(
-      created.map((item) => item.id),
-      null,
-    )
-  }
-
-  const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFiles = Array.from(event.target.files ?? [])
-    if (nextFiles.length === 0) {
-      return
-    }
-
-    if (isChatConversationView) {
-      addAttachmentFiles(nextFiles)
-    } else {
-      handleNewFiles(nextFiles)
-    }
-    event.target.value = ''
   }
 
   const handleDrop = async (event: DragEvent<HTMLElement>) => {
@@ -1903,11 +1311,7 @@ function App() {
       return
     }
 
-    if (isChatConversationView) {
-      addAttachmentFiles(nextFiles)
-    } else {
-      handleNewFiles(nextFiles)
-    }
+    await handleSendFilesToCurrentConversation(nextFiles)
   }
 
   const handleDragEnter = () => {
@@ -1935,40 +1339,9 @@ function App() {
         member.deviceId !== self?.deviceId &&
         onlinePeers.some((peer) => peer.deviceId === member.deviceId),
     )
-    const latestSession = sessions
-      .filter((session) => session.roomId === roomId)
-      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
-
     setSelectedRoomId(roomId)
-    setIsMobileConversationListVisible(false)
     setSelectedPeerId(firstPeer?.deviceId ?? null)
-    setSelectedSessionId(latestSession?.sessionId ?? null)
     updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
-    if (activeView === 'connect' || activeView === 'sessions') {
-      handleViewChange('text')
-    }
-  }
-
-  const handleToggleRoomPinned = (roomId: string) => {
-    const current = roomStateById.get(roomId)
-    updateRoomState({
-      roomId,
-      pinned: !(current?.pinned ?? false),
-    })
-  }
-
-  const handleReconnectPublicRoom = () => {
-    setLocalError(null)
-    const publicRoomId = selectedRoom?.isPublic ? selectedRoom.roomId : null
-
-    if (!publicRoomId) {
-      setLocalError('请选择世界对话后再重连。')
-      return
-    }
-
-    reconnectSocket(() => {
-      joinRoom(publicRoomId)
-    })
   }
 
   const handleCreatePublicRoom = () => {
@@ -1979,151 +1352,7 @@ function App() {
 
     createPublicRoom()
     setLocalError(null)
-
-    if (activeView === 'connect' || activeView === 'sessions') {
-      handleViewChange('text')
-    }
   }
-
-  const handleCopyPublicRoomLink = (roomId: string) => {
-    const url = buildPublicRoomUrl(roomId)
-
-    if (!navigator.clipboard) {
-      setLocalError(`世界对话入口链接：${url}`)
-      return
-    }
-
-    void navigator.clipboard.writeText(url).then(
-      () => {
-        setLocalError('世界对话入口链接已复制。')
-      },
-      () => {
-        setLocalError(`世界对话入口链接：${url}`)
-      },
-    )
-  }
-
-  const handleSharedPanelOpenChange = (nextIsOpen: boolean) => {
-    setIsSharedPanelOpen(nextIsOpen)
-
-    if (nextIsOpen && sharedContentTab === 'chat') {
-      setSharedContentTab('media')
-    }
-  }
-
-  const chatRouteElement = (
-    <Suspense fallback={<div className="dd-empty">正在加载对话...</div>}>
-      <ChatConversationStage
-        isDragging={isDragging}
-        unifiedConversationEntries={unifiedConversationEntries}
-        fileConversationEmptyState={fileConversationEmptyState}
-        chatDraft={chatDraft}
-        fileInputId={fileInputId}
-        activeTransferLabel={activeTransferLabel}
-        isSendDisabled={
-          !hasChatDraftContent ||
-          (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
-        }
-        isAiGenerating={isAiGenerating}
-        aiQuotaLabel={aiQuotaLabel}
-        aiModelOptions={aiModelOptions}
-        selectedAiModel={selectedAiModel}
-        selectedAiModelLabel={selectedAiModelLabel}
-        enterToSend={preferences.enterToSend}
-        attachments={attachmentDrafts}
-        isSharedPanelOpen={isSharedPanelOpen}
-        sharedContentTab={sharedContentTab}
-        sharedMediaEntries={sharedMediaEntries}
-        sharedFileEntries={sharedFileEntries}
-        sharedLinkEntries={sharedLinkEntries}
-        hasOlderHistory={selectedRoomHistoryPagination?.hasMore ?? false}
-        isOlderHistoryLoading={selectedRoomHistoryPagination?.isLoading ?? false}
-        onChatDraftChange={setChatDraft}
-        onFileSelection={handleFileSelection}
-        onRetryTransfer={retryTransfer}
-        onCancelTransfer={cancelTransfer}
-        onSendText={(quoteHtml) => {
-          void handleSendText(quoteHtml)
-        }}
-        onRecallText={handleRecallText}
-        canRecallAnyMessage={canRecallAnyMessage}
-        onRemoveAttachment={removeAttachment}
-        onLoadOlderHistory={() => {
-          if (selectedRoom) {
-            loadOlderRoomHistoryTexts(selectedRoom.roomId)
-          }
-        }}
-        onAiModelChange={setSelectedAiModel}
-        onEnterToSendChange={(value) => updatePreferences({ enterToSend: value })}
-        onSharedPanelOpenChange={handleSharedPanelOpenChange}
-        onSharedContentTabChange={setSharedContentTab}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={(event) => {
-          void handleDrop(event)
-        }}
-      />
-    </Suspense>
-  )
-
-  const sendRouteElement = isChatConversationView ? (
-    chatRouteElement
-  ) : (
-    <SendStage
-      isDragging={isDragging}
-      fileInputId={fileInputId}
-      activeTransferLabel={activeTransferLabel}
-      hasRunnableTransfers={hasRunnableTransfers}
-      visibleTransferItems={visibleTransferItems}
-      fileSenderEmptyState={fileSenderEmptyState}
-      onFileSelection={handleFileSelection}
-      onSendFiles={() => {
-        void handleSendFiles()
-      }}
-      onRetryTransfer={retryTransfer}
-      onCancelTransfer={cancelTransfer}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={(event) => {
-        void handleDrop(event)
-      }}
-    />
-  )
-
-  const textRouteElement = isChatConversationView ? (
-    chatRouteElement
-  ) : (
-    <TextStage
-      textMode={textMode}
-      draftText={draftText}
-      chatDraft={chatDraft}
-      activeTransferLabel={activeTransferLabel}
-      connectedTargetCount={connectedTargets.length}
-      sortedChatRecords={sortedChatRecords}
-      textRecords={textRecords}
-      onTextModeChange={setTextMode}
-      onDraftTextChange={setDraftText}
-      onChatDraftChange={setChatDraft}
-      onSendText={() => {
-        void handleSendText()
-      }}
-    />
-  )
-
-  const receiveRouteElement = isChatConversationView ? (
-    chatRouteElement
-  ) : (
-    <ReceiveStage
-      joinCode={joinCode}
-      receivedCompletedFiles={receivedCompletedFiles}
-      receivedPendingFiles={receivedPendingFiles}
-      onJoinCodeChange={setJoinCode}
-      onJoinCode={handleJoinCode}
-      onRequestSnapshot={requestSnapshot}
-    />
-  )
 
   const adminRouteElement = (
     <AdminStage
@@ -2197,164 +1426,75 @@ function App() {
     />
   )
 
-  if (isSnapLinkMode) {
-    return (
-      <SnapLinkStage
-        isDragging={isDragging}
-        shouldOpenAiChat={isAiChatView}
-        selectedRoomId={effectiveSelectedRoomId}
-        selectedConversationName={selectedConversationName}
-        activeTransferLabel={activeTransferLabel}
-        roomJoinDraft={joinRoomIdDraft}
-        roomListItems={roomListItems}
-        chatDraft={chatDraft}
-        fileInputId={fileInputId}
-        isSendDisabled={
-          !hasChatDraftContent ||
-          (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
-        }
-        isAiGenerating={isAiGenerating}
-        aiQuotaLabel={aiQuotaLabel}
-        aiModelOptions={aiModelOptions}
-        selectedAiModel={selectedAiModel}
-        selectedAiModelLabel={selectedAiModelLabel}
-        unifiedConversationEntries={unifiedConversationEntries}
-        fileConversationEmptyState={fileConversationEmptyState}
-        localError={localError}
-        errorMessage={errorMessage}
-        aiChatElement={aiChatElement}
-        onRoomJoinDraftChange={setJoinRoomIdDraft}
-        onJoinRoomById={handleJoinRoomByIdValue}
-        onCreatePublicRoom={handleCreatePublicRoom}
-        onOpenRoomConversation={handleOpenRoomConversation}
-        onCopyPublicRoomLink={handleCopyPublicRoomLink}
-        onChatDraftChange={setChatDraft}
-        onAiModelChange={setSelectedAiModel}
-        onDirectFileSelection={(files) => {
-          void handleSendFilesToCurrentConversation(files)
-        }}
-        onSendText={(quoteHtml) => {
-          void handleSendText(quoteHtml)
-        }}
-        onRecallText={handleRecallText}
-        canRecallAnyMessage={canRecallAnyMessage}
-        onRetryTransfer={retryTransfer}
-        onCancelTransfer={cancelTransfer}
-        onUseClassicInterface={() => setInterfaceMode('classic')}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={(event) => {
-          void handleDrop(event)
-        }}
-      />
-    )
-  }
+  const imageGenerationElement = imageAccount.isAuthenticated ? (
+    <ImageGenerationStage
+      isReady={!imageAccount.isLoading}
+      userEmail={imageAccount.user?.email ?? ''}
+      onGenerateImage={generateImage}
+      onGetImageQuota={getImageQuota}
+      onListImageHistory={listImageHistory}
+      onLogout={imageAccount.logout}
+    />
+  ) : imageAuthGateElement
 
   return (
-    <div className={`dd-shell${isAdminView ? ' dd-shell--admin' : ''}`} data-theme="chat-desktop">
-      {!isAdminView ? (
-        <AppSidebar
-          isMobileNavOpen={isMobileNavOpen}
-          effectiveNavView={effectiveNavView}
-          visibleNavItems={visibleNavItems}
-          onToggleMobileNav={() => setIsMobileNavOpen((previous) => !previous)}
-          onToggleContentRail={() => setIsContentRailCollapsed((previous) => !previous)}
-          onInterfaceModeChange={setInterfaceMode}
-          onViewChange={handleViewChange}
-        />
-      ) : null}
-
-      <main className={`dd-main${isChatDesktopTheme ? ' is-chat-desktop' : ''}${activeView === 'connect' ? ' is-connect-main' : ''}${isContentRailCollapsed ? ' is-content-collapsed' : ''}${isAdminView ? ' is-admin-main' : ''}${isStandaloneView ? ' is-standalone-main' : ''}${isCompactMobileViewport && isMobileConversationListVisible ? ' is-mobile-room-list-open' : ''}`}>
-        {!isAdminView && !isStandaloneView ? (
-          <AppHeader
-            isChatConversationView={isChatConversationView}
-            currentMeta={currentMeta}
-            currentRoomId={effectiveSelectedRoomId}
-            isSharedPanelOpen={isSharedPanelOpen}
-            selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
-            localError={localError}
-            errorMessage={errorMessage}
-            isReconnectDisabled={socketState === 'connecting'}
-            onReconnect={
-              isChatConversationView && selectedRoom?.isPublic
-                ? handleReconnectPublicRoom
-                : undefined
-            }
-            onToggleSharedPanel={
-              isChatConversationView
-                ? () => handleSharedPanelOpenChange(!isSharedPanelOpen)
-                : undefined
-            }
-          />
-        ) : null}
-
-        <section className="dd-stage">
-          <div className="dd-stage__backdrop" aria-hidden="true" />
-          <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={pathForView(DEFAULT_VIEW)} replace />}
-            />
-            <Route
-              path="/connect"
-              element={<Navigate to={pathForView('text')} replace />}
-            />
-            <Route path="/send" element={sendRouteElement} />
-            <Route path="/receive" element={receiveRouteElement} />
-            <Route path="/text" element={textRouteElement} />
-            <Route
-              path="/chat"
-              element={aiChatElement}
-            />
-            <Route
-              path="/image"
-              element={
-                imageAccount.isAuthenticated ? (
-                  <ImageGenerationStage
-                    isReady={!imageAccount.isLoading}
-                    userEmail={imageAccount.user?.email ?? ''}
-                    onGenerateImage={generateImage}
-                    onGetImageQuota={getImageQuota}
-                    onListImageHistory={listImageHistory}
-                    onLogout={imageAccount.logout}
-                  />
-                ) : imageAuthGateElement
-              }
-            />
-            <Route path="/admin" element={adminRouteElement} />
-            <Route path="/sessions" element={<Navigate to={pathForView('text')} replace />} />
-            <Route
-              path="*"
-              element={<Navigate to={pathForView(DEFAULT_VIEW)} replace />}
-            />
-          </Routes>
-        </section>
-
-        {!isAdminView && !isStandaloneView && activeView !== 'connect' ? (
-          <ContentGrid
-            roomJoinDraft={joinRoomIdDraft}
-            roomListItems={roomListItems}
-            selectedRoomId={effectiveSelectedRoomId}
-            isContentRailCollapsed={isContentRailCollapsed}
-            isMobileConversationListVisible={isMobileConversationListVisible}
-            isEditingDeviceName={isEditingDeviceName}
-            deviceNameDraft={deviceNameDraft}
-            selfDeviceName={self?.deviceName ?? localIdentity.deviceName}
-            onRoomJoinDraftChange={setJoinRoomIdDraft}
-            onDeviceNameDraftChange={setDeviceNameDraft}
-            onJoinRoom={handleJoinRoomById}
-            onCreatePublicRoom={handleCreatePublicRoom}
-            onCopyPublicRoomLink={handleCopyPublicRoomLink}
-            onBeginEditDeviceName={beginEditDeviceName}
-            onSaveDeviceName={saveDeviceName}
-            onCancelEditDeviceName={cancelEditDeviceName}
-            onOpenRoomConversation={handleOpenRoomConversation}
-            onToggleRoomPinned={handleToggleRoomPinned}
-          />
-        ) : null}
-      </main>
-    </div>
+    <SnapLinkStage
+      isDragging={isDragging}
+      activeView={isAdminView ? 'admin' : isImageView ? 'image' : isAiChatView ? 'ai-chat' : 'conversation'}
+      selectedRoomId={effectiveSelectedRoomId}
+      selectedConversationName={selectedConversationName}
+      activeTransferLabel={activeTransferLabel}
+      roomJoinDraft={joinRoomIdDraft}
+      roomListItems={roomListItems}
+      chatDraft={chatDraft}
+      fileInputId={fileInputId}
+      isSendDisabled={
+        !hasChatDraftContent ||
+        (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
+      }
+      isAiGenerating={isAiGenerating}
+      aiQuotaLabel={aiQuotaLabel}
+      aiModelOptions={aiModelOptions}
+      selectedAiModel={selectedAiModel}
+      selectedAiModelLabel={selectedAiModelLabel}
+      unifiedConversationEntries={unifiedConversationEntries}
+      fileConversationEmptyState={fileConversationEmptyState}
+      sharedMediaEntries={sharedMediaEntries}
+      sharedFileEntries={sharedFileEntries}
+      sharedLinkEntries={sharedLinkEntries}
+      localError={localError}
+      errorMessage={errorMessage}
+      aiChatElement={aiChatElement}
+      imageElement={imageGenerationElement}
+      adminElement={adminRouteElement}
+      onRoomJoinDraftChange={setJoinRoomIdDraft}
+      onJoinRoomById={handleJoinRoomByIdValue}
+      onCreatePublicRoom={handleCreatePublicRoom}
+      onOpenRoomConversation={handleOpenRoomConversation}
+      onOpenRoomHome={() => handleViewChange('text')}
+      onOpenAiChatView={() => handleViewChange('chat')}
+      onOpenImageView={() => handleViewChange('image')}
+      onOpenAdminView={() => handleViewChange('admin')}
+      onChatDraftChange={setChatDraft}
+      onAiModelChange={setSelectedAiModel}
+      onDirectFileSelection={(files) => {
+        void handleSendFilesToCurrentConversation(files)
+      }}
+      onSendText={(quoteHtml) => {
+        void handleSendText(quoteHtml)
+      }}
+      onRecallText={handleRecallText}
+      onRecallFile={handleRecallFile}
+      canRecallAnyMessage={canRecallAnyMessage}
+      onRetryTransfer={retryTransfer}
+      onCancelTransfer={cancelTransfer}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={(event) => {
+        void handleDrop(event)
+      }}
+    />
   )
 }
 

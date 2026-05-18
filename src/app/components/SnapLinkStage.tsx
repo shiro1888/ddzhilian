@@ -10,7 +10,7 @@ import type {
   ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { RoomListItem, UnifiedConversationEntry } from '../types'
+import type { FileConversationEntry, RoomListItem, SharedContentTab, UnifiedConversationEntry } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
 import {
   extractPlainTextFromRichText,
@@ -21,6 +21,15 @@ import {
 } from '../utils'
 
 type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }>['file']
+type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
+type SnapLinkSharedLinkEntry = {
+  id: string
+  url: string
+  label: string
+  sourceName: string
+  createdAt: string
+}
+type SnapLinkActiveView = 'conversation' | 'ai-chat' | 'image' | 'admin'
 
 type BotMentionTriggerRange = {
   start: number
@@ -56,6 +65,8 @@ const snapLinkQuickEmojis = [
 ]
 
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
+const snapLinkImageSelectionValue = '__snaplink_image__'
+const snapLinkAdminSelectionValue = '__snaplink_admin__'
 const snapLinkComposerMaxHeight = 120
 
 function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null) {
@@ -71,7 +82,7 @@ function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null
 
 type SnapLinkStageProps = {
   isDragging: boolean
-  shouldOpenAiChat?: boolean
+  activeView: SnapLinkActiveView
   selectedRoomId: string | null
   selectedConversationName: string
   activeTransferLabel: string
@@ -87,23 +98,31 @@ type SnapLinkStageProps = {
   selectedAiModelLabel: string
   unifiedConversationEntries: UnifiedConversationEntry[]
   fileConversationEmptyState: string
+  sharedMediaEntries: FileConversationEntry[]
+  sharedFileEntries: FileConversationEntry[]
+  sharedLinkEntries: SnapLinkSharedLinkEntry[]
   localError: string | null
   errorMessage: string | null
   aiChatElement: ReactNode
+  imageElement: ReactNode
+  adminElement: ReactNode
   onRoomJoinDraftChange: (value: string) => void
   onJoinRoomById: (roomId: string) => void
   onCreatePublicRoom: () => void
   onOpenRoomConversation: (roomId: string) => void
-  onCopyPublicRoomLink: (roomId: string) => void
+  onOpenRoomHome: () => void
+  onOpenAiChatView: () => void
+  onOpenImageView: () => void
+  onOpenAdminView: () => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onDirectFileSelection: (files: File[]) => void
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
+  onRecallFile: (historyId: string) => Promise<void> | void
   canRecallAnyMessage: boolean
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
-  onUseClassicInterface: () => void
   onDragEnter: () => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
@@ -316,6 +335,21 @@ function isImageFileEntry(file: SnapLinkFileEntry) {
   )
 }
 
+function resolveMediaFileEntryKind(file: FileConversationEntry) {
+  const normalizedMimeType = file.mimeType?.toLowerCase() ?? ''
+  const normalizedFileName = file.fileName.toLowerCase()
+
+  if (normalizedMimeType.startsWith('image/') || /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(normalizedFileName)) {
+    return 'image' as const
+  }
+
+  if (normalizedMimeType.startsWith('video/') || /\.(m4v|mov|mp4|ogv|webm)$/i.test(normalizedFileName)) {
+    return 'video' as const
+  }
+
+  return null
+}
+
 function getImageExtensionFromMimeType(mimeType: string) {
   switch (mimeType.toLowerCase()) {
     case 'image/jpeg':
@@ -513,7 +547,7 @@ function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entry
 
 export function SnapLinkStage({
   isDragging,
-  shouldOpenAiChat = false,
+  activeView,
   selectedRoomId,
   selectedConversationName,
   activeTransferLabel,
@@ -529,30 +563,37 @@ export function SnapLinkStage({
   selectedAiModelLabel,
   unifiedConversationEntries,
   fileConversationEmptyState,
+  sharedMediaEntries,
+  sharedFileEntries,
+  sharedLinkEntries,
   localError,
   errorMessage,
   aiChatElement,
+  imageElement,
+  adminElement,
   onRoomJoinDraftChange,
   onJoinRoomById,
   onCreatePublicRoom,
   onOpenRoomConversation,
-  onCopyPublicRoomLink,
+  onOpenRoomHome,
+  onOpenAiChatView,
+  onOpenImageView,
+  onOpenAdminView,
   onChatDraftChange,
   onAiModelChange,
   onDirectFileSelection,
   onSendText,
   onRecallText,
+  onRecallFile,
   canRecallAnyMessage,
   onRetryTransfer,
   onCancelTransfer,
-  onUseClassicInterface,
   onDragEnter,
   onDragOver,
   onDragLeave,
   onDrop,
 }: SnapLinkStageProps) {
-  const [isLobbyOpen, setIsLobbyOpen] = useState(!shouldOpenAiChat)
-  const [isAiChatOpen, setIsAiChatOpen] = useState(shouldOpenAiChat)
+  const [isLobbyOpen, setIsLobbyOpen] = useState(activeView === 'conversation')
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
@@ -561,6 +602,7 @@ export function SnapLinkStage({
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
+  const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const isComposerComposingRef = useRef(false)
@@ -577,6 +619,9 @@ export function SnapLinkStage({
   const selectedRoomOnlineCount = selectedRoom
     ? Math.min(selectedRoom.memberCount, selectedRoom.onlineCount + 1)
     : 0
+  const isAiChatOpen = activeView === 'ai-chat'
+  const isImageOpen = activeView === 'image'
+  const isAdminOpen = activeView === 'admin'
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
@@ -592,8 +637,16 @@ export function SnapLinkStage({
       }),
     [roomListItems],
   )
-  const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen
+  const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen
   const plainDraft = normalizePlainComposerDraft(chatDraft)
+  const effectiveActiveSharedTab = hasActiveRoom ? activeSharedTab : null
+  const sharedTabItems: Array<{ id: SnapLinkSharedTab; label: string; count: number }> = [
+    { id: 'files', label: '历史文件', count: sharedFileEntries.length },
+    { id: 'media', label: '媒体', count: sharedMediaEntries.length },
+    { id: 'links', label: '链接', count: sharedLinkEntries.length },
+  ]
+  const sharedContentCount = sharedTabItems.reduce((total, item) => total + item.count, 0)
+  const activeSharedTabItem = sharedTabItems.find((item) => item.id === effectiveActiveSharedTab)
 
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
@@ -761,14 +814,28 @@ export function SnapLinkStage({
   }, [imagePreview])
 
   const handleCreateRoom = () => {
-    setIsAiChatOpen(false)
+    setActiveSharedTab(null)
     setIsLobbyOpen(false)
+    onOpenRoomHome()
     onCreatePublicRoom()
   }
 
   const handleOpenAiChat = () => {
+    setActiveSharedTab(null)
     setIsLobbyOpen(false)
-    setIsAiChatOpen(true)
+    onOpenAiChatView()
+  }
+
+  const handleOpenImage = () => {
+    setActiveSharedTab(null)
+    setIsLobbyOpen(false)
+    onOpenImageView()
+  }
+
+  const handleOpenAdmin = () => {
+    setActiveSharedTab(null)
+    setIsLobbyOpen(false)
+    onOpenAdminView()
   }
 
   const handleJoinRoom = () => {
@@ -779,31 +846,44 @@ export function SnapLinkStage({
     }
 
     setIsLobbyOpen(false)
-    setIsAiChatOpen(false)
+    setActiveSharedTab(null)
+    onOpenRoomHome()
     onJoinRoomById(nextRoomId)
   }
 
   const handleRoomSelection = (roomId: string) => {
     if (roomId === snapLinkAiChatSelectionValue) {
-      setIsLobbyOpen(false)
-      setIsAiChatOpen(true)
+      handleOpenAiChat()
       return
     }
 
-    setIsAiChatOpen(false)
+    if (roomId === snapLinkImageSelectionValue) {
+      handleOpenImage()
+      return
+    }
+
+    if (roomId === snapLinkAdminSelectionValue) {
+      handleOpenAdmin()
+      return
+    }
 
     if (!roomId) {
+      setActiveSharedTab(null)
       setIsLobbyOpen(true)
+      onOpenRoomHome()
       return
     }
 
     setIsLobbyOpen(false)
+    setActiveSharedTab(null)
+    onOpenRoomHome()
     onOpenRoomConversation(roomId)
   }
 
   const handleBackToLobby = () => {
-    setIsAiChatOpen(false)
+    setActiveSharedTab(null)
     setIsLobbyOpen(true)
+    onOpenRoomHome()
   }
 
   const handleCopyRoomId = () => {
@@ -816,14 +896,6 @@ export function SnapLinkStage({
       void navigator.clipboard.writeText(selectedRoomId)
     }
     window.setTimeout(() => setCopiedRoomId(null), 1000)
-  }
-
-  const handleCopyPublicLink = () => {
-    if (!selectedRoomId) {
-      return
-    }
-
-    onCopyPublicRoomLink(selectedRoomId)
   }
 
   const submitComposerDraft = () => {
@@ -1114,8 +1186,18 @@ export function SnapLinkStage({
     })
   }
 
+  const recallFileEntry = (file: FileConversationEntry) => {
+    if (!file.historyId || !file.canRecall) {
+      return
+    }
+
+    void Promise.resolve(onRecallFile(file.historyId)).catch(() => {
+      // The parent surface reports the recall failure.
+    })
+  }
+
   const renderFileActions = (file: SnapLinkFileEntry) => {
-    if (!file.downloadUrl && !file.onDownload && !file.action) {
+    if (!file.downloadUrl && !file.onDownload && !file.action && !file.canRecall) {
       return null
     }
 
@@ -1141,8 +1223,112 @@ export function SnapLinkStage({
             取消
           </button>
         ) : null}
+        {file.historyId && file.canRecall ? (
+          <button type="button" className="is-danger" onClick={() => recallFileEntry(file)}>
+            撤回
+          </button>
+        ) : null}
       </div>
     )
+  }
+
+  const renderSharedFileActions = (file: FileConversationEntry) => {
+    if (!file.downloadUrl && !file.onDownload && !file.canRecall) {
+      return null
+    }
+
+    return (
+      <div className="dd-snaplink__shared-actions">
+        {file.onDownload ? (
+          <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
+            {file.isDownloadDisabled ? '下载中' : '下载'}
+          </button>
+        ) : null}
+        {file.downloadUrl ? (
+          <a href={file.downloadUrl} download={file.downloadName}>
+            下载
+          </a>
+        ) : null}
+        {file.historyId && file.canRecall ? (
+          <button type="button" className="is-danger" onClick={() => recallFileEntry(file)}>
+            撤回
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+
+  const renderSharedFileRow = (file: FileConversationEntry, variant: 'media' | 'file') => {
+    const mediaKind = resolveMediaFileEntryKind(file)
+
+    return (
+      <article key={file.id} className={`dd-snaplink__shared-row is-${variant}`}>
+        {variant === 'media' ? (
+          <div className="dd-snaplink__shared-preview">
+            {file.previewUrl && mediaKind === 'image' ? (
+              <button
+                type="button"
+                aria-label={`预览图片 ${file.fileName}`}
+                onClick={() => openImagePreview(file.previewUrl ?? '', file.fileName)}
+              >
+                <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
+              </button>
+            ) : file.previewUrl && mediaKind === 'video' ? (
+              <video src={file.previewUrl} controls preload="metadata" />
+            ) : (
+              <span>{getFileExtension(file.fileName)}</span>
+            )}
+          </div>
+        ) : (
+          <span className="dd-snaplink__shared-ext">{getFileExtension(file.fileName)}</span>
+        )}
+        <div className="dd-snaplink__shared-main">
+          <strong title={file.fileName}>{file.fileName}</strong>
+          <span>
+            {formatFileSize(file.fileSize)} · {file.statusLabel} · {formatMessageClock(file.createdAt)}
+          </span>
+        </div>
+        {renderSharedFileActions(file)}
+      </article>
+    )
+  }
+
+  const renderSharedPanelContent = () => {
+    if (effectiveActiveSharedTab === 'files') {
+      return sharedFileEntries.length > 0 ? (
+        sharedFileEntries.map((file) => renderSharedFileRow(file, 'file'))
+      ) : (
+        <div className="dd-snaplink__shared-empty">暂无历史文件</div>
+      )
+    }
+
+    if (effectiveActiveSharedTab === 'media') {
+      return sharedMediaEntries.length > 0 ? (
+        sharedMediaEntries.map((file) => renderSharedFileRow(file, 'media'))
+      ) : (
+        <div className="dd-snaplink__shared-empty">暂无媒体</div>
+      )
+    }
+
+    if (effectiveActiveSharedTab === 'links') {
+      return sharedLinkEntries.length > 0 ? (
+        sharedLinkEntries.map((entry) => (
+          <article key={entry.id} className="dd-snaplink__shared-row is-link">
+            <div className="dd-snaplink__shared-main">
+              <strong title={entry.label}>{entry.label}</strong>
+              <span>{entry.sourceName} · {formatMessageClock(entry.createdAt)}</span>
+            </div>
+            <a href={entry.url} target="_blank" rel="noreferrer">
+              打开
+            </a>
+          </article>
+        ))
+      ) : (
+        <div className="dd-snaplink__shared-empty">暂无链接</div>
+      )
+    }
+
+    return null
   }
 
   const renderFileCard = (file: SnapLinkFileEntry) => {
@@ -1197,11 +1383,21 @@ export function SnapLinkStage({
           {roomListItems.length > 0 ? (
             <select
               aria-label="选择对话"
-              value={isAiChatOpen ? snapLinkAiChatSelectionValue : hasActiveRoom ? selectedRoomId ?? '' : ''}
+              value={
+                isAdminOpen
+                  ? snapLinkAdminSelectionValue
+                  : isImageOpen
+                  ? snapLinkImageSelectionValue
+                  : isAiChatOpen
+                    ? snapLinkAiChatSelectionValue
+                    : hasActiveRoom ? selectedRoomId ?? '' : ''
+              }
               onChange={(event) => handleRoomSelection(event.target.value)}
             >
               <option value="">大厅</option>
-              <option value={snapLinkAiChatSelectionValue}>Chat with AI</option>
+              <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
+              <option value={snapLinkImageSelectionValue}>生图</option>
+              {isAdminOpen ? <option value={snapLinkAdminSelectionValue}>管理</option> : null}
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -1219,20 +1415,42 @@ export function SnapLinkStage({
               <span>{selectedRoomOnlineCount}</span>
             </span>
           ) : null}
-          {isAiChatOpen ? (
-            <button type="button" onClick={handleBackToLobby}>
-              大厅
+          <button
+            type="button"
+            className={!isAiChatOpen && !isImageOpen && !isAdminOpen ? 'is-active' : ''}
+            onClick={handleBackToLobby}
+          >
+            对话
+          </button>
+          <button
+            type="button"
+            className={isAiChatOpen ? 'is-active' : ''}
+            onClick={handleOpenAiChat}
+          >
+            AI 聊天
+          </button>
+          <button
+            type="button"
+            className={isImageOpen ? 'is-active' : ''}
+            onClick={handleOpenImage}
+          >
+            生图
+          </button>
+          {isAdminOpen ? (
+            <button type="button" className="is-active" onClick={handleOpenAdmin}>
+              管理
             </button>
           ) : null}
-          <button type="button" onClick={onUseClassicInterface}>
-            原界面
-          </button>
         </div>
       </header>
 
-      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : 'is-lobby'}`}>
-        <div className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : 'is-lobby'}`}>
-          {isAiChatOpen ? (
+      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : 'is-lobby'}`}>
+        <div className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : 'is-lobby'}`}>
+          {isAdminOpen ? (
+            adminElement
+          ) : isImageOpen ? (
+            imageElement
+          ) : isAiChatOpen ? (
             aiChatElement
           ) : !hasActiveRoom ? (
             <section className="dd-snaplink__lobby" aria-label="ddzhilian 大厅">
@@ -1325,16 +1543,53 @@ export function SnapLinkStage({
                   </span>
                 </div>
                 <div className="dd-snaplink__room-actions">
-                  {selectedRoom?.isPublic ? (
-                    <button type="button" onClick={handleCopyPublicLink}>
-                      链接
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => setIsLobbyOpen(true)}>
+                  <button
+                    type="button"
+                    className={effectiveActiveSharedTab ? 'is-active' : ''}
+                    aria-expanded={Boolean(effectiveActiveSharedTab)}
+                    aria-label="查看历史文件、媒体和链接"
+                    onClick={() => setActiveSharedTab((current) => (current ? null : 'files'))}
+                  >
+                    历史内容
+                    {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
+                  </button>
+                  <button type="button" onClick={() => {
+                    setActiveSharedTab(null)
+                    setIsLobbyOpen(true)
+                  }}>
                     离开
                   </button>
                 </div>
               </div>
+
+              {effectiveActiveSharedTab ? (
+                <div className="dd-snaplink__shared-panel" aria-label={activeSharedTabItem?.label ?? '历史内容'}>
+                  <div className="dd-snaplink__shared-head">
+                    <strong>历史内容</strong>
+                    <button type="button" onClick={() => setActiveSharedTab(null)}>
+                      关闭
+                    </button>
+                  </div>
+                  <div className="dd-snaplink__shared-tabs" role="tablist" aria-label="历史内容分类">
+                    {sharedTabItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={effectiveActiveSharedTab === item.id}
+                        className={effectiveActiveSharedTab === item.id ? 'is-active' : ''}
+                        onClick={() => setActiveSharedTab(item.id)}
+                      >
+                        {item.label}
+                        {item.count > 0 ? ` ${item.count.toString()}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dd-snaplink__shared-list">
+                    {renderSharedPanelContent()}
+                  </div>
+                </div>
+              ) : null}
 
               <div ref={messagesRef} className="dd-snaplink__messages">
                 {visibleConversationEntries.length > 0 ? (

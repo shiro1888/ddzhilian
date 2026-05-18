@@ -287,6 +287,23 @@ export class HistoryRegistry {
     return this.filesById.get(historyId);
   }
 
+  async deleteFile(historyId: string) {
+    this.prune();
+    const record = this.filesById.get(historyId);
+    if (!record) {
+      return false;
+    }
+
+    await this.deleteRemoteFiles([historyId]);
+    this.removeFileRecord(record);
+
+    if (!this.supabaseClient) {
+      this.persistLocalIndex();
+    }
+
+    return true;
+  }
+
   getLatestPublicRoomId() {
     this.prune();
     const publicRecords = [

@@ -47,7 +47,7 @@ const IMAGE_JOB_POLL_TIMEOUT_MS = 15 * 60 * 1000
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
-type RecallTextOptions = {
+type RecallHistoryOptions = {
   canRecallAny?: boolean
 }
 
@@ -462,6 +462,8 @@ export function useDdzhilian() {
   const connectionStatesRef = useRef<Record<string, PeerConnectionState>>({})
   const transferItemsRef = useRef<TransferItem[]>([])
   const textRecordsRef = useRef<TextRecord[]>([])
+  const receivedFilesRef = useRef<ReceivedFile[]>([])
+  const historyFilesRef = useRef<HistoryFileSummary[]>([])
   const historyTextsRef = useRef<HistoryTextSummary[]>([])
   const historyTextPaginationRef = useRef<Record<string, HistoryTextPaginationState>>({})
   const incomingTransfersRef = useRef(new Map<string, IncomingTransferDraft>())
@@ -537,6 +539,14 @@ export function useDdzhilian() {
   useEffect(() => {
     textRecordsRef.current = textRecords
   }, [textRecords])
+
+  useEffect(() => {
+    receivedFilesRef.current = receivedFiles
+  }, [receivedFiles])
+
+  useEffect(() => {
+    historyFilesRef.current = historyFiles
+  }, [historyFiles])
 
   useEffect(() => {
     historyTextsRef.current = historyTexts
@@ -2772,7 +2782,7 @@ export function useDdzhilian() {
     }
   }
 
-  const recallText = async (recordId: string, options?: RecallTextOptions) => {
+  const recallText = async (recordId: string, options?: RecallHistoryOptions) => {
     const canRecallAny = options?.canRecallAny === true
     const activeSelf = selfRef.current
     const localRecord = textRecordsRef.current.find((record) => record.id === recordId)
@@ -2854,6 +2864,51 @@ export function useDdzhilian() {
     startTransition(() => {
       setTextRecords((previous) => previous.filter((record) => record.id !== recordId))
       setHistoryTexts((previous) => previous.filter((record) => record.historyId !== recordId))
+    })
+  }
+
+  const recallFile = async (historyId: string, options?: RecallHistoryOptions) => {
+    const canRecallAny = options?.canRecallAny === true
+    const activeSelf = selfRef.current
+    const historyRecord = historyFilesRef.current.find((record) => record.historyId === historyId)
+    const localTransfer = transferItemsRef.current.find((record) => record.historyId === historyId)
+    const receivedFile = receivedFilesRef.current.find((record) => record.historyId === historyId)
+    const isRemoteHistoryRecord = Boolean(historyRecord && historyRecord.sourceDeviceId !== activeSelf?.deviceId)
+    const isRemoteReceivedFile = Boolean(receivedFile && receivedFile.fromDeviceId !== activeSelf?.deviceId)
+    const isRemoteFile = isRemoteHistoryRecord || (!historyRecord && isRemoteReceivedFile)
+    const roomId =
+      historyRecord?.roomId ??
+      localTransfer?.roomId ??
+      (receivedFile ? sessionsRef.current[receivedFile.sessionId]?.roomId : undefined)
+
+    if (!canRecallAny && isRemoteFile) {
+      throw new Error('只能撤回自己发送的文件。')
+    }
+
+    const { response } = await fetchWithHistoryAuthRetry((requestSelf) =>
+      fetch(`${API_BASE_URL}/api/history/file/${encodeURIComponent(historyId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: buildHistoryAuthHeaders(requestSelf),
+      }), {
+        roomId,
+      })
+
+    if (!response) {
+      throw new Error('当前设备尚未完成文件撤回授权。')
+    }
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(await readApiError(response, '文件撤回失败。'))
+    }
+
+    archivedHistoryIdsRef.current.delete(historyId)
+    archivingHistoryIdsRef.current.delete(historyId)
+    transferFilesRef.current.delete(historyId)
+    startTransition(() => {
+      setHistoryFiles((previous) => previous.filter((record) => record.historyId !== historyId))
+      setTransferItems((previous) => previous.filter((record) => record.historyId !== historyId))
+      setReceivedFiles((previous) => previous.filter((record) => record.historyId !== historyId))
     })
   }
 
@@ -3558,6 +3613,7 @@ export function useDdzhilian() {
     startPendingTransfers,
     sendText,
     recallText,
+    recallFile,
     sendRoomText,
     ensureRoomHistoryLoaded: (roomId: string) => {
       const state = historyTextPaginationRef.current[roomId]

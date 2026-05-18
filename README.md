@@ -2,7 +2,7 @@
 
 [中文说明](README.zh-CN.md)
 
-ddzhilian is a lightweight cross-device transfer and chat workspace. It brings device discovery, short-code pairing, file transfer, long-text sharing, public rooms, and history management into a desktop-style chat interface for quickly moving content between computers, phones, and browser clients.
+ddzhilian is a lightweight cross-device transfer and chat workspace. It brings device discovery, file transfer, long-text sharing, public rooms, AI chat, image generation, and history management into the SnapLink-style interface for quickly moving content between computers, phones, and browser clients.
 
 For a token-friendly code map, see [CODEBASE_INDEX.md](CODEBASE_INDEX.md).
 
@@ -17,7 +17,7 @@ This repository contains:
 
 - Device discovery: show eligible devices from the same account or local network context.
 - Short-code pairing: connect devices quickly with a short transfer code.
-- Chat workspace: use a desktop-chat interface for messages, files, and session state.
+- SnapLink workspace: use one lightweight conversation interface for rooms, messages, files, and history state.
 - File transfer: support drag-and-drop selection, progress state, receive queues, and completed history.
 - Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
 - Public rooms: support public room entry links and room-scoped history.
@@ -92,15 +92,14 @@ The signaling server listens on `http://0.0.0.0:8787` by default and exposes Web
 
 The frontend uses browser history routes. Main routes include:
 
-- `/send`
-- `/receive`
 - `/text`
+- `/chat`
 - `/image`
-- `/sessions`
+- `/admin`
 
-The legacy `/connect` path is kept as a redirect to `/text`; it is not shown as a primary navigation entry.
+Legacy `/`, `/connect`, `/send`, `/receive`, and `/sessions` paths are kept as compatibility entries and resolve to `/text`; they are not separate UI surfaces anymore.
 
-The current product shape centers on the chat-desktop experience. File sending and receiving flows fold back into the conversation workspace.
+The current product shape centers on the SnapLink experience. File sending, receiving, text exchange, room history, AI chat entry, image generation entry, and admin entry are all reached from the SnapLink shell.
 
 ## Messages And Markdown
 
