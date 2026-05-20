@@ -6373,6 +6373,13 @@
   background: var(--snap-surface);
 }
 
+.dd-snaplink__top-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .dd-snaplink__brand {
   display: inline-flex;
   align-items: center;
@@ -6390,6 +6397,82 @@
   height: 5px;
   border-radius: 50%;
   background: var(--snap-green);
+}
+
+.dd-snaplink__device-name {
+  display: inline-flex;
+  align-items: center;
+  max-width: 210px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--snap-border);
+  border-radius: 8px;
+  background: var(--snap-bg);
+  color: var(--snap-ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__device-name:hover {
+  border-color: #c8c8cf;
+  color: var(--snap-ink);
+}
+
+.dd-snaplink__device-name-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dd-snaplink__device-name-form input {
+  width: min(220px, 28vw);
+  min-width: 120px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--snap-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--snap-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.dd-snaplink__device-name-form input:focus {
+  outline: none;
+  border-color: var(--snap-muted);
+}
+
+.dd-snaplink__device-name-form button {
+  flex: none;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--snap-bg);
+  color: var(--snap-ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dd-snaplink__device-name-form button:hover {
+  background: var(--snap-border);
+  color: var(--snap-ink);
+}
+
+.dd-snaplink__device-name-form span {
+  flex: none;
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dd-snaplink__top-actions {
@@ -6483,6 +6566,8 @@
 
 .dd-snaplink__canvas.is-admin {
   align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
 }
 
 .dd-snaplink__app {
@@ -6520,9 +6605,14 @@
 }
 
 .dd-snaplink__app.is-admin {
-  width: min(100%, 1280px);
-  min-height: calc(100svh - 80px);
-  padding: 12px;
+  width: 100%;
+  min-height: calc(100svh - 48px);
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .dd-snaplink__app.is-ai-chat .dd-ai-chat {
@@ -6538,7 +6628,13 @@
 }
 
 .dd-snaplink__app.is-admin .dd-admin-workbench {
-  min-height: 0;
+  min-height: calc(100svh - 48px);
+}
+
+.dd-snaplink__app.is-admin .dd-admin-dashboard-layout {
+  min-height: calc(100svh - 48px);
+  border: 0;
+  border-radius: 0;
 }
 
 .dd-snaplink__lobby {
@@ -7770,6 +7866,33 @@
       padding: 0 14px;
     }
 
+  .dd-snaplink__top-left {
+      flex: 0 1 auto;
+      gap: 6px;
+      min-width: 0;
+    }
+
+  .dd-snaplink__device-name {
+      max-width: 138px;
+      min-height: 28px;
+      padding: 0 8px;
+    }
+
+  .dd-snaplink__device-name-form {
+      gap: 4px;
+    }
+
+  .dd-snaplink__device-name-form input {
+      width: min(132px, 36vw);
+      min-width: 82px;
+      padding: 0 8px;
+    }
+
+  .dd-snaplink__device-name-form button {
+      min-height: 28px;
+      padding: 0 7px;
+    }
+
   .dd-snaplink__top-actions {
       gap: 4px;
     }
@@ -7982,7 +8105,7 @@
   .dd-snaplink__top-actions {
       flex: 1 1 auto;
       justify-content: flex-end;
-      max-width: calc(100vw - 112px);
+      max-width: calc(100vw - 220px);
       overflow-x: auto;
       overflow-y: hidden;
       padding-bottom: 2px;
@@ -7996,7 +8119,7 @@
 
   .dd-snaplink__brand {
       flex: 0 1 auto;
-      max-width: 104px;
+      max-width: 86px;
     }
 
   .dd-snaplink__brand span {

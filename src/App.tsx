@@ -1344,6 +1344,17 @@ function App() {
     updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
   }
 
+  const handleDeviceNameChange = (deviceName: string) => {
+    const normalizedName = deviceName.trim().slice(0, 80)
+    if (!normalizedName) {
+      setLocalError('设备名不能为空。')
+      return
+    }
+
+    updateSettings({ deviceName: normalizedName })
+    setLocalError(null)
+  }
+
   const handleCreatePublicRoom = () => {
     if (!self) {
       setLocalError('服务连接完成后才能进入世界对话。')
@@ -1441,6 +1452,7 @@ function App() {
     <SnapLinkStage
       isDragging={isDragging}
       activeView={isAdminView ? 'admin' : isImageView ? 'image' : isAiChatView ? 'ai-chat' : 'conversation'}
+      deviceName={selfName}
       selectedRoomId={effectiveSelectedRoomId}
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
@@ -1471,6 +1483,7 @@ function App() {
       onJoinRoomById={handleJoinRoomByIdValue}
       onCreatePublicRoom={handleCreatePublicRoom}
       onOpenRoomConversation={handleOpenRoomConversation}
+      onDeviceNameChange={handleDeviceNameChange}
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
       onOpenImageView={() => handleViewChange('image')}

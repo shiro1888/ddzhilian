@@ -83,6 +83,7 @@ function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null
 type SnapLinkStageProps = {
   isDragging: boolean
   activeView: SnapLinkActiveView
+  deviceName: string
   selectedRoomId: string | null
   selectedConversationName: string
   activeTransferLabel: string
@@ -110,6 +111,7 @@ type SnapLinkStageProps = {
   onJoinRoomById: (roomId: string) => void
   onCreatePublicRoom: () => void
   onOpenRoomConversation: (roomId: string) => void
+  onDeviceNameChange: (deviceName: string) => void
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
   onOpenImageView: () => void
@@ -548,6 +550,7 @@ function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entry
 export function SnapLinkStage({
   isDragging,
   activeView,
+  deviceName,
   selectedRoomId,
   selectedConversationName,
   activeTransferLabel,
@@ -575,6 +578,7 @@ export function SnapLinkStage({
   onJoinRoomById,
   onCreatePublicRoom,
   onOpenRoomConversation,
+  onDeviceNameChange,
   onOpenRoomHome,
   onOpenAiChatView,
   onOpenImageView,
@@ -595,6 +599,9 @@ export function SnapLinkStage({
 }: SnapLinkStageProps) {
   const [isLobbyOpen, setIsLobbyOpen] = useState(activeView === 'conversation')
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
+  const [isRenamingDevice, setIsRenamingDevice] = useState(false)
+  const [deviceNameDraft, setDeviceNameDraft] = useState('')
+  const [deviceNameError, setDeviceNameError] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
@@ -878,6 +885,29 @@ export function SnapLinkStage({
     setActiveSharedTab(null)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
+  }
+
+  const startDeviceRename = () => {
+    setDeviceNameDraft(deviceName)
+    setDeviceNameError(null)
+    setIsRenamingDevice(true)
+  }
+
+  const cancelDeviceRename = () => {
+    setIsRenamingDevice(false)
+    setDeviceNameDraft('')
+    setDeviceNameError(null)
+  }
+
+  const commitDeviceRename = () => {
+    const normalizedName = deviceNameDraft.trim()
+    if (!normalizedName) {
+      setDeviceNameError('设备名不能为空')
+      return
+    }
+
+    onDeviceNameChange(normalizedName.slice(0, 80))
+    cancelDeviceRename()
   }
 
   const handleBackToLobby = () => {
@@ -1375,9 +1405,50 @@ export function SnapLinkStage({
         onDrop={onDrop}
       >
       <header className="dd-snaplink__topbar">
-        <div className="dd-snaplink__brand">
-          <i aria-hidden="true" />
-          <span>ddzhilian</span>
+        <div className="dd-snaplink__top-left">
+          <div className="dd-snaplink__brand">
+            <i aria-hidden="true" />
+            <span>ddzhilian</span>
+          </div>
+          {isRenamingDevice ? (
+            <form
+              className="dd-snaplink__device-name-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                commitDeviceRename()
+              }}
+            >
+              <input
+                value={deviceNameDraft}
+                autoFocus
+                maxLength={80}
+                aria-label="设备名"
+                onChange={(event) => {
+                  setDeviceNameDraft(event.target.value)
+                  setDeviceNameError(null)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    cancelDeviceRename()
+                  }
+                }}
+              />
+              <button type="submit">保存</button>
+              <button type="button" onClick={cancelDeviceRename}>
+                取消
+              </button>
+              {deviceNameError ? <span>{deviceNameError}</span> : null}
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="dd-snaplink__device-name"
+              title="修改设备名"
+              onClick={startDeviceRename}
+            >
+              设备：{deviceName}
+            </button>
+          )}
         </div>
         <div className="dd-snaplink__top-actions">
           {roomListItems.length > 0 ? (
@@ -1397,7 +1468,7 @@ export function SnapLinkStage({
               <option value="">大厅</option>
               <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
               <option value={snapLinkImageSelectionValue}>生图</option>
-              {isAdminOpen ? <option value={snapLinkAdminSelectionValue}>管理</option> : null}
+              <option value={snapLinkAdminSelectionValue}>管理</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -1436,11 +1507,13 @@ export function SnapLinkStage({
           >
             生图
           </button>
-          {isAdminOpen ? (
-            <button type="button" className="is-active" onClick={handleOpenAdmin}>
-              管理
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={isAdminOpen ? 'is-active' : ''}
+            onClick={handleOpenAdmin}
+          >
+            管理
+          </button>
         </div>
       </header>
 
