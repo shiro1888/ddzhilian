@@ -122,7 +122,7 @@ export function AdminStage({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isModuleCustomizerOpen, setIsModuleCustomizerOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<AdminSection>('dashboard')
-  const [themeMode, setThemeMode] = useState<AdminThemeMode>('system')
+  const [themeMode, setThemeMode] = useState<AdminThemeMode>('light')
   const currentSettings = aiSettings
   const allUsage = usage?.models ?? []
   const allTrendBuckets = usage?.trendBuckets ?? []

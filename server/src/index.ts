@@ -4751,6 +4751,16 @@ async function handleAiImageRequest(
   });
 
   cleanupImageGenerationJobs();
+  const existingJob = [...imageGenerationJobs.values()].find((job) =>
+    job.userId === authResult.user.id && (job.status === 'queued' || job.status === 'running'));
+  if (existingJob) {
+    writeJson(response, 202, {
+      ...toImageGenerationJobPayload(existingJob, resolveRequestBaseUrl(request)),
+      pollUrl: `/api/ai/image/jobs/${encodeURIComponent(existingJob.jobId)}`,
+    });
+    return;
+  }
+
   const createdAtDate = new Date();
   const createdAt = createdAtDate.toISOString();
   const jobId = randomUUID();

@@ -97,7 +97,7 @@ npm run dev
 
 旧的 `/`、`/connect`、`/send`、`/receive` 和 `/sessions` 路径仅作为兼容入口保留，都会回到 `/text`，不再是独立 UI 页面。
 
-当前产品形态以 SnapLink 体验为主，文件发送、接收、文本交换、room 历史、AI Chat、生图和后台入口都从 SnapLink 外壳进入。
+当前产品形态以 SnapLink 体验为主，文件发送、接收、文本交换、room 历史、AI Chat 和生图入口都从 SnapLink 外壳进入。`/admin` 仍是直接路由，但不在 SnapLink 导航中展示。
 
 ## 消息与 Markdown
 

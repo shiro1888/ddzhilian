@@ -66,7 +66,6 @@ const snapLinkQuickEmojis = [
 
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
 const snapLinkImageSelectionValue = '__snaplink_image__'
-const snapLinkAdminSelectionValue = '__snaplink_admin__'
 const snapLinkComposerMaxHeight = 120
 
 function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null) {
@@ -115,7 +114,6 @@ type SnapLinkStageProps = {
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
   onOpenImageView: () => void
-  onOpenAdminView: () => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onDirectFileSelection: (files: File[]) => void
@@ -582,7 +580,6 @@ export function SnapLinkStage({
   onOpenRoomHome,
   onOpenAiChatView,
   onOpenImageView,
-  onOpenAdminView,
   onChatDraftChange,
   onAiModelChange,
   onDirectFileSelection,
@@ -839,12 +836,6 @@ export function SnapLinkStage({
     onOpenImageView()
   }
 
-  const handleOpenAdmin = () => {
-    setActiveSharedTab(null)
-    setIsLobbyOpen(false)
-    onOpenAdminView()
-  }
-
   const handleJoinRoom = () => {
     const nextRoomId = normalizeRoomDraft(roomJoinDraft.trim())
     if (!nextRoomId) {
@@ -866,11 +857,6 @@ export function SnapLinkStage({
 
     if (roomId === snapLinkImageSelectionValue) {
       handleOpenImage()
-      return
-    }
-
-    if (roomId === snapLinkAdminSelectionValue) {
-      handleOpenAdmin()
       return
     }
 
@@ -1455,9 +1441,7 @@ export function SnapLinkStage({
             <select
               aria-label="选择对话"
               value={
-                isAdminOpen
-                  ? snapLinkAdminSelectionValue
-                  : isImageOpen
+                isImageOpen
                   ? snapLinkImageSelectionValue
                   : isAiChatOpen
                     ? snapLinkAiChatSelectionValue
@@ -1468,7 +1452,6 @@ export function SnapLinkStage({
               <option value="">大厅</option>
               <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
               <option value={snapLinkImageSelectionValue}>生图</option>
-              <option value={snapLinkAdminSelectionValue}>管理</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -1506,13 +1489,6 @@ export function SnapLinkStage({
             onClick={handleOpenImage}
           >
             生图
-          </button>
-          <button
-            type="button"
-            className={isAdminOpen ? 'is-active' : ''}
-            onClick={handleOpenAdmin}
-          >
-            管理
           </button>
         </div>
       </header>

@@ -99,7 +99,7 @@ The frontend uses browser history routes. Main routes include:
 
 Legacy `/`, `/connect`, `/send`, `/receive`, and `/sessions` paths are kept as compatibility entries and resolve to `/text`; they are not separate UI surfaces anymore.
 
-The current product shape centers on the SnapLink experience. File sending, receiving, text exchange, room history, AI chat entry, image generation entry, and admin entry are all reached from the SnapLink shell.
+The current product shape centers on the SnapLink experience. File sending, receiving, text exchange, room history, AI chat entry, and image generation entry are reached from the SnapLink shell. `/admin` remains a direct route and is not shown in the SnapLink navigation.
 
 ## Messages And Markdown
 
