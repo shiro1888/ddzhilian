@@ -1487,6 +1487,7 @@ function App() {
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
       onOpenImageView={() => handleViewChange('image')}
+      onOpenAdminView={() => handleViewChange('admin')}
       onChatDraftChange={setChatDraft}
       onAiModelChange={setSelectedAiModel}
       onDirectFileSelection={(files) => {

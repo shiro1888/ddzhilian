@@ -4115,13 +4115,23 @@
 }
 
 @media (max-width: 640px) {
+  .dd-snaplink__canvas.is-admin,
+  .dd-snaplink__app.is-admin,
+  .dd-snaplink__app.is-admin .dd-admin-workbench,
+  .dd-snaplink__app.is-admin .dd-admin-login-layout,
+  .dd-snaplink__app.is-admin .dd-admin-login-surface {
+      width: 100%;
+      min-width: 0;
+      max-width: 100vw;
+    }
+
   .dd-admin-login-surface {
       padding: 12px;
     }
 
   .dd-admin-login-card--full {
-      width: calc(100vw - 24px);
-      max-width: calc(100vw - 24px);
+      width: 100%;
+      max-width: 100%;
       padding: 18px;
     }
 }
@@ -8633,6 +8643,12 @@
       gap: 6px;
       padding-inline: 10px;
     }
+}
+
+.dd-snaplink__canvas.is-admin > .dd-snaplink__app.is-admin {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .dd-ai-chat__topbar {
