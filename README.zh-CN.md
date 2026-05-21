@@ -132,7 +132,7 @@ npm run dev
 - 基于 Supabase Auth 的后台管理员账号验证、超级管理员配置和普通管理员增删
 - 生成图会保存为服务端图片文件，并以账号鉴权的图片链接返回给前端，而不是把 base64 直接塞进 JSON
 - Cloudflare AI 或 OpenRouter 的文本 AI 代理接口
-- 通过 Codex 反代地址接入 `gpt-image-2` 图片生成与图片编辑接口
+- 通过 Codex 反代地址接入上游图片生成与图片编辑接口
 
 更详细的后端协议说明见 [server/README.md](server/README.md)。生图功能的账号鉴权、API 接入、图片上传、异步返回、图片落盘、历史记录和额度扣减流程见 [docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md](docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md)。
 
@@ -216,6 +216,7 @@ npm run dev
 - `CODEX_IMAGE_BASE_URL`
 - `CODEX_IMAGE_API_KEY`
 - `CODEX_IMAGE_MODEL`
+- `CODEX_IMAGE_FALLBACK_MODELS`
 - `CODEX_IMAGE_SIZE`
 - `CODEX_IMAGE_QUALITY`
 - `CODEX_IMAGE_MAX_PROMPT_CHARS`

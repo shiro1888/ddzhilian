@@ -118,7 +118,8 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `OPENROUTER_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
 - `CODEX_IMAGE_BASE_URL`: Codex reverse-proxy OpenAI-compatible base URL for `/api/ai/image`, default `https://cpa.shiro1888.com/v1`; the backend uses `/images/generations` for text-only requests and `/images/edits` when images are uploaded
 - `CODEX_IMAGE_API_KEY`: optional backend-only bearer token for the Codex image reverse proxy; falls back to `OPENAI_IMAGE_API_KEY` or `OPENAI_API_KEY`
-- `CODEX_IMAGE_MODEL`: image model used by `/api/ai/image`, default `gpt-image-2`
+- `CODEX_IMAGE_MODEL`: primary image model used by `/api/ai/image`, default `gpt-image-2`
+- `CODEX_IMAGE_FALLBACK_MODELS`: comma-separated fallback image models tried only when the primary model is unavailable at the upstream, default `gemini-3.1-flash-image`
 - `CODEX_IMAGE_SIZE`: generated image size sent to the reverse proxy, default `2000x2000`; the server accepts `auto` or explicit `WIDTHxHEIGHT` sizes, rejects any dimension above `2000`, and rounds explicit dimensions to the nearest multiple of 16 before calling the upstream image API.
 - `CODEX_IMAGE_QUALITY`: optional image quality parameter, default `auto`
 - `CODEX_IMAGE_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/image`, default `4000`

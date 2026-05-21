@@ -18,6 +18,8 @@ const defaultCloudflareAiModels = [
     label: 'GPT-OSS 120B',
   },
 ];
+const defaultCodexImageModel = 'gpt-image-2';
+const defaultCodexImageFallbackModels = ['gemini-3.1-flash-image'];
 const defaultAiSystemPrompt = [
   'You are an isolated chat assistant inside ddzhilian.',
   'You cannot access this website source code, files, database, server environment variables, user devices, network services, or admin tools.',
@@ -127,6 +129,7 @@ export interface ServerConfig {
     apiKey?: string;
     baseUrl: string;
     model: string;
+    models: string[];
     size: string;
     quality: string;
     maxPromptChars: number;
@@ -373,6 +376,16 @@ export function loadConfig(): ServerConfig {
     process.env.OPENAI_IMAGE_BASE_URL?.trim() ||
     process.env.OPENAI_BASE_URL?.trim() ||
     'https://cpa.shiro1888.com/v1';
+  const codexImageModel = process.env.CODEX_IMAGE_MODEL?.trim() || defaultCodexImageModel;
+  const configuredCodexImageFallbackModels = readStringList('CODEX_IMAGE_FALLBACK_MODELS');
+  const codexImageModels = [
+    ...new Set([
+      codexImageModel,
+      ...(configuredCodexImageFallbackModels.length > 0
+        ? configuredCodexImageFallbackModels
+        : defaultCodexImageFallbackModels),
+    ]),
+  ];
 
   if (publicHttpBaseUrl) {
     allowedOrigins.add(publicHttpBaseUrl);
@@ -479,7 +492,8 @@ export function loadConfig(): ServerConfig {
         process.env.OPENAI_API_KEY?.trim() ||
         undefined,
       baseUrl: normalizeOpenAiImageBaseUrl(codexImageBaseUrl),
-      model: process.env.CODEX_IMAGE_MODEL?.trim() || 'gpt-image-2',
+      model: codexImageModel,
+      models: codexImageModels,
       size: process.env.CODEX_IMAGE_SIZE?.trim() || '2000x2000',
       quality: process.env.CODEX_IMAGE_QUALITY?.trim() || 'auto',
       maxPromptChars: Math.max(1, readNumber('CODEX_IMAGE_MAX_PROMPT_CHARS', 4000)),

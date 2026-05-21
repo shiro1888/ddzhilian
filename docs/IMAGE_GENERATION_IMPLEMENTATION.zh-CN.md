@@ -90,6 +90,7 @@ SUPABASE_IMAGE_GENERATIONS_TABLE=image_generations
 CODEX_IMAGE_BASE_URL=https://cpa.shiro1888.com/v1
 CODEX_IMAGE_API_KEY=
 CODEX_IMAGE_MODEL=gpt-image-2
+CODEX_IMAGE_FALLBACK_MODELS=gemini-3.1-flash-image
 CODEX_IMAGE_SIZE=auto
 CODEX_IMAGE_QUALITY=auto
 CODEX_IMAGE_MAX_PROMPT_CHARS=4000
@@ -142,7 +143,7 @@ Cookie: ddzhilian_user_session=...
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `prompt` | 是 | 图片生成或修改提示词 |
-| `model` | 否 | 不传则使用 `CODEX_IMAGE_MODEL` |
+| `model` | 否 | 不传则使用 `CODEX_IMAGE_MODEL`，并在该模型上游不可用时按 `CODEX_IMAGE_FALLBACK_MODELS` 顺序降级 |
 | `size` | 否 | 不传则使用 `CODEX_IMAGE_SIZE`；`/image` 前端按所选比例把分辨率解释为最长边 1080 / 1440 / 2000；显式 `WIDTHxHEIGHT` 会在后端归一到最接近的 16 倍数后再转发上游 |
 | `quality` | 否 | 不传则使用 `CODEX_IMAGE_QUALITY` |
 | `image[]` | 否 | 参考图文件；存在时走图片编辑接口 |
@@ -421,6 +422,7 @@ Cookie: ddzhilian_user_session=...
 | 总额度不足 | 429 | `总额度已耗尽。` |
 | 上游超时 | 504/524 映射 | `图片反代请求超时，上游服务没有及时返回结果，请稍后重试。` |
 | 上游鉴权失败 | 401/403 映射 | `图片反代鉴权失败，请检查 CODEX_IMAGE_API_KEY 配置。` |
+| 上游模型认证不可用 | 上游 `auth_unavailable` | 优先自动尝试 `CODEX_IMAGE_FALLBACK_MODELS`；全部失败后返回 `图片模型上游认证不可用，请检查 CODEX_IMAGE_MODEL / CODEX_IMAGE_FALLBACK_MODELS 是否仍在上游 /models 中可用，或更换为支持该模型的上游认证。` |
 
 上游请求重试策略：
 
@@ -433,7 +435,7 @@ Cookie: ddzhilian_user_session=...
 
 1. 执行 Supabase schema 或迁移，确保 `user_profiles`、`image_generations` 字段完整。
 2. 在 `server/.env` 配置 `SUPABASE_URL` 与 `SUPABASE_SERVICE_ROLE_KEY`。
-3. 配置 `CODEX_IMAGE_BASE_URL`、`CODEX_IMAGE_API_KEY`、`CODEX_IMAGE_MODEL`。
+3. 配置 `CODEX_IMAGE_BASE_URL`、`CODEX_IMAGE_API_KEY`、`CODEX_IMAGE_MODEL` 和可选的 `CODEX_IMAGE_FALLBACK_MODELS`。
 4. 确认 `server/data/image-assets` 所在磁盘可写。
 5. 启动后端，访问 `/api/auth/session` 确认账号能力已配置。
 6. 登录账号后访问 `/image`。

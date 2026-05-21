@@ -1486,7 +1486,7 @@ export function ImageGenerationStage({
                   {formatImageTime(entry.createdAt)}
                   {durationLabel ? ` · 耗时 ${durationLabel}` : ''}
                 </span>
-                <a href={imageSrc} download={`gpt-image-2-${index + 1}.png`}>
+                <a href={imageSrc} download={`generated-image-${index + 1}.png`}>
                   下载
                 </a>
               </figcaption>

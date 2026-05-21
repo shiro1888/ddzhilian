@@ -124,6 +124,7 @@ type OpenAiCompatibleModelsResponse = {
     name?: unknown;
   }>;
   error?: {
+    code?: unknown;
     message?: string;
   };
 };
@@ -186,6 +187,7 @@ type AiImagePreparedRequest = {
 };
 type AiImageUpstreamRequest = {
   endpointKind: 'generation' | 'edit';
+  model: string;
   headers: Record<string, string>;
   createBody: () => string | FormData;
 };
@@ -206,6 +208,7 @@ type CodexImageGenerationResponse = {
     revised_prompt?: unknown;
   }>;
   error?: {
+    code?: unknown;
     message?: string;
   };
 };
@@ -224,6 +227,7 @@ type ImageGenerationJob = {
   user: AccountUserSummary;
   prompt: string;
   model: string;
+  modelCandidates: string[];
   size: string;
   quality: string;
   sourceImageCount: number;
@@ -1800,6 +1804,10 @@ function getCodexImageConfigurationError() {
     return 'Codex image model is not configured on this server.';
   }
 
+  if (config.codexImageAi.models.length === 0) {
+    return 'Codex image model list is not configured on this server.';
+  }
+
   return undefined;
 }
 
@@ -1849,6 +1857,7 @@ function buildCodexImageRequest(input: {
 
     return {
       endpointKind: 'generation',
+      model: input.model,
       headers: buildCodexImageHeaders('application/json'),
       createBody: () => JSON.stringify(requestBody),
     };
@@ -1856,6 +1865,7 @@ function buildCodexImageRequest(input: {
 
   return {
     endpointKind: 'edit',
+    model: input.model,
     headers: buildCodexImageHeaders(),
     createBody: () => {
       const formData = new FormData();
@@ -1907,7 +1917,7 @@ async function requestCodexImageAttempt(
         jobId: job.jobId,
         baseUrl: config.codexImageAi.baseUrl,
         endpointKind: upstreamRequest.endpointKind,
-        model: job.model,
+        model: upstreamRequest.model,
         attempt,
         parallelRequests,
         durationMs: Date.now() - startedAt,
@@ -1928,7 +1938,7 @@ async function requestCodexImageAttempt(
     endpointKind: upstreamRequest.endpointKind,
     status: response.status,
     ok: response.ok,
-    model: job.model,
+    model: upstreamRequest.model,
     attempt,
     parallelRequests,
     durationMs,
@@ -2015,7 +2025,7 @@ async function requestCodexImageWithRace(
             baseUrl: config.codexImageAi.baseUrl,
             endpointKind: upstreamRequest.endpointKind,
             status: result.response.status,
-            model: job.model,
+            model: upstreamRequest.model,
             attempt,
             parallelRequests,
           });
@@ -2035,7 +2045,14 @@ async function requestCodexImageWithRace(
 }
 
 function formatCodexImageError(payload: CodexImageGenerationResponse | null) {
-  return payload?.error?.message?.trim();
+  const code = typeof payload?.error?.code === 'string' ? payload.error.code.trim() : '';
+  const message = payload?.error?.message?.trim() ?? '';
+  return [code, message].filter(Boolean).join(': ') || undefined;
+}
+
+function isCodexImageModelUnavailableFailure(payload: CodexImageGenerationResponse | null) {
+  const message = formatCodexImageError(payload)?.toLowerCase() ?? '';
+  return /auth_unavailable|no auth available|no available channel|model .*not available|model .*unavailable|model .*not found/.test(message);
 }
 
 function formatCodexImageFailureMessage(
@@ -2044,6 +2061,10 @@ function formatCodexImageFailureMessage(
 ) {
   const message = formatCodexImageError(payload);
   if (message) {
+    if (/auth_unavailable|no auth available/i.test(message)) {
+      return '图片模型上游认证不可用，请检查 CODEX_IMAGE_MODEL / CODEX_IMAGE_FALLBACK_MODELS 是否仍在上游 /models 中可用，或更换为支持该模型的上游认证。';
+    }
+
     return message;
   }
 
@@ -4421,7 +4442,7 @@ async function handleAiChatRequest(
 
 async function runImageGenerationJob(
   job: ImageGenerationJob,
-  upstreamRequest: AiImageUpstreamRequest,
+  upstreamRequests: AiImageUpstreamRequest[],
 ) {
   touchImageGenerationJob(job, 'running');
 
@@ -4438,18 +4459,48 @@ async function runImageGenerationJob(
   }
 
   try {
-    const {
-      response: imageResponse,
-      payload: imagePayload,
-      attempts: imageAttempts,
-    } = await requestCodexImageWithRace(job, upstreamRequest);
+    let imagePayload: CodexImageGenerationResponse | null = null;
 
-    if (!imageResponse.ok || !imagePayload || imagePayload.error) {
-      const message = formatCodexImageFailureMessage(imageResponse.status, imagePayload);
+    for (const [index, upstreamRequest] of upstreamRequests.entries()) {
+      job.model = upstreamRequest.model;
+      const {
+        response: imageResponse,
+        payload: candidatePayload,
+        attempts: imageAttempts,
+      } = await requestCodexImageWithRace(job, upstreamRequest);
+
+      if (imageResponse.ok && candidatePayload && !candidatePayload.error) {
+        imagePayload = candidatePayload;
+
+        if (imageAttempts > 1) {
+          console.warn('Codex image reverse proxy retry succeeded', {
+            jobId: job.jobId,
+            model: upstreamRequest.model,
+            attempts: imageAttempts,
+          });
+        }
+
+        break;
+      }
+
+      const message = formatCodexImageFailureMessage(imageResponse.status, candidatePayload);
+      const fallbackRequest = upstreamRequests[index + 1];
+      if (fallbackRequest && isCodexImageModelUnavailableFailure(candidatePayload)) {
+        console.warn('Codex image reverse proxy model unavailable; falling back', {
+          jobId: job.jobId,
+          status: imageResponse.status,
+          fromModel: upstreamRequest.model,
+          toModel: fallbackRequest.model,
+          attempts: imageAttempts,
+          message,
+        });
+        continue;
+      }
+
       console.error('Codex image reverse proxy job failed', {
         jobId: job.jobId,
         status: imageResponse.status,
-        model: job.model,
+        model: upstreamRequest.model,
         attempts: imageAttempts,
         message,
       });
@@ -4458,12 +4509,10 @@ async function runImageGenerationJob(
       return;
     }
 
-    if (imageAttempts > 1) {
-      console.warn('Codex image reverse proxy retry succeeded', {
-        jobId: job.jobId,
-        model: job.model,
-        attempts: imageAttempts,
-      });
+    if (!imagePayload) {
+      job.error = 'Codex image reverse proxy request did not return a usable response.';
+      touchImageGenerationJob(job, 'failed');
+      return;
     }
 
     const extractedImages = extractCodexImageResults(imagePayload);
@@ -4623,10 +4672,10 @@ async function runImageGenerationJob(
 
 function startImageGenerationJob(
   job: ImageGenerationJob,
-  upstreamRequest: AiImageUpstreamRequest,
+  upstreamRequests: AiImageUpstreamRequest[],
 ) {
   setTimeout(() => {
-    void runImageGenerationJob(job, upstreamRequest);
+    void runImageGenerationJob(job, upstreamRequests);
   }, 0);
 }
 
@@ -4721,7 +4770,11 @@ async function handleAiImageRequest(
     return;
   }
 
-  const model = normalizeImageOption(payload.model, config.codexImageAi.model);
+  const requestedModel = typeof payload.model === 'string' && payload.model.trim()
+    ? payload.model.trim()
+    : '';
+  const modelCandidates = requestedModel ? [requestedModel] : config.codexImageAi.models;
+  const model = modelCandidates[0] ?? config.codexImageAi.model;
   const sizeResult = normalizeImageSizeOption(payload.size, config.codexImageAi.size);
   if (!sizeResult.ok) {
     writeJson(response, 400, { error: sizeResult.error });
@@ -4742,13 +4795,13 @@ async function handleAiImageRequest(
     return;
   }
 
-  const upstreamRequest = buildCodexImageRequest({
-    model,
+  const upstreamRequests = modelCandidates.map((candidateModel) => buildCodexImageRequest({
+    model: candidateModel,
     prompt,
     size,
     quality,
     uploadedImages,
-  });
+  }));
 
   cleanupImageGenerationJobs();
   const existingJob = [...imageGenerationJobs.values()].find((job) =>
@@ -4796,6 +4849,7 @@ async function handleAiImageRequest(
     user: authResult.user,
     prompt,
     model,
+    modelCandidates,
     size,
     quality,
     sourceImageCount: uploadedImages.length,
@@ -4807,7 +4861,7 @@ async function handleAiImageRequest(
   };
 
   imageGenerationJobs.set(job.jobId, job);
-  startImageGenerationJob(job, upstreamRequest);
+  startImageGenerationJob(job, upstreamRequests);
   writeJson(response, 202, {
     ...toImageGenerationJobPayload(job, resolveRequestBaseUrl(request)),
     pollUrl: `/api/ai/image/jobs/${encodeURIComponent(job.jobId)}`,

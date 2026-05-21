@@ -219,6 +219,7 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `CODEX_IMAGE_BASE_URL`
 - `CODEX_IMAGE_API_KEY`
 - `CODEX_IMAGE_MODEL`
+- `CODEX_IMAGE_FALLBACK_MODELS`
 - `CODEX_IMAGE_SIZE`
 - `CODEX_IMAGE_QUALITY`
 - `CODEX_IMAGE_MAX_PROMPT_CHARS`

@@ -948,8 +948,9 @@
 }
 
 .dd-admin-sidebar__nav button.is-active {
-  background: linear-gradient(135deg, #27c064 0%, #1eb154 100%);
+  background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.62);
 }
 
 .dd-admin-sidebar__nav button.is-subtle {
@@ -2895,7 +2896,7 @@
 .dd-admin-sidebar__nav button.is-active {
   background: var(--cc-active-row);
   color: var(--cc-text);
-  box-shadow: inset 3px 0 0 var(--cc-green);
+  box-shadow: inset 3px 0 0 var(--cc-active-accent);
 }
 
 .dd-admin-sidebar__nav button:not(.is-active):hover,
@@ -3275,7 +3276,8 @@
   --cc-text-secondary: var(--snap-ink-soft, #52525b);
   --cc-text-tertiary: var(--snap-muted, #a1a1aa);
   --cc-hover: var(--snap-bg, #f5f4f1);
-  --cc-active-row: color-mix(in srgb, var(--snap-bg, #f5f4f1) 82%, var(--snap-green, #16a34a) 8%);
+  --cc-active-row: color-mix(in srgb, var(--snap-bg, #f5f4f1) 76%, #ffffff 24%);
+  --cc-active-accent: #3f3f46;
   --cc-green: var(--snap-green, #16a34a);
   --input-bg: #ffffff;
   --input-border-soft: var(--snap-border, #e4e4e7);
@@ -3431,7 +3433,7 @@
 .dd-admin-sidebar__nav button.is-active {
   background: var(--cc-active-row);
   color: var(--cc-text);
-  box-shadow: inset 3px 0 0 var(--cc-green);
+  box-shadow: inset 3px 0 0 var(--cc-active-accent);
 }
 
 .dd-admin-nav-icon {
@@ -3733,7 +3735,8 @@
   --cc-text-secondary: #c2d0c6;
   --cc-text-tertiary: #91a494;
   --cc-hover: rgba(190, 216, 195, 0.1);
-  --cc-active-row: rgba(54, 184, 107, 0.18);
+  --cc-active-row: rgba(237, 245, 239, 0.1);
+  --cc-active-accent: #d4d4d8;
   --input-bg: #152019;
   --input-border-soft: rgba(155, 179, 161, 0.28);
 }
@@ -3751,7 +3754,8 @@
       --cc-text-secondary: #c2d0c6;
       --cc-text-tertiary: #91a494;
       --cc-hover: rgba(190, 216, 195, 0.1);
-      --cc-active-row: rgba(54, 184, 107, 0.18);
+      --cc-active-row: rgba(237, 245, 239, 0.1);
+      --cc-active-accent: #d4d4d8;
       --input-bg: #152019;
       --input-border-soft: rgba(155, 179, 161, 0.28);
     }
@@ -7975,7 +7979,7 @@
 .dd-snaplink__file-progress div {
   height: 100%;
   border-radius: inherit;
-  background: var(--snap-green);
+  background: color-mix(in srgb, var(--snap-ink-soft) 76%, var(--snap-border));
   transition: width 160ms ease;
 }
 
