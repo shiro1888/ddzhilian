@@ -216,6 +216,15 @@ export type ServerEvent =
       payload: DirectorySnapshotPayload
     }
   | {
+      type: 'history-recalled'
+      payload: {
+        kind: 'text' | 'file'
+        historyId: string
+        roomId: string
+        recalledAt: string
+      }
+    }
+  | {
       type: 'session-created'
       payload: {
         sessionId: string
@@ -344,6 +353,7 @@ export type TextRecord = {
   id: string
   sessionId: string
   roomId?: string
+  sourceDeviceId?: string
   fromSelf: boolean
   senderName?: string
   status?: 'sending' | 'failed'

@@ -633,7 +633,7 @@ function App() {
               '',
             sourceDeviceId: record.sourceDeviceId,
             fromSelf: record.sourceDeviceId === self?.deviceId,
-            senderName: record.sourceDeviceName,
+            senderName: deviceNameById.get(record.sourceDeviceId) ?? record.sourceDeviceName,
             status: undefined,
             text: record.text,
             createdAt: record.createdAt,
@@ -814,7 +814,10 @@ function App() {
         fileName: file.fileName,
         fileSize: file.size,
         mimeType: file.mimeType,
-        subtitle: file.sourceDeviceId === self?.deviceId ? '已归档到当前对话' : file.sourceDeviceName,
+        subtitle:
+          file.sourceDeviceId === self?.deviceId
+            ? '已归档到当前对话'
+            : deviceNameById.get(file.sourceDeviceId) ?? file.sourceDeviceName,
         detail: downloadProgress
           ? `${formatFileSize(downloadProgress.receivedBytes)} / ${formatFileSize(downloadProgress.totalBytes)}`
           : `${formatFileSize(file.size)} · 历史文件`,
@@ -851,7 +854,12 @@ function App() {
         fromSelf: record.fromSelf,
         senderName: record.fromSelf
           ? selfName
-          : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
+          : sourceDeviceId
+            ? deviceNameById.get(sourceDeviceId) ??
+              sessionPeerNameById.get(record.sessionId) ??
+              record.senderName ??
+              '对方设备'
+            : record.senderName ?? sessionPeerNameById.get(record.sessionId) ?? '对方设备',
         status: record.status,
         createdAt: record.createdAt,
         text: record.text,
@@ -1056,7 +1064,12 @@ function App() {
         label: link.label,
         sourceName: record.fromSelf
           ? selfName
-          : record.senderName?.trim() || sessionPeerNameById.get(record.sessionId) || '对方设备',
+          : (
+              (record.sourceDeviceId ? deviceNameById.get(record.sourceDeviceId) : undefined) ??
+              record.senderName?.trim() ??
+              sessionPeerNameById.get(record.sessionId) ??
+              '对方设备'
+            ),
         createdAt: record.createdAt,
       })),
     ),

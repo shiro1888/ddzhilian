@@ -909,6 +909,7 @@ export function useDdzhilian() {
     const peerIndex = new Map(normalizedPeers.map((peer) => [peer.deviceId, peer] as const))
     const peerNameById = new Map(normalizedPeers.map((peer) => [peer.deviceId, peer.deviceName] as const))
     peerNameById.set(snapshot.self.deviceId, snapshot.self.deviceName)
+    const snapshotHistoryFileIds = new Set(snapshot.historyFiles.map((file) => file.historyId))
     const snapshotIds = new Set(snapshot.sessions.map((session) => session.sessionId))
     const roomsNeedingRefresh = snapshot.rooms.filter((room) => {
       const previousRoom = roomsById[room.roomId]
@@ -1006,6 +1007,14 @@ export function useDdzhilian() {
       setTransferItems((previous) => {
         let changed = false
         const next = previous.map((item) => {
+          if (
+            archivedHistoryIdsRef.current.has(item.historyId) &&
+            !snapshotHistoryFileIds.has(item.historyId)
+          ) {
+            changed = true
+            return null
+          }
+
           const targetDeviceName = item.targetDeviceId
             ? peerNameById.get(item.targetDeviceId)
             : undefined
@@ -1019,9 +1028,18 @@ export function useDdzhilian() {
             ...item,
             targetDeviceName,
           }
-        })
+        }).filter((item): item is TransferItem => Boolean(item))
 
         return changed ? next : previous
+      })
+      setReceivedFiles((previous) => {
+        const next = previous.filter((file) =>
+          !file.historyId ||
+          !archivedHistoryIdsRef.current.has(file.historyId) ||
+          snapshotHistoryFileIds.has(file.historyId),
+        )
+
+        return next.length === previous.length ? previous : next
       })
     })
 
@@ -1037,6 +1055,51 @@ export function useDdzhilian() {
     for (const room of roomsNeedingRefresh) {
       void fetchRoomHistoryTexts(room.roomId, 'initial', { roomSummary: room })
     }
+  }
+
+  const applyHistoryRecall = (
+    payload: Extract<ServerEvent, { type: 'history-recalled' }>['payload'],
+  ) => {
+    const { historyId, kind } = payload
+
+    if (kind === 'text') {
+      archivedTextHistoryIdsRef.current.delete(historyId)
+      archivingTextHistoryIdsRef.current.delete(historyId)
+      textRecordsRef.current = textRecordsRef.current.filter((record) => record.id !== historyId)
+      historyTextsRef.current = historyTextsRef.current.filter((record) => record.historyId !== historyId)
+
+      startTransition(() => {
+        setTextRecords((previous) => previous.filter((record) => record.id !== historyId))
+        setHistoryTexts((previous) => previous.filter((record) => record.historyId !== historyId))
+      })
+      return
+    }
+
+    archivedHistoryIdsRef.current.delete(historyId)
+    archivingHistoryIdsRef.current.delete(historyId)
+    transferFilesRef.current.delete(historyId)
+
+    for (const transfer of transferItemsRef.current) {
+      if (transfer.historyId === historyId) {
+        transferFilesRef.current.delete(transfer.id)
+      }
+    }
+
+    for (const [transferId, draft] of incomingTransfersRef.current) {
+      if (draft.historyId === historyId) {
+        incomingTransfersRef.current.delete(transferId)
+      }
+    }
+
+    historyFilesRef.current = historyFilesRef.current.filter((record) => record.historyId !== historyId)
+    transferItemsRef.current = transferItemsRef.current.filter((record) => record.historyId !== historyId)
+    receivedFilesRef.current = receivedFilesRef.current.filter((record) => record.historyId !== historyId)
+
+    startTransition(() => {
+      setHistoryFiles((previous) => previous.filter((record) => record.historyId !== historyId))
+      setTransferItems((previous) => previous.filter((record) => record.historyId !== historyId))
+      setReceivedFiles((previous) => previous.filter((record) => record.historyId !== historyId))
+    })
   }
 
   const receiveFileChunk = (transferId: string, index: number, chunk: Uint8Array) => {
@@ -1110,6 +1173,7 @@ export function useDdzhilian() {
           ...previous,
             {
               id: message.id,
+              sourceDeviceId: fromDeviceId,
               sessionId,
               roomId: sessionsRef.current[sessionId]?.roomId,
               fromSelf: false,
@@ -1574,6 +1638,11 @@ export function useDdzhilian() {
 
     if (event.type === 'directory-snapshot') {
       applySnapshot(event.payload)
+      return
+    }
+
+    if (event.type === 'history-recalled') {
+      applyHistoryRecall(event.payload)
       return
     }
 
@@ -2647,6 +2716,7 @@ export function useDdzhilian() {
       id: options?.recordId ?? crypto.randomUUID(),
       sessionId,
       roomId: sessionsRef.current[sessionId]?.roomId,
+      sourceDeviceId: selfRef.current?.deviceId,
       fromSelf: true,
       status: 'sending',
       text,
@@ -2711,6 +2781,7 @@ export function useDdzhilian() {
                 id: historyId,
                 sessionId: '',
                 roomId,
+                sourceDeviceId: activeSelf.deviceId,
                 fromSelf: true,
                 senderName: activeSelf.deviceName,
                 status: 'sending' as const,

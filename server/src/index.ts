@@ -5018,6 +5018,11 @@ async function handleHistoryTextDeleteRequest(
     const deleted = await history.deleteText(historyId);
     writeJson(response, 200, { ok: true, deleted });
     if (deleted) {
+      broadcastHistoryRecalled({
+        kind: 'text',
+        historyId,
+        roomId: record.roomId,
+      });
       broadcastSnapshots();
     }
   } catch (error) {
@@ -5070,6 +5075,11 @@ async function handleHistoryFileDeleteRequest(
     const deleted = await history.deleteFile(historyId);
     writeJson(response, 200, { ok: true, deleted });
     if (deleted) {
+      broadcastHistoryRecalled({
+        kind: 'file',
+        historyId,
+        roomId: record.roomId,
+      });
       broadcastSnapshots();
     }
   } catch (error) {
@@ -5679,6 +5689,33 @@ function broadcastSnapshots() {
         payload: snapshot,
       });
     }
+  }
+}
+
+function broadcastHistoryRecalled(payload: {
+  kind: 'text' | 'file';
+  historyId: string;
+  roomId: string;
+}) {
+  const room = rooms.getById(payload.roomId);
+  if (!room) {
+    return;
+  }
+
+  const recalledAt = new Date().toISOString();
+  for (const memberId of room.memberIds) {
+    const device = devices.getById(memberId);
+    if (!device) {
+      continue;
+    }
+
+    send(device.socket, {
+      type: 'history-recalled',
+      payload: {
+        ...payload,
+        recalledAt,
+      },
+    });
   }
 }
 

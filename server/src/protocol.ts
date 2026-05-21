@@ -249,6 +249,15 @@ export type ServerEvent =
       payload: DirectorySnapshotPayload;
     }
   | {
+      type: 'history-recalled';
+      payload: {
+        kind: 'text' | 'file';
+        historyId: string;
+        roomId: string;
+        recalledAt: string;
+      };
+    }
+  | {
       type: 'session-created';
       payload: {
         sessionId: string;
