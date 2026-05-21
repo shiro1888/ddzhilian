@@ -10,7 +10,13 @@ import type {
   ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { FileConversationEntry, RoomListItem, SharedContentTab, UnifiedConversationEntry } from '../types'
+import type {
+  ComposerImageDraft,
+  FileConversationEntry,
+  RoomListItem,
+  SharedContentTab,
+  UnifiedConversationEntry,
+} from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
 import {
   extractPlainTextFromRichText,
@@ -89,6 +95,7 @@ type SnapLinkStageProps = {
   roomJoinDraft: string
   roomListItems: RoomListItem[]
   chatDraft: string
+  composerImageDrafts: ComposerImageDraft[]
   fileInputId: string
   isSendDisabled: boolean
   isAiGenerating: boolean
@@ -116,6 +123,8 @@ type SnapLinkStageProps = {
   onOpenImageView: () => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
+  onPastedImageSelection: (files: File[]) => void
+  onComposerImageRemove: (id: string) => void
   onDirectFileSelection: (files: File[]) => void
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
@@ -512,17 +521,6 @@ function resolveActorIdentity(
   }
 }
 
-function OnlineMemberIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-      <path d="M3.5 19a5 5 0 0 1 10 0" />
-      <path d="M16.5 11.5a2.5 2.5 0 1 0 0-5" />
-      <path d="M15 15.5a4.5 4.5 0 0 1 5.5 3.5" />
-    </svg>
-  )
-}
-
 function isConversationMessageEntry(
   entry: UnifiedConversationEntry | undefined,
 ): entry is Exclude<UnifiedConversationEntry, { entryType: 'notice' }> {
@@ -555,6 +553,7 @@ export function SnapLinkStage({
   roomJoinDraft,
   roomListItems,
   chatDraft,
+  composerImageDrafts,
   fileInputId,
   isSendDisabled,
   isAiGenerating,
@@ -582,6 +581,8 @@ export function SnapLinkStage({
   onOpenImageView,
   onChatDraftChange,
   onAiModelChange,
+  onPastedImageSelection,
+  onComposerImageRemove,
   onDirectFileSelection,
   onSendText,
   onRecallText,
@@ -1039,7 +1040,7 @@ export function SnapLinkStage({
     setIsEmojiPickerOpen(false)
     setIsBotPanelOpen(false)
     botMentionTriggerRangeRef.current = null
-    onDirectFileSelection(pastedImageFiles)
+    onPastedImageSelection(pastedImageFiles)
   }
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -1465,7 +1466,6 @@ export function SnapLinkStage({
               aria-label={`${selectedRoomOnlineCount.toString()} 人在线`}
               title={`${selectedRoomOnlineCount.toString()} 人在线`}
             >
-              <OnlineMemberIcon />
               <span>{selectedRoomOnlineCount}</span>
             </span>
           ) : null}
@@ -1764,6 +1764,23 @@ export function SnapLinkStage({
                       ×
                     </button>
                   </div>
+                </div>
+              ) : null}
+
+              {composerImageDrafts.length > 0 ? (
+                <div className="dd-snaplink__image-drafts" aria-label="待发送图片">
+                  {composerImageDrafts.map((image) => (
+                    <figure key={image.id} className="dd-snaplink__image-draft">
+                      <img src={image.dataUrl} alt={image.name} />
+                      <button
+                        type="button"
+                        aria-label={`移除 ${image.name}`}
+                        onClick={() => onComposerImageRemove(image.id)}
+                      >
+                        ×
+                      </button>
+                    </figure>
+                  ))}
                 </div>
               ) : null}
 

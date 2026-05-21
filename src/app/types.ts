@@ -27,6 +27,14 @@ export type FileConversationEntry = {
   canRecall?: boolean
 }
 
+export type ComposerImageDraft = {
+  id: string
+  name: string
+  size: number
+  mimeType?: string
+  dataUrl: string
+}
+
 export type ConversationNotice = {
   id: string
   sessionId: string

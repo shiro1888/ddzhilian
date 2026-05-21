@@ -8,6 +8,7 @@ import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
+  ComposerImageDraft,
   ConversationNotice,
   NavView,
   RoomListItem,
@@ -21,6 +22,8 @@ import {
   formatFileSize,
   formatRelativeTime,
   hasRichTextImage,
+  readImageFileAsDataUrl,
+  renderInlineImageHtml,
   transferStatusLabel,
   transferStatusTone,
 } from './app/utils'
@@ -206,8 +209,14 @@ function extractAiChatImagesFromRichText(value: string): AiChatImageInput[] {
   return images
 }
 
+function isSupportedChatInlineImage(file: File) {
+  const mimeType = normalizeAiChatImageMimeType(file.type)
+  return Boolean(mimeType && AI_CHAT_ALLOWED_IMAGE_TYPES.has(mimeType))
+}
+
 const AI_CHAT_IMAGE_MAX_COUNT = 4
 const AI_CHAT_ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+const CHAT_INLINE_IMAGE_MAX_BYTES = 4 * 1024 * 1024
 
 function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
@@ -219,6 +228,7 @@ function App() {
   const fileInputId = useId()
   const [isDragging, setIsDragging] = useState(false)
   const [chatDraft, setChatDraft] = useState('')
+  const [composerImageDrafts, setComposerImageDrafts] = useState<ComposerImageDraft[]>([])
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
@@ -900,10 +910,12 @@ function App() {
       : '选择一个已有对话后，消息和文件会显示在这里。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
-    hasRichTextImage(chatDraft)
+    hasRichTextImage(chatDraft) ||
+    composerImageDrafts.length > 0
   const hasChatTextDraft =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
-    hasRichTextImage(chatDraft)
+    hasRichTextImage(chatDraft) ||
+    composerImageDrafts.length > 0
   const canSendRoomContentWithoutConnection =
     Boolean(selectedRoom) &&
     hasChatTextDraft
@@ -1192,9 +1204,64 @@ function App() {
     }
   }
 
+  const handleComposerImagePaste = async (files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    const remainingSlots = Math.max(0, AI_CHAT_IMAGE_MAX_COUNT - composerImageDrafts.length)
+    if (remainingSlots === 0) {
+      setLocalError(`一次最多暂存 ${AI_CHAT_IMAGE_MAX_COUNT.toString()} 张图片。`)
+      return
+    }
+
+    const selectedFiles = files.slice(0, remainingSlots)
+    const acceptedFiles = selectedFiles.filter((file) =>
+      file.size <= CHAT_INLINE_IMAGE_MAX_BYTES &&
+      isSupportedChatInlineImage(file),
+    )
+    const skippedCount = files.length - acceptedFiles.length
+
+    if (acceptedFiles.length === 0) {
+      setLocalError('粘贴图片需为 PNG、JPEG、WebP 或 GIF，且不能超过 4 MiB；其他图片请改用文件发送。')
+      return
+    }
+
+    try {
+      const drafts = await Promise.all(
+        acceptedFiles.map(async (file) => ({
+          id: crypto.randomUUID(),
+          name: file.name || '粘贴图片',
+          size: file.size,
+          mimeType: file.type || undefined,
+          dataUrl: await readImageFileAsDataUrl(file),
+        })),
+      )
+
+      setComposerImageDrafts((previous) => [
+        ...previous,
+        ...drafts,
+      ].slice(0, AI_CHAT_IMAGE_MAX_COUNT))
+      setLocalError(
+        skippedCount > 0
+          ? `已暂存 ${acceptedFiles.length.toString()} 张图片，另有 ${skippedCount.toString()} 张因数量或大小限制未加入。`
+          : null,
+      )
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '图片读取失败。')
+    }
+  }
+
   const handleSendText = async (quoteHtml = '') => {
     const draftSource = chatDraft
-    const rawText = quoteHtml ? `${quoteHtml}${draftSource}` : draftSource
+    const inlineImageHtml = composerImageDrafts
+      .map((image) => renderInlineImageHtml(image.dataUrl, image.name))
+      .join('')
+    const rawText = [
+      quoteHtml,
+      draftSource,
+      inlineImageHtml ? `<div>${inlineImageHtml}</div>` : '',
+    ].filter(Boolean).join('\n')
     const draftPlainText = extractPlainTextFromRichText(draftSource).trim()
     const quotedText = quoteHtml ? extractPlainTextFromRichText(quoteHtml).trim() : ''
     const normalizedText = extractPlainTextFromRichText(rawText).trim()
@@ -1224,7 +1291,7 @@ function App() {
     const isPublicRoom = Boolean(selectedRoom?.isPublic)
     const shouldSendRoomContentThroughHistory =
       Boolean(selectedRoom) &&
-      (isPublicRoom || selectedRoomConnectedTargets.length === 0)
+      (isPublicRoom || selectedRoomConnectedTargets.length === 0 || hasImageContent)
 
     if (selectedRoomConnectedTargets.length === 0 && !shouldSendRoomContentThroughHistory) {
       setLocalError('先与当前选中的设备建立连接，再发送消息。')
@@ -1258,6 +1325,7 @@ function App() {
       }
 
       setChatDraft('')
+      setComposerImageDrafts([])
       setLocalError(null)
 
       if (aiBotPrompt !== null) {
@@ -1393,6 +1461,7 @@ function App() {
       isAdminRenamingOnlineDevice={isAdminRenamingOnlineDevice}
       isAdminUpdatingUser={isAdminUpdatingUser}
       isAdminUpdatingRole={isAdminUpdatingRole}
+      isAdminDevLoginEnabled={isAdminDevLoginEnabled}
       adminError={adminError}
       adminToasts={adminToasts}
       historyStats={adminHistoryStats}
@@ -1475,6 +1544,7 @@ function App() {
       roomJoinDraft={joinRoomIdDraft}
       roomListItems={roomListItems}
       chatDraft={chatDraft}
+      composerImageDrafts={composerImageDrafts}
       fileInputId={fileInputId}
       isSendDisabled={
         !hasChatDraftContent ||
@@ -1505,6 +1575,12 @@ function App() {
       onOpenImageView={() => handleViewChange('image')}
       onChatDraftChange={setChatDraft}
       onAiModelChange={setSelectedAiModel}
+      onPastedImageSelection={(files) => {
+        void handleComposerImagePaste(files)
+      }}
+      onComposerImageRemove={(imageId) => {
+        setComposerImageDrafts((previous) => previous.filter((image) => image.id !== imageId))
+      }}
       onDirectFileSelection={(files) => {
         void handleSendFilesToCurrentConversation(files)
       }}

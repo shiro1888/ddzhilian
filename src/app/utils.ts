@@ -1022,9 +1022,68 @@ function highlightCodeHtml(value: string, language: string) {
   return escapeHtml(value)
 }
 
+function isCompleteHtmlDocument(value: string) {
+  const trimmedValue = value.trim()
+  return (
+    /^(?:<!doctype\s+html[^>]*>\s*)?<html\b/i.test(trimmedValue) &&
+    /<head\b[\s\S]*<\/head>/i.test(trimmedValue) &&
+    /<body\b[\s\S]*<\/body>/i.test(trimmedValue) &&
+    /<\/html>\s*$/i.test(trimmedValue)
+  )
+}
+
+function createHtmlDocumentSwitchName(codeText: string) {
+  let hash = 0
+  for (let index = 0; index < codeText.length; index += 1) {
+    hash = Math.imul(31, hash) + codeText.charCodeAt(index)
+  }
+
+  return `dd-html-document-view-${(hash >>> 0).toString(36)}-${codeText.length.toString(36)}`
+}
+
+function renderHtmlDocumentPreviewHtml(codeText: string) {
+  // Keep user-provided HTML isolated from the parent chat document.
+  return [
+    '<div class="dd-html-preview" aria-label="HTML 内嵌预览">',
+    '<div class="dd-html-preview__header">',
+    '<span>HTML</span>',
+    '<span>预览</span>',
+    '</div>',
+    `<iframe class="dd-html-preview__frame" title="HTML 预览" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" srcdoc="${escapeHtml(codeText)}"></iframe>`,
+    '</div>',
+  ].join('')
+}
+
+function renderHtmlDocumentBlockHtml(codeText: string, languageLabel: string) {
+  const switchName = createHtmlDocumentSwitchName(codeText)
+  const fullscreenId = `${switchName}-fullscreen`
+  return [
+    '<div class="dd-html-document">',
+    `<input id="${escapeHtml(fullscreenId)}" class="dd-html-document__fullscreen-toggle" type="checkbox" />`,
+    `<pre class="dd-code-block dd-html-document__code-block" data-language="${escapeHtml(languageLabel)}">`,
+    '<div class="dd-code-block__header dd-html-document__header">',
+    `<span class="dd-code-block__language">${escapeHtml(languageLabel)}</span>`,
+    '<span class="dd-html-document__tabs" role="group" aria-label="HTML 显示模式">',
+    `<label class="dd-html-document__tab dd-html-document__tab--code"><input type="radio" name="${escapeHtml(switchName)}" /><span>代码</span></label>`,
+    `<label class="dd-html-document__tab dd-html-document__tab--preview"><input type="radio" name="${escapeHtml(switchName)}" checked /><span>预览</span></label>`,
+    '</span>',
+    `<label class="dd-html-document__fullscreen" for="${escapeHtml(fullscreenId)}"><span class="dd-html-document__fullscreen-open">全屏</span><span class="dd-html-document__fullscreen-close">退出</span></label>`,
+    '<button type="button" class="dd-code-copy">复制</button>',
+    '</div>',
+    `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
+    '</pre>',
+    renderHtmlDocumentPreviewHtml(codeText),
+    '</div>',
+  ].join('')
+}
+
 function renderCodeBlockHtml(codeText: string, language: string) {
   const languageLabel = detectCodeLanguage(codeText, language)
-  return [
+  if (languageLabel === 'html' && isCompleteHtmlDocument(codeText)) {
+    return renderHtmlDocumentBlockHtml(codeText, languageLabel)
+  }
+
+  const codeBlockHtml = [
     `<pre class="dd-code-block" data-language="${escapeHtml(languageLabel)}">`,
     '<div class="dd-code-block__header">',
     `<span class="dd-code-block__language">${escapeHtml(languageLabel)}</span>`,
@@ -1033,6 +1092,8 @@ function renderCodeBlockHtml(codeText: string, language: string) {
     `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
     '</pre>',
   ].join('')
+
+  return codeBlockHtml
 }
 
 function shouldRenderAsCodeBlock(value: string, root: Element) {
@@ -1124,6 +1185,15 @@ export function hasRichTextImage(value: string) {
 export function sanitizeRichTextHtml(value: string) {
   if (!value) {
     return ''
+  }
+
+  const normalizedRawValue = normalizeCodeText(value)
+  if (isCompleteHtmlDocument(normalizedRawValue)) {
+    return renderCodeBlockHtml(normalizedRawValue, 'html')
+  }
+
+  if (hasMarkdownFence(normalizedRawValue)) {
+    return renderMarkdownBlocks(normalizedRawValue)
   }
 
   if (!/[<>]/.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
@@ -1325,6 +1395,15 @@ export function sanitizeRichTextHtml(value: string) {
 }
 
 export function sanitizeBotReplyHtml(value: string) {
+  const normalizedRawValue = normalizeCodeText(value)
+  if (isCompleteHtmlDocument(normalizedRawValue)) {
+    return renderCodeBlockHtml(normalizedRawValue, 'html')
+  }
+
+  if (hasMarkdownFence(normalizedRawValue)) {
+    return renderBotMarkdownReply(normalizedRawValue)
+  }
+
   if (!value || !/[<>]/.test(value) || typeof window === 'undefined' || typeof DOMParser === 'undefined') {
     return normalizePlainRichText(value)
   }
