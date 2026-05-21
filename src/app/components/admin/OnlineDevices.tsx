@@ -70,7 +70,7 @@ export function OnlineDevicesWorkspace({
         <div className="dd-admin-table-toolbar">
           <Input
             type="search"
-            placeholder="按名称、设备 ID、平台或账号搜索"
+            placeholder="按名称、设备 ID、设备平台或账号搜索"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
           />
@@ -88,7 +88,7 @@ export function OnlineDevicesWorkspace({
               <thead>
                 <tr>
                   <th>显示名称</th>
-                  <th>平台</th>
+                  <th>设备平台</th>
                   <th>账号</th>
                   <th>状态</th>
                   <th>房间 / 会话</th>

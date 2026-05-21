@@ -317,6 +317,17 @@ const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
 const adminSessionCookieName = 'ddzhilian_admin_session';
 const userSessionCookieName = 'ddzhilian_user_session';
+const isProductionRuntime = process.env.NODE_ENV === 'production';
+const isDevelopmentRuntime =
+  process.env.NODE_ENV === 'development' ||
+  process.env.npm_lifecycle_event === 'dev';
+const isDevAdminEntryEnabled = isDevelopmentRuntime && !isProductionRuntime;
+const devAdminSession: AdminAccountSession = {
+  userId: 'dev-admin-local',
+  email: 'dev-admin@localhost',
+  role: 'super_admin',
+  isSuperAdmin: true,
+};
 const accountAuthConfirmDefaultPath = '/image';
 const accountAuthConfirmErrorPath = '/auth/confirm';
 const openRouterFallbackModelIds = [
@@ -736,7 +747,7 @@ function buildAdminSessionCookie(sessionId: string) {
     `Max-Age=${(7 * 24 * 60 * 60).toString()}`,
   ];
 
-  if (process.env.NODE_ENV === 'production') {
+  if (isProductionRuntime) {
     parts.push('Secure');
   }
 
@@ -752,7 +763,7 @@ function buildAdminSessionClearCookie() {
     'Max-Age=0',
   ];
 
-  if (process.env.NODE_ENV === 'production') {
+  if (isProductionRuntime) {
     parts.push('Secure');
   }
 
@@ -2155,19 +2166,27 @@ async function authenticateAdminRequest(
   },
   response?: ServerResponse,
 ): Promise<AdminAuthResult> {
-  if (!accounts) {
-    return {
-      ok: false as const,
-      statusCode: 503,
-      message: '管理员账号登录未配置，请先配置 Supabase。',
-    };
-  }
-
   const cookies = parseCookies(request.headers.cookie);
   const sessionId = cookies.get(adminSessionCookieName);
   if (sessionId) {
     const session = adminSessions.get(sessionId);
     if (session) {
+      if (isDevAdminEntryEnabled && session.userId === devAdminSession.userId) {
+        return {
+          ok: true as const,
+          sessionId: session.sessionId,
+          admin: devAdminSession,
+        };
+      }
+
+      if (!accounts) {
+        return {
+          ok: false as const,
+          statusCode: 503,
+          message: '管理员账号登录未配置，请先配置 Supabase。',
+        };
+      }
+
       try {
         const admin = await accounts.getAdminUserById(session.userId, config.adminSuperEmails);
         if (admin) {
@@ -2188,6 +2207,14 @@ async function authenticateAdminRequest(
         appendResponseCookie(response, buildAdminSessionClearCookie());
       }
     }
+  }
+
+  if (!accounts) {
+    return {
+      ok: false as const,
+      statusCode: 503,
+      message: '管理员账号登录未配置，请先配置 Supabase。',
+    };
   }
 
   if (!sessionId) {
@@ -3204,6 +3231,30 @@ async function handleAdminLoginRequest(
   }
 }
 
+async function handleAdminDevLoginRequest(
+  response: ServerResponse,
+) {
+  if (!isDevAdminEntryEnabled) {
+    writeJson(response, 404, { error: 'Not found.' });
+    return;
+  }
+
+  try {
+    const session = adminSessions.create(devAdminSession);
+    appendResponseCookie(response, buildAdminSessionCookie(session.sessionId));
+    const dashboard = await buildAdminStatePayload(devAdminSession);
+    writeJson(response, 200, {
+      ok: true,
+      authenticated: true,
+      ...dashboard,
+    });
+  } catch (error) {
+    writeJson(response, 500, {
+      error: error instanceof Error ? error.message : '开发环境后台入口失败。',
+    });
+  }
+}
+
 function handleAdminLogoutRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -3240,6 +3291,29 @@ function handleAdminSessionRequest(
       const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
       writeJson(response, statusCode, {
         error: error instanceof Error ? error.message : 'Failed to load admin session.',
+      });
+    });
+}
+
+function handleAdminOnlineDevicesRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  void authenticateAdminRequest(request, response)
+    .then((authResult) => {
+      if (!authResult.ok) {
+        writeJson(response, authResult.statusCode, { error: authResult.message });
+        return;
+      }
+
+      writeJson(response, 200, {
+        onlineDevices: buildAdminOnlineDevicesPayload(),
+      });
+    })
+    .catch((error) => {
+      const statusCode = error instanceof AccountAuthError ? error.statusCode : 500;
+      writeJson(response, statusCode, {
+        error: error instanceof Error ? error.message : 'Failed to load online devices.',
       });
     });
 }
@@ -5115,6 +5189,11 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
+  if (url.pathname === '/api/admin/dev-login' && request.method === 'POST') {
+    void handleAdminDevLoginRequest(response);
+    return;
+  }
+
   if (url.pathname === '/api/admin/logout' && request.method === 'POST') {
     handleAdminLogoutRequest(request, response);
     return;
@@ -5122,6 +5201,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/admin/session' && request.method === 'GET') {
     handleAdminSessionRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/admin/online-devices' && request.method === 'GET') {
+    handleAdminOnlineDevicesRequest(request, response);
     return;
   }
 

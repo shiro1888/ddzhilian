@@ -257,10 +257,12 @@ function App() {
     adminUsers,
     adminRoles,
     adminToasts,
+    isAdminDevLoginEnabled,
     setAdminEmailDraft,
     setAdminPasswordDraft,
     dismissAdminToast,
     handleAdminConnect,
+    handleAdminDevConnect,
     handleAdminDisconnect,
     handleAdminProviderChange,
     handleAdminSystemPromptChange,
@@ -1403,6 +1405,7 @@ function App() {
       onAdminPasswordDraftChange={setAdminPasswordDraft}
       onAdminToastDismiss={dismissAdminToast}
       onConnect={handleAdminConnect}
+      onDevConnect={handleAdminDevConnect}
       onDisconnect={handleAdminDisconnect}
       onProviderChange={handleAdminProviderChange}
       onSystemPromptChange={handleAdminSystemPromptChange}

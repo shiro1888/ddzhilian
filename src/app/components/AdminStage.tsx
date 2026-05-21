@@ -49,6 +49,7 @@ type AdminStageProps = {
   isAdminRenamingOnlineDevice: boolean
   isAdminUpdatingUser: boolean
   isAdminUpdatingRole: boolean
+  isAdminDevLoginEnabled: boolean
   adminError: string | null
   adminToasts: AdminToast[]
   historyStats: AdminHistoryStats | null
@@ -61,6 +62,7 @@ type AdminStageProps = {
   onAdminPasswordDraftChange: (value: string) => void
   onAdminToastDismiss: (id: string) => void
   onConnect: () => void
+  onDevConnect: () => void
   onDisconnect: () => void
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onSystemPromptChange: (value: string) => void
@@ -94,6 +96,7 @@ export function AdminStage({
   isAdminRenamingOnlineDevice,
   isAdminUpdatingUser,
   isAdminUpdatingRole,
+  isAdminDevLoginEnabled,
   adminError,
   adminToasts,
   historyStats,
@@ -106,6 +109,7 @@ export function AdminStage({
   onAdminPasswordDraftChange,
   onAdminToastDismiss,
   onConnect,
+  onDevConnect,
   onDisconnect,
   onProviderChange,
   onSystemPromptChange,
@@ -261,9 +265,11 @@ export function AdminStage({
           adminError={adminError}
           isAdminLoading={isAdminLoading}
           isAdminLoginTransitioning={isAdminLoginTransitioning}
+          isAdminDevLoginEnabled={isAdminDevLoginEnabled}
           onAdminEmailDraftChange={onAdminEmailDraftChange}
           onAdminPasswordDraftChange={onAdminPasswordDraftChange}
           onConnect={onConnect}
+          onDevConnect={onDevConnect}
         />
       ) : (
         <Tabs.Root

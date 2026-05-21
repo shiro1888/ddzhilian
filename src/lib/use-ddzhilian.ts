@@ -184,6 +184,7 @@ type IncomingTransferDraft = {
 }
 
 type SystemName = 'windows' | 'android' | 'ios' | 'ipad' | 'mac' | 'linux' | 'web'
+const legacyDevicePlatformNames = new Set(['web', 'mobile', 'tablet'])
 
 function debugLog(...parts: unknown[]) {
   if (process.env.NODE_ENV === 'development') {
@@ -238,18 +239,22 @@ function isLegacyGeneratedName(name: string) {
   return /\b(browser|device)$/i.test(name.trim())
 }
 
+function normalizeStoredDevicePlatform(value: string | undefined, fallback: string) {
+  const platform = value?.trim().toLowerCase()
+  if (!platform || legacyDevicePlatformNames.has(platform)) {
+    return fallback
+  }
+
+  return platform
+}
+
 function getDefaultIdentity(): StoredIdentity {
   const system = detectSystemName()
-  const platform = /iphone|android|mobile/i.test(navigator.userAgent)
-    ? 'mobile'
-    : /ipad|tablet/i.test(navigator.userAgent)
-      ? 'tablet'
-      : 'web'
   const deviceName = createGeneratedDeviceName(system)
 
   return {
     deviceName,
-    platform,
+    platform: system,
     autoConnect: true,
     discoverable: true,
     allowShortCode: true,
@@ -265,17 +270,22 @@ function readStoredIdentity(): StoredIdentity {
 
     const fallback = getDefaultIdentity()
     const parsed = { ...fallback, ...(JSON.parse(raw) as StoredIdentity) }
+    const next: StoredIdentity = {
+      ...parsed,
+      platform: normalizeStoredDevicePlatform(parsed.platform, fallback.platform),
+    }
+    let shouldPersist = next.platform !== parsed.platform
 
-    if (!parsed.deviceName || isLegacyGeneratedName(parsed.deviceName)) {
-      const next = {
-        ...parsed,
-        deviceName: fallback.deviceName,
-      }
-      writeStoredIdentity(next)
-      return next
+    if (!next.deviceName || isLegacyGeneratedName(next.deviceName)) {
+      next.deviceName = fallback.deviceName
+      shouldPersist = true
     }
 
-    return parsed
+    if (shouldPersist) {
+      writeStoredIdentity(next)
+    }
+
+    return next
   } catch {
     return getDefaultIdentity()
   }

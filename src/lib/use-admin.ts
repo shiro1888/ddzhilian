@@ -16,6 +16,7 @@ import type {
 } from './ddzhilian-types'
 
 const ADMIN_LOGIN_EXIT_ANIMATION_MS = 720
+const ADMIN_ONLINE_DEVICES_REFRESH_MS = 2000
 const ADMIN_TOAST_TIMEOUT_MS = 4200
 
 type AdminToastKind = 'success' | 'error'
@@ -55,6 +56,16 @@ export type AdminManualOpenAiApiDraft = {
 type UseAdminOptions = {
   enabled: boolean
 }
+
+type AdminLoginResponse = AdminStateResponse & {
+  authenticated?: boolean
+}
+
+type AdminOnlineDevicesResponse = {
+  onlineDevices?: AdminOnlineDevicesSnapshot
+}
+
+const isAdminDevLoginEnabled = process.env.NODE_ENV === 'development'
 
 export function resolveAdminApiBaseUrl() {
   const env = process.env as Record<string, string | undefined>
@@ -104,6 +115,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
   const [adminRoles, setAdminRoles] = useState<AdminRolesSnapshot | null>(null)
   const [adminToasts, setAdminToasts] = useState<AdminToast[]>([])
   const adminLoginTransitionTimeoutRef = useRef<number | null>(null)
+  const onlineDevicesRefreshInFlightRef = useRef(false)
   const toastTimeoutsRef = useRef<number[]>([])
   const toastSequenceRef = useRef(0)
 
@@ -128,7 +140,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     pushAdminToast('error', message)
   }, [pushAdminToast])
 
-  const clearAdminSnapshots = () => {
+  const clearAdminSnapshots = useCallback(() => {
     setAdminSession(null)
     setAdminHistoryStats(null)
     setAdminAiSettings(null)
@@ -136,7 +148,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     setAdminOnlineDevices(null)
     setAdminUsers(null)
     setAdminRoles(null)
-  }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -210,7 +222,97 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     return () => {
       isCancelled = true
     }
-  }, [enabled, setAdminErrorMessage])
+  }, [enabled, clearAdminSnapshots, setAdminErrorMessage])
+
+  useEffect(() => {
+    if (!enabled || !isAdminAuthenticated || isAdminLoginTransitioning) {
+      return
+    }
+
+    let isCancelled = false
+
+    const refreshOnlineDevices = async () => {
+      if (onlineDevicesRefreshInFlightRef.current) {
+        return
+      }
+
+      onlineDevicesRefreshInFlightRef.current = true
+      try {
+        const response = await fetch(`${resolveAdminApiBaseUrl()}/api/admin/online-devices`, {
+          credentials: 'include',
+        })
+
+        if (isCancelled) {
+          return
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          const message = await readAdminApiError(response, '管理员账号会话已失效。')
+          if (isCancelled) {
+            return
+          }
+
+          setIsAdminAuthenticated(false)
+          setIsAdminLoginTransitioning(false)
+          clearAdminSnapshots()
+          setAdminErrorMessage(message)
+          return
+        }
+
+        if (!response.ok) {
+          return
+        }
+
+        const payload = await response.json() as AdminOnlineDevicesResponse
+        if (!isCancelled) {
+          setAdminOnlineDevices(payload.onlineDevices ?? null)
+        }
+      } catch {
+        // 在线列表刷新是后台同步通道，临时网络失败不打断已打开的管理台。
+      } finally {
+        onlineDevicesRefreshInFlightRef.current = false
+      }
+    }
+
+    void refreshOnlineDevices()
+    const interval = window.setInterval(() => {
+      void refreshOnlineDevices()
+    }, ADMIN_ONLINE_DEVICES_REFRESH_MS)
+
+    return () => {
+      isCancelled = true
+      window.clearInterval(interval)
+    }
+  }, [enabled, isAdminAuthenticated, isAdminLoginTransitioning, clearAdminSnapshots, setAdminErrorMessage])
+
+  const completeAdminLogin = (payload: AdminLoginResponse, successMessage: string) => {
+    if (!payload.authenticated) {
+      setIsAdminAuthenticated(false)
+      setIsAdminLoginTransitioning(false)
+      setAdminErrorMessage('管理员登录失败。')
+      return
+    }
+
+    setAdminSession(payload.admin ?? null)
+    setAdminHistoryStats(payload.history)
+    setAdminAiSettings(payload.ai)
+    setAdminUsage(payload.usage)
+    setAdminOnlineDevices(payload.onlineDevices)
+    setAdminUsers(payload.users ?? null)
+    setAdminRoles(payload.roles ?? null)
+    setIsAdminLoginTransitioning(true)
+    pushAdminToast('success', successMessage)
+
+    if (adminLoginTransitionTimeoutRef.current) {
+      clearTimeout(adminLoginTransitionTimeoutRef.current)
+    }
+
+    adminLoginTransitionTimeoutRef.current = window.setTimeout(() => {
+      setIsAdminAuthenticated(true)
+      setIsAdminLoginTransitioning(false)
+      adminLoginTransitionTimeoutRef.current = null
+    }, ADMIN_LOGIN_EXIT_ANIMATION_MS)
+  }
 
   const handleAdminConnect = () => {
     const nextEmail = adminEmailDraft.trim()
@@ -242,39 +344,47 @@ export function useAdmin({ enabled }: UseAdminOptions) {
           throw new Error(await readAdminApiError(response, '管理员登录失败。'))
         }
 
-        return response.json() as Promise<AdminStateResponse & { authenticated?: boolean }>
+        return response.json() as Promise<AdminLoginResponse>
       })
       .then((payload) => {
-        if (!payload.authenticated) {
-          setIsAdminAuthenticated(false)
-          setIsAdminLoginTransitioning(false)
-          setAdminErrorMessage('管理员登录失败。')
-          return
-        }
-
-        setAdminSession(payload.admin ?? null)
-        setAdminHistoryStats(payload.history)
-        setAdminAiSettings(payload.ai)
-        setAdminUsage(payload.usage)
-        setAdminOnlineDevices(payload.onlineDevices)
-        setAdminUsers(payload.users ?? null)
-        setAdminRoles(payload.roles ?? null)
-        setIsAdminLoginTransitioning(true)
-        pushAdminToast('success', '已进入后台。')
-
-        if (adminLoginTransitionTimeoutRef.current) {
-          clearTimeout(adminLoginTransitionTimeoutRef.current)
-        }
-
-        adminLoginTransitionTimeoutRef.current = window.setTimeout(() => {
-          setIsAdminAuthenticated(true)
-          setIsAdminLoginTransitioning(false)
-          adminLoginTransitionTimeoutRef.current = null
-        }, ADMIN_LOGIN_EXIT_ANIMATION_MS)
+        completeAdminLogin(payload, '已进入后台。')
       })
       .catch((error) => {
         setIsAdminLoginTransitioning(false)
         setAdminErrorMessage(error instanceof Error ? error.message : '管理员登录失败。')
+      })
+      .finally(() => {
+        setIsAdminLoading(false)
+      })
+  }
+
+  const handleAdminDevConnect = () => {
+    if (!isAdminDevLoginEnabled) {
+      setAdminErrorMessage('开发环境入口不可用。')
+      return
+    }
+
+    setIsAdminLoading(true)
+    setIsAdminLoginTransitioning(false)
+    setAdminError(null)
+
+    void fetch(`${resolveAdminApiBaseUrl()}/api/admin/dev-login`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readAdminApiError(response, '开发环境后台入口失败。'))
+        }
+
+        return response.json() as Promise<AdminLoginResponse>
+      })
+      .then((payload) => {
+        completeAdminLogin(payload, '已通过开发入口进入后台。')
+      })
+      .catch((error) => {
+        setIsAdminLoginTransitioning(false)
+        setAdminErrorMessage(error instanceof Error ? error.message : '开发环境后台入口失败。')
       })
       .finally(() => {
         setIsAdminLoading(false)
@@ -646,10 +756,12 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     adminUsers,
     adminRoles,
     adminToasts,
+    isAdminDevLoginEnabled,
     setAdminEmailDraft,
     setAdminPasswordDraft,
     dismissAdminToast,
     handleAdminConnect,
+    handleAdminDevConnect,
     handleAdminDisconnect,
     handleAdminProviderChange,
     handleAdminSystemPromptChange,

@@ -7,18 +7,22 @@ export function AdminLogin({
   adminError,
   isAdminLoading,
   isAdminLoginTransitioning,
+  isAdminDevLoginEnabled,
   onAdminEmailDraftChange,
   onAdminPasswordDraftChange,
   onConnect,
+  onDevConnect,
 }: {
   adminEmailDraft: string
   adminPasswordDraft: string
   adminError: string | null
   isAdminLoading: boolean
   isAdminLoginTransitioning: boolean
+  isAdminDevLoginEnabled: boolean
   onAdminEmailDraftChange: (value: string) => void
   onAdminPasswordDraftChange: (value: string) => void
   onConnect: () => void
+  onDevConnect: () => void
 }) {
   const isLoginLocked = isAdminLoading || isAdminLoginTransitioning
 
@@ -62,6 +66,16 @@ export function AdminLogin({
             >
               {isAdminLoginTransitioning ? '正在进入...' : isAdminLoading ? '登录中...' : '进入后台'}
             </Button>
+            {isAdminDevLoginEnabled ? (
+              <Button
+                type="button"
+                className="dd-button dd-admin-login-dev-button"
+                disabled={isLoginLocked}
+                onClick={onDevConnect}
+              >
+                一键进入开发后台
+              </Button>
+            ) : null}
           </div>
           {adminError ? <p className="dd-error-note">{adminError}</p> : null}
         </div>

@@ -70,15 +70,6 @@ export function AdminSidebar({
         <span />
         <span />
       </button>
-      <button
-        type="button"
-        className="dd-admin-sidebar__theme"
-        aria-label="切换后台主题"
-        title="切换后台主题"
-        onClick={onThemeToggle}
-      >
-        {themeMode === 'dark' ? 'Light' : themeMode === 'light' ? 'Auto' : 'Dark'}
-      </button>
       <nav className="dd-admin-sidebar__nav" aria-label="后台导航">
         <section className="dd-admin-nav-group">
           <div className="dd-admin-nav-group__title">后台功能</div>
@@ -109,6 +100,15 @@ export function AdminSidebar({
           })}
         </section>
       </nav>
+      <button
+        type="button"
+        className="dd-admin-sidebar__theme"
+        aria-label="切换后台主题"
+        title="切换后台主题"
+        onClick={onThemeToggle}
+      >
+        {themeMode === 'dark' ? 'Light' : themeMode === 'light' ? 'Auto' : 'Dark'}
+      </button>
       <button type="button" className="dd-admin-sidebar__collapse" title="退出后台" aria-label="退出后台" onClick={onDisconnect}>
         <AdminNavIcon name="logout" />
         <span className="dd-admin-nav-label">退出后台</span>
