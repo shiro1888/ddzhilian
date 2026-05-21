@@ -121,7 +121,7 @@ This file is a token-friendly map of the repository. Use it to find the implemen
 - `src/lib/use-account-auth.ts`: frontend account session helper for `/api/auth/*`, using HttpOnly cookies through the signaling backend.
 - `src/lib/ddzhilian-types.ts`: shared frontend protocol/data types.
 - `src/app/types.ts`: UI-level view and component types.
-- `src/app/utils.ts`: small UI helpers plus rich-text/Markdown/code-block rendering, copyable code-block HTML generation, and sandboxed code/preview/fullscreen switching for complete HTML documents.
+- `src/app/utils.ts`: small UI helpers plus rich-text/Markdown/code-block rendering, copyable code-block HTML generation, and sandboxed code/preview plus dialog fullscreen rendering for complete HTML documents.
 
 ### Frontend feature components
 

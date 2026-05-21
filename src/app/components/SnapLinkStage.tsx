@@ -1095,10 +1095,35 @@ export function SnapLinkStage({
     }, 1600)
   }
 
+  const openHtmlDocumentFullscreen = (button: HTMLElement) => {
+    const dialog = button.closest('.dd-html-document')?.querySelector<HTMLDialogElement>('.dd-html-document__dialog')
+    if (!dialog) {
+      return false
+    }
+
+    if (!dialog.open) {
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal()
+      } else {
+        dialog.setAttribute('open', '')
+      }
+    }
+
+    return true
+  }
+
   const handleRichBubbleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target
 
     if (!(target instanceof HTMLElement)) {
+      return
+    }
+
+    const fullscreenButton = target.closest<HTMLElement>('.dd-html-document__fullscreen')
+    if (fullscreenButton && event.currentTarget.contains(fullscreenButton)) {
+      event.preventDefault()
+      event.stopPropagation()
+      openHtmlDocumentFullscreen(fullscreenButton)
       return
     }
 

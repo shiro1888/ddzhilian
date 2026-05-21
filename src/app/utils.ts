@@ -1056,10 +1056,8 @@ function renderHtmlDocumentPreviewHtml(codeText: string) {
 
 function renderHtmlDocumentBlockHtml(codeText: string, languageLabel: string) {
   const switchName = createHtmlDocumentSwitchName(codeText)
-  const fullscreenId = `${switchName}-fullscreen`
   return [
     '<div class="dd-html-document">',
-    `<input id="${escapeHtml(fullscreenId)}" class="dd-html-document__fullscreen-toggle" type="checkbox" />`,
     `<pre class="dd-code-block dd-html-document__code-block" data-language="${escapeHtml(languageLabel)}">`,
     '<div class="dd-code-block__header dd-html-document__header">',
     `<span class="dd-code-block__language">${escapeHtml(languageLabel)}</span>`,
@@ -1067,12 +1065,21 @@ function renderHtmlDocumentBlockHtml(codeText: string, languageLabel: string) {
     `<label class="dd-html-document__tab dd-html-document__tab--code"><input type="radio" name="${escapeHtml(switchName)}" /><span>代码</span></label>`,
     `<label class="dd-html-document__tab dd-html-document__tab--preview"><input type="radio" name="${escapeHtml(switchName)}" checked /><span>预览</span></label>`,
     '</span>',
-    `<label class="dd-html-document__fullscreen" for="${escapeHtml(fullscreenId)}"><span class="dd-html-document__fullscreen-open">全屏</span><span class="dd-html-document__fullscreen-close">退出</span></label>`,
+    '<button type="button" class="dd-html-document__fullscreen">全屏</button>',
     '<button type="button" class="dd-code-copy">复制</button>',
     '</div>',
     `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
     '</pre>',
     renderHtmlDocumentPreviewHtml(codeText),
+    '<dialog class="dd-html-document__dialog" aria-label="HTML 全屏预览">',
+    '<div class="dd-html-document__dialog-header">',
+    '<strong>HTML 预览</strong>',
+    '<form method="dialog">',
+    '<button type="submit" class="dd-html-document__dialog-close">退出</button>',
+    '</form>',
+    '</div>',
+    `<iframe class="dd-html-document__dialog-frame" title="HTML 全屏预览" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" srcdoc="${escapeHtml(codeText)}"></iframe>`,
+    '</dialog>',
     '</div>',
   ].join('')
 }
