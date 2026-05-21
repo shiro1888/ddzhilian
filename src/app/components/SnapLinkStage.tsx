@@ -306,7 +306,7 @@ function createBotMentionDraft(value: string) {
   }
 
   const normalizedDraft = value.trimStart()
-  return normalizedDraft ? `@Ai ${normalizedDraft}` : '@Ai '
+  return normalizedDraft ? `@ai ${normalizedDraft}` : '@ai '
 }
 
 function findBotMentionTriggerStart(value: string, caretPosition: number) {
@@ -1044,7 +1044,17 @@ export function SnapLinkStage({
   }
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing || isComposerComposingRef.current) {
+    if (event.nativeEvent.isComposing || isComposerComposingRef.current) {
+      return
+    }
+
+    if (event.key === 'Tab' && isBotPanelOpen) {
+      event.preventDefault()
+      handleBotMentionSelect()
+      return
+    }
+
+    if (event.key !== 'Enter') {
       return
     }
 
