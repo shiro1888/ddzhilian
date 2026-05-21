@@ -1045,10 +1045,6 @@ function renderHtmlDocumentPreviewHtml(codeText: string) {
   // Keep user-provided HTML isolated from the parent chat document.
   return [
     '<div class="dd-html-preview" aria-label="HTML 内嵌预览">',
-    '<div class="dd-html-preview__header">',
-    '<span>HTML</span>',
-    '<span>预览</span>',
-    '</div>',
     `<iframe class="dd-html-preview__frame" title="HTML 预览" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" srcdoc="${escapeHtml(codeText)}"></iframe>`,
     '</div>',
   ].join('')

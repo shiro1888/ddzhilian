@@ -370,20 +370,6 @@
   color: var(--ink);
 }
 
-.dd-html-preview__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 30px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--line-soft);
-  background: #f7f7f7;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
 .dd-html-preview__frame {
   display: block;
   width: 100%;

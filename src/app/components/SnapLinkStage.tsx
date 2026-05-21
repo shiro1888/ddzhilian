@@ -1111,6 +1111,18 @@ export function SnapLinkStage({
       return false
     }
 
+    if (!dialog.dataset.backdropClickLocked) {
+      dialog.dataset.backdropClickLocked = 'true'
+      dialog.addEventListener('click', (dialogEvent) => {
+        if (dialogEvent.target !== dialog) {
+          return
+        }
+
+        dialogEvent.preventDefault()
+        dialogEvent.stopPropagation()
+      })
+    }
+
     if (!dialog.open) {
       if (typeof dialog.showModal === 'function') {
         dialog.showModal()
