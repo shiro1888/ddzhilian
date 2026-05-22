@@ -222,6 +222,30 @@ function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
 }
 
+type RoomPreviewEvent = {
+  createdAt: string
+  previewText: string
+}
+
+function isNewerRoomPreviewEvent(candidate: RoomPreviewEvent, current: RoomPreviewEvent | undefined) {
+  return !current || Date.parse(candidate.createdAt) > Date.parse(current.createdAt)
+}
+
+function setLatestRoomPreviewEvent(
+  eventsByRoomId: Map<string, RoomPreviewEvent>,
+  roomId: string | undefined,
+  event: RoomPreviewEvent,
+) {
+  if (!roomId) {
+    return
+  }
+
+  const current = eventsByRoomId.get(roomId)
+  if (isNewerRoomPreviewEvent(event, current)) {
+    eventsByRoomId.set(roomId, event)
+  }
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -329,6 +353,7 @@ function App() {
     recallFile,
     sendRoomText,
     ensureRoomHistoryLoaded,
+    loadOlderRoomHistoryTexts,
     askAi,
     listAiChatConversations,
     saveAiChatConversations,
@@ -441,24 +466,33 @@ function App() {
     () => new Map(rooms.map((room) => [room.roomId, room] as const)),
     [rooms],
   )
-  const roomStateById = new Map(roomStates.map((state) => [state.roomId, state] as const))
-  const deviceNameById = new Map<string, string>()
-  if (self) {
-    deviceNameById.set(self.deviceId, self.deviceName)
-  }
-  for (const peer of onlinePeers) {
-    deviceNameById.set(peer.deviceId, peer.deviceName)
-  }
-  for (const room of rooms) {
-    for (const member of room.members) {
-      deviceNameById.set(member.deviceId, member.deviceName)
+  const roomStateById = useMemo(
+    () => new Map(roomStates.map((state) => [state.roomId, state] as const)),
+    [roomStates],
+  )
+  const deviceNameById = useMemo(() => {
+    const next = new Map<string, string>()
+    if (self) {
+      next.set(self.deviceId, self.deviceName)
     }
-  }
+    for (const peer of onlinePeers) {
+      next.set(peer.deviceId, peer.deviceName)
+    }
+    for (const room of rooms) {
+      for (const member of room.members) {
+        next.set(member.deviceId, member.deviceName)
+      }
+    }
+    return next
+  }, [onlinePeers, rooms, self])
 
-  const sessionPeerNameById = new Map<string, string>()
-  for (const session of sessions) {
-    sessionPeerNameById.set(session.sessionId, session.peer?.deviceName ?? session.peerId)
-  }
+  const sessionPeerNameById = useMemo(() => {
+    const next = new Map<string, string>()
+    for (const session of sessions) {
+      next.set(session.sessionId, session.peer?.deviceName ?? session.peerId)
+    }
+    return next
+  }, [sessions])
 
   const effectiveSelectedRoomId =
     selectedRoomId && roomById.has(selectedRoomId)
@@ -581,8 +615,9 @@ function App() {
             ? '当前没有可接收文件的已连接设备'
             : '暂无已连接设备'
 
-  const visibleTransferItems = transferItems.filter(
-    (item) => item.status !== 'cancelled',
+  const visibleTransferItems = useMemo(
+    () => transferItems.filter((item) => item.status !== 'cancelled'),
+    [transferItems],
   )
   const sortedChatRecords = collapseBroadcastTextRecords(
     [...textRecords].sort(
@@ -931,18 +966,117 @@ function App() {
     aiQuotaStatus?.model ||
     'AI 模型'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
-  const sessionRoomIdById = new Map(sessions.map((session) => [session.sessionId, session.roomId] as const))
+  const sessionRoomIdById = useMemo(
+    () => new Map(sessions.map((session) => [session.sessionId, session.roomId] as const)),
+    [sessions],
+  )
+  const latestSessionByRoomId = useMemo(() => {
+    const next = new Map<string, (typeof sessions)[number]>()
+    for (const session of sessions) {
+      const current = next.get(session.roomId)
+      if (!current || Date.parse(session.updatedAt) > Date.parse(current.updatedAt)) {
+        next.set(session.roomId, session)
+      }
+    }
+    return next
+  }, [sessions])
+  const connectedCountByRoomId = useMemo(() => {
+    const next = new Map<string, number>()
+    for (const target of connectedTargets) {
+      const roomId = target.session.roomId
+      next.set(roomId, (next.get(roomId) ?? 0) + 1)
+    }
+    return next
+  }, [connectedTargets])
+  const loadedHistoryTextRoomIds = useMemo(() => {
+    const next = new Set<string>()
+    for (const record of historyTexts) {
+      next.add(record.roomId)
+    }
+    return next
+  }, [historyTexts])
+  const roomActivityById = useMemo(() => {
+    const latestEventByRoomId = new Map<string, RoomPreviewEvent>()
+    const unreadCountByRoomId = new Map<string, number>()
+    const lastReadTimeByRoomId = new Map<string, number>()
+    for (const state of roomStates) {
+      if (state.lastReadAt) {
+        lastReadTimeByRoomId.set(state.roomId, Date.parse(state.lastReadAt))
+      }
+    }
+
+    const addEvent = (
+      roomId: string | undefined,
+      event: RoomPreviewEvent,
+      isIncoming: boolean,
+    ) => {
+      if (!roomId) {
+        return
+      }
+
+      setLatestRoomPreviewEvent(latestEventByRoomId, roomId, event)
+      const lastReadTime = lastReadTimeByRoomId.get(roomId)
+      if (isIncoming && lastReadTime !== undefined && Date.parse(event.createdAt) > lastReadTime) {
+        unreadCountByRoomId.set(roomId, (unreadCountByRoomId.get(roomId) ?? 0) + 1)
+      }
+    }
+
+    for (const record of textRecords) {
+      const roomId = record.roomId ?? sessionRoomIdById.get(record.sessionId)
+      const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
+      addEvent(roomId, {
+        createdAt: record.createdAt,
+        previewText: `[文本] ${preview}`,
+      }, !record.fromSelf)
+    }
+
+    for (const record of historyTexts) {
+      const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
+      addEvent(record.roomId, {
+        createdAt: record.createdAt,
+        previewText: `[文本] ${preview}`,
+      }, record.sourceDeviceId !== self?.deviceId)
+    }
+
+    for (const file of receivedFiles) {
+      addEvent(sessionRoomIdById.get(file.sessionId), {
+        createdAt: file.createdAt,
+        previewText: `[文件] ${file.name}`,
+      }, true)
+    }
+
+    for (const item of visibleTransferItems) {
+      addEvent(item.roomId ?? (item.sessionId ? sessionRoomIdById.get(item.sessionId) : undefined), {
+        createdAt: item.createdAt,
+        previewText: `[文件] ${item.fileName}`,
+      }, false)
+    }
+
+    for (const file of historyFiles) {
+      addEvent(file.roomId, {
+        createdAt: file.createdAt,
+        previewText: `[文件] ${file.fileName}`,
+      }, file.sourceDeviceId !== self?.deviceId)
+    }
+
+    return { latestEventByRoomId, unreadCountByRoomId }
+  }, [
+    historyFiles,
+    historyTexts,
+    receivedFiles,
+    roomStates,
+    self?.deviceId,
+    sessionRoomIdById,
+    textRecords,
+    visibleTransferItems,
+  ])
   const roomListItems: RoomListItem[] = rooms
     .map((room) => {
-      const roomSessions = sessions
-        .filter((session) => session.roomId === room.roomId)
-        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
-      const roomSessionIds = new Set(roomSessions.map((session) => session.sessionId))
-      const latestSession = roomSessions[0]
+      const latestSession = latestSessionByRoomId.get(room.roomId)
       const memberNames = room.members
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
-      const hasLoadedHistoryTexts = historyTexts.some((record) => record.roomId === room.roomId)
+      const hasLoadedHistoryTexts = loadedHistoryTextRoomIds.has(room.roomId)
       const title =
         isBotChatRoom(room)
           ? 'DD直连小助手'
@@ -953,51 +1087,19 @@ function App() {
           : memberNames.length <= 3
             ? memberNames.join('、')
             : `${memberNames.slice(0, 3).join('、')} 等 ${memberNames.length} 位成员`
-      const latestEvents = [
-        ...textRecords
-          .filter((record) => roomSessionIds.has(record.sessionId))
-          .map((record) => {
-            const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
-            return {
-              createdAt: record.createdAt,
-              previewText: `[文本] ${preview}`,
-            }
-          }),
-        ...historyTexts
-          .filter((record) => record.roomId === room.roomId)
-          .map((record) => {
-            const preview = extractPlainTextFromRichText(record.text).slice(0, 28) || '空消息'
-            return {
-              createdAt: record.createdAt,
-              previewText: `[文本] ${preview}`,
-            }
-          }),
-        ...receivedFiles
-          .filter((file) => roomSessionIds.has(file.sessionId))
-          .map((file) => ({
-            createdAt: file.createdAt,
-            previewText: `[文件] ${file.name}`,
-          })),
-        ...visibleTransferItems
-          .filter((item) => item.sessionId && sessionRoomIdById.get(item.sessionId) === room.roomId)
-          .map((item) => ({
-            createdAt: item.createdAt,
-            previewText: `[文件] ${item.fileName}`,
-          })),
-        ...historyFiles
-          .filter((file) => file.roomId === room.roomId)
-          .map((file) => ({
-            createdAt: file.createdAt,
-            previewText: `[文件] ${file.fileName}`,
-          })),
-        ...(!hasLoadedHistoryTexts && room.historyTextLatestAt && room.historyTextPreview
-          ? [{
+      const roomState = roomStateById.get(room.roomId)
+      const lastReadTime = roomState?.lastReadAt ? Date.parse(roomState.lastReadAt) : null
+      const unloadedHistoryPreview =
+        !hasLoadedHistoryTexts && room.historyTextLatestAt && room.historyTextPreview
+          ? {
               createdAt: room.historyTextLatestAt,
               previewText: `[文本] ${(extractPlainTextFromRichText(room.historyTextPreview).slice(0, 28) || '空消息')}`,
-            }]
-          : []),
-      ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-      const latestEvent = latestEvents[0]
+            }
+          : undefined
+      const indexedLatestEvent = roomActivityById.latestEventByRoomId.get(room.roomId)
+      const latestEvent = unloadedHistoryPreview && isNewerRoomPreviewEvent(unloadedHistoryPreview, indexedLatestEvent)
+        ? unloadedHistoryPreview
+        : indexedLatestEvent
       const updatedAt = latestEvent?.createdAt ?? latestSession?.updatedAt ?? room.updatedAt
       const previewText =
         latestEvent?.previewText ??
@@ -1010,33 +1112,18 @@ function App() {
         (member) => member.deviceId !== self?.deviceId && member.online,
       ).length
       const hasSelf = room.members.some((member) => member.deviceId === self?.deviceId)
-      const connectedCount = connectedTargets.filter((target) => target.session.roomId === room.roomId).length
-      const roomState = roomStateById.get(room.roomId)
-      const lastReadTime = roomState?.lastReadAt ? new Date(roomState.lastReadAt).getTime() : null
-      const incomingEvents = [
-        ...textRecords
-          .filter((record) => roomSessionIds.has(record.sessionId) && !record.fromSelf)
-          .map((record) => record.createdAt),
-        ...historyTexts
-          .filter((record) => record.roomId === room.roomId && record.sourceDeviceId !== self?.deviceId)
-          .map((record) => record.createdAt),
-        ...receivedFiles
-          .filter((file) => roomSessionIds.has(file.sessionId))
-          .map((file) => file.createdAt),
-        ...historyFiles
-          .filter((file) => file.roomId === room.roomId && file.sourceDeviceId !== self?.deviceId)
-          .map((file) => file.createdAt),
-        ...(!hasLoadedHistoryTexts &&
+      const connectedCount = connectedCountByRoomId.get(room.roomId) ?? 0
+      const unloadedHistoryUnreadCount =
+        (!hasLoadedHistoryTexts &&
+        lastReadTime !== null &&
         room.historyTextLatestAt &&
         room.historyTextLatestSourceDeviceId &&
-        room.historyTextLatestSourceDeviceId !== self?.deviceId
-          ? [room.historyTextLatestAt]
-          : []),
-      ]
+        room.historyTextLatestSourceDeviceId !== self?.deviceId &&
+        Date.parse(room.historyTextLatestAt) > lastReadTime
+          ? 1
+          : 0)
       const unreadCount =
-        lastReadTime === null
-          ? 0
-          : incomingEvents.filter((createdAt) => new Date(createdAt).getTime() > lastReadTime).length
+        (roomActivityById.unreadCountByRoomId.get(room.roomId) ?? 0) + unloadedHistoryUnreadCount
       const status: RoomListItem['status'] =
         connectedCount > 0 ? 'connected' : onlineCount > 0 || hasSelf ? 'online' : 'history'
 
@@ -1593,6 +1680,7 @@ function App() {
       }}
       onRecallText={handleRecallText}
       onRecallFile={handleRecallFile}
+      onLoadOlderRoomHistory={loadOlderRoomHistoryTexts}
       canRecallAnyMessage={canRecallAnyMessage}
       onRetryTransfer={retryTransfer}
       onCancelTransfer={cancelTransfer}

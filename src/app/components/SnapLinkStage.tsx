@@ -75,6 +75,9 @@ const snapLinkQuickEmojis = [
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
 const snapLinkImageSelectionValue = '__snaplink_image__'
 const snapLinkComposerMaxHeight = 120
+const snapLinkInitialMessageRenderCount = 80
+const snapLinkMessageRenderStep = 80
+const snapLinkHistoryLoadThreshold = 72
 const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
@@ -231,6 +234,7 @@ type SnapLinkStageProps = {
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
   onRecallFile: (historyId: string) => Promise<void> | void
+  onLoadOlderRoomHistory: (roomId: string) => void
   canRecallAnyMessage: boolean
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
@@ -691,6 +695,7 @@ export function SnapLinkStage({
   onSendText,
   onRecallText,
   onRecallFile,
+  onLoadOlderRoomHistory,
   canRecallAnyMessage,
   onRetryTransfer,
   onCancelTransfer,
@@ -713,8 +718,13 @@ export function SnapLinkStage({
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
+  const [messageRenderState, setMessageRenderState] = useState<{ roomId: string | null; count: number }>(() => ({
+    roomId: null,
+    count: snapLinkInitialMessageRenderCount,
+  }))
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  const messageScrollRestoreRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const isComposerComposingRef = useRef(false)
   const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
@@ -752,6 +762,15 @@ export function SnapLinkStage({
     [roomListItems],
   )
   const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen
+  if (messageRenderState.roomId !== selectedRoomId) {
+    setMessageRenderState({
+      roomId: selectedRoomId,
+      count: snapLinkInitialMessageRenderCount,
+    })
+  }
+  const messageRenderCount = messageRenderState.roomId === selectedRoomId
+    ? messageRenderState.count
+    : snapLinkInitialMessageRenderCount
   const plainDraft = normalizePlainComposerDraft(chatDraft)
   const effectiveActiveSharedTab = hasActiveRoom ? activeSharedTab : null
   const sharedTabItems: Array<{ id: SnapLinkSharedTab; label: string; count: number }> = [
@@ -772,13 +791,70 @@ export function SnapLinkStage({
     '--snap-theme-ai': themeColors.ai,
     '--snap-theme-ai-text': getSnapLinkThemeContrastColor(themeColors.ai),
   }), [themeColors])
-  const visibleConversationEntries = useMemo(
+  const filteredConversationEntries = useMemo(
     () =>
       unifiedConversationEntries.filter((entry) =>
         !(entry.entryType === 'text' && hiddenTextEntryIds.has(entry.id)),
       ),
     [hiddenTextEntryIds, unifiedConversationEntries],
   )
+  const visibleConversationEntries = useMemo(
+    () => filteredConversationEntries.slice(
+      Math.max(0, filteredConversationEntries.length - messageRenderCount),
+    ),
+    [filteredConversationEntries, messageRenderCount],
+  )
+
+  useEffect(() => {
+    messageScrollRestoreRef.current = null
+  }, [selectedRoomId])
+
+  const handleMessagesScroll = useCallback(() => {
+    const messages = messagesRef.current
+    if (!messages || !selectedRoomId || !hasActiveRoom || messages.scrollTop > snapLinkHistoryLoadThreshold) {
+      return
+    }
+
+    if (visibleConversationEntries.length < filteredConversationEntries.length) {
+      messageScrollRestoreRef.current = {
+        previousScrollHeight: messages.scrollHeight,
+        previousScrollTop: messages.scrollTop,
+      }
+      setMessageRenderState((current) => {
+        const currentCount = current.roomId === selectedRoomId
+          ? current.count
+          : snapLinkInitialMessageRenderCount
+
+        return {
+          roomId: selectedRoomId,
+          count: Math.min(filteredConversationEntries.length, currentCount + snapLinkMessageRenderStep),
+        }
+      })
+      return
+    }
+
+    messageScrollRestoreRef.current = {
+      previousScrollHeight: messages.scrollHeight,
+      previousScrollTop: messages.scrollTop,
+    }
+    setMessageRenderState((current) => {
+      const currentCount = current.roomId === selectedRoomId
+        ? current.count
+        : snapLinkInitialMessageRenderCount
+
+      return {
+        roomId: selectedRoomId,
+        count: currentCount + snapLinkMessageRenderStep,
+      }
+    })
+    onLoadOlderRoomHistory(selectedRoomId)
+  }, [
+    filteredConversationEntries.length,
+    hasActiveRoom,
+    onLoadOlderRoomHistory,
+    selectedRoomId,
+    visibleConversationEntries.length,
+  ])
 
   useEffect(() => {
     const messages = messagesRef.current
@@ -786,8 +862,18 @@ export function SnapLinkStage({
       return
     }
 
+    const restore = messageScrollRestoreRef.current
+    if (restore) {
+      messageScrollRestoreRef.current = null
+      messages.scrollTop = Math.max(
+        0,
+        messages.scrollHeight - restore.previousScrollHeight + restore.previousScrollTop,
+      )
+      return
+    }
+
     messages.scrollTop = messages.scrollHeight
-  }, [hasActiveRoom, visibleConversationEntries.length])
+  }, [hasActiveRoom, selectedRoomId, visibleConversationEntries.length])
 
   useEffect(() => {
     if (isComposerComposingRef.current) {
@@ -1964,7 +2050,7 @@ export function SnapLinkStage({
                 </div>
               ) : null}
 
-              <div ref={messagesRef} className="dd-snaplink__messages">
+              <div ref={messagesRef} className="dd-snaplink__messages" onScroll={handleMessagesScroll}>
                 {visibleConversationEntries.length > 0 ? (
                   visibleConversationEntries.map((entry, index) => {
                     const previousIso = index > 0 ? visibleConversationEntries[index - 1].createdAt : null
