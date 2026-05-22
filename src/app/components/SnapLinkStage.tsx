@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
   CompositionEvent as ReactCompositionEvent,
+  CSSProperties,
   DragEvent,
   FormEvent,
   MouseEvent as ReactMouseEvent,
@@ -74,6 +75,33 @@ const snapLinkQuickEmojis = [
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
 const snapLinkImageSelectionValue = '__snaplink_image__'
 const snapLinkComposerMaxHeight = 120
+const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
+const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
+const snapLinkThemeSubmitDebounceMs = 700
+
+type SnapLinkThemeColorTarget = 'self' | 'peer' | 'ai'
+type SnapLinkThemeColors = Record<SnapLinkThemeColorTarget, string>
+type SnapLinkThemeStyle = CSSProperties & {
+  '--snap-theme-self': string
+  '--snap-theme-self-text': string
+  '--snap-theme-peer': string
+  '--snap-theme-peer-text': string
+  '--snap-theme-ai': string
+  '--snap-theme-ai-text': string
+}
+
+const snapLinkDefaultThemeColors: SnapLinkThemeColors = {
+  self: '#F9887F',
+  peer: '#F5F4F1',
+  ai: '#EFF6FF',
+}
+const snapLinkThemeColorOptions: Array<{ label: string; colors: SnapLinkThemeColors }> = [
+  { label: '珊瑚', colors: { self: '#F9887F', peer: '#FFF4F2', ai: '#FFE8E5' } },
+  { label: '微信绿', colors: { self: '#95EC69', peer: '#F2F8ED', ai: '#EAF7E1' } },
+  { label: '天空蓝', colors: { self: '#6EA8FE', peer: '#F3F7FF', ai: '#EAF2FF' } },
+  { label: '青柠', colors: { self: '#B7E36D', peer: '#F6FAEE', ai: '#EEF8D8' } },
+  { label: '暖橙', colors: { self: '#F6B35D', peer: '#FFF7ED', ai: '#FFEED8' } },
+]
 
 function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null) {
   if (!textarea) {
@@ -86,10 +114,83 @@ function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null
   textarea.style.overflowY = textarea.scrollHeight > snapLinkComposerMaxHeight ? 'auto' : 'hidden'
 }
 
+function normalizeSnapLinkThemeColor(value: string, fallback: string) {
+  const normalizedValue = value.trim()
+  return snapLinkThemeColorPattern.test(normalizedValue)
+    ? normalizedValue.toUpperCase()
+    : fallback
+}
+
+function normalizeSnapLinkThemeColors(value: Partial<Record<SnapLinkThemeColorTarget, string>>) {
+  return {
+    self: normalizeSnapLinkThemeColor(value.self ?? '', snapLinkDefaultThemeColors.self),
+    peer: normalizeSnapLinkThemeColor(value.peer ?? '', snapLinkDefaultThemeColors.peer),
+    ai: normalizeSnapLinkThemeColor(value.ai ?? '', snapLinkDefaultThemeColors.ai),
+  }
+}
+
+function readStoredSnapLinkThemeColors() {
+  if (typeof window === 'undefined') {
+    return snapLinkDefaultThemeColors
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(snapLinkThemeStorageKey)
+    if (!storedValue) {
+      return snapLinkDefaultThemeColors
+    }
+
+    const parsedValue: unknown = JSON.parse(storedValue)
+    if (typeof parsedValue === 'string') {
+      return normalizeSnapLinkThemeColors({ self: parsedValue })
+    }
+
+    if (parsedValue && typeof parsedValue === 'object') {
+      return normalizeSnapLinkThemeColors(parsedValue as Partial<Record<SnapLinkThemeColorTarget, string>>)
+    }
+  } catch {
+    return snapLinkDefaultThemeColors
+  }
+
+  return snapLinkDefaultThemeColors
+}
+
+function getSnapLinkThemeContrastColor(color: string) {
+  const normalizedColor = normalizeSnapLinkThemeColor(color, snapLinkDefaultThemeColors.self)
+  const red = Number.parseInt(normalizedColor.slice(1, 3), 16)
+  const green = Number.parseInt(normalizedColor.slice(3, 5), 16)
+  const blue = Number.parseInt(normalizedColor.slice(5, 7), 16)
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000
+
+  return brightness >= 150 ? '#18181B' : '#FFFFFF'
+}
+
+function resolveSnapLinkApiBaseUrl() {
+  const env = process.env as Record<string, string | undefined>
+  const configuredUrl = env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '')
+  }
+
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const { protocol, hostname, host } = window.location
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8787'
+  }
+
+  return `${protocol}//${host}`
+}
+
 type SnapLinkStageProps = {
   isDragging: boolean
   activeView: SnapLinkActiveView
+  deviceId?: string
   deviceName: string
+  accountId?: string
   selectedRoomId: string | null
   selectedConversationName: string
   activeTransferLabel: string
@@ -307,7 +408,7 @@ function createBotMentionDraft(value: string) {
   }
 
   const normalizedDraft = value.trimStart()
-  return normalizedDraft ? `@ai ${normalizedDraft}` : '@ai '
+  return normalizedDraft ? `@ai ${normalizedDraft}` : '@DD直连小助手 '
 }
 
 function findBotMentionTriggerStart(value: string, caretPosition: number) {
@@ -547,7 +648,9 @@ function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entry
 export function SnapLinkStage({
   isDragging,
   activeView,
+  deviceId,
   deviceName,
+  accountId,
   selectedRoomId,
   selectedConversationName,
   activeTransferLabel,
@@ -603,6 +706,8 @@ export function SnapLinkStage({
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
+  const [isThemePanelOpen, setIsThemePanelOpen] = useState(false)
+  const [themeColors, setThemeColors] = useState<SnapLinkThemeColors>(() => readStoredSnapLinkThemeColors())
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
@@ -618,6 +723,9 @@ export function SnapLinkStage({
   const botMentionTriggerRangeRef = useRef<BotMentionTriggerRange | null>(null)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
+  const themeTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const themePanelRef = useRef<HTMLDivElement | null>(null)
+  const themeSubmissionTimeoutRef = useRef<number | null>(null)
   const selectedRoom = useMemo(
     () => roomListItems.find((room) => room.roomId === selectedRoomId),
     [roomListItems, selectedRoomId],
@@ -656,6 +764,14 @@ export function SnapLinkStage({
 
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
+  const themeStyle = useMemo<SnapLinkThemeStyle>(() => ({
+    '--snap-theme-self': themeColors.self,
+    '--snap-theme-self-text': getSnapLinkThemeContrastColor(themeColors.self),
+    '--snap-theme-peer': themeColors.peer,
+    '--snap-theme-peer-text': getSnapLinkThemeContrastColor(themeColors.peer),
+    '--snap-theme-ai': themeColors.ai,
+    '--snap-theme-ai-text': getSnapLinkThemeContrastColor(themeColors.ai),
+  }), [themeColors])
   const visibleConversationEntries = useMemo(
     () =>
       unifiedConversationEntries.filter((entry) =>
@@ -767,6 +883,48 @@ export function SnapLinkStage({
   }, [isBotPanelOpen])
 
   useEffect(() => {
+    return () => {
+      if (themeSubmissionTimeoutRef.current) {
+        window.clearTimeout(themeSubmissionTimeoutRef.current)
+        themeSubmissionTimeoutRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isThemePanelOpen) {
+      return undefined
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (themePanelRef.current?.contains(target) || themeTriggerRef.current?.contains(target)) {
+        return
+      }
+
+      setIsThemePanelOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsThemePanelOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isThemePanelOpen])
+
+  useEffect(() => {
     if (!messageContextMenu) {
       return undefined
     }
@@ -836,6 +994,69 @@ export function SnapLinkStage({
     setActiveSharedTab(null)
     setIsLobbyOpen(false)
     onOpenImageView()
+  }
+
+  const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    if (themeSubmissionTimeoutRef.current) {
+      window.clearTimeout(themeSubmissionTimeoutRef.current)
+    }
+
+    themeSubmissionTimeoutRef.current = window.setTimeout(() => {
+      themeSubmissionTimeoutRef.current = null
+      void fetch(`${resolveSnapLinkApiBaseUrl()}/api/snaplink/theme-submissions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: 'snaplink-beta',
+          colors,
+          deviceId,
+          deviceName,
+          accountId,
+        }),
+      }).catch(() => {
+        // 配色提交不影响主题即时预览，临时网络失败不打断用户操作。
+      })
+    }, snapLinkThemeSubmitDebounceMs)
+  }, [accountId, deviceId, deviceName])
+
+  const applyThemeColors = (nextColors: SnapLinkThemeColors, options?: { collect?: boolean }) => {
+    const normalizedColors = normalizeSnapLinkThemeColors(nextColors)
+    setThemeColors(normalizedColors)
+
+    try {
+      window.localStorage.setItem(snapLinkThemeStorageKey, JSON.stringify(normalizedColors))
+    } catch {
+      // Theme selection still applies for the current session when localStorage is unavailable.
+    }
+
+    if (options?.collect) {
+      submitThemeColors(normalizedColors)
+    }
+  }
+
+  const updateThemeColor = (target: SnapLinkThemeColorTarget, color: string) => {
+    applyThemeColors({
+      ...themeColors,
+      [target]: normalizeSnapLinkThemeColor(color, themeColors[target]),
+    }, { collect: true })
+  }
+
+  const resetThemeColors = () => {
+    applyThemeColors(snapLinkDefaultThemeColors, { collect: true })
+  }
+
+  const toggleThemePanel = () => {
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(false)
+    botMentionTriggerRangeRef.current = null
+    setIsThemePanelOpen((current) => !current)
   }
 
   const handleJoinRoom = () => {
@@ -925,6 +1146,7 @@ export function SnapLinkStage({
       const quoteHtml = quoteDraft ? renderQuoteDraftHtml(quoteDraft) : undefined
       setIsEmojiPickerOpen(false)
       setIsBotPanelOpen(false)
+      setIsThemePanelOpen(false)
       botMentionTriggerRangeRef.current = null
       onSendText(quoteHtml)
       setQuoteDraft(null)
@@ -961,6 +1183,7 @@ export function SnapLinkStage({
         end: caretPosition,
       }
       setIsEmojiPickerOpen(false)
+      setIsThemePanelOpen(false)
       setIsBotPanelOpen(true)
       return
     }
@@ -974,6 +1197,7 @@ export function SnapLinkStage({
   const handleBotTriggerClick = () => {
     botMentionTriggerRangeRef.current = null
     setIsEmojiPickerOpen(false)
+    setIsThemePanelOpen(false)
     setIsBotPanelOpen(true)
     focusComposerInput(getComposerDraft().length)
   }
@@ -982,6 +1206,7 @@ export function SnapLinkStage({
     const nextDraft = createBotMentionDraftFromTrigger(getComposerDraft(), botMentionTriggerRangeRef.current)
     commitComposerDraft(nextDraft, nextDraft.length)
     setIsEmojiPickerOpen(false)
+    setIsThemePanelOpen(false)
     setIsBotPanelOpen(false)
     botMentionTriggerRangeRef.current = null
     focusComposerInput(nextDraft.length)
@@ -1040,6 +1265,7 @@ export function SnapLinkStage({
     event.preventDefault()
     setIsEmojiPickerOpen(false)
     setIsBotPanelOpen(false)
+    setIsThemePanelOpen(false)
     botMentionTriggerRangeRef.current = null
     onPastedImageSelection(pastedImageFiles)
   }
@@ -1367,6 +1593,25 @@ export function SnapLinkStage({
     return null
   }
 
+  const renderThemeColorField = (
+    target: SnapLinkThemeColorTarget,
+    label: string,
+    description: string,
+  ) => (
+    <label className="dd-snaplink__theme-field">
+      <span>
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+      <input
+        type="color"
+        value={themeColors[target]}
+        aria-label={`${label}颜色`}
+        onChange={(event) => updateThemeColor(target, event.target.value)}
+      />
+    </label>
+  )
+
   const renderFileCard = (file: SnapLinkFileEntry) => {
     const progress = clampProgress(file.progress)
     const progressPercent = Math.round(progress * 100)
@@ -1405,6 +1650,7 @@ export function SnapLinkStage({
     <>
       <section
         className={`dd-snaplink${isDragging ? ' is-dragging' : ''}`}
+        style={themeStyle}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -1488,6 +1734,62 @@ export function SnapLinkStage({
               <span>{selectedRoomOnlineCount}</span>
             </span>
           ) : null}
+          <div className="dd-snaplink__theme">
+            <button
+              ref={themeTriggerRef}
+              type="button"
+              className={`dd-snaplink__theme-trigger${isThemePanelOpen ? ' is-active' : ''}`}
+              aria-label="自定义主题 Beta"
+              aria-expanded={isThemePanelOpen}
+              aria-haspopup="dialog"
+              title="自定义主题 Beta"
+              onClick={toggleThemePanel}
+            >
+              主题
+              <span>Beta</span>
+            </button>
+            {isThemePanelOpen ? (
+              <div
+                ref={themePanelRef}
+                className="dd-snaplink__theme-panel"
+                role="dialog"
+                aria-label="自定义主题 Beta"
+              >
+                <div className="dd-snaplink__theme-head">
+                  <strong>自定义主题</strong>
+                  <span>Beta</span>
+                </div>
+                <p className="dd-snaplink__theme-notice">
+                  Beta 功能：你填写的配色将会被收集，用于改进主题体验。
+                </p>
+                <div className="dd-snaplink__theme-fields">
+                  {renderThemeColorField('self', '发送的信息框', '自己发送的消息气泡')}
+                  {renderThemeColorField('peer', '接收的信息框', '其他成员发送的消息气泡')}
+                  {renderThemeColorField('ai', 'AI 的信息框', 'DD直连小助手回复气泡')}
+                </div>
+                <div className="dd-snaplink__theme-presets" aria-label="主题预设">
+                  {snapLinkThemeColorOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className="dd-snaplink__theme-preset"
+                      onClick={() => applyThemeColors(option.colors, { collect: true })}
+                    >
+                      <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
+                        <i style={{ background: option.colors.self }} />
+                        <i style={{ background: option.colors.peer }} />
+                        <i style={{ background: option.colors.ai }} />
+                      </span>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="dd-snaplink__theme-reset" onClick={resetThemeColors}>
+                  恢复默认
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             className={!isAiChatOpen && !isImageOpen && !isAdminOpen ? 'is-active' : ''}
@@ -1889,6 +2191,7 @@ export function SnapLinkStage({
                     title="选择 emoji"
                     onClick={() => {
                       setIsBotPanelOpen(false)
+                      setIsThemePanelOpen(false)
                       botMentionTriggerRangeRef.current = null
                       setIsEmojiPickerOpen((previous) => !previous)
                     }}

@@ -39,6 +39,11 @@ import {
   type ImageGenerationImage,
   type ImageGenerationRecord,
 } from './registry/image-generation-history-registry.js';
+import {
+  type ThemeSubmissionColors,
+  type ThemeSubmissionInput,
+  ThemeSubmissionRegistry,
+} from './registry/theme-submission-registry.js';
 import { RoomRegistry } from './registry/room-registry.js';
 import { SessionRegistry } from './registry/session-registry.js';
 import { UiStateRegistry } from './registry/ui-state-registry.js';
@@ -276,6 +281,16 @@ const imageGenerationHistory = config.supabase
       imageGenerationsTable: config.supabase.imageGenerationsTable,
     })
   : undefined;
+const themeSubmissions = await ThemeSubmissionRegistry.create({
+  localFilePath: fileURLToPath(new URL('../data/admin/theme-submissions.json', import.meta.url)),
+  supabase: config.supabase
+    ? {
+        url: config.supabase.url,
+        serviceRoleKey: config.supabase.serviceRoleKey,
+        themeSubmissionsTable: config.supabase.themeSubmissionsTable,
+      }
+    : undefined,
+});
 const adminConfig = new AdminConfigRegistry(config);
 const adminSessions = new AdminSessionRegistry();
 const aiUsage = new AiUsageRegistry(
@@ -439,6 +454,58 @@ function writeJson(
 ) {
   response.writeHead(statusCode, { 'content-type': 'application/json' });
   response.end(JSON.stringify(payload));
+}
+
+const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/;
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeThemeSubmissionColor(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const color = value.trim();
+  return snapLinkThemeColorPattern.test(color) ? color.toUpperCase() : undefined;
+}
+
+function normalizeThemeSubmissionString(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalizedValue = value.trim().slice(0, maxLength);
+  return normalizedValue || undefined;
+}
+
+function parseThemeSubmissionInput(payload: unknown): ThemeSubmissionInput | null {
+  if (!isObjectRecord(payload) || !isObjectRecord(payload.colors)) {
+    return null;
+  }
+
+  const colors: ThemeSubmissionColors = {
+    self: normalizeThemeSubmissionColor(payload.colors.self) ?? '',
+    peer: normalizeThemeSubmissionColor(payload.colors.peer) ?? '',
+    ai: normalizeThemeSubmissionColor(payload.colors.ai) ?? '',
+  };
+
+  if (!colors.self || !colors.peer || !colors.ai) {
+    return null;
+  }
+
+  return {
+    source: 'snaplink-beta',
+    colors,
+    deviceId: normalizeThemeSubmissionString(payload.deviceId, 120),
+    deviceName: normalizeThemeSubmissionString(payload.deviceName, 120),
+    accountId: normalizeThemeSubmissionString(payload.accountId, 120),
+  };
+}
+
+function firstHeaderValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function writeRedirect(
@@ -3083,6 +3150,7 @@ async function buildAdminStatePayload(admin: AdminAccountSession) {
   const onlineDevices = buildAdminOnlineDevicesPayload();
   const users = await buildAdminUsersPayload();
   const roles = admin.isSuperAdmin ? await buildAdminRolesPayload() : undefined;
+  const themeSubmissionsSnapshot = await themeSubmissions.getSnapshot();
 
   return {
     history: history.getStats(),
@@ -3099,6 +3167,7 @@ async function buildAdminStatePayload(admin: AdminAccountSession) {
     onlineDevices,
     users,
     roles,
+    themeSubmissions: themeSubmissionsSnapshot,
     admin: toAdminSessionPayload(admin),
     serverTime: new Date().toISOString(),
   };
@@ -3643,6 +3712,46 @@ function handleAdminStateRequest(
       error: error instanceof Error ? error.message : 'Failed to build admin dashboard.',
     });
   });
+}
+
+async function handleSnapLinkThemeSubmissionRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  let input: ThemeSubmissionInput | null;
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 4 * 1024 });
+    input = parseThemeSubmissionInput(JSON.parse(buffer.toString('utf8')));
+  } catch (error) {
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error: error instanceof RequestBodyTooLargeError
+        ? 'Theme submission payload is too large.'
+        : 'Invalid theme submission payload.',
+    });
+    return;
+  }
+
+  if (!input) {
+    writeJson(response, 400, { error: 'Invalid theme submission payload.' });
+    return;
+  }
+
+  try {
+    const result = await themeSubmissions.record({
+      ...input,
+      userAgent: normalizeThemeSubmissionString(firstHeaderValue(request.headers['user-agent']), 300),
+    });
+
+    writeJson(response, 200, {
+      ok: true,
+      storedIn: result.storedIn,
+    });
+  } catch (error) {
+    console.error('Theme submission failed', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    writeJson(response, 500, { error: 'Theme submission failed.' });
+  }
 }
 
 async function handleAdminAiConfigUpdate(
@@ -5183,6 +5292,11 @@ const httpServer = createServer((request, response) => {
   }
 
   const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+
+  if (url.pathname === '/api/snaplink/theme-submissions' && request.method === 'POST') {
+    void handleSnapLinkThemeSubmissionRequest(request, response);
+    return;
+  }
 
   if (url.pathname === '/api/admin/login' && request.method === 'POST') {
     void handleAdminLoginRequest(request, response);

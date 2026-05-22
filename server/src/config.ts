@@ -81,6 +81,7 @@ export interface ServerConfig {
     userProfilesTable: string;
     imageGenerationsTable: string;
     adminRolesTable: string;
+    themeSubmissionsTable: string;
     authEmailRedirectUrl?: string;
   };
   aiProvider: AiProvider;
@@ -420,6 +421,8 @@ export function loadConfig(): ServerConfig {
             userProfilesTable: process.env.SUPABASE_USER_PROFILES_TABLE?.trim() || 'user_profiles',
             imageGenerationsTable: process.env.SUPABASE_IMAGE_GENERATIONS_TABLE?.trim() || 'image_generations',
             adminRolesTable: process.env.SUPABASE_ADMIN_ROLES_TABLE?.trim() || 'admin_roles',
+            themeSubmissionsTable:
+              process.env.SUPABASE_THEME_SUBMISSIONS_TABLE?.trim() || 'snaplink_theme_submissions',
             authEmailRedirectUrl:
               process.env.SUPABASE_AUTH_EMAIL_REDIRECT_URL?.trim() ||
               joinUrlPath(publicHttpBaseUrl, '/auth/confirm'),

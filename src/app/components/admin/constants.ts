@@ -22,7 +22,7 @@ export const CLIPROXYAPI_PRESET = {
   reasoningEffort: 'high' as const,
 }
 
-export type AdminSection = 'dashboard' | 'models' | 'providers' | 'online' | 'users' | 'roles'
+export type AdminSection = 'dashboard' | 'models' | 'providers' | 'online' | 'users' | 'themes' | 'roles'
 
 export type ManualOpenAiApiDraft = {
   label: string
@@ -53,6 +53,7 @@ export type AdminNavIconName =
   | 'provider'
   | 'role'
   | 'settings'
+  | 'theme'
   | 'usage'
   | 'user'
   | 'logout'
@@ -262,6 +263,7 @@ export function isAdminSection(value: unknown): value is AdminSection {
     value === 'providers' ||
     value === 'online' ||
     value === 'users' ||
+    value === 'themes' ||
     value === 'roles'
   )
 }
@@ -505,6 +507,11 @@ export const ADMIN_SECTION_META: Record<AdminSection, { title: string; subtitle:
     subtitle: '查看账号、额度和图片生成配额。',
     eyebrow: 'Users',
   },
+  themes: {
+    title: '主题反馈',
+    subtitle: '查看 SnapLink Beta 自定义主题提交的配色数据。',
+    eyebrow: 'Theme Beta',
+  },
   roles: {
     title: '角色',
     subtitle: '管理后台管理员名单。',
@@ -549,6 +556,12 @@ export const ADMIN_PRIMARY_NAV_ITEMS: Array<{
     label: '用户',
     description: '账号与额度',
     icon: 'user',
+  },
+  {
+    section: 'themes',
+    label: '主题',
+    description: 'Beta 配色反馈',
+    icon: 'theme',
   },
   {
     section: 'roles',

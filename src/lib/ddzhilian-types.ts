@@ -723,6 +723,39 @@ export type AdminRolesSnapshot = {
   loadedAt: string
 }
 
+export type SnapLinkThemeColors = {
+  self: string
+  peer: string
+  ai: string
+}
+
+export type AdminThemeSubmission = {
+  submissionId: string
+  source: 'snaplink-beta'
+  colors: SnapLinkThemeColors
+  deviceId?: string
+  deviceName?: string
+  accountId?: string
+  userAgent?: string
+  createdAt: string
+}
+
+export type AdminThemeSubmissionStats = {
+  total: number
+  listed: number
+  uniqueDevices: number
+  latestAt?: string
+}
+
+export type AdminThemeSubmissionsSnapshot = {
+  configured: boolean
+  storage: 'supabase' | 'local' | 'local-fallback'
+  submissions: AdminThemeSubmission[]
+  stats: AdminThemeSubmissionStats
+  error?: string
+  loadedAt: string
+}
+
 export type AdminStateResponse = {
   authenticated?: boolean
   admin?: AdminSessionInfo
@@ -732,6 +765,7 @@ export type AdminStateResponse = {
   onlineDevices: AdminOnlineDevicesSnapshot
   users?: AdminUsersSnapshot
   roles?: AdminRolesSnapshot
+  themeSubmissions: AdminThemeSubmissionsSnapshot
   serverTime: string
 }
 

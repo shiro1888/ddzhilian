@@ -9,6 +9,7 @@ import type {
   AdminOpenRouterConfig,
   AdminRolesSnapshot,
   AdminSessionInfo,
+  AdminThemeSubmissionsSnapshot,
   AdminUsageSnapshot,
   AdminUserQuotaUpdate,
   AdminUsersSnapshot,
@@ -28,6 +29,7 @@ import { ModelsWorkspace } from './admin/ModelsWorkspace'
 import { ProvidersWorkspace } from './admin/ProvidersWorkspace'
 import { RoleManagementWorkspace } from './admin/RoleManagement'
 import { OnlineDevicesWorkspace } from './admin/OnlineDevices'
+import { ThemeSubmissionsWorkspace } from './admin/ThemeSubmissions'
 import { UserManagementWorkspace } from './admin/UserManagement'
 import {
   buildBusinessKpiCards,
@@ -58,6 +60,7 @@ type AdminStageProps = {
   onlineDevices: AdminOnlineDevicesSnapshot | null
   users: AdminUsersSnapshot | null
   roles: AdminRolesSnapshot | null
+  themeSubmissions: AdminThemeSubmissionsSnapshot | null
   onAdminEmailDraftChange: (value: string) => void
   onAdminPasswordDraftChange: (value: string) => void
   onAdminToastDismiss: (id: string) => void
@@ -105,6 +108,7 @@ export function AdminStage({
   onlineDevices,
   users,
   roles,
+  themeSubmissions,
   onAdminEmailDraftChange,
   onAdminPasswordDraftChange,
   onAdminToastDismiss,
@@ -359,6 +363,10 @@ export function AdminStage({
                 isUpdatingUser={isAdminUpdatingUser}
                 onUserQuotaUpdate={onUserQuotaUpdate}
               />
+            </Tabs.Panel>
+
+            <Tabs.Panel className="dd-admin-section-panel" value="themes" keepMounted>
+              <ThemeSubmissionsWorkspace themeSubmissions={themeSubmissions} />
             </Tabs.Panel>
 
             <Tabs.Panel className="dd-admin-section-panel" value="roles" keepMounted>

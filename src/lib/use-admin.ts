@@ -10,6 +10,7 @@ import type {
   AdminRolesSnapshot,
   AdminSessionInfo,
   AdminStateResponse,
+  AdminThemeSubmissionsSnapshot,
   AdminUsageSnapshot,
   AdminUserQuotaUpdate,
   AdminUsersSnapshot,
@@ -113,6 +114,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
   const [adminOnlineDevices, setAdminOnlineDevices] = useState<AdminOnlineDevicesSnapshot | null>(null)
   const [adminUsers, setAdminUsers] = useState<AdminUsersSnapshot | null>(null)
   const [adminRoles, setAdminRoles] = useState<AdminRolesSnapshot | null>(null)
+  const [adminThemeSubmissions, setAdminThemeSubmissions] = useState<AdminThemeSubmissionsSnapshot | null>(null)
   const [adminToasts, setAdminToasts] = useState<AdminToast[]>([])
   const adminLoginTransitionTimeoutRef = useRef<number | null>(null)
   const onlineDevicesRefreshInFlightRef = useRef(false)
@@ -148,6 +150,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     setAdminOnlineDevices(null)
     setAdminUsers(null)
     setAdminRoles(null)
+    setAdminThemeSubmissions(null)
   }, [])
 
   useEffect(() => {
@@ -204,6 +207,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? null)
+        setAdminThemeSubmissions(payload.themeSubmissions ?? null)
       } catch (error) {
         if (isCancelled) {
           return
@@ -300,6 +304,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     setAdminOnlineDevices(payload.onlineDevices)
     setAdminUsers(payload.users ?? null)
     setAdminRoles(payload.roles ?? null)
+    setAdminThemeSubmissions(payload.themeSubmissions ?? null)
     setIsAdminLoginTransitioning(true)
     pushAdminToast('success', successMessage)
 
@@ -508,6 +513,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
           onlineDevices?: AdminOnlineDevicesSnapshot
           users?: AdminUsersSnapshot
           roles?: AdminRolesSnapshot
+          themeSubmissions?: AdminThemeSubmissionsSnapshot
         }>
       })
       .then((payload) => {
@@ -518,6 +524,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? adminRoles)
+        setAdminThemeSubmissions(payload.themeSubmissions ?? adminThemeSubmissions)
         pushAdminToast('success', 'AI 配置已保存。')
       })
       .catch((error) => {
@@ -557,6 +564,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
           onlineDevices?: AdminOnlineDevicesSnapshot
           users?: AdminUsersSnapshot
           roles?: AdminRolesSnapshot
+          themeSubmissions?: AdminThemeSubmissionsSnapshot
         }>
       })
       .then((payload) => {
@@ -566,6 +574,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
         setAdminOnlineDevices(payload.onlineDevices ?? null)
         setAdminUsers(payload.users ?? null)
         setAdminRoles(payload.roles ?? adminRoles)
+        setAdminThemeSubmissions(payload.themeSubmissions ?? adminThemeSubmissions)
         pushAdminToast('success', '历史记录已清空。')
       })
       .catch((error) => {
@@ -755,6 +764,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     adminOnlineDevices,
     adminUsers,
     adminRoles,
+    adminThemeSubmissions,
     adminToasts,
     isAdminDevLoginEnabled,
     setAdminEmailDraft,

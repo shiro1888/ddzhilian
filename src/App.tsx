@@ -266,6 +266,7 @@ function App() {
     adminOnlineDevices,
     adminUsers,
     adminRoles,
+    adminThemeSubmissions,
     adminToasts,
     isAdminDevLoginEnabled,
     setAdminEmailDraft,
@@ -1470,6 +1471,7 @@ function App() {
       onlineDevices={adminOnlineDevices}
       users={adminUsers}
       roles={adminRoles}
+      themeSubmissions={adminThemeSubmissions}
       onAdminEmailDraftChange={setAdminEmailDraft}
       onAdminPasswordDraftChange={setAdminPasswordDraft}
       onAdminToastDismiss={dismissAdminToast}
@@ -1537,7 +1539,9 @@ function App() {
     <SnapLinkStage
       isDragging={isDragging}
       activeView={isAdminView ? 'admin' : isImageView ? 'image' : isAiChatView ? 'ai-chat' : 'conversation'}
+      deviceId={self?.deviceId ?? localIdentity.deviceId}
       deviceName={selfName}
+      accountId={self?.accountId ?? localIdentity.accountId}
       selectedRoomId={effectiveSelectedRoomId}
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
