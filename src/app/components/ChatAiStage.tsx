@@ -9,7 +9,7 @@ import type {
   AiModelOption,
   AiQuotaStatus,
 } from '../../lib/ddzhilian-types'
-import { extractPlainTextFromRichText, sanitizeRichTextHtml } from '../utils'
+import { extractPlainTextFromRichText, openHtmlDocumentFullscreenPreview, sanitizeRichTextHtml } from '../utils'
 
 const AI_CHAT_STORAGE_KEY = 'ddzhilian-ai-chat-conversations'
 const MAX_STORED_CONVERSATIONS = 50
@@ -457,35 +457,6 @@ function markCodeCopyButton(button: HTMLButtonElement) {
     button.textContent = previousText
     button.classList.remove('is-copied')
   }, 1200)
-}
-
-function openHtmlDocumentFullscreen(button: HTMLElement) {
-  const dialog = button.closest('.dd-html-document')?.querySelector<HTMLDialogElement>('.dd-html-document__dialog')
-  if (!dialog) {
-    return false
-  }
-
-  if (!dialog.dataset.backdropClickLocked) {
-    dialog.dataset.backdropClickLocked = 'true'
-    dialog.addEventListener('click', (dialogEvent) => {
-      if (dialogEvent.target !== dialog) {
-        return
-      }
-
-      dialogEvent.preventDefault()
-      dialogEvent.stopPropagation()
-    })
-  }
-
-  if (!dialog.open) {
-    if (typeof dialog.showModal === 'function') {
-      dialog.showModal()
-    } else {
-      dialog.setAttribute('open', '')
-    }
-  }
-
-  return true
 }
 
 export function ChatAiStage({
@@ -1103,7 +1074,7 @@ export function ChatAiStage({
     if (fullscreenButton && event.currentTarget.contains(fullscreenButton)) {
       event.preventDefault()
       event.stopPropagation()
-      openHtmlDocumentFullscreen(fullscreenButton)
+      openHtmlDocumentFullscreenPreview(fullscreenButton)
       return
     }
 

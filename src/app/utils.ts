@@ -1032,41 +1032,74 @@ function isCompleteHtmlDocument(value: string) {
   )
 }
 
-function createHtmlDocumentSwitchName(codeText: string) {
-  let hash = 0
-  for (let index = 0; index < codeText.length; index += 1) {
-    hash = Math.imul(31, hash) + codeText.charCodeAt(index)
-  }
+const HTML_DOCUMENT_IFRAME_SANDBOX = 'allow-scripts'
 
-  return `dd-html-document-view-${(hash >>> 0).toString(36)}-${codeText.length.toString(36)}`
+function createHtmlDocumentPreviewFrame(codeText: string, className: string, title: string) {
+  const frame = document.createElement('iframe')
+  frame.className = className
+  frame.title = title
+  frame.loading = 'lazy'
+  frame.setAttribute('sandbox', HTML_DOCUMENT_IFRAME_SANDBOX)
+  frame.setAttribute('referrerpolicy', 'no-referrer')
+  frame.srcdoc = codeText
+  return frame
 }
 
-function renderHtmlDocumentPreviewHtml(codeText: string) {
-  // Keep user-provided HTML isolated from the parent chat document.
-  return [
-    '<div class="dd-html-preview" aria-label="HTML 内嵌预览">',
-    `<iframe class="dd-html-preview__frame" title="HTML 预览" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" srcdoc="${escapeHtml(codeText)}"></iframe>`,
-    '</div>',
-  ].join('')
+function getHtmlDocumentSource(documentBlock: HTMLElement) {
+  return documentBlock.querySelector<HTMLElement>('.dd-html-document__code-block code')?.textContent ?? ''
+}
+
+export function openHtmlDocumentFullscreenPreview(control: HTMLElement) {
+  const documentBlock = control.closest<HTMLElement>('.dd-html-document')
+  const dialog = documentBlock?.querySelector<HTMLDialogElement>('.dd-html-document__dialog')
+  const preview = dialog?.querySelector<HTMLElement>('.dd-html-document__dialog-preview')
+  if (!documentBlock || !dialog || !preview) {
+    return false
+  }
+
+  if (!preview.querySelector('iframe')) {
+    const codeText = getHtmlDocumentSource(documentBlock)
+    if (!codeText.trim()) {
+      return false
+    }
+
+    preview.replaceChildren(createHtmlDocumentPreviewFrame(codeText, 'dd-html-document__dialog-frame', 'HTML 全屏预览'))
+  }
+
+  if (!dialog.dataset.backdropClickLocked) {
+    dialog.dataset.backdropClickLocked = 'true'
+    dialog.addEventListener('click', (dialogEvent) => {
+      if (dialogEvent.target !== dialog) {
+        return
+      }
+
+      dialogEvent.preventDefault()
+      dialogEvent.stopPropagation()
+    })
+  }
+
+  if (!dialog.open) {
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal()
+    } else {
+      dialog.setAttribute('open', '')
+    }
+  }
+
+  return true
 }
 
 function renderHtmlDocumentBlockHtml(codeText: string, languageLabel: string) {
-  const switchName = createHtmlDocumentSwitchName(codeText)
   return [
     '<div class="dd-html-document">',
     `<pre class="dd-code-block dd-html-document__code-block" data-language="${escapeHtml(languageLabel)}">`,
     '<div class="dd-code-block__header dd-html-document__header">',
     `<span class="dd-code-block__language">${escapeHtml(languageLabel)}</span>`,
-    '<span class="dd-html-document__tabs" role="group" aria-label="HTML 显示模式">',
-    `<label class="dd-html-document__tab dd-html-document__tab--code"><input type="radio" name="${escapeHtml(switchName)}" /><span>代码</span></label>`,
-    `<label class="dd-html-document__tab dd-html-document__tab--preview"><input type="radio" name="${escapeHtml(switchName)}" checked /><span>预览</span></label>`,
-    '</span>',
     '<button type="button" class="dd-html-document__fullscreen">全屏</button>',
     '<button type="button" class="dd-code-copy">复制</button>',
     '</div>',
     `<code>${highlightCodeHtml(codeText, languageLabel)}</code>`,
     '</pre>',
-    renderHtmlDocumentPreviewHtml(codeText),
     '<dialog class="dd-html-document__dialog" aria-label="HTML 全屏预览">',
     '<div class="dd-html-document__dialog-header">',
     '<strong>HTML 预览</strong>',
@@ -1074,7 +1107,7 @@ function renderHtmlDocumentBlockHtml(codeText: string, languageLabel: string) {
     '<button type="submit" class="dd-html-document__dialog-close">退出</button>',
     '</form>',
     '</div>',
-    `<iframe class="dd-html-document__dialog-frame" title="HTML 全屏预览" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" srcdoc="${escapeHtml(codeText)}"></iframe>`,
+    '<div class="dd-html-document__dialog-preview"></div>',
     '</dialog>',
     '</div>',
   ].join('')

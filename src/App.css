@@ -360,24 +360,6 @@
   color: #d7e1eb;
 }
 
-.dd-html-preview {
-  display: grid;
-  margin-top: 10px;
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: #ffffff;
-  color: var(--ink);
-}
-
-.dd-html-preview__frame {
-  display: block;
-  width: 100%;
-  height: clamp(220px, 42vh, 360px);
-  border: 0;
-  background: #ffffff;
-}
-
 .dd-html-document {
   overflow: hidden;
   border-radius: 8px;
@@ -387,54 +369,11 @@
   justify-content: flex-start;
 }
 
-.dd-html-document__tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.dd-html-document__tab {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-}
-
-.dd-html-document__tab input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.dd-html-document__tab span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 20px;
-  padding: 0 8px;
-  border-radius: 4px;
-  color: #9fb2c7;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.dd-html-document__tab input:checked + span {
-  background: #e5edf5;
-  color: #101820;
-}
-
 .dd-html-document__fullscreen {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
   min-height: 24px;
   padding: 0 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -455,30 +394,6 @@
 
 .dd-html-document .dd-code-block {
   margin: 0;
-}
-
-.dd-html-document .dd-html-preview {
-  display: none;
-  margin-top: 0;
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
-}
-
-.dd-html-document:has(.dd-html-document__tab--preview input:checked) .dd-code-block {
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-}
-
-.dd-html-document:has(.dd-html-document__tab--preview input:checked) .dd-code-block code {
-  display: none;
-}
-
-.dd-html-document:has(.dd-html-document__tab--preview input:checked) .dd-html-preview {
-  display: grid;
-}
-
-.dd-html-document:has(.dd-html-document__tab--code input:checked) .dd-html-preview {
-  display: none;
 }
 
 .dd-html-document__dialog {
@@ -536,6 +451,11 @@
 .dd-html-document__dialog-close:hover {
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
+}
+
+.dd-html-document__dialog-preview {
+  min-height: 0;
+  background: #ffffff;
 }
 
 .dd-html-document__dialog-frame {
