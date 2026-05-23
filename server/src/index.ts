@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer } from 'ws';
 
-import { loadConfig, type AiProvider } from './config.js';
+import {
+  loadConfig,
+  type AiProvider,
+  type OpenAiCompatibleReasoningEffort,
+  type OpenAiCompatibleWireApi,
+} from './config.js';
 import {
   type ClientEvent,
   type PairReason,
@@ -137,6 +142,31 @@ type AdminOpenAiCompatibleDetectPayload = {
   baseUrl?: unknown;
   apiKey?: unknown;
   modelId?: unknown;
+  wireApi?: unknown;
+  reasoningEffort?: unknown;
+};
+type OpenAiCompatibleClientOptions = {
+  baseUrl: string;
+  apiKey: string;
+  wireApi: OpenAiCompatibleWireApi;
+  reasoningEffort?: OpenAiCompatibleReasoningEffort;
+  siteUrl?: string;
+  siteName?: string;
+  systemPrompt?: string;
+};
+type OpenAiCompatibleModelOption = {
+  id: string;
+  label: string;
+};
+type OpenAiCompatibleModelRefreshResult = {
+  refreshed: boolean;
+  baseUrl: string;
+  selectedModelId?: string;
+  models: OpenAiCompatibleModelOption[];
+  checkedModelCount: number;
+  failedModelCount: number;
+  refreshedAt: string;
+  skippedReason?: string;
 };
 type AiChatRequestPayload = {
   prompt?: unknown;
@@ -350,6 +380,13 @@ const openRouterFallbackModelIds = [
   'inclusionai/ling-2.6-1t:free',
   'openrouter/free',
 ];
+const openAiCompatibleModelRefreshIntervalMs = 60 * 60 * 1000;
+const openAiCompatibleModelListTimeoutMs = 12_000;
+const openAiCompatibleModelProbeTimeoutMs = 10_000;
+const openAiCompatibleModelProbeMaxOutputTokens = 8;
+const openAiCompatibleModelProbeConcurrency = 3;
+const openAiCompatibleNonChatModelPattern =
+  /\b(audio|clip|dall-e|embedding|image|moderation|ocr|realtime|speech|tts|transcribe|translation|whisper)\b/i;
 
 class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -1122,15 +1159,16 @@ function extractOpenRouterText(payload: OpenRouterChatResponse) {
 }
 
 function buildOpenAiCompatibleRequestBody(
+  options: Pick<OpenAiCompatibleClientOptions, 'wireApi' | 'reasoningEffort' | 'systemPrompt'>,
   model: string,
   prompt: string,
   maxOutputTokens: number,
   images: AiChatImageInput[] = [],
 ) {
-  const reasoningEffort = config.openrouterAi.reasoningEffort;
+  const reasoningEffort = options.reasoningEffort ?? '';
+  const systemPrompt = options.systemPrompt ?? getAiSystemPrompt();
 
-  if (config.openrouterAi.wireApi === 'responses') {
-    const instructions = getAiSystemPrompt();
+  if (options.wireApi === 'responses') {
     const input = images.length > 0
       ? [{
           role: 'user' as const,
@@ -1140,7 +1178,7 @@ function buildOpenAiCompatibleRequestBody(
 
     return {
       model,
-      ...(instructions ? { instructions } : {}),
+      ...(systemPrompt ? { instructions: systemPrompt } : {}),
       input,
       max_output_tokens: maxOutputTokens,
       ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
@@ -1149,17 +1187,17 @@ function buildOpenAiCompatibleRequestBody(
 
   return {
     model,
-    messages: buildAiMessages(prompt, images),
+    messages: buildAiMessagesWithSystemPrompt(prompt, images, systemPrompt),
     max_tokens: maxOutputTokens,
     ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
   };
 }
 
-function buildOpenAiCompatibleEndpoint() {
-  const path = config.openrouterAi.wireApi === 'responses'
+function buildOpenAiCompatibleEndpoint(baseUrl: string, wireApi: OpenAiCompatibleWireApi) {
+  const path = wireApi === 'responses'
     ? '/responses'
     : '/chat/completions';
-  return new URL(`${config.openrouterAi.baseUrl}${path}`);
+  return new URL(`${baseUrl}${path}`);
 }
 
 function formatOpenRouterError(payload: OpenRouterChatResponse | null) {
@@ -1175,21 +1213,21 @@ function isOpenRouterBaseUrl(value: string) {
   }
 }
 
-function buildOpenRouterChatHeaders() {
+function buildOpenAiCompatibleHeaders(options: Pick<OpenAiCompatibleClientOptions, 'baseUrl' | 'apiKey' | 'siteUrl' | 'siteName'>) {
   const headers: Record<string, string> = {
-    authorization: `Bearer ${config.openrouterAi.apiKey ?? ''}`,
+    authorization: `Bearer ${options.apiKey}`,
     'content-type': 'application/json',
   };
 
-  if (!isOpenRouterBaseUrl(config.openrouterAi.baseUrl)) {
+  if (!isOpenRouterBaseUrl(options.baseUrl)) {
     return headers;
   }
 
-  if (config.openrouterAi.siteUrl) {
-    headers['HTTP-Referer'] = config.openrouterAi.siteUrl;
+  if (options.siteUrl) {
+    headers['HTTP-Referer'] = options.siteUrl;
   }
-  if (config.openrouterAi.siteName) {
-    headers['X-OpenRouter-Title'] = config.openrouterAi.siteName;
+  if (options.siteName) {
+    headers['X-OpenRouter-Title'] = options.siteName;
   }
 
   return headers;
@@ -1213,48 +1251,84 @@ function getOpenRouterChatCandidates(primaryModel: string) {
   });
 }
 
+async function requestOpenAiCompatibleChat(
+  options: OpenAiCompatibleClientOptions,
+  model: string,
+  prompt: string,
+  maxOutputTokens: number,
+  images: AiChatImageInput[] = [],
+  timeoutMs?: number,
+): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
+  const endpoint = buildOpenAiCompatibleEndpoint(options.baseUrl, options.wireApi);
+  const abort = timeoutMs ? createAbortSignal(timeoutMs) : undefined;
+
+  try {
+    const aiResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: buildOpenAiCompatibleHeaders(options),
+      body: JSON.stringify(buildOpenAiCompatibleRequestBody(options, model, prompt, maxOutputTokens, images)),
+      signal: abort?.signal,
+    });
+    const aiPayload = await aiResponse.json().catch(() => null) as
+      | OpenRouterChatResponse
+      | null;
+
+    if (!aiResponse.ok || !aiPayload || aiPayload.error) {
+      return {
+        ok: false,
+        model,
+        status: aiResponse.status,
+        message: formatOpenRouterError(aiPayload),
+      };
+    }
+
+    const answer = extractOpenRouterText(aiPayload);
+    if (!answer) {
+      return {
+        ok: false,
+        model,
+        status: 502,
+        message: 'OpenAI-compatible API returned an empty response.',
+      };
+    }
+
+    return {
+      ok: true,
+      model,
+      answer,
+      promptTokens: Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? aiPayload.usage?.input_tokens ?? 0)),
+      completionTokens: Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? aiPayload.usage?.output_tokens ?? 0)),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      model,
+      status: 0,
+      message: error instanceof Error && error.name === 'AbortError'
+        ? 'OpenAI-compatible API request timed out.'
+        : error instanceof Error
+          ? error.message
+          : 'OpenAI-compatible API request failed.',
+    };
+  } finally {
+    abort?.clear();
+  }
+}
+
 async function requestOpenRouterChat(
   model: string,
   prompt: string,
   maxOutputTokens: number,
   images: AiChatImageInput[] = [],
 ): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
-  const endpoint = buildOpenAiCompatibleEndpoint();
-  const aiResponse = await fetch(endpoint, {
-    method: 'POST',
-    headers: buildOpenRouterChatHeaders(),
-    body: JSON.stringify(buildOpenAiCompatibleRequestBody(model, prompt, maxOutputTokens, images)),
-  });
-  const aiPayload = await aiResponse.json().catch(() => null) as
-    | OpenRouterChatResponse
-    | null;
-
-  if (!aiResponse.ok || !aiPayload || aiPayload.error) {
-    return {
-      ok: false,
-      model,
-      status: aiResponse.status,
-      message: formatOpenRouterError(aiPayload),
-    };
-  }
-
-  const answer = extractOpenRouterText(aiPayload);
-  if (!answer) {
-    return {
-      ok: false,
-      model,
-      status: 502,
-      message: 'OpenAI-compatible API returned an empty response.',
-    };
-  }
-
-  return {
-    ok: true,
-    model,
-    answer,
-    promptTokens: Math.max(0, Math.floor(aiPayload.usage?.prompt_tokens ?? aiPayload.usage?.input_tokens ?? 0)),
-    completionTokens: Math.max(0, Math.floor(aiPayload.usage?.completion_tokens ?? aiPayload.usage?.output_tokens ?? 0)),
-  };
+  return requestOpenAiCompatibleChat({
+    baseUrl: config.openrouterAi.baseUrl,
+    apiKey: config.openrouterAi.apiKey ?? '',
+    wireApi: config.openrouterAi.wireApi,
+    reasoningEffort: config.openrouterAi.reasoningEffort,
+    siteUrl: config.openrouterAi.siteUrl,
+    siteName: config.openrouterAi.siteName,
+  }, model, prompt, maxOutputTokens, images);
 }
 
 function isCloudflareAiQuotaError(
@@ -1364,13 +1438,41 @@ function normalizeAdminOpenAiCompatibleBaseUrl(value: unknown) {
   return normalized;
 }
 
+function normalizeAdminOpenAiCompatibleWireApi(
+  value: unknown,
+  fallback: OpenAiCompatibleWireApi,
+): OpenAiCompatibleWireApi {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[-/]/g, '_');
+  return normalized === 'responses' ? 'responses' : 'chat_completions';
+}
+
+function normalizeAdminOpenAiCompatibleReasoningEffort(
+  value: unknown,
+  fallback: OpenAiCompatibleReasoningEffort,
+): OpenAiCompatibleReasoningEffort {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized;
+  }
+
+  return '';
+}
+
 function toOpenAiCompatibleModelOptions(payload: OpenAiCompatibleModelsResponse | null) {
   const source = Array.isArray(payload?.data)
     ? payload.data
     : Array.isArray(payload?.models)
       ? payload.models
       : [];
-  const models = new Map<string, { id: string; label: string }>();
+  const models = new Map<string, OpenAiCompatibleModelOption>();
 
   for (const item of source) {
     const id = typeof item.id === 'string' ? item.id.trim() : '';
@@ -1466,6 +1568,232 @@ function normalizeImageSizeOption(value: unknown, fallback: string) {
     ok: true as const,
     size: `${normalizeImageDimensionForUpstream(width).toString()}x${normalizeImageDimensionForUpstream(height).toString()}`,
   };
+}
+
+function isLikelyOpenAiCompatibleChatModel(model: OpenAiCompatibleModelOption) {
+  return !openAiCompatibleNonChatModelPattern.test(`${model.id} ${model.label}`);
+}
+
+async function mapWithConcurrency<T, Result>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<Result>,
+) {
+  const results = new Array<Result>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }));
+
+  return results;
+}
+
+async function fetchOpenAiCompatibleModelOptions(
+  baseUrl: string,
+  apiKey: string,
+) {
+  const abort = createAbortSignal(openAiCompatibleModelListTimeoutMs);
+
+  try {
+    const modelsResponse = await fetch(new URL(`${baseUrl}/models`), {
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+      },
+      signal: abort.signal,
+    });
+    const modelsPayload = await modelsResponse.json().catch(() => null) as OpenAiCompatibleModelsResponse | null;
+
+    if (!modelsResponse.ok) {
+      throw new Error(
+        modelsPayload?.error?.message?.trim() ||
+        `模型检测失败，上游 /models 返回 ${modelsResponse.status.toString()}。`,
+      );
+    }
+
+    const models = toOpenAiCompatibleModelOptions(modelsPayload);
+    if (models.length === 0) {
+      throw new Error('模型检测失败，上游 /models 没有返回可用模型。');
+    }
+
+    return models;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('模型检测超时，请检查 Base URL 是否可访问。');
+    }
+
+    throw error instanceof Error
+      ? error
+      : new Error('模型检测失败，请检查 Base URL、API Key 和网络连通性。');
+  } finally {
+    abort.clear();
+  }
+}
+
+async function detectUsableOpenAiCompatibleModels(
+  options: OpenAiCompatibleClientOptions,
+) {
+  const listedModels = (await fetchOpenAiCompatibleModelOptions(options.baseUrl, options.apiKey))
+    .filter(isLikelyOpenAiCompatibleChatModel);
+  const probeResults = await mapWithConcurrency(
+    listedModels,
+    openAiCompatibleModelProbeConcurrency,
+    async (model) => {
+      const result = await requestOpenAiCompatibleChat(
+        {
+          ...options,
+          reasoningEffort: '',
+          systemPrompt: '',
+        },
+        model.id,
+        'Reply OK.',
+        openAiCompatibleModelProbeMaxOutputTokens,
+        [],
+        openAiCompatibleModelProbeTimeoutMs,
+      );
+
+      if (!result.ok) {
+        console.warn('OpenAI-compatible model probe failed', {
+          model: model.id,
+          status: result.status,
+          message: result.message,
+        });
+      }
+
+      return {
+        model,
+        result,
+      };
+    },
+  );
+  const models = probeResults
+    .filter((entry) => entry.result.ok)
+    .map((entry) => entry.model);
+
+  return {
+    models,
+    checkedModelCount: listedModels.length,
+    failedModelCount: listedModels.length - models.length,
+  };
+}
+
+function toOpenAiCompatibleModelToggles(
+  models: OpenAiCompatibleModelOption[],
+  previousModels: AdminAiSettingsSnapshot['openrouter']['models'],
+  selectedModelId: string,
+) {
+  const previousById = new Map(previousModels.map((model) => [model.id, model]));
+  const hadPreviousModels = previousModels.length > 0;
+  const nextModels = models.map((model) => {
+    const previous = previousById.get(model.id);
+    return {
+      id: model.id,
+      label: model.label || previous?.label || model.id,
+      enabled: previous?.enabled ?? !hadPreviousModels,
+    };
+  });
+
+  if (selectedModelId) {
+    const selectedIndex = nextModels.findIndex((model) => model.id === selectedModelId);
+    if (selectedIndex >= 0) {
+      nextModels[selectedIndex] = {
+        ...nextModels[selectedIndex],
+        enabled: true,
+      };
+    }
+  }
+
+  if (nextModels.every((model) => !model.enabled) && nextModels[0]) {
+    nextModels[0] = {
+      ...nextModels[0],
+      enabled: true,
+    };
+  }
+
+  return nextModels;
+}
+
+let openAiCompatibleModelRefreshPromise: Promise<OpenAiCompatibleModelRefreshResult> | null = null;
+
+function refreshConfiguredOpenAiCompatibleModels() {
+  if (openAiCompatibleModelRefreshPromise) {
+    return openAiCompatibleModelRefreshPromise;
+  }
+
+  openAiCompatibleModelRefreshPromise = (async () => {
+    const snapshot = adminConfig.getAiSettingsSnapshot();
+    const refreshedAt = new Date().toISOString();
+    const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(snapshot.openrouter.baseUrl) ?? '';
+    const apiKey = snapshot.openrouter.apiKey.trim();
+
+    if (!baseUrl || !apiKey) {
+      return {
+        refreshed: false,
+        baseUrl,
+        selectedModelId: snapshot.openrouter.model || undefined,
+        models: snapshot.openrouter.models.map((model) => ({
+          id: model.id,
+          label: model.label,
+        })),
+        checkedModelCount: 0,
+        failedModelCount: 0,
+        refreshedAt,
+        skippedReason: 'OpenAI 兼容接口未配置 Base URL 或 API Key。',
+      };
+    }
+
+    const detected = await detectUsableOpenAiCompatibleModels({
+      baseUrl,
+      apiKey,
+      wireApi: snapshot.openrouter.wireApi,
+      reasoningEffort: snapshot.openrouter.reasoningEffort,
+      siteUrl: snapshot.openrouter.siteUrl,
+      siteName: snapshot.openrouter.siteName,
+    });
+
+    if (detected.models.length === 0) {
+      throw new Error('没有检测到可用模型，已保留原模型列表。');
+    }
+
+    const usableModelIds = new Set(detected.models.map((model) => model.id));
+    const selectedModelId = usableModelIds.has(snapshot.openrouter.model)
+      ? snapshot.openrouter.model
+      : detected.models[0].id;
+    const nextModels = toOpenAiCompatibleModelToggles(
+      detected.models,
+      snapshot.openrouter.models,
+      selectedModelId,
+    );
+
+    adminConfig.updateAiSettings({
+      ...snapshot,
+      openrouter: {
+        ...snapshot.openrouter,
+        baseUrl,
+        model: selectedModelId,
+        models: nextModels,
+      },
+    });
+
+    return {
+      refreshed: true,
+      baseUrl,
+      selectedModelId,
+      models: detected.models,
+      checkedModelCount: detected.checkedModelCount,
+      failedModelCount: detected.failedModelCount,
+      refreshedAt,
+    };
+  })().finally(() => {
+    openAiCompatibleModelRefreshPromise = null;
+  });
+
+  return openAiCompatibleModelRefreshPromise;
 }
 
 function getImageQuotaPeriod(now = new Date()): AccountImageQuotaPeriod {
@@ -3001,8 +3329,11 @@ function buildAiResponseInputContent(prompt: string, images: AiChatImageInput[])
   ];
 }
 
-function buildAiMessages(prompt: string, images: AiChatImageInput[] = []): AiChatMessage[] {
-  const systemPrompt = getAiSystemPrompt();
+function buildAiMessagesWithSystemPrompt(
+  prompt: string,
+  images: AiChatImageInput[],
+  systemPrompt: string,
+): AiChatMessage[] {
   return [
     ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
     {
@@ -3010,6 +3341,10 @@ function buildAiMessages(prompt: string, images: AiChatImageInput[] = []): AiCha
       content: buildAiChatContent(prompt, images),
     },
   ];
+}
+
+function buildAiMessages(prompt: string, images: AiChatImageInput[] = []): AiChatMessage[] {
+  return buildAiMessagesWithSystemPrompt(prompt, images, getAiSystemPrompt());
 }
 
 function writeAiQuotaExhausted(response: ServerResponse) {
@@ -3849,61 +4184,79 @@ async function handleAdminAiConfigDetect(
   const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(payload.baseUrl);
   const apiKey = typeof payload.apiKey === 'string' ? payload.apiKey.trim() : '';
   const requestedModelId = typeof payload.modelId === 'string' ? payload.modelId.trim() : '';
+  const wireApi = normalizeAdminOpenAiCompatibleWireApi(payload.wireApi, config.openrouterAi.wireApi);
+  const reasoningEffort = normalizeAdminOpenAiCompatibleReasoningEffort(
+    payload.reasoningEffort,
+    config.openrouterAi.reasoningEffort,
+  );
 
   if (!baseUrl || !apiKey) {
     writeJson(response, 400, { error: 'Base URL 和 API Key 都需要填写后才能检测模型。' });
     return;
   }
 
-  const abort = createAbortSignal(12_000);
-
   try {
-    const modelsResponse = await fetch(new URL(`${baseUrl}/models`), {
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-      },
-      signal: abort.signal,
+    const detected = await detectUsableOpenAiCompatibleModels({
+      baseUrl,
+      apiKey,
+      wireApi,
+      reasoningEffort,
+      siteUrl: config.openrouterAi.siteUrl,
+      siteName: config.openrouterAi.siteName,
     });
-    const modelsPayload = await modelsResponse.json().catch(() => null) as OpenAiCompatibleModelsResponse | null;
-
-    if (!modelsResponse.ok) {
-      writeJson(response, 502, {
-        error:
-          modelsPayload?.error?.message?.trim() ||
-          `模型检测失败，上游 /models 返回 ${modelsResponse.status.toString()}。`,
-      });
-      return;
-    }
-
-    const models = toOpenAiCompatibleModelOptions(modelsPayload);
-    if (models.length === 0) {
-      writeJson(response, 502, { error: '模型检测失败，上游 /models 没有返回可用模型。' });
+    if (detected.models.length === 0) {
+      writeJson(response, 502, { error: '没有检测到可用模型，请检查 API Key、接口类型和模型权限。' });
       return;
     }
 
     const selectedModelId = requestedModelId
-      ? models.find((model) => model.id === requestedModelId)?.id
-      : models[0]?.id;
-
-    if (requestedModelId && !selectedModelId) {
-      writeJson(response, 400, { error: '当前模型 ID 不在上游返回的真实模型列表中。' });
-      return;
-    }
+      ? detected.models.find((model) => model.id === requestedModelId)?.id ?? detected.models[0]?.id
+      : detected.models[0]?.id;
 
     writeJson(response, 200, {
       ok: true,
       baseUrl,
       selectedModelId,
-      models,
+      models: detected.models,
+      checkedModelCount: detected.checkedModelCount,
+      failedModelCount: detected.failedModelCount,
     });
   } catch (error) {
     writeJson(response, 502, {
-      error: error instanceof Error && error.name === 'AbortError'
-        ? '模型检测超时，请检查 Base URL 是否可访问。'
+      error: error instanceof Error
+        ? error.message
         : '模型检测失败，请检查 Base URL、API Key 和网络连通性。',
     });
-  } finally {
-    abort.clear();
+  }
+}
+
+async function handleAdminAiConfigRefreshModels(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  try {
+    const refresh = await refreshConfiguredOpenAiCompatibleModels();
+    if (!refresh.refreshed) {
+      writeJson(response, 400, { error: refresh.skippedReason ?? 'OpenAI 兼容接口未配置。' });
+      return;
+    }
+
+    const dashboard = await buildAdminStatePayload(authResult.admin);
+    writeJson(response, 200, {
+      ok: true,
+      refresh,
+      ...dashboard,
+    });
+  } catch (error) {
+    writeJson(response, 502, {
+      error: error instanceof Error ? error.message : '模型列表刷新失败。',
+    });
   }
 }
 
@@ -5381,6 +5734,11 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
+  if (url.pathname === '/api/admin/ai-config/refresh-models' && request.method === 'POST') {
+    void handleAdminAiConfigRefreshModels(request, response);
+    return;
+  }
+
   if (url.pathname === '/api/admin/history/clear' && request.method === 'POST') {
     void handleAdminHistoryClear(request, response);
     return;
@@ -5966,6 +6324,15 @@ const historyMaintenanceInterval = setInterval(() => {
   }
 }, config.pingIntervalMs);
 historyMaintenanceInterval.unref();
+
+const openAiCompatibleModelRefreshInterval = setInterval(() => {
+  void refreshConfiguredOpenAiCompatibleModels().catch((error) => {
+    console.warn('Scheduled OpenAI-compatible model refresh failed', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+}, openAiCompatibleModelRefreshIntervalMs);
+openAiCompatibleModelRefreshInterval.unref();
 
 function cancelPendingRoomExit(deviceId: string) {
   const timer = pendingRoomExitTimers.get(deviceId);

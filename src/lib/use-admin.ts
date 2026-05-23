@@ -37,12 +37,21 @@ export type AdminOpenAiCompatibleDetectInput = {
   baseUrl: string
   apiKey: string
   modelId?: string
+  wireApi?: AdminOpenRouterConfig['wireApi']
+  reasoningEffort?: AdminOpenAiReasoningEffort
 }
 
 export type AdminOpenAiCompatibleDetectResult = {
   baseUrl: string
   models: AdminOpenAiCompatibleDetectedModel[]
   selectedModelId?: string
+  checkedModelCount?: number
+  failedModelCount?: number
+}
+
+export type AdminOpenAiCompatibleRefreshResult = AdminOpenAiCompatibleDetectResult & {
+  refreshed: boolean
+  refreshedAt: string
 }
 
 export type AdminManualOpenAiApiDraft = {
@@ -483,6 +492,43 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     })
   }
 
+  const handleAdminOpenRouterModelsRefresh = (): Promise<AdminOpenAiCompatibleRefreshResult> => {
+    if (!isAdminAuthenticated) {
+      const message = '请先登录后台。'
+      setAdminErrorMessage(message)
+      return Promise.reject(new Error(message))
+    }
+
+    return fetch(`${resolveAdminApiBaseUrl()}/api/admin/ai-config/refresh-models`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    }).then(async (response) => {
+      if (!response.ok) {
+        const message = await readAdminApiError(response, '模型列表刷新失败。')
+        pushAdminToast('error', message)
+        throw new Error(message)
+      }
+
+      const payload = await response.json() as AdminStateResponse & {
+        refresh: AdminOpenAiCompatibleRefreshResult
+      }
+      setAdminSession(payload.admin ?? adminSession)
+      setAdminAiSettings(payload.ai)
+      setAdminHistoryStats(payload.history)
+      setAdminUsage(payload.usage ?? null)
+      setAdminOnlineDevices(payload.onlineDevices ?? null)
+      setAdminUsers(payload.users ?? null)
+      setAdminRoles(payload.roles ?? adminRoles)
+      setAdminThemeSubmissions(payload.themeSubmissions ?? adminThemeSubmissions)
+      pushAdminToast('success', `已刷新 ${payload.refresh.models.length} 个可用模型。`)
+      return payload.refresh
+    })
+  }
+
   const handleAdminSave = () => {
     if (!isAdminAuthenticated || !adminAiSettings) {
       setAdminErrorMessage('请先登录后台。')
@@ -778,6 +824,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     handleAdminCloudflareFieldChange,
     handleAdminOpenRouterFieldChange,
     handleAdminOpenRouterModelsDetect,
+    handleAdminOpenRouterModelsRefresh,
     handleAdminSave,
     handleAdminClearHistory,
     handleAdminOnlineDeviceRename,

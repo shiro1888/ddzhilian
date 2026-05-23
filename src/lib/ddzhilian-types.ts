@@ -578,6 +578,9 @@ export type AdminCloudflareConfig = {
 }
 
 export type AdminOpenRouterConfig = {
+  displayName: string
+  homepageUrl: string
+  note: string
   apiKey: string
   baseUrl: string
   wireApi: AdminOpenAiWireApi

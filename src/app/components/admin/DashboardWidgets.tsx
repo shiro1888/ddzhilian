@@ -7,7 +7,11 @@ import type {
   AdminOpenRouterConfig,
   AdminUsageSnapshot,
 } from '../../../lib/ddzhilian-types'
-import type { AdminOpenAiCompatibleDetectInput, AdminOpenAiCompatibleDetectResult } from '../../../lib/use-admin'
+import type {
+  AdminOpenAiCompatibleDetectInput,
+  AdminOpenAiCompatibleDetectResult,
+  AdminOpenAiCompatibleRefreshResult,
+} from '../../../lib/use-admin'
 import { DangerZonePanel } from './DangerZonePanel'
 import type { DashboardWidgetKey, KpiCard, TrendPoint } from './constants'
 import { KpiCardView } from './KpiCard'
@@ -42,6 +46,7 @@ export function DashboardWidgetContent({
   onOpenProviders,
   onOpenRouterFieldChange,
   onOpenRouterModelsDetect,
+  onOpenRouterModelsRefresh,
   onProviderChange,
   onSave,
   onSetDefaultModel,
@@ -67,6 +72,7 @@ export function DashboardWidgetContent({
   onOpenProviders: () => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
+  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onSave: () => void
   onSetDefaultModel: (id: string) => void
@@ -120,6 +126,7 @@ export function DashboardWidgetContent({
           onCloudflareFieldChange={onCloudflareFieldChange}
           onOpenRouterFieldChange={onOpenRouterFieldChange}
           onOpenRouterModelsDetect={onOpenRouterModelsDetect}
+          onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
           onProviderChange={onProviderChange}
           onSave={onSave}
           isSaving={isAdminSaving}

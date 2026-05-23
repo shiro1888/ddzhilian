@@ -2,19 +2,25 @@ import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import { Tabs } from '@base-ui/react/tabs'
 import { useState } from 'react'
-import type { AdminAiSettings, AdminCloudflareConfig, AdminOpenAiReasoningEffort, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
-import type { AdminOpenAiCompatibleDetectInput, AdminOpenAiCompatibleDetectResult } from '../../../lib/use-admin'
+import type { AdminAiSettings, AdminCloudflareConfig, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
+import type {
+  AdminOpenAiCompatibleDetectInput,
+  AdminOpenAiCompatibleDetectResult,
+  AdminOpenAiCompatibleRefreshResult,
+} from '../../../lib/use-admin'
 import { isProviderConfigOption, OPENAI_COMPATIBLE_PROVIDER_LABEL } from './constants'
 import type { ProviderConfigOption } from './constants'
 import { AdminConfigField } from './FormControls'
 import { CliProxyApiPresetPanel } from './CliProxyApiPresetPanel'
 import { ManualOpenAiApiPanel } from './ManualOpenAiApiPanel'
+import { OpenAiProviderTemplatePanel } from './OpenAiProviderTemplatePanel'
 
 export function ProviderConfigPanel({
   settings,
   onCloudflareFieldChange,
   onOpenRouterFieldChange,
   onOpenRouterModelsDetect,
+  onOpenRouterModelsRefresh,
   onProviderChange,
   onSave,
   isSaving,
@@ -23,17 +29,19 @@ export function ProviderConfigPanel({
   onCloudflareFieldChange: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
+  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onSave: () => void
   isSaving: boolean
 }) {
   const [activeOption, setActiveOption] = useState<ProviderConfigOption>('params')
-  const [expandedProvider, setExpandedProvider] = useState<AdminAiSettings['provider'] | null>(null)
+  const [expandedProvider, setExpandedProvider] = useState<AdminAiSettings['provider'] | null>('openrouter')
   const isOpenRouter = settings.provider === 'openrouter'
   const isCloudflareExpanded = expandedProvider === 'cloudflare'
   const isOpenRouterExpanded = expandedProvider === 'openrouter'
   const enabledCloudflareModels = settings.cloudflare.models.filter((model) => model.enabled).length
   const enabledOpenRouterModels = settings.openrouter.models.filter((model) => model.enabled).length
+  const openRouterDisplayName = settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL
   const toggleProviderDetails = (provider: AdminAiSettings['provider']) => {
     setExpandedProvider((current) => current === provider ? null : provider)
   }
@@ -64,7 +72,7 @@ export function ProviderConfigPanel({
         </Tabs.List>
         <Tabs.Panel className="dd-admin-provider-panel" value="params" keepMounted>
           <div className="dd-admin-provider-config-list">
-            <article className={`dd-admin-provider-config-item${settings.provider === 'cloudflare' ? ' is-active' : ''}${isCloudflareExpanded ? ' is-expanded' : ''}`}>
+            <article className={`dd-admin-provider-config-item dd-admin-provider-config-item--cloudflare${settings.provider === 'cloudflare' ? ' is-active' : ''}${isCloudflareExpanded ? ' is-expanded' : ''}`}>
               <div className="dd-admin-provider-config-item__head">
                 <button
                   type="button"
@@ -73,7 +81,7 @@ export function ProviderConfigPanel({
                   aria-controls="admin-provider-cloudflare-details"
                   onClick={() => toggleProviderDetails('cloudflare')}
                 >
-                  <span className="dd-admin-provider-config-item__kicker">供应商 01</span>
+                  <span className="dd-admin-provider-config-item__kicker">供应商 02</span>
                   <strong>Cloudflare AI</strong>
                   <small>Cloudflare Workers AI 接入参数与额度保护。</small>
                   <span className="dd-admin-provider-config-item__expand">{isCloudflareExpanded ? '收起' : '展开'}</span>
@@ -138,7 +146,7 @@ export function ProviderConfigPanel({
               ) : null}
             </article>
 
-            <article className={`dd-admin-provider-config-item${settings.provider === 'openrouter' ? ' is-active' : ''}${isOpenRouterExpanded ? ' is-expanded' : ''}`}>
+            <article className={`dd-admin-provider-config-item dd-admin-provider-config-item--openai${settings.provider === 'openrouter' ? ' is-active' : ''}${isOpenRouterExpanded ? ' is-expanded' : ''}`}>
               <div className="dd-admin-provider-config-item__head">
                 <button
                   type="button"
@@ -147,8 +155,8 @@ export function ProviderConfigPanel({
                   aria-controls="admin-provider-openrouter-details"
                   onClick={() => toggleProviderDetails('openrouter')}
                 >
-                  <span className="dd-admin-provider-config-item__kicker">供应商 02</span>
-                  <strong>{OPENAI_COMPATIBLE_PROVIDER_LABEL}</strong>
+                  <span className="dd-admin-provider-config-item__kicker">供应商 01</span>
+                  <strong>{openRouterDisplayName}</strong>
                   <small>OpenRouter、CLIProxyAPI 或其他 OpenAI 兼容接口。</small>
                   <span className="dd-admin-provider-config-item__expand">{isOpenRouterExpanded ? '收起' : '展开'}</span>
                 </button>
@@ -170,7 +178,7 @@ export function ProviderConfigPanel({
                 <div id="admin-provider-openrouter-details" className="dd-admin-provider-config-item__details">
                   <dl className="dd-admin-provider-config-meta">
                     <div>
-                      <dt>Base URL</dt>
+                      <dt>API 地址</dt>
                       <dd>{settings.openrouter.baseUrl || '未设置'}</dd>
                     </div>
                     <div>
@@ -182,46 +190,13 @@ export function ProviderConfigPanel({
                       <dd>{enabledOpenRouterModels.toString()}</dd>
                     </div>
                   </dl>
-                  <div className="dd-admin-config-form">
-                    <AdminConfigField label="API Key">
-                      <Input type="password" value={settings.openrouter.apiKey} onChange={(event) => onOpenRouterFieldChange('apiKey', event.currentTarget.value)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="Base URL">
-                      <Input type="text" value={settings.openrouter.baseUrl} onChange={(event) => onOpenRouterFieldChange('baseUrl', event.currentTarget.value)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="接口类型">
-                      <select value={settings.openrouter.wireApi} onChange={(event) => onOpenRouterFieldChange('wireApi', event.currentTarget.value as AdminOpenRouterConfig['wireApi'])}>
-                        <option value="chat_completions">Chat Completions</option>
-                        <option value="responses">Responses</option>
-                      </select>
-                    </AdminConfigField>
-                    <AdminConfigField label="推理强度">
-                      <select
-                        value={settings.openrouter.reasoningEffort}
-                        onChange={(event) => onOpenRouterFieldChange('reasoningEffort', event.currentTarget.value as AdminOpenAiReasoningEffort)}
-                      >
-                        <option value="">不发送</option>
-                        <option value="low">low</option>
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
-                      </select>
-                    </AdminConfigField>
-                    <AdminConfigField label="站点 URL">
-                      <Input type="text" value={settings.openrouter.siteUrl} onChange={(event) => onOpenRouterFieldChange('siteUrl', event.currentTarget.value)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="站点名称">
-                      <Input type="text" value={settings.openrouter.siteName} onChange={(event) => onOpenRouterFieldChange('siteName', event.currentTarget.value)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="默认模型" wide>
-                      <Input type="text" value={settings.openrouter.model} onChange={(event) => onOpenRouterFieldChange('model', event.currentTarget.value)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="最大 Prompt 字符">
-                      <Input type="number" min="1" value={settings.openrouter.maxPromptChars} onChange={(event) => onOpenRouterFieldChange('maxPromptChars', Number(event.currentTarget.value) || 1)} />
-                    </AdminConfigField>
-                    <AdminConfigField label="最大输出 Token">
-                      <Input type="number" min="1" value={settings.openrouter.maxOutputTokens} onChange={(event) => onOpenRouterFieldChange('maxOutputTokens', Number(event.currentTarget.value) || 1)} />
-                    </AdminConfigField>
-                  </div>
+                  <OpenAiProviderTemplatePanel
+                    settings={settings.openrouter}
+                    onDetectModels={onOpenRouterModelsDetect}
+                    onRefreshModels={onOpenRouterModelsRefresh}
+                    onProviderChange={onProviderChange}
+                    onOpenRouterFieldChange={onOpenRouterFieldChange}
+                  />
                 </div>
               ) : null}
             </article>

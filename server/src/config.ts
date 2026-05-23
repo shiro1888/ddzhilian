@@ -115,6 +115,9 @@ export interface ServerConfig {
     estimatedOutputNeuronsPerMillionTokens: number;
   };
   openrouterAi: {
+    displayName: string;
+    homepageUrl: string;
+    note: string;
     apiKey?: string;
     baseUrl: string;
     wireApi: OpenAiCompatibleWireApi;
@@ -477,6 +480,9 @@ export function loadConfig(): ServerConfig {
       ),
     },
     openrouterAi: {
+      displayName: process.env.OPENROUTER_PROVIDER_NAME?.trim() || 'OpenRouter',
+      homepageUrl: process.env.OPENROUTER_PROVIDER_URL?.trim() || 'https://openrouter.ai',
+      note: process.env.OPENROUTER_PROVIDER_NOTE?.trim() || '',
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
       baseUrl: normalizeOpenAiCompatibleBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
       wireApi: readOpenAiCompatibleWireApi(process.env.OPENROUTER_WIRE_API),

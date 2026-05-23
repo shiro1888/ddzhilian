@@ -473,7 +473,7 @@ export function describeProviderStatus(settings: AdminAiSettings) {
       enabled: settings.provider === 'cloudflare',
     },
     {
-      name: OPENAI_COMPATIBLE_PROVIDER_LABEL,
+      name: settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL,
       state: settings.openrouter.apiKey ? '健康' : '待配置',
       modelCount: settings.openrouter.models.filter((model) => model.enabled).length,
       enabled: settings.provider === 'openrouter',

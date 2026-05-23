@@ -1,5 +1,9 @@
 import type { AdminAiSettings, AdminCloudflareConfig, AdminModelUsage, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
-import type { AdminOpenAiCompatibleDetectInput, AdminOpenAiCompatibleDetectResult } from '../../../lib/use-admin'
+import type {
+  AdminOpenAiCompatibleDetectInput,
+  AdminOpenAiCompatibleDetectResult,
+  AdminOpenAiCompatibleRefreshResult,
+} from '../../../lib/use-admin'
 import { ProviderConfigPanel } from './ProviderConfigPanel'
 import { ProviderTable } from './ProviderTable'
 import { SystemPromptPanel } from './SystemPromptPanel'
@@ -13,6 +17,7 @@ export function ProvidersWorkspace({
   onCloudflareFieldChange,
   onOpenRouterFieldChange,
   onOpenRouterModelsDetect,
+  onOpenRouterModelsRefresh,
   onProviderChange,
   onSave,
   isSaving,
@@ -24,6 +29,7 @@ export function ProvidersWorkspace({
   onCloudflareFieldChange: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
+  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onSave: () => void
   isSaving: boolean
@@ -42,6 +48,7 @@ export function ProvidersWorkspace({
         onCloudflareFieldChange={onCloudflareFieldChange}
         onOpenRouterFieldChange={onOpenRouterFieldChange}
         onOpenRouterModelsDetect={onOpenRouterModelsDetect}
+        onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
         onProviderChange={onProviderChange}
         onSave={onSave}
         isSaving={isSaving}

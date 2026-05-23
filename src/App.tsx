@@ -328,6 +328,7 @@ function App() {
     handleAdminCloudflareFieldChange,
     handleAdminOpenRouterFieldChange,
     handleAdminOpenRouterModelsDetect,
+    handleAdminOpenRouterModelsRefresh,
     handleAdminSave,
     handleAdminClearHistory,
     handleAdminOnlineDeviceRename,
@@ -1592,6 +1593,7 @@ function App() {
       onCloudflareFieldChange={handleAdminCloudflareFieldChange}
       onOpenRouterFieldChange={handleAdminOpenRouterFieldChange}
       onOpenRouterModelsDetect={handleAdminOpenRouterModelsDetect}
+      onOpenRouterModelsRefresh={handleAdminOpenRouterModelsRefresh}
       onSave={handleAdminSave}
       onClearHistory={handleAdminClearHistory}
       onOnlineDeviceRename={handleAdminOnlineDeviceRename}

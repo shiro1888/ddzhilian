@@ -14,6 +14,9 @@ export function ProviderTable({
   }
 }) {
   const providers = describeProviderStatus(settings)
+  const activeProviderName = activeProvider === 'openrouter'
+    ? settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL
+    : 'Cloudflare'
 
   return (
     <section className="dd-admin-table-card">
@@ -41,7 +44,7 @@ export function ProviderTable({
               <td>{provider.name}</td>
               <td><span className={`dd-admin-status-dot ${provider.state === '健康' ? 'is-green' : 'is-amber'}`}>{provider.state}</span></td>
               <td>{provider.modelCount}</td>
-              <td>{provider.enabled ? (activeProvider === 'openrouter' ? OPENAI_COMPATIBLE_PROVIDER_LABEL : 'Cloudflare') : '待切换'}</td>
+              <td>{provider.enabled ? activeProviderName : '待切换'}</td>
             </tr>
           ))}
         </tbody>

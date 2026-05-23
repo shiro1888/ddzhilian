@@ -67,6 +67,9 @@ export function ManualOpenAiApiPanel({
     void onDetectModels({
       baseUrl,
       apiKey,
+      modelId: draft.modelId.trim() || undefined,
+      wireApi: draft.wireApi,
+      reasoningEffort: draft.reasoningEffort,
     })
       .then((result) => {
         const selectedModelId = result.selectedModelId ?? result.models[0]?.id ?? ''

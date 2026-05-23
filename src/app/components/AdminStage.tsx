@@ -17,6 +17,7 @@ import type {
 import type {
   AdminOpenAiCompatibleDetectInput,
   AdminOpenAiCompatibleDetectResult,
+  AdminOpenAiCompatibleRefreshResult,
   AdminToast,
 } from '../../lib/use-admin'
 import { AdminLogin } from './admin/AdminLogin'
@@ -78,6 +79,7 @@ type AdminStageProps = {
     value: AdminOpenRouterConfig[Field],
   ) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
+  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onSave: () => void
   onClearHistory: () => void
   onOnlineDeviceRename: (input: AdminOnlineDeviceNameUpdate) => Promise<void>
@@ -120,6 +122,7 @@ export function AdminStage({
   onCloudflareFieldChange,
   onOpenRouterFieldChange,
   onOpenRouterModelsDetect,
+  onOpenRouterModelsRefresh,
   onSave,
   onClearHistory,
   onOnlineDeviceRename,
@@ -251,6 +254,7 @@ export function AdminStage({
       onOpenProviders={() => setActiveSection('providers')}
       onOpenRouterFieldChange={onOpenRouterFieldChange}
       onOpenRouterModelsDetect={onOpenRouterModelsDetect}
+      onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
       onProviderChange={onProviderChange}
       onSave={onSave}
       onSetDefaultModel={updateActiveDefaultModel}
@@ -340,6 +344,7 @@ export function AdminStage({
                   onCloudflareFieldChange={onCloudflareFieldChange}
                   onOpenRouterFieldChange={onOpenRouterFieldChange}
                   onOpenRouterModelsDetect={onOpenRouterModelsDetect}
+                  onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
                   onProviderChange={onProviderChange}
                   onSave={onSave}
                   isSaving={isAdminSaving}

@@ -12,6 +12,8 @@ import {
 const ADMIN_CONFIG_ROOT = fileURLToPath(new URL('../../data/admin', import.meta.url));
 const ADMIN_CONFIG_PATH = join(ADMIN_CONFIG_ROOT, 'config.json');
 const ENV_PATH = fileURLToPath(new URL('../../.env', import.meta.url));
+const defaultOpenRouterDisplayName = 'OpenRouter';
+const defaultOpenRouterHomepageUrl = 'https://openrouter.ai';
 const defaultOpenRouterBaseUrl = 'https://openrouter.ai/api/v1';
 
 export type AdminModelToggleItem = {
@@ -34,6 +36,9 @@ export type AdminAiSettingsSnapshot = {
     maxOutputTokens: number;
   };
   openrouter: {
+    displayName: string;
+    homepageUrl: string;
+    note: string;
     apiKey: string;
     baseUrl: string;
     wireApi: OpenAiCompatibleWireApi;
@@ -54,6 +59,11 @@ type LegacyProviderSnapshot = {
   accountId?: unknown;
   apiToken?: unknown;
   apiKey?: unknown;
+  displayName?: unknown;
+  providerName?: unknown;
+  homepageUrl?: unknown;
+  providerUrl?: unknown;
+  note?: unknown;
   baseUrl?: unknown;
   wireApi?: unknown;
   reasoningEffort?: unknown;
@@ -84,6 +94,10 @@ function normalizeOpenAiCompatibleBaseUrl(value: unknown) {
     .replace(/\/chat\/completions$/i, '')
     .replace(/\/responses$/i, '')
     .replace(/\/+$/g, '');
+}
+
+function normalizeHomepageUrl(value: unknown) {
+  return normalizeOptionalString(value).replace(/\/+$/g, '');
 }
 
 function normalizeOpenAiCompatibleWireApi(
@@ -170,7 +184,7 @@ function parseModelToggleItems(
       })
       .filter((entry): entry is AdminModelToggleItem => Boolean(entry));
 
-    return ensureDefaultEnabled(mapped, defaultModelId, fallbackModels);
+    return ensureExplicitDefaultEnabled(mapped, defaultModelId);
   }
 
   const legacyText = normalizeOptionalString(value);
@@ -205,6 +219,33 @@ function parseModelToggleItems(
     });
 
   return ensureDefaultEnabled(parsed, defaultModelId, fallbackModels);
+}
+
+function ensureExplicitDefaultEnabled(
+  models: AdminModelToggleItem[],
+  defaultModelId: string,
+) {
+  const next = new Map<string, AdminModelToggleItem>();
+
+  for (const model of models) {
+    next.set(model.id, model);
+  }
+
+  const safeDefaultId = next.has(defaultModelId)
+    ? defaultModelId
+    : [...next.values()].find((model) => model.enabled)?.id || [...next.keys()][0] || '';
+
+  if (safeDefaultId) {
+    const currentDefault = next.get(safeDefaultId);
+    if (currentDefault) {
+      next.set(safeDefaultId, {
+        ...currentDefault,
+        enabled: true,
+      });
+    }
+  }
+
+  return [...next.values()];
 }
 
 function ensureDefaultEnabled(
@@ -266,6 +307,27 @@ function normalizeSnapshot(
   const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
   const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
   const openrouterModel = normalizeOptionalString(openrouterInput.model) || fallback.openrouterAi.model;
+  const openrouterDisplayName =
+    normalizeOptionalString(openrouterInput.displayName) ||
+    normalizeOptionalString(openrouterInput.providerName) ||
+    fallback.openrouterAi.displayName ||
+    defaultOpenRouterDisplayName;
+  const cloudflareModels = parseModelToggleItems(
+    cloudflareInput.models ?? cloudflareInput.modelsText,
+    cloudflareModel,
+    fallback.cloudflareAi.models,
+  );
+  const openrouterModels = parseModelToggleItems(
+    openrouterInput.models ?? openrouterInput.modelsText,
+    openrouterModel,
+    fallback.openrouterAi.models,
+  );
+  const normalizedCloudflareModel = cloudflareModels.some((model) => model.id === cloudflareModel)
+    ? cloudflareModel
+    : cloudflareModels.find((model) => model.enabled)?.id ?? cloudflareModels[0]?.id ?? cloudflareModel;
+  const normalizedOpenrouterModel = openrouterModels.some((model) => model.id === openrouterModel)
+    ? openrouterModel
+    : openrouterModels.find((model) => model.enabled)?.id ?? openrouterModels[0]?.id ?? openrouterModel;
 
   return {
     provider,
@@ -273,12 +335,8 @@ function normalizeSnapshot(
     cloudflare: {
       accountId: normalizeOptionalString(cloudflareInput.accountId),
       apiToken: normalizeOptionalString(cloudflareInput.apiToken),
-      model: cloudflareModel,
-      models: parseModelToggleItems(
-        cloudflareInput.models ?? cloudflareInput.modelsText,
-        cloudflareModel,
-        fallback.cloudflareAi.models,
-      ),
+      model: normalizedCloudflareModel,
+      models: cloudflareModels,
       freeOnly: cloudflareInput.freeOnly !== false,
       dailyNeuronBudget: normalizeNonNegativeInteger(
         cloudflareInput.dailyNeuronBudget,
@@ -294,6 +352,13 @@ function normalizeSnapshot(
       ),
     },
     openrouter: {
+      displayName: openrouterDisplayName,
+      homepageUrl:
+        normalizeHomepageUrl(openrouterInput.homepageUrl) ||
+        normalizeHomepageUrl(openrouterInput.providerUrl) ||
+        fallback.openrouterAi.homepageUrl ||
+        defaultOpenRouterHomepageUrl,
+      note: normalizeOptionalString(openrouterInput.note).slice(0, 240),
       apiKey: normalizeOptionalString(openrouterInput.apiKey),
       baseUrl:
         normalizeOpenAiCompatibleBaseUrl(openrouterInput.baseUrl) ||
@@ -309,12 +374,8 @@ function normalizeSnapshot(
       ),
       siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
       siteName: normalizeOptionalString(openrouterInput.siteName) || fallback.openrouterAi.siteName,
-      model: openrouterModel,
-      models: parseModelToggleItems(
-        openrouterInput.models ?? openrouterInput.modelsText,
-        openrouterModel,
-        fallback.openrouterAi.models,
-      ),
+      model: normalizedOpenrouterModel,
+      models: openrouterModels,
       maxPromptChars: normalizePositiveInteger(
         openrouterInput.maxPromptChars,
         fallback.openrouterAi.maxPromptChars,
@@ -401,6 +462,9 @@ export class AdminConfigRegistry {
         maxOutputTokens: this.config.cloudflareAi.maxOutputTokens,
       },
       openrouter: {
+        displayName: this.config.openrouterAi.displayName,
+        homepageUrl: this.config.openrouterAi.homepageUrl,
+        note: this.config.openrouterAi.note,
         apiKey: this.config.openrouterAi.apiKey ?? '',
         baseUrl: this.config.openrouterAi.baseUrl,
         wireApi: this.config.openrouterAi.wireApi,
@@ -451,6 +515,9 @@ export class AdminConfigRegistry {
     this.config.cloudflareAi.maxOutputTokens = input.cloudflare.maxOutputTokens;
 
     this.config.openrouterAi.apiKey = input.openrouter.apiKey || undefined;
+    this.config.openrouterAi.displayName = input.openrouter.displayName;
+    this.config.openrouterAi.homepageUrl = input.openrouter.homepageUrl;
+    this.config.openrouterAi.note = input.openrouter.note;
     this.config.openrouterAi.baseUrl = input.openrouter.baseUrl;
     this.config.openrouterAi.wireApi = input.openrouter.wireApi;
     this.config.openrouterAi.reasoningEffort = input.openrouter.reasoningEffort;

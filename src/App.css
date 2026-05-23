@@ -3145,9 +3145,13 @@
 
 .dd-admin-provider-config-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
   align-items: start;
+}
+
+.dd-admin-provider-config-item--openai {
+  order: -1;
 }
 
 .dd-admin-provider-config-item {
@@ -4424,6 +4428,8 @@
   .dd-admin-dashboard-layout,
   .dd-admin-login-layout,
   .dd-admin-config-form,
+  .dd-admin-provider-template__grid,
+  .dd-admin-provider-template__advanced-grid,
   .dd-admin-provider-config-list,
   .dd-admin-code-preview-grid {
       grid-template-columns: 1fr;
@@ -4460,6 +4466,8 @@
   .dd-admin-topbar,
   .dd-admin-login-card,
   .dd-admin-config-form,
+  .dd-admin-provider-template__address-head,
+  .dd-admin-provider-template__model-head,
   .dd-admin-provider-config-meta,
   .dd-admin-role-create,
   .dd-admin-provider-table,
@@ -4469,6 +4477,16 @@
 
   .dd-admin-topbar {
       padding: 14px;
+    }
+
+  .dd-admin-provider-template__address-head,
+  .dd-admin-provider-template__model-head {
+      display: grid;
+      justify-items: start;
+    }
+
+  .dd-admin-provider-template__address-actions {
+      justify-content: flex-start;
     }
 
   .dd-admin-topbar__actions {
@@ -5660,6 +5678,160 @@
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dd-admin-provider-template {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.dd-admin-provider-template__grid,
+.dd-admin-provider-template__advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dd-admin-provider-template__stack {
+  display: grid;
+  gap: 7px;
+}
+
+.dd-admin-provider-template input,
+.dd-admin-provider-template select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--cc-divider);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--cc-text);
+  box-shadow: none;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+}
+
+.dd-admin-provider-template input::placeholder {
+  color: var(--cc-text-tertiary);
+}
+
+.dd-admin-provider-template__link {
+  justify-self: start;
+  color: #2e7df3;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dd-admin-provider-template__link:hover {
+  text-decoration: underline;
+}
+
+.dd-admin-provider-template__address-head,
+.dd-admin-provider-template__model-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dd-admin-provider-template__address-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.dd-admin-provider-template__model-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.dd-admin-provider-template__switch-label {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--cc-divider);
+  border-radius: 999px;
+  background: var(--cc-surface);
+  color: var(--cc-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 26px;
+}
+
+.dd-admin-provider-template__test,
+.dd-admin-provider-template__model-button {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.dd-button--subtle {
+  border: 1px solid var(--cc-divider);
+  background: var(--cc-surface);
+  color: var(--cc-text-secondary);
+}
+
+.dd-admin-provider-template__hint {
+  min-height: 42px;
+  margin: -8px 0 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(250, 157, 59, 0.5);
+  border-radius: 8px;
+  background: rgba(250, 157, 59, 0.08);
+  color: #b86612;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dd-admin-provider-template__advanced {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.dd-admin-provider-template__advanced summary {
+  width: max-content;
+  color: var(--cc-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dd-admin-provider-template__advanced[open] summary {
+  margin-bottom: 12px;
+  color: var(--cc-green);
+}
+
+@media (max-width: 720px) {
+  .dd-admin-provider-template__grid,
+  .dd-admin-provider-template__advanced-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dd-admin-provider-template__address-head,
+  .dd-admin-provider-template__model-head {
+    display: grid;
+    justify-items: start;
+  }
+
+  .dd-admin-provider-template__address-actions {
+    justify-content: flex-start;
+  }
 }
 
 .dd-ai-chat__sources {
