@@ -532,6 +532,11 @@ export type AccountSessionResponse = {
   user?: AccountUser
 }
 
+export type AccountEmailCheckResponse = {
+  configured?: boolean
+  registered: boolean
+}
+
 export type AiModelOption = {
   id: string
   label: string

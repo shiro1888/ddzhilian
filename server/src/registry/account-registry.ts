@@ -86,6 +86,10 @@ export interface AccountRegistrationResult {
   user?: AccountUserSummary;
 }
 
+export interface AccountEmailCheckResult {
+  registered: boolean;
+}
+
 export type AccountEmailConfirmType =
   | 'signup'
   | 'invite'
@@ -549,6 +553,18 @@ export class AccountRegistry {
       email,
       requiresEmailConfirmation: true,
       user: data.user ? toUserSummary(data.user) : undefined,
+    };
+  }
+
+  async checkEmail(input: { email: unknown }): Promise<AccountEmailCheckResult> {
+    const email = normalizeEmail(input.email);
+    if (!validateEmail(email)) {
+      throw new AccountAuthError('请输入有效的邮箱地址。', 400);
+    }
+
+    await this.assertReady();
+    return {
+      registered: Boolean(await this.findAuthUserByEmail(email)),
     };
   }
 

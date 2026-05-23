@@ -3428,6 +3428,44 @@ async function readAccountAuthPayload(request: IncomingMessage) {
   };
 }
 
+async function readAccountEmailPayload(request: IncomingMessage) {
+  const buffer = await readRequestBuffer(request, { maxBytes: 8 * 1024 });
+  const payload = JSON.parse(buffer.toString('utf8')) as {
+    email?: unknown;
+  };
+
+  return {
+    email: payload.email,
+  };
+}
+
+async function handleAccountEmailCheckRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!accounts) {
+    writeJson(response, 503, { error: '账号检测未配置，请先配置 Supabase。' });
+    return;
+  }
+
+  try {
+    const payload = await readAccountEmailPayload(request);
+    const result = await accounts.checkEmail(payload);
+    writeJson(response, 200, {
+      ok: true,
+      configured: true,
+      registered: result.registered,
+    });
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, 400, { error: '账号检测请求无效。' });
+  }
+}
+
 async function handleAccountLoginRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -5376,6 +5414,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/auth/register' && request.method === 'POST') {
     void handleAccountRegisterRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/auth/check-email' && request.method === 'POST') {
+    void handleAccountEmailCheckRequest(request, response);
     return;
   }
 

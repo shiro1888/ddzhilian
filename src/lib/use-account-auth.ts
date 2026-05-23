@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AccountSessionResponse, AccountUser } from './ddzhilian-types'
+import type { AccountEmailCheckResponse, AccountSessionResponse, AccountUser } from './ddzhilian-types'
 
 function readPublicEnv(name: 'SIGNALING_HTTP_URL') {
   const env = process.env as Record<string, string | undefined>
@@ -57,6 +57,23 @@ async function submitAccountCredentials(
   }
 
   return payload
+}
+
+async function checkAccountEmail(email: string) {
+  const response = await fetch(`${ACCOUNT_API_BASE_URL}/api/auth/check-email`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ email }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readAccountApiError(response, '账号检测失败。'))
+  }
+
+  return await response.json() as AccountEmailCheckResponse
 }
 
 export function useAccountAuth() {
@@ -136,6 +153,21 @@ export function useAccountAuth() {
     }
   }, [])
 
+  const checkEmailRegistration = useCallback(async (email: string) => {
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      return await checkAccountEmail(email)
+    } catch (checkError) {
+      const message = checkError instanceof Error ? checkError.message : '账号检测失败。'
+      setError(message)
+      throw new Error(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [])
+
   const logout = useCallback(async () => {
     setIsSubmitting(true)
     setError(null)
@@ -159,6 +191,7 @@ export function useAccountAuth() {
     error,
     login,
     register,
+    checkEmailRegistration,
     logout,
     refreshSession,
   }
