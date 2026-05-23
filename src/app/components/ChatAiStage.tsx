@@ -85,30 +85,27 @@ type ConversationContextMenu = {
 const CONVERSATION_CONTEXT_MENU_WIDTH = 176
 const CONVERSATION_CONTEXT_MENU_HEIGHT = 162
 const CONVERSATION_CONTEXT_MENU_MARGIN = 8
-const CONVERSATION_CONTEXT_MENU_OFFSET_X = -10
-const CONVERSATION_CONTEXT_MENU_OFFSET_Y = -50
 
 function clampContextMenuPosition(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), Math.max(min, max))
 }
 
 function resolveContextMenuPosition(
-  pointerX: number,
-  pointerY: number,
-  viewportWidth: number,
-  viewportHeight: number,
+  conversationRect: DOMRect,
+  railRect: DOMRect,
 ) {
-  const maxLeft = viewportWidth - CONVERSATION_CONTEXT_MENU_WIDTH - CONVERSATION_CONTEXT_MENU_MARGIN
-  const maxTop = viewportHeight - CONVERSATION_CONTEXT_MENU_HEIGHT - CONVERSATION_CONTEXT_MENU_MARGIN
-  const preferredLeft = pointerX + CONVERSATION_CONTEXT_MENU_OFFSET_X
-  const preferredTop = pointerY + CONVERSATION_CONTEXT_MENU_OFFSET_Y
-  const flippedLeft = pointerX - CONVERSATION_CONTEXT_MENU_WIDTH - CONVERSATION_CONTEXT_MENU_OFFSET_X
-  const flippedTop = pointerY - CONVERSATION_CONTEXT_MENU_HEIGHT - CONVERSATION_CONTEXT_MENU_OFFSET_Y
-  const left = preferredLeft > maxLeft ? flippedLeft : preferredLeft
-  const top = preferredTop > maxTop ? flippedTop : preferredTop
+  const maxLeft = railRect.width - CONVERSATION_CONTEXT_MENU_WIDTH - CONVERSATION_CONTEXT_MENU_MARGIN
+  const maxTop = railRect.height - CONVERSATION_CONTEXT_MENU_HEIGHT - CONVERSATION_CONTEXT_MENU_MARGIN
+  const preferredLeft = conversationRect.right - railRect.left - CONVERSATION_CONTEXT_MENU_WIDTH - CONVERSATION_CONTEXT_MENU_MARGIN
+  const fallbackLeft = conversationRect.left - railRect.left + CONVERSATION_CONTEXT_MENU_MARGIN
+  const top = conversationRect.top - railRect.top + CONVERSATION_CONTEXT_MENU_MARGIN
 
   return {
-    left: clampContextMenuPosition(left, CONVERSATION_CONTEXT_MENU_MARGIN, maxLeft),
+    left: clampContextMenuPosition(
+      preferredLeft >= CONVERSATION_CONTEXT_MENU_MARGIN ? preferredLeft : fallbackLeft,
+      CONVERSATION_CONTEXT_MENU_MARGIN,
+      maxLeft,
+    ),
     top: clampContextMenuPosition(top, CONVERSATION_CONTEXT_MENU_MARGIN, maxTop),
   }
 }
@@ -499,6 +496,10 @@ export function ChatAiStage({
     () => conversations.find((conversation) => conversation.id === conversationContextMenu?.conversationId),
     [conversationContextMenu?.conversationId, conversations],
   )
+  const pendingDeleteConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === pendingDeleteConversationId) ?? null,
+    [conversations, pendingDeleteConversationId],
+  )
   const filteredConversations = useMemo(() => {
     const visibleConversations = conversations
       .filter((conversation) => showArchived ? conversation.archived : !conversation.archived)
@@ -748,12 +749,9 @@ export function ChatAiStage({
     conversation: ChatAiConversation,
   ) => {
     event.preventDefault()
-    const position = resolveContextMenuPosition(
-      event.clientX,
-      event.clientY,
-      window.innerWidth,
-      window.innerHeight,
-    )
+    const rail = event.currentTarget.closest('.dd-ai-chat__rail')
+    const railRect = rail?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect()
+    const position = resolveContextMenuPosition(event.currentTarget.getBoundingClientRect(), railRect)
 
     setActiveConversationId(conversation.id)
     setPendingDeleteConversationId(null)
@@ -1012,58 +1010,6 @@ export function ChatAiStage({
     activeGenerationRef.current?.controller.abort()
   }
 
-  const handleRegenerate = () => {
-    if (!activeConversation || isGenerating) {
-      return
-    }
-
-    const messages = activeConversation.messages
-    const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')
-    if (!lastUserMessage) {
-      setLocalError('没有可重新生成的问题。')
-      return
-    }
-
-    const assistantMessageId = createId('ai-message')
-    const now = new Date().toISOString()
-
-    updateConversation(activeConversation.id, (conversation) => {
-      const lastAssistantIndex = [...conversation.messages].reverse().findIndex((message) => message.role === 'assistant')
-      const removeIndex =
-        lastAssistantIndex >= 0
-          ? conversation.messages.length - 1 - lastAssistantIndex
-          : -1
-      const retainedMessages =
-        removeIndex >= 0
-          ? conversation.messages.filter((_, index) => index !== removeIndex)
-          : conversation.messages
-
-      return {
-        ...conversation,
-        updatedAt: now,
-        messages: [
-          ...retainedMessages,
-          {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: '',
-            createdAt: now,
-            status: 'streaming',
-            model: selectedAiModelLabel,
-          },
-        ],
-      }
-    })
-
-    void requestAssistantResponse(
-      activeConversation.id,
-      lastUserMessage.content,
-      assistantMessageId,
-      [],
-      isWebSearchEnabled,
-    )
-  }
-
   const handleRichMessageClick = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target
     if (!(target instanceof HTMLElement)) {
@@ -1219,10 +1165,15 @@ export function ChatAiStage({
               role="menuitem"
               className="is-danger"
               onClick={() => {
+                if (isGenerating) {
+                  setLocalError('请先停止当前生成，再删除对话。')
+                  setConversationContextMenu(null)
+                  return
+                }
+
                 setPendingDeleteConversationId(contextMenuConversation.id)
                 setConversationContextMenu(null)
               }}
-              disabled={isGenerating}
             >
               删除
             </button>
@@ -1315,9 +1266,6 @@ export function ChatAiStage({
                     <span>联网搜索</span>
                   </label>
                 </details>
-                <button type="button" onClick={handleRegenerate} disabled={isGenerating || !activeConversation?.messages.length}>
-                  重新生成
-                </button>
                 {SHOW_SAMPLE_OUTPUT ? (
                   <button type="button" onClick={insertSampleMessages} disabled={isGenerating}>
                     示例输出
@@ -1328,10 +1276,10 @@ export function ChatAiStage({
           </div>
         </header>
 
-        {pendingDeleteConversationId === activeConversation?.id ? (
+        {pendingDeleteConversation ? (
           <div className="dd-ai-chat__confirm">
-            <span>确认删除当前会话？</span>
-            <button type="button" onClick={() => deleteConversation(activeConversation.id)}>
+            <span>确认删除这条会话？</span>
+            <button type="button" onClick={() => deleteConversation(pendingDeleteConversation.id)}>
               删除
             </button>
             <button type="button" onClick={() => setPendingDeleteConversationId(null)}>
@@ -1377,15 +1325,24 @@ export function ChatAiStage({
                     <strong>{message.role === 'user' ? '你' : 'DD直连 AI'}</strong>
                     <span>{formatConversationTime(message.createdAt)}</span>
                   </div>
-                  <div
-                    className="dd-ai-chat__bubble dd-chatbox__bubble--rich"
-                    onClick={handleRichMessageClick}
-                    dangerouslySetInnerHTML={{
-                      __html: message.content
-                        ? sanitizeRichTextHtml(message.content)
-                        : '<p>正在生成...</p>',
-                    }}
-                  />
+                  {message.status === 'streaming' && !message.content ? (
+                    <div className="dd-ai-chat__bubble dd-ai-chat__thinking" role="status" aria-live="polite">
+                      <span>thinking</span>
+                      <i aria-hidden="true" />
+                      <i aria-hidden="true" />
+                      <i aria-hidden="true" />
+                    </div>
+                  ) : (
+                    <div
+                      className="dd-ai-chat__bubble dd-chatbox__bubble--rich"
+                      onClick={handleRichMessageClick}
+                      dangerouslySetInnerHTML={{
+                        __html: message.content
+                          ? sanitizeRichTextHtml(message.content)
+                          : '<p>正在生成...</p>',
+                      }}
+                    />
+                  )}
                   {message.attachments?.length ? (
                     <div className="dd-ai-chat__message-attachments">
                       {message.attachments.map((attachment) => (
@@ -1399,16 +1356,21 @@ export function ChatAiStage({
                     </div>
                   ) : null}
                   {message.webSearch?.sources.length ? (
-                    <div className="dd-ai-chat__sources" aria-label="联网搜索来源">
-                      <strong>来源</strong>
-                      {message.webSearch.sources.map((source) => (
-                        <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
-                          <span>{source.title}</span>
-                          <small>{formatSourceHostname(source.url)}</small>
-                          {source.snippet ? <em>{source.snippet}</em> : null}
-                        </a>
-                      ))}
-                    </div>
+                    <details className="dd-ai-chat__sources" aria-label="联网搜索来源">
+                      <summary>
+                        <span>联网搜索来源</span>
+                        <small>{message.webSearch.sources.length} 个</small>
+                      </summary>
+                      <div className="dd-ai-chat__sources-list">
+                        {message.webSearch.sources.map((source) => (
+                          <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                            <span>{source.title}</span>
+                            <small>{formatSourceHostname(source.url)}</small>
+                            {source.snippet ? <em>{source.snippet}</em> : null}
+                          </a>
+                        ))}
+                      </div>
+                    </details>
                   ) : null}
                   <div className="dd-ai-chat__message-actions">
                     <button type="button" onClick={() => handleCopyMessage(message)}>

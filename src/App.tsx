@@ -262,6 +262,7 @@ function App() {
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
+  const [aiGeneratingRoomId, setAiGeneratingRoomId] = useState<string | null>(null)
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
@@ -1422,6 +1423,7 @@ function App() {
             throw new Error('当前对话尚未建立房间，无法同步 AI 回复。')
           }
 
+          setAiGeneratingRoomId(botRoomId)
           const answer = await askAi(aiBotPrompt, {
             roomId: botRoomId,
             replyToName: self?.deviceName ?? localIdentity.deviceName,
@@ -1439,6 +1441,7 @@ function App() {
           setLocalError(error instanceof Error ? error.message : 'AI 请求失败。')
         } finally {
           setIsAiGenerating(false)
+          setAiGeneratingRoomId(null)
         }
       }
     } catch (error) {
@@ -1628,6 +1631,7 @@ function App() {
         (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
       }
       isAiGenerating={isAiGenerating}
+      aiGeneratingRoomId={aiGeneratingRoomId}
       aiQuotaLabel={aiQuotaLabel}
       aiModelOptions={aiModelOptions}
       selectedAiModel={selectedAiModel}

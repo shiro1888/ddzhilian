@@ -204,6 +204,7 @@ type SnapLinkStageProps = {
   fileInputId: string
   isSendDisabled: boolean
   isAiGenerating: boolean
+  aiGeneratingRoomId: string | null
   aiQuotaLabel: string
   aiModelOptions: AiModelOption[]
   selectedAiModel: string
@@ -657,6 +658,7 @@ export function SnapLinkStage({
   fileInputId,
   isSendDisabled,
   isAiGenerating,
+  aiGeneratingRoomId,
   aiQuotaLabel,
   aiModelOptions,
   selectedAiModel,
@@ -776,6 +778,7 @@ export function SnapLinkStage({
 
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
   const isBotDraft = startsWithBotMention(plainDraft)
+  const shouldShowAiThinking = hasActiveRoom && isAiGenerating && aiGeneratingRoomId === selectedRoomId
   const themeStyle = useMemo<SnapLinkThemeStyle>(() => ({
     '--snap-theme-self': themeColors.self,
     '--snap-theme-self-text': getSnapLinkThemeContrastColor(themeColors.self),
@@ -2002,8 +2005,9 @@ export function SnapLinkStage({
               ) : null}
 
               <div ref={messagesRef} className="dd-snaplink__messages" onScroll={handleMessagesScroll}>
-                {visibleConversationEntries.length > 0 ? (
-                  visibleConversationEntries.map((entry, index) => {
+                {visibleConversationEntries.length > 0 || shouldShowAiThinking ? (
+                  <>
+                  {visibleConversationEntries.map((entry, index) => {
                     const previousIso = index > 0 ? visibleConversationEntries[index - 1].createdAt : null
                     const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
 
@@ -2097,7 +2101,31 @@ export function SnapLinkStage({
                         </div>
                       </div>
                     )
-                  })
+                  })}
+                  {shouldShowAiThinking ? (
+                    <div className="dd-snaplink__entry">
+                      <div className="dd-snaplink__row is-peer is-bot is-thinking">
+                        <span className="dd-snaplink__avatar" aria-hidden="true">
+                          AI
+                        </span>
+                        <div className="dd-snaplink__message-main">
+                          <div className="dd-snaplink__sender-meta">
+                            <span className="dd-snaplink__sender-name" title="DD直连小助手">
+                              DD直连小助手
+                            </span>
+                            <span className="dd-snaplink__sender-badge is-ai">AI</span>
+                          </div>
+                          <div className="dd-snaplink__bubble dd-snaplink__thinking" role="status" aria-live="polite">
+                            <span>thinking</span>
+                            <i aria-hidden="true" />
+                            <i aria-hidden="true" />
+                            <i aria-hidden="true" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  </>
                 ) : (
                   <div className="dd-snaplink__empty">{fileConversationEmptyState}</div>
                 )}
