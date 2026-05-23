@@ -5,6 +5,7 @@ import { AdminStage } from './app/components/AdminStage'
 import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
+import { LandingWelcome } from './app/components/LandingWelcome'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
@@ -271,6 +272,7 @@ function App() {
   const isAiChatView = activeView === 'chat'
   const isImageView = activeView === 'image'
   const isAdminProtectedView = isAdminView
+  const isLandingEntry = location.pathname === '/'
   const {
     adminEmailDraft,
     adminPasswordDraft,
@@ -364,12 +366,6 @@ function App() {
     getAiQuota,
     sendRoomFiles,
   } = useDdzhilian()
-
-  useEffect(() => {
-    if (location.pathname === '/') {
-      navigate(`${pathForView('text')}${location.search}`, { replace: true })
-    }
-  }, [location.pathname, location.search, navigate])
 
   useEffect(() => {
     const nextAccountId = imageAccount.user?.id ?? ''
@@ -1698,6 +1694,16 @@ function App() {
       }}
     />
   )
+
+  if (isLandingEntry) {
+    return (
+      <LandingWelcome
+        onEnter={() => {
+          navigate(`${pathForView('text')}${location.search}`, { replace: true })
+        }}
+      />
+    )
+  }
 
   return snapLinkStageElement
 }

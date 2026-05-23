@@ -1,6 +1,6 @@
 :root {
-  --font-ui: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', Arial, sans-serif;
-  --font-mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-ui: 'Maple UI', 'Maple Mono', 'Maple Mono NF CN', 'Maple Mono CN', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', Arial, sans-serif;
+  --font-mono: 'Maple Mono', 'Maple Mono NF CN', 'Maple Mono CN', 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace;
   --font-body: var(--font-ui);
   --font-display: var(--font-ui);
   --base-font-size: 15px;

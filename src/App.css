@@ -162,12 +162,21 @@
   background: #ffffff;
 }
 
+.dd-landing--welcome {
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
 .dd-landing__panel {
   display: grid;
   justify-items: center;
   gap: 16px;
   width: min(100%, 360px);
   text-align: center;
+}
+
+.dd-landing__panel--welcome {
+  width: min(100%, 520px);
 }
 
 .dd-landing__greeting {
@@ -178,6 +187,11 @@
   line-height: 1.4;
   letter-spacing: 0;
   word-break: break-word;
+}
+
+.dd-landing__greeting--welcome {
+  min-height: 0;
+  font-size: 46px;
 }
 
 .dd-landing__cursor {
@@ -425,6 +439,11 @@
   .dd-landing__greeting {
     min-height: 46px;
     font-size: 30px;
+  }
+
+  .dd-landing__greeting--welcome {
+    min-height: 0;
+    font-size: 34px;
   }
 
   .dd-landing__form input {
@@ -4187,7 +4206,7 @@
 
 .dd-admin-theme-swatch-row code {
   color: var(--cc-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
 }
 
@@ -8484,7 +8503,7 @@
   border-radius: 4px;
   background: #f8fafc;
   color: #64748b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
