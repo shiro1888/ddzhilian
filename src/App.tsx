@@ -5,7 +5,6 @@ import { AdminStage } from './app/components/AdminStage'
 import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
-import { LandingWelcome } from './app/components/LandingWelcome'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
@@ -103,6 +102,10 @@ function readRoomIdFromSearch(search: string) {
 
 function isBotChatRoom(room: Pick<RoomSummary, 'reason'> | null | undefined) {
   return room?.reason === 'bot-chat'
+}
+
+function resolvePublicRoomTitle(publicIndex?: number) {
+  return publicIndex ? `世界对话 ${publicIndex.toString()}` : '世界对话'
 }
 
 function parseAiBotPrompt(value: string) {
@@ -256,7 +259,6 @@ function App() {
   const [composerImageDrafts, setComposerImageDrafts] = useState<ComposerImageDraft[]>([])
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
-  const [joinRoomIdDraft, setJoinRoomIdDraft] = useState('')
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
@@ -272,7 +274,6 @@ function App() {
   const isAiChatView = activeView === 'chat'
   const isImageView = activeView === 'image'
   const isAdminProtectedView = isAdminView
-  const isLandingEntry = location.pathname === '/'
   const {
     adminEmailDraft,
     adminPasswordDraft,
@@ -342,7 +343,6 @@ function App() {
     lastCreatedPublicRoomId,
     lastCreatedPrivateRoomId,
     joinRoom,
-    createPublicRoom,
     updateSettings,
     updateRoomState,
     createTransferItems,
@@ -366,6 +366,12 @@ function App() {
     getAiQuota,
     sendRoomFiles,
   } = useDdzhilian()
+
+  useEffect(() => {
+    if (location.pathname === '/') {
+      navigate(`${pathForView('text')}${location.search}`, { replace: true })
+    }
+  }, [location.pathname, location.search, navigate])
 
   useEffect(() => {
     const nextAccountId = imageAccount.user?.id ?? ''
@@ -592,7 +598,7 @@ function App() {
   const selectedConversationName = isSelectedBotRoom
     ? 'DD直连小助手'
     : selectedRoom?.isPublic
-    ? '世界对话'
+    ? resolvePublicRoomTitle(selectedRoom.publicIndex)
     : selectedRoom && selectedRoomMemberNames.length > 0
     ? selectedRoomMemberNames.length <= 3
       ? selectedRoomMemberNames.join('、')
@@ -1079,11 +1085,12 @@ function App() {
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
       const hasLoadedHistoryTexts = loadedHistoryTextRoomIds.has(room.roomId)
+      const publicRoomTitle = room.isPublic ? resolvePublicRoomTitle(room.publicIndex) : ''
       const title =
         isBotChatRoom(room)
           ? 'DD直连小助手'
           : room.isPublic
-          ? '世界对话'
+          ? publicRoomTitle
           : memberNames.length === 0
           ? `Room ${room.roomId}`
           : memberNames.length <= 3
@@ -1108,7 +1115,7 @@ function App() {
         (isBotChatRoom(room)
           ? 'DD直连小助手'
           : room.isPublic
-            ? '世界对话，可通过链接加入'
+            ? `${publicRoomTitle}，可通过链接加入`
             : '暂无消息')
       const onlineCount = room.members.filter(
         (member) => member.deviceId !== self?.deviceId && member.online,
@@ -1136,6 +1143,7 @@ function App() {
         updatedAt,
         updatedAtLabel: formatRelativeTime(updatedAt),
         isPublic: room.isPublic,
+        publicIndex: room.publicIndex,
         memberCount: room.members.length,
         onlineCount,
         status,
@@ -1144,6 +1152,10 @@ function App() {
       }
     })
     .sort((left, right) => {
+      if (left.isPublic && right.isPublic) {
+        return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
+      }
+
       if (left.isPublic !== right.isPublic) {
         return left.isPublic ? -1 : 1
       }
@@ -1230,23 +1242,6 @@ function App() {
       navigate(pathForView(view))
       setLocalError(null)
     })
-  }
-
-  const handleJoinRoomByIdValue = (roomId: string) => {
-    const nextRoomId = roomId.trim().toUpperCase()
-    if (!nextRoomId) {
-      setLocalError('请输入 roomId。')
-      return
-    }
-
-    joinRoom(nextRoomId)
-    setPendingRoomSelectionId(nextRoomId)
-    setJoinRoomIdDraft('')
-    setLocalError(null)
-
-    if (activeView !== 'text') {
-      handleViewChange('text')
-    }
   }
 
   const handleSendFilesToCurrentConversation = async (files: File[]) => {
@@ -1528,16 +1523,6 @@ function App() {
     setLocalError(null)
   }
 
-  const handleCreatePublicRoom = () => {
-    if (!self) {
-      setLocalError('服务连接完成后才能进入世界对话。')
-      return
-    }
-
-    createPublicRoom()
-    setLocalError(null)
-  }
-
   const adminRouteElement = (
     <AdminStage
       adminEmailDraft={adminEmailDraft}
@@ -1634,7 +1619,6 @@ function App() {
       selectedRoomId={effectiveSelectedRoomId}
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
-      roomJoinDraft={joinRoomIdDraft}
       roomListItems={roomListItems}
       chatDraft={chatDraft}
       composerImageDrafts={composerImageDrafts}
@@ -1658,9 +1642,6 @@ function App() {
       aiChatElement={aiChatElement}
       imageElement={imageGenerationElement}
       adminElement={adminRouteElement}
-      onRoomJoinDraftChange={setJoinRoomIdDraft}
-      onJoinRoomById={handleJoinRoomByIdValue}
-      onCreatePublicRoom={handleCreatePublicRoom}
       onOpenRoomConversation={handleOpenRoomConversation}
       onDeviceNameChange={handleDeviceNameChange}
       onOpenRoomHome={() => handleViewChange('text')}
@@ -1694,16 +1675,6 @@ function App() {
       }}
     />
   )
-
-  if (isLandingEntry) {
-    return (
-      <LandingWelcome
-        onEnter={() => {
-          navigate(`${pathForView('text')}${location.search}`, { replace: true })
-        }}
-      />
-    )
-  }
 
   return snapLinkStageElement
 }

@@ -6,16 +6,23 @@ export interface Room {
   memberIds: string[];
   reason: PairReason;
   isPublic: boolean;
+  publicIndex?: number;
   lanKey?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export const publicRoomCount = 6;
 
 function uniqueMemberIds(memberIds: string[]) {
   return [...new Set(memberIds)];
 }
 
 function compareRooms(left: Room, right: Room) {
+  if (left.isPublic && right.isPublic) {
+    return (left.publicIndex ?? publicRoomCount + 1) - (right.publicIndex ?? publicRoomCount + 1);
+  }
+
   if (right.memberIds.length !== left.memberIds.length) {
     return right.memberIds.length - left.memberIds.length;
   }
@@ -30,12 +37,13 @@ export class RoomRegistry {
 
   private readonly byLanKey = new Map<string, string>();
 
-  private publicRoomId: string | undefined;
+  private readonly publicRoomIdsByIndex = new Map<number, string>();
 
   createRoom(input: {
     memberIds: string[];
     reason: PairReason;
     isPublic?: boolean;
+    publicIndex?: number;
     lanKey?: string;
     roomId?: string;
   }) {
@@ -52,6 +60,7 @@ export class RoomRegistry {
       memberIds: members,
       reason: input.reason,
       isPublic: input.isPublic ?? false,
+      publicIndex: input.publicIndex,
       lanKey: input.lanKey,
       createdAt: now,
       updatedAt: now,
@@ -61,6 +70,10 @@ export class RoomRegistry {
 
     if (room.lanKey) {
       this.byLanKey.set(room.lanKey, room.roomId);
+    }
+
+    if (room.isPublic && room.publicIndex) {
+      this.publicRoomIdsByIndex.set(room.publicIndex, room.roomId);
     }
 
     for (const memberId of members) {
@@ -138,9 +151,24 @@ export class RoomRegistry {
     };
   }
 
+  ensurePublicRooms(deviceId: string, preferredPrimaryRoomId?: string) {
+    return Array.from({ length: publicRoomCount }, (_, index) =>
+      this.ensurePublicRoomAtIndex(
+        deviceId,
+        index + 1,
+        index === 0 ? preferredPrimaryRoomId : undefined,
+      ),
+    );
+  }
+
   ensurePublicRoom(deviceId: string, preferredRoomId?: string) {
-    const existing = this.publicRoomId
-      ? this.byId.get(this.publicRoomId)
+    return this.ensurePublicRoomAtIndex(deviceId, 1, preferredRoomId);
+  }
+
+  private ensurePublicRoomAtIndex(deviceId: string, publicIndex: number, preferredRoomId?: string) {
+    const existingId = this.publicRoomIdsByIndex.get(publicIndex);
+    const existing = existingId
+      ? this.byId.get(existingId)
       : undefined;
 
     if (existing) {
@@ -157,10 +185,9 @@ export class RoomRegistry {
       memberIds: [deviceId],
       reason: 'manual',
       isPublic: true,
+      publicIndex,
       roomId: preferredRoomId,
     });
-
-    this.publicRoomId = room.roomId;
 
     return {
       room,
@@ -215,7 +242,7 @@ export class RoomRegistry {
       room.memberIds = room.memberIds.filter((memberId) => memberId !== deviceId);
       this.unindexMember(roomId, deviceId);
 
-      if (room.memberIds.length === 0) {
+      if (room.memberIds.length === 0 && !room.isPublic) {
         this.deleteRoom(room);
         continue;
       }
@@ -250,8 +277,8 @@ export class RoomRegistry {
   private deleteRoom(room: Room) {
     this.byId.delete(room.roomId);
 
-    if (room.isPublic && this.publicRoomId === room.roomId) {
-      this.publicRoomId = undefined;
+    if (room.isPublic && room.publicIndex && this.publicRoomIdsByIndex.get(room.publicIndex) === room.roomId) {
+      this.publicRoomIdsByIndex.delete(room.publicIndex);
     }
 
     if (room.lanKey && this.byLanKey.get(room.lanKey) === room.roomId) {

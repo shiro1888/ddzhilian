@@ -80,6 +80,7 @@ export type RoomListItem = {
   updatedAt: string
   updatedAtLabel: string
   isPublic: boolean
+  publicIndex?: number
   memberCount: number
   onlineCount: number
   status: RoomListStatus

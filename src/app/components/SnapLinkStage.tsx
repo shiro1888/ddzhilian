@@ -81,6 +81,7 @@ const snapLinkHistoryLoadThreshold = 72
 const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
+const snapLinkLobbyGreetingText = '你好，我是ddzhilian'
 
 type SnapLinkThemeColorTarget = 'self' | 'peer' | 'ai'
 type SnapLinkThemeColors = Record<SnapLinkThemeColorTarget, string>
@@ -197,7 +198,6 @@ type SnapLinkStageProps = {
   selectedRoomId: string | null
   selectedConversationName: string
   activeTransferLabel: string
-  roomJoinDraft: string
   roomListItems: RoomListItem[]
   chatDraft: string
   composerImageDrafts: ComposerImageDraft[]
@@ -218,9 +218,6 @@ type SnapLinkStageProps = {
   aiChatElement: ReactNode
   imageElement: ReactNode
   adminElement: ReactNode
-  onRoomJoinDraftChange: (value: string) => void
-  onJoinRoomById: (roomId: string) => void
-  onCreatePublicRoom: () => void
   onOpenRoomConversation: (roomId: string) => void
   onDeviceNameChange: (deviceName: string) => void
   onOpenRoomHome: () => void
@@ -242,10 +239,6 @@ type SnapLinkStageProps = {
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
   onDrop: (event: DragEvent<HTMLElement>) => void
-}
-
-function normalizeRoomDraft(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
 function escapeInlineHtml(value: string) {
@@ -658,7 +651,6 @@ export function SnapLinkStage({
   selectedRoomId,
   selectedConversationName,
   activeTransferLabel,
-  roomJoinDraft,
   roomListItems,
   chatDraft,
   composerImageDrafts,
@@ -679,9 +671,6 @@ export function SnapLinkStage({
   aiChatElement,
   imageElement,
   adminElement,
-  onRoomJoinDraftChange,
-  onJoinRoomById,
-  onCreatePublicRoom,
   onOpenRoomConversation,
   onDeviceNameChange,
   onOpenRoomHome,
@@ -749,6 +738,10 @@ export function SnapLinkStage({
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
+        if (left.isPublic && right.isPublic) {
+          return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
+        }
+
         if (left.isPublic !== right.isPublic) {
           return left.isPublic ? -1 : 1
         }
@@ -1063,13 +1056,6 @@ export function SnapLinkStage({
     }
   }, [imagePreview])
 
-  const handleCreateRoom = () => {
-    setActiveSharedTab(null)
-    setIsLobbyOpen(false)
-    onOpenRoomHome()
-    onCreatePublicRoom()
-  }
-
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
     setIsLobbyOpen(false)
@@ -1143,19 +1129,6 @@ export function SnapLinkStage({
     setIsBotPanelOpen(false)
     botMentionTriggerRangeRef.current = null
     setIsThemePanelOpen((current) => !current)
-  }
-
-  const handleJoinRoom = () => {
-    const nextRoomId = normalizeRoomDraft(roomJoinDraft.trim())
-    if (!nextRoomId) {
-      onJoinRoomById(nextRoomId)
-      return
-    }
-
-    setIsLobbyOpen(false)
-    setActiveSharedTab(null)
-    onOpenRoomHome()
-    onJoinRoomById(nextRoomId)
   }
 
   const handleRoomSelection = (roomId: string) => {
@@ -1913,11 +1886,10 @@ export function SnapLinkStage({
             aiChatElement
           ) : !hasActiveRoom ? (
             <section className="dd-snaplink__lobby" aria-label="ddzhilian 大厅">
-              <h1>ddzhilian</h1>
-              <p>创建房间或输入连接码加入</p>
-              <button type="button" className="dd-snaplink__create" onClick={handleCreateRoom}>
-                创建房间
-              </button>
+              <h1 className="dd-snaplink__lobby-title" aria-label={snapLinkLobbyGreetingText}>
+                <span className="dd-snaplink__lobby-type" aria-hidden="true">{snapLinkLobbyGreetingText}<span className="dd-snaplink__lobby-cursor">_</span></span>
+              </h1>
+              <p>选择 AI 聊天</p>
               <button
                 type="button"
                 className="dd-snaplink__create dd-snaplink__create--ai"
@@ -1925,27 +1897,6 @@ export function SnapLinkStage({
               >
                 Chat with AI
               </button>
-              <div className="dd-snaplink__separator">或输入连接码</div>
-              <div className="dd-snaplink__join">
-                <input
-                  type="text"
-                  inputMode="text"
-                  placeholder="6 位连接码"
-                  value={roomJoinDraft}
-                  maxLength={12}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(event) => onRoomJoinDraftChange(normalizeRoomDraft(event.target.value))}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      handleJoinRoom()
-                    }
-                  }}
-                />
-                <button type="button" onClick={handleJoinRoom}>
-                  加入
-                </button>
-              </div>
               {(localError || errorMessage) && (
                 <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
               )}

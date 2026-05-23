@@ -89,6 +89,7 @@ export interface RoomSummary {
   roomId: string;
   members: RoomMemberSummary[];
   isPublic: boolean;
+  publicIndex?: number;
   reason: PairReason;
   historyTextCount: number;
   historyTextLatestAt?: string;
