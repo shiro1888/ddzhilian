@@ -1259,13 +1259,16 @@ export function SnapLinkStage({
   }
 
   const handleBotTriggerClick = () => {
-    const nextDraft = createBotMentionDraft(getComposerDraft())
-    commitComposerDraft(nextDraft, nextDraft.length)
+    const currentDraft = getComposerDraft()
+    const caretPosition = inputRef.current?.selectionStart ?? currentDraft.length
+
+    draftValueRef.current = currentDraft
+    onChatDraftChange(currentDraft)
     botMentionTriggerRangeRef.current = null
     setIsEmojiPickerOpen(false)
     setIsThemePanelOpen(false)
-    setIsBotPanelOpen(false)
-    focusComposerInput(nextDraft.length)
+    setIsBotPanelOpen(true)
+    focusComposerInput(caretPosition)
   }
 
   const handleBotMentionSelect = () => {
