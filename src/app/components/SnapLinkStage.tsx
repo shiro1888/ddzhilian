@@ -44,6 +44,8 @@ type BotMentionTriggerRange = {
   end: number
 }
 
+const AI_BOT_MENTION_LABEL = '@DD直连小助手'
+
 type SnapLinkMessageContextMenuState = {
   entryId: string
   text: string
@@ -397,7 +399,7 @@ function normalizePlainComposerDraft(value: string) {
 }
 
 function startsWithBotMention(value: string) {
-  return /^@(?:ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
+  return /^@(?:DD直连小助手|ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
 }
 
 function createBotMentionDraft(value: string) {
@@ -406,7 +408,7 @@ function createBotMentionDraft(value: string) {
   }
 
   const normalizedDraft = value.trimStart()
-  return normalizedDraft ? `@ai ${normalizedDraft}` : '@DD直连小助手 '
+  return normalizedDraft ? `${AI_BOT_MENTION_LABEL} ${normalizedDraft}` : `${AI_BOT_MENTION_LABEL} `
 }
 
 function findBotMentionTriggerStart(value: string, caretPosition: number) {
@@ -869,7 +871,7 @@ export function SnapLinkStage({
     }
 
     messages.scrollTop = messages.scrollHeight
-  }, [hasActiveRoom, selectedRoomId, visibleConversationEntries.length])
+  }, [hasActiveRoom, selectedRoomId, shouldShowAiThinking, visibleConversationEntries.length])
 
   useEffect(() => {
     if (isComposerComposingRef.current) {
@@ -1257,11 +1259,13 @@ export function SnapLinkStage({
   }
 
   const handleBotTriggerClick = () => {
+    const nextDraft = createBotMentionDraft(getComposerDraft())
+    commitComposerDraft(nextDraft, nextDraft.length)
     botMentionTriggerRangeRef.current = null
     setIsEmojiPickerOpen(false)
     setIsThemePanelOpen(false)
-    setIsBotPanelOpen(true)
-    focusComposerInput(getComposerDraft().length)
+    setIsBotPanelOpen(false)
+    focusComposerInput(nextDraft.length)
   }
 
   const handleBotMentionSelect = () => {
@@ -2189,10 +2193,10 @@ export function SnapLinkStage({
                   ref={botTriggerRef}
                   type="button"
                   className={`dd-snaplink__bot${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
-                  aria-label="询问 DD直连小助手"
+                  aria-label="输入 @DD直连小助手"
                   aria-expanded={isBotPanelOpen}
                   aria-haspopup="dialog"
-                  title="询问 DD直连小助手"
+                  title="输入 @DD直连小助手"
                   disabled={isAiGenerating}
                   onClick={handleBotTriggerClick}
                 >
@@ -2203,14 +2207,14 @@ export function SnapLinkStage({
                     ref={botPanelRef}
                     className="dd-snaplink__bot-panel"
                     role="dialog"
-                    aria-label="@Ai 模型选择"
+                    aria-label="@DD直连小助手 模型选择"
                   >
                     <button
                       type="button"
                       className="dd-snaplink__bot-option"
                       onClick={handleBotMentionSelect}
                     >
-                      <strong>@Ai</strong>
+                      <strong>{AI_BOT_MENTION_LABEL}</strong>
                       <span>{selectedAiModelLabel} · {aiQuotaLabel}</span>
                     </button>
                     <label className="dd-snaplink__bot-model">

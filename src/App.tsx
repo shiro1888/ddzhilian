@@ -38,6 +38,26 @@ import { useAdmin } from './lib/use-admin'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
+const AI_BOT_MENTION_LABEL = '@DD直连小助手'
+const AI_THINKING_MIN_VISIBLE_MS = 650
+
+function wait(durationMs: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, durationMs)
+  })
+}
+
+async function keepAiThinkingVisibleSince(startedAt: number | null) {
+  if (startedAt === null) {
+    return
+  }
+
+  const remainingMs = AI_THINKING_MIN_VISIBLE_MS - (Date.now() - startedAt)
+  if (remainingMs > 0) {
+    await wait(remainingMs)
+  }
+}
+
 function isPreviewableMediaType(mimeType?: string) {
   return Boolean(mimeType?.startsWith('image/') || mimeType?.startsWith('video/'))
 }
@@ -109,7 +129,7 @@ function resolvePublicRoomTitle(publicIndex?: number) {
 }
 
 function parseAiBotPrompt(value: string) {
-  const match = /^@(?:ai|bot)(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
+  const match = /^@(?:DD直连小助手|ai|bot)(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
   if (!match) {
     return null
   }
@@ -1370,7 +1390,7 @@ function App() {
       !quotedText &&
       aiBotImages.length === 0
     ) {
-      setLocalError('请输入要问 @Ai 的问题。')
+      setLocalError(`请输入要问 ${AI_BOT_MENTION_LABEL} 的问题。`)
       return
     }
 
@@ -1383,6 +1403,20 @@ function App() {
       setLocalError('先与当前选中的设备建立连接，再发送消息。')
       return
     }
+
+    const botRoomId = aiBotPrompt === null ? null : effectiveSelectedRoomId
+    if (aiBotPrompt !== null && !botRoomId) {
+      setLocalError('当前对话尚未建立房间，无法同步 AI 回复。')
+      return
+    }
+
+    const shouldShowAiThinking = botRoomId !== null
+    if (shouldShowAiThinking) {
+      setLocalError(null)
+      setAiGeneratingRoomId(botRoomId)
+      setIsAiGenerating(true)
+    }
+    const aiThinkingStartedAt = shouldShowAiThinking ? Date.now() : null
 
     try {
       const recordId = crypto.randomUUID()
@@ -1414,16 +1448,8 @@ function App() {
       setComposerImageDrafts([])
       setLocalError(null)
 
-      if (aiBotPrompt !== null) {
-        setIsAiGenerating(true)
+      if (aiBotPrompt !== null && botRoomId !== null) {
         try {
-          const botRoomId = effectiveSelectedRoomId
-
-          if (!botRoomId) {
-            throw new Error('当前对话尚未建立房间，无法同步 AI 回复。')
-          }
-
-          setAiGeneratingRoomId(botRoomId)
           const answer = await askAi(aiBotPrompt, {
             roomId: botRoomId,
             replyToName: self?.deviceName ?? localIdentity.deviceName,
@@ -1440,11 +1466,17 @@ function App() {
         } catch (error) {
           setLocalError(error instanceof Error ? error.message : 'AI 请求失败。')
         } finally {
+          await keepAiThinkingVisibleSince(aiThinkingStartedAt)
           setIsAiGenerating(false)
           setAiGeneratingRoomId(null)
         }
       }
     } catch (error) {
+      if (shouldShowAiThinking) {
+        await keepAiThinkingVisibleSince(aiThinkingStartedAt)
+        setIsAiGenerating(false)
+        setAiGeneratingRoomId(null)
+      }
       setLocalError(error instanceof Error ? error.message : '文本发送失败。')
     }
   }
