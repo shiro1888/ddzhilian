@@ -5,7 +5,6 @@ import { AdminStage } from './app/components/AdminStage'
 import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
-import { LandingAuthGate } from './app/components/LandingAuthGate'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
@@ -365,6 +364,12 @@ function App() {
     getAiQuota,
     sendRoomFiles,
   } = useDdzhilian()
+
+  useEffect(() => {
+    if (location.pathname === '/') {
+      navigate(`${pathForView('text')}${location.search}`, { replace: true })
+    }
+  }, [location.pathname, location.search, navigate])
 
   useEffect(() => {
     const nextAccountId = imageAccount.user?.id ?? ''
@@ -1694,21 +1699,7 @@ function App() {
     />
   )
 
-  return (
-    <LandingAuthGate
-      isLandingEntry={location.pathname === '/'}
-      isLoading={imageAccount.isLoading}
-      isSubmitting={imageAccount.isSubmitting}
-      isAuthenticated={imageAccount.isAuthenticated}
-      user={imageAccount.user}
-      error={imageAccount.error}
-      onCheckEmailRegistration={imageAccount.checkEmailRegistration}
-      onLogin={imageAccount.login}
-      onRegister={imageAccount.register}
-    >
-      {snapLinkStageElement}
-    </LandingAuthGate>
-  )
+  return snapLinkStageElement
 }
 
 export default App
