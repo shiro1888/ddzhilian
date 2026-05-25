@@ -327,6 +327,9 @@ function App() {
     handleAdminSystemPromptChange,
     handleAdminCloudflareFieldChange,
     handleAdminOpenRouterFieldChange,
+    handleAdminFeedbackProviderAdd,
+    handleAdminFeedbackProviderChange,
+    handleAdminFeedbackProviderDelete,
     handleAdminOpenRouterModelsDetect,
     handleAdminOpenRouterModelsRefresh,
     handleAdminSave,
@@ -986,8 +989,8 @@ function App() {
     Boolean(selectedRoom) &&
     hasChatTextDraft
   const aiQuotaLabel = aiQuotaStatus
-    ? aiQuotaStatus.provider === 'openrouter'
-      ? (aiQuotaStatus.limitLabel ?? 'OpenAI 兼容接口')
+    ? aiQuotaStatus.provider && aiQuotaStatus.provider !== 'cloudflare'
+      ? (aiQuotaStatus.limitLabel ?? '外部 API 计费')
       : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
     : 'AI 额度加载中'
   const selectedAiModelLabel =
@@ -1592,6 +1595,9 @@ function App() {
       onSystemPromptChange={handleAdminSystemPromptChange}
       onCloudflareFieldChange={handleAdminCloudflareFieldChange}
       onOpenRouterFieldChange={handleAdminOpenRouterFieldChange}
+      onFeedbackProviderAdd={handleAdminFeedbackProviderAdd}
+      onFeedbackProviderChange={handleAdminFeedbackProviderChange}
+      onFeedbackProviderDelete={handleAdminFeedbackProviderDelete}
       onOpenRouterModelsDetect={handleAdminOpenRouterModelsDetect}
       onOpenRouterModelsRefresh={handleAdminOpenRouterModelsRefresh}
       onSave={handleAdminSave}

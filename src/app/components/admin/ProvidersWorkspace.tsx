@@ -1,4 +1,10 @@
-import type { AdminAiSettings, AdminCloudflareConfig, AdminModelUsage, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
+import type {
+  AdminAiSettings,
+  AdminCloudflareConfig,
+  AdminFeedbackProviderConfig,
+  AdminModelUsage,
+  AdminOpenRouterConfig,
+} from '../../../lib/ddzhilian-types'
 import type {
   AdminOpenAiCompatibleDetectInput,
   AdminOpenAiCompatibleDetectResult,
@@ -16,6 +22,9 @@ export function ProvidersWorkspace({
   onSystemPromptChange,
   onCloudflareFieldChange,
   onOpenRouterFieldChange,
+  onFeedbackProviderAdd,
+  onFeedbackProviderChange,
+  onFeedbackProviderDelete,
   onOpenRouterModelsDetect,
   onOpenRouterModelsRefresh,
   onProviderChange,
@@ -28,6 +37,9 @@ export function ProvidersWorkspace({
   onSystemPromptChange: (value: string) => void
   onCloudflareFieldChange: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
+  onFeedbackProviderAdd: (provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderChange: (providerId: string, provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
@@ -47,6 +59,9 @@ export function ProvidersWorkspace({
         settings={settings}
         onCloudflareFieldChange={onCloudflareFieldChange}
         onOpenRouterFieldChange={onOpenRouterFieldChange}
+        onFeedbackProviderAdd={onFeedbackProviderAdd}
+        onFeedbackProviderChange={onFeedbackProviderChange}
+        onFeedbackProviderDelete={onFeedbackProviderDelete}
         onOpenRouterModelsDetect={onOpenRouterModelsDetect}
         onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
         onProviderChange={onProviderChange}

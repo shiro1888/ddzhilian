@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AdminAiSettings,
   AdminCloudflareConfig,
+  AdminFeedbackProviderConfig,
   AdminHistoryStats,
   AdminOnlineDeviceNameUpdate,
   AdminOnlineDevicesSnapshot,
@@ -469,6 +470,50 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     )
   }
 
+  const handleAdminFeedbackProviderAdd = (provider: AdminFeedbackProviderConfig) => {
+    setAdminAiSettings((previous) =>
+      previous
+        ? {
+            ...previous,
+            feedbackProviders: [
+              ...previous.feedbackProviders.filter((entry) => entry.id !== provider.id),
+              provider,
+            ],
+          }
+        : previous,
+    )
+  }
+
+  const handleAdminFeedbackProviderChange = (
+    providerId: string,
+    provider: AdminFeedbackProviderConfig,
+  ) => {
+    setAdminAiSettings((previous) =>
+      previous
+        ? {
+            ...previous,
+            feedbackProviders: previous.feedbackProviders.map((entry) =>
+              entry.id === providerId ? provider : entry,
+            ),
+          }
+        : previous,
+    )
+  }
+
+  const handleAdminFeedbackProviderDelete = (providerId: string) => {
+    setAdminAiSettings((previous) => {
+      if (!previous) {
+        return previous
+      }
+
+      return {
+        ...previous,
+        provider: previous.provider === providerId ? 'openrouter' : previous.provider,
+        feedbackProviders: previous.feedbackProviders.filter((entry) => entry.id !== providerId),
+      }
+    })
+  }
+
   const handleAdminOpenRouterModelsDetect = (
     input: AdminOpenAiCompatibleDetectInput,
   ): Promise<AdminOpenAiCompatibleDetectResult> => {
@@ -823,6 +868,9 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     handleAdminSystemPromptChange,
     handleAdminCloudflareFieldChange,
     handleAdminOpenRouterFieldChange,
+    handleAdminFeedbackProviderAdd,
+    handleAdminFeedbackProviderChange,
+    handleAdminFeedbackProviderDelete,
     handleAdminOpenRouterModelsDetect,
     handleAdminOpenRouterModelsRefresh,
     handleAdminSave,

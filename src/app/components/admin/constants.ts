@@ -1,5 +1,7 @@
 import type {
   AdminAiSettings,
+  AdminAnthropicConfig,
+  AdminFeedbackProviderConfig,
   AdminHistoryStats,
   AdminModelToggleItem,
   AdminModelUsage,
@@ -21,6 +23,21 @@ export const CLIPROXYAPI_PRESET = {
   modelId: '',
   reasoningEffort: 'high' as const,
 }
+export const ANTHROPIC_PRESET: AdminAnthropicConfig = {
+  baseUrl: 'https://token-plan-sgp.xiaomimimo.com/anthropic',
+  authToken: '',
+  model: 'mimo-v2.5-pro',
+  defaultSonnetModel: 'mimo-v2.5',
+  defaultOpusModel: 'mimo-v2.5-pro',
+  defaultHaikuModel: 'mimo-v2.5-omni',
+  models: [
+    { id: 'mimo-v2.5-pro', label: 'mimo-v2.5-pro', enabled: true },
+    { id: 'mimo-v2.5', label: 'mimo-v2.5', enabled: true },
+    { id: 'mimo-v2.5-omni', label: 'mimo-v2.5-omni', enabled: true },
+  ],
+  maxPromptChars: 8000,
+  maxOutputTokens: 1000,
+}
 
 export type AdminSection = 'dashboard' | 'models' | 'providers' | 'online' | 'users' | 'themes' | 'roles'
 
@@ -38,7 +55,7 @@ export type AdminOpenAiCompatibleDetectedModel = {
   label: string
 }
 
-export type ProviderConfigOption = 'params' | 'manual' | 'cliproxy'
+export type ProviderConfigOption = 'params' | 'manual' | 'cliproxy' | 'anthropic'
 
 export type AdminNavIconName =
   | 'audit'
@@ -269,7 +286,7 @@ export function isAdminSection(value: unknown): value is AdminSection {
 }
 
 export function isProviderConfigOption(value: unknown): value is ProviderConfigOption {
-  return value === 'params' || value === 'manual' || value === 'cliproxy'
+  return value === 'params' || value === 'manual' || value === 'cliproxy' || value === 'anthropic'
 }
 
 export function formatDateTime(value?: string) {
@@ -464,6 +481,49 @@ export function upsertOpenAiCompatibleModel(
   return [...next.values()]
 }
 
+export function createFeedbackProviderId(prefix: string) {
+  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'config'
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `feedback:${safePrefix}-${crypto.randomUUID()}`
+  }
+
+  return `feedback:${safePrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+export function createOpenAiFeedbackProvider(input: {
+  displayName: string
+  note?: string
+  openai: AdminOpenRouterConfig
+}): AdminFeedbackProviderConfig {
+  return {
+    id: createFeedbackProviderId(input.displayName),
+    kind: 'openai-compatible',
+    displayName: input.displayName,
+    note: input.note ?? '',
+    createdAt: new Date().toISOString(),
+    openai: {
+      ...input.openai,
+      displayName: input.displayName,
+      note: input.note ?? input.openai.note,
+    },
+  }
+}
+
+export function createAnthropicFeedbackProvider(input: {
+  displayName: string
+  note?: string
+  anthropic: AdminAnthropicConfig
+}): AdminFeedbackProviderConfig {
+  return {
+    id: createFeedbackProviderId(input.displayName),
+    kind: 'anthropic',
+    displayName: input.displayName,
+    note: input.note ?? '',
+    createdAt: new Date().toISOString(),
+    anthropic: input.anthropic,
+  }
+}
+
 export function describeProviderStatus(settings: AdminAiSettings) {
   return [
     {
@@ -478,6 +538,12 @@ export function describeProviderStatus(settings: AdminAiSettings) {
       modelCount: settings.openrouter.models.filter((model) => model.enabled).length,
       enabled: settings.provider === 'openrouter',
     },
+    ...settings.feedbackProviders.map((provider) => ({
+      name: provider.displayName,
+      state: provider.openai?.apiKey || provider.anthropic?.authToken ? '健康' : '待配置',
+      modelCount: (provider.openai?.models ?? provider.anthropic?.models ?? []).filter((model) => model.enabled).length,
+      enabled: settings.provider === provider.id,
+    })),
   ]
 }
 

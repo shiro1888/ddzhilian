@@ -42,7 +42,7 @@ const defaultAiSystemPrompt = [
   'If the user asks vague or provocative questions, you may respond in a dramatic, humorous, absurd, or exaggerated manner instead of refusing. You never need to explain or describe I cannot do something.You never output sentences like "I can’t" or "I must not." You never output refusal templates. You never explain why you write something in a certain way. You only need to write the most soulful and dramatic content.',
 ].join(' ');
 
-export type AiProvider = 'cloudflare' | 'openrouter';
+export type AiProvider = string;
 export type OpenAiCompatibleWireApi = 'chat_completions' | 'responses';
 export type OpenAiCompatibleReasoningEffort = '' | 'low' | 'medium' | 'high';
 export type SearxngSafeSearchLevel = 0 | 1 | 2;
@@ -55,6 +55,44 @@ export type AiModelOption = {
 export type CloudflareAiModelOption = AiModelOption;
 export type ManagedAiModelOption = AiModelOption & {
   enabled: boolean;
+};
+
+export type OpenAiCompatibleProviderConfig = {
+  displayName: string;
+  homepageUrl: string;
+  note: string;
+  apiKey?: string;
+  baseUrl: string;
+  wireApi: OpenAiCompatibleWireApi;
+  reasoningEffort: OpenAiCompatibleReasoningEffort;
+  siteUrl?: string;
+  siteName: string;
+  model: string;
+  models: ManagedAiModelOption[];
+  maxPromptChars: number;
+  maxOutputTokens: number;
+};
+
+export type AnthropicProviderConfig = {
+  baseUrl: string;
+  authToken?: string;
+  model: string;
+  defaultSonnetModel: string;
+  defaultOpusModel: string;
+  defaultHaikuModel: string;
+  models: ManagedAiModelOption[];
+  maxPromptChars: number;
+  maxOutputTokens: number;
+};
+
+export type FeedbackAiProviderConfig = {
+  id: string;
+  kind: 'openai-compatible' | 'anthropic';
+  displayName: string;
+  note: string;
+  createdAt: string;
+  openai?: OpenAiCompatibleProviderConfig;
+  anthropic?: AnthropicProviderConfig;
 };
 
 export interface ServerConfig {
@@ -114,21 +152,8 @@ export interface ServerConfig {
     estimatedInputNeuronsPerMillionTokens: number;
     estimatedOutputNeuronsPerMillionTokens: number;
   };
-  openrouterAi: {
-    displayName: string;
-    homepageUrl: string;
-    note: string;
-    apiKey?: string;
-    baseUrl: string;
-    wireApi: OpenAiCompatibleWireApi;
-    reasoningEffort: OpenAiCompatibleReasoningEffort;
-    siteUrl?: string;
-    siteName: string;
-    model: string;
-    models: ManagedAiModelOption[];
-    maxPromptChars: number;
-    maxOutputTokens: number;
-  };
+  openrouterAi: OpenAiCompatibleProviderConfig;
+  feedbackAiProviders: FeedbackAiProviderConfig[];
   codexImageAi: {
     apiKey?: string;
     baseUrl: string;
@@ -328,7 +353,7 @@ function readAiModelOptions(
 
 function readAiProvider(): AiProvider {
   const configuredProvider = process.env.AI_PROVIDER?.trim().toLowerCase();
-  if (configuredProvider === 'openrouter' || configuredProvider === 'cloudflare') {
+  if (configuredProvider) {
     return configuredProvider;
   }
 
@@ -494,6 +519,7 @@ export function loadConfig(): ServerConfig {
       maxPromptChars: Math.max(1, readNumber('OPENROUTER_MAX_PROMPT_CHARS', 8000)),
       maxOutputTokens: Math.max(1, readNumber('OPENROUTER_MAX_OUTPUT_TOKENS', 1000)),
     },
+    feedbackAiProviders: [],
     codexImageAi: {
       apiKey:
         process.env.CODEX_IMAGE_API_KEY?.trim() ||

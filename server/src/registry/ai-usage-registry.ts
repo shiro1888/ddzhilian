@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-type ProviderKey = 'cloudflare' | 'openrouter';
+type ProviderKey = string;
 
 export type AiUsageIncrement = {
   provider: ProviderKey;
@@ -107,8 +107,17 @@ export class AiUsageRegistry {
     this.pruneTrendBuckets();
     const now = new Date();
     const buckets: StoredAiTrendBucket[] = [];
+    const providers = new Set<string>(['cloudflare', 'openrouter']);
 
-    for (const provider of ['cloudflare', 'openrouter'] as const) {
+    for (const record of this.usageByKey.values()) {
+      providers.add(record.provider);
+    }
+
+    for (const bucket of this.trendBucketsByKey.values()) {
+      providers.add(bucket.provider);
+    }
+
+    for (const provider of [...providers].sort()) {
       for (let offset = hours - 1; offset >= 0; offset -= 1) {
         const bucketStartAt = toHourBucketIso(new Date(now.getTime() - offset * 60 * 60 * 1000));
         const bucketKey = `${provider}:${bucketStartAt}`;

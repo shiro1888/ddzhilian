@@ -81,12 +81,16 @@ export function OpenAiProviderTemplatePanel({
   settings,
   onDetectModels,
   onRefreshModels,
+  providerId = 'openrouter',
+  activateProviderOnDetect = true,
   onProviderChange,
   onOpenRouterFieldChange,
 }: {
   settings: AdminOpenRouterConfig
   onDetectModels: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
-  onRefreshModels: () => Promise<AdminOpenAiCompatibleRefreshResult>
+  onRefreshModels?: () => Promise<AdminOpenAiCompatibleRefreshResult>
+  providerId?: AdminAiSettings['provider']
+  activateProviderOnDetect?: boolean
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
 }) {
@@ -123,7 +127,9 @@ export function OpenAiProviderTemplatePanel({
       return
     }
 
-    onProviderChange('openrouter')
+    if (activateProviderOnDetect) {
+      onProviderChange(providerId)
+    }
     setIsDetectingModels(true)
     setMessage(null)
 
@@ -163,7 +169,13 @@ export function OpenAiProviderTemplatePanel({
   }
 
   const refreshModels = () => {
-    onProviderChange('openrouter')
+    if (!onRefreshModels) {
+      return
+    }
+
+    if (activateProviderOnDetect) {
+      onProviderChange(providerId)
+    }
     setIsRefreshingModels(true)
     setMessage(null)
 
@@ -273,7 +285,7 @@ export function OpenAiProviderTemplatePanel({
           <Button
             type="button"
             className="dd-button dd-button--dark dd-admin-provider-template__model-button"
-            disabled={isDetectingModels || isRefreshingModels}
+            disabled={!onRefreshModels || isDetectingModels || isRefreshingModels}
             onClick={refreshModels}
           >
             {isRefreshingModels ? '刷新中...' : '刷新模型列表'}

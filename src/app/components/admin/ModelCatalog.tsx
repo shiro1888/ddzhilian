@@ -2,24 +2,20 @@ import { Button } from '@base-ui/react/button'
 import { useMemo, useState } from 'react'
 import type { AdminAiSettings, AdminModelToggleItem } from '../../../lib/ddzhilian-types'
 import { AdminBaseSwitch } from './FormControls'
-import { OPENAI_COMPATIBLE_PROVIDER_LABEL } from './constants'
 
 type ModelCatalogApiProvider = AdminAiSettings['provider']
 type ModelCatalogApiProviderFilter = ModelCatalogApiProvider | 'all'
 
 export type AdminModelCatalogEntry = AdminModelToggleItem & {
   apiProvider: ModelCatalogApiProvider
+  apiProviderLabel: string
 }
 
 const API_PROVIDER_FILTER_OPTIONS: Array<{ value: ModelCatalogApiProviderFilter, label: string }> = [
   { value: 'all', label: '全部 API 供应商' },
   { value: 'cloudflare', label: 'Cloudflare AI' },
-  { value: 'openrouter', label: OPENAI_COMPATIBLE_PROVIDER_LABEL },
+  { value: 'openrouter', label: 'OpenAI 兼容接口' },
 ]
-
-function getApiProviderLabel(provider: ModelCatalogApiProvider) {
-  return provider === 'openrouter' ? OPENAI_COMPATIBLE_PROVIDER_LABEL : 'Cloudflare AI'
-}
 
 function getModelProviderKey(modelId: string) {
   if (modelId.startsWith('@cf/')) {
@@ -59,6 +55,17 @@ export function ModelCatalog({
 }) {
   const [apiProviderFilter, setApiProviderFilter] = useState<ModelCatalogApiProviderFilter>('all')
   const [modelProviderFilter, setModelProviderFilter] = useState('all')
+  const apiProviderOptions = useMemo(() => {
+    const options = new Map<ModelCatalogApiProviderFilter, string>(
+      API_PROVIDER_FILTER_OPTIONS.map((option) => [option.value, option.label]),
+    )
+
+    for (const model of models) {
+      options.set(model.apiProvider, model.apiProviderLabel)
+    }
+
+    return [...options.entries()].map(([value, label]) => ({ value, label }))
+  }, [models])
   const modelsMatchingApiProvider = useMemo(
     () => models.filter((model) => apiProviderFilter === 'all' || model.apiProvider === apiProviderFilter),
     [apiProviderFilter, models],
@@ -105,7 +112,7 @@ export function ModelCatalog({
               setModelProviderFilter('all')
             }}
           >
-            {API_PROVIDER_FILTER_OPTIONS.map((option) => (
+            {apiProviderOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
@@ -130,7 +137,7 @@ export function ModelCatalog({
             <article key={`${model.apiProvider}:${model.id}`} className="dd-admin-model-catalog-card">
               <div className="dd-admin-model-catalog-card__copy">
                 <div className="dd-admin-model-catalog-card__meta">
-                  <span>{getApiProviderLabel(model.apiProvider)}</span>
+                  <span>{model.apiProviderLabel}</span>
                   <span>{getModelProviderLabel(getModelProviderKey(model.id))}</span>
                 </div>
                 <strong>{model.label}</strong>

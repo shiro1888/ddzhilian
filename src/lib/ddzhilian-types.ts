@@ -378,7 +378,7 @@ export type AiWebSearchSource = {
 
 export type AiChatResponse = {
   response: string
-  provider?: 'cloudflare' | 'openrouter'
+  provider?: string
   model: string
   quota?: AiQuotaStatus
   historyText?: HistoryTextSummary
@@ -549,7 +549,7 @@ export type AiQuotaStatus = {
   dailyNeuronBudget: number
   remainingNeurons: number
   freeOnly?: boolean
-  provider?: 'cloudflare' | 'openrouter'
+  provider?: string
   limitLabel?: string
   model?: string
   models?: AiModelOption[]
@@ -593,6 +593,28 @@ export type AdminOpenRouterConfig = {
   maxOutputTokens: number
 }
 
+export type AdminAnthropicConfig = {
+  baseUrl: string
+  authToken: string
+  model: string
+  defaultSonnetModel: string
+  defaultOpusModel: string
+  defaultHaikuModel: string
+  models: AdminModelToggleItem[]
+  maxPromptChars: number
+  maxOutputTokens: number
+}
+
+export type AdminFeedbackProviderConfig = {
+  id: string
+  kind: 'openai-compatible' | 'anthropic'
+  displayName: string
+  note: string
+  createdAt: string
+  openai?: AdminOpenRouterConfig
+  anthropic?: AdminAnthropicConfig
+}
+
 export type AdminOpenAiWireApi = 'chat_completions' | 'responses'
 export type AdminOpenAiReasoningEffort = '' | 'low' | 'medium' | 'high'
 
@@ -603,14 +625,15 @@ export type AdminModelToggleItem = {
 }
 
 export type AdminAiSettings = {
-  provider: 'cloudflare' | 'openrouter'
+  provider: string
   systemPrompt: string
   cloudflare: AdminCloudflareConfig
   openrouter: AdminOpenRouterConfig
+  feedbackProviders: AdminFeedbackProviderConfig[]
 }
 
 export type AdminModelUsage = {
-  provider: 'cloudflare' | 'openrouter'
+  provider: string
   modelId: string
   modelLabel: string
   totalCalls: number
@@ -625,7 +648,7 @@ export type AdminModelUsage = {
 }
 
 export type AdminUsageTrendBucket = {
-  provider: 'cloudflare' | 'openrouter'
+  provider: string
   bucketStartAt: string
   totalCalls: number
   successCalls: number

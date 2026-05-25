@@ -8,7 +8,9 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 import {
   loadConfig,
-  type AiProvider,
+  type AnthropicProviderConfig,
+  type FeedbackAiProviderConfig,
+  type OpenAiCompatibleProviderConfig,
   type OpenAiCompatibleReasoningEffort,
   type OpenAiCompatibleWireApi,
 } from './config.js';
@@ -92,6 +94,19 @@ type OpenRouterChatResponse = {
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+};
+type AnthropicMessagesResponse = {
+  content?: Array<{
+    type?: unknown;
+    text?: unknown;
+  }>;
+  error?: {
+    message?: string;
+  };
+  usage?: {
     input_tokens?: number;
     output_tokens?: number;
   };
@@ -1233,10 +1248,13 @@ function buildOpenAiCompatibleHeaders(options: Pick<OpenAiCompatibleClientOption
   return headers;
 }
 
-function getOpenRouterChatCandidates(primaryModel: string) {
+function getOpenAiCompatibleChatCandidates(
+  primaryModel: string,
+  providerConfig: OpenAiCompatibleProviderConfig,
+) {
   const candidates = [
     primaryModel,
-    config.openrouterAi.model,
+    providerConfig.model,
     ...openRouterFallbackModelIds,
   ];
   const seen = new Set<string>();
@@ -1315,20 +1333,98 @@ async function requestOpenAiCompatibleChat(
   }
 }
 
-async function requestOpenRouterChat(
+function buildAnthropicEndpoint(baseUrl: string) {
+  const normalized = baseUrl.replace(/\/+$/g, '');
+  const suffix = normalized.endsWith('/v1') ? '/messages' : '/v1/messages';
+  return new URL(`${normalized}${suffix}`);
+}
+
+function buildAnthropicRequestBody(
   model: string,
   prompt: string,
   maxOutputTokens: number,
-  images: AiChatImageInput[] = [],
+) {
+  const systemPrompt = getAiSystemPrompt();
+  return {
+    model,
+    max_tokens: maxOutputTokens,
+    ...(systemPrompt ? { system: systemPrompt } : {}),
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+  };
+}
+
+function extractAnthropicText(payload: AnthropicMessagesResponse) {
+  return payload.content
+    ?.map((part) => part.type === 'text' && typeof part.text === 'string' ? part.text : '')
+    .filter(Boolean)
+    .join('\n')
+    .trim() ?? '';
+}
+
+function formatAnthropicError(payload: AnthropicMessagesResponse | null) {
+  return payload?.error?.message?.trim();
+}
+
+async function requestAnthropicChat(
+  providerConfig: AnthropicProviderConfig,
+  model: string,
+  prompt: string,
+  maxOutputTokens: number,
 ): Promise<OpenRouterChatSuccess | OpenRouterChatFailure> {
-  return requestOpenAiCompatibleChat({
-    baseUrl: config.openrouterAi.baseUrl,
-    apiKey: config.openrouterAi.apiKey ?? '',
-    wireApi: config.openrouterAi.wireApi,
-    reasoningEffort: config.openrouterAi.reasoningEffort,
-    siteUrl: config.openrouterAi.siteUrl,
-    siteName: config.openrouterAi.siteName,
-  }, model, prompt, maxOutputTokens, images);
+  const endpoint = buildAnthropicEndpoint(providerConfig.baseUrl);
+
+  try {
+    const aiResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${providerConfig.authToken ?? ''}`,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'x-api-key': providerConfig.authToken ?? '',
+      },
+      body: JSON.stringify(buildAnthropicRequestBody(model, prompt, maxOutputTokens)),
+    });
+    const aiPayload = await aiResponse.json().catch(() => null) as AnthropicMessagesResponse | null;
+
+    if (!aiResponse.ok || !aiPayload || aiPayload.error) {
+      return {
+        ok: false,
+        model,
+        status: aiResponse.status,
+        message: formatAnthropicError(aiPayload),
+      };
+    }
+
+    const answer = extractAnthropicText(aiPayload);
+    if (!answer) {
+      return {
+        ok: false,
+        model,
+        status: 502,
+        message: 'Anthropic-compatible API returned an empty response.',
+      };
+    }
+
+    return {
+      ok: true,
+      model,
+      answer,
+      promptTokens: Math.max(0, Math.floor(aiPayload.usage?.input_tokens ?? 0)),
+      completionTokens: Math.max(0, Math.floor(aiPayload.usage?.output_tokens ?? 0)),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      model,
+      status: 0,
+      message: error instanceof Error ? error.message : 'Anthropic-compatible API request failed.',
+    };
+  }
 }
 
 function isCloudflareAiQuotaError(
@@ -1405,8 +1501,8 @@ function formatAiQuotaStatus(input: {
   return `今日 AI 免费额度剩余 ${input.remainingNeurons.toLocaleString()} / ${input.dailyNeuronBudget.toLocaleString()} Neurons，已使用 ${input.usedNeurons.toLocaleString()}。`;
 }
 
-function formatOpenRouterStatus(model: string) {
-  return `当前 AI 提供方为 OpenAI 兼容接口，模型 ${model}。本站不统计该接口额度；实际费用和限额以你的 API 服务账户为准。`;
+function formatExternalAiStatus(label: string, model: string) {
+  return `当前 AI 提供方为 ${label}，模型 ${model}。本站不统计该接口额度；实际费用和限额以你的 API 服务账户为准。`;
 }
 
 function normalizeAdminOpenAiCompatibleBaseUrl(value: unknown) {
@@ -2514,17 +2610,66 @@ function extractCodexImageResults(payload: CodexImageGenerationResponse): CodexI
   return images;
 }
 
-function getActiveAiSettings() {
+type ActiveAiSettings = {
+  provider: string;
+  kind: 'cloudflare' | 'openai-compatible' | 'anthropic';
+  label: string;
+  model: string;
+  models: Array<{ id: string; label: string; enabled: boolean }>;
+  maxPromptChars: number;
+  maxOutputTokens: number;
+  openai?: OpenAiCompatibleProviderConfig;
+  anthropic?: AnthropicProviderConfig;
+};
+
+function getFeedbackAiProvider(providerId: string): FeedbackAiProviderConfig | undefined {
+  return config.feedbackAiProviders.find((provider) => provider.id === providerId);
+}
+
+function getActiveAiSettings(): ActiveAiSettings {
   if (config.aiProvider === 'openrouter') {
     const models = config.openrouterAi.models.filter((model) => model.enabled !== false);
     const defaultModel = models.find((model) => model.id === config.openrouterAi.model)?.id ?? models[0]?.id ?? '';
     return {
       provider: 'openrouter' as const,
+      kind: 'openai-compatible',
       label: 'OpenAI 兼容接口',
       model: defaultModel,
       models,
       maxPromptChars: config.openrouterAi.maxPromptChars,
       maxOutputTokens: config.openrouterAi.maxOutputTokens,
+      openai: config.openrouterAi,
+    };
+  }
+
+  const feedbackProvider = getFeedbackAiProvider(config.aiProvider);
+  if (feedbackProvider?.kind === 'openai-compatible' && feedbackProvider.openai) {
+    const models = feedbackProvider.openai.models.filter((model) => model.enabled !== false);
+    const defaultModel = models.find((model) => model.id === feedbackProvider.openai?.model)?.id ?? models[0]?.id ?? '';
+    return {
+      provider: feedbackProvider.id,
+      kind: feedbackProvider.kind,
+      label: feedbackProvider.displayName || feedbackProvider.openai.displayName || 'OpenAI 兼容接口',
+      model: defaultModel,
+      models,
+      maxPromptChars: feedbackProvider.openai.maxPromptChars,
+      maxOutputTokens: feedbackProvider.openai.maxOutputTokens,
+      openai: feedbackProvider.openai,
+    };
+  }
+
+  if (feedbackProvider?.kind === 'anthropic' && feedbackProvider.anthropic) {
+    const models = feedbackProvider.anthropic.models.filter((model) => model.enabled !== false);
+    const defaultModel = models.find((model) => model.id === feedbackProvider.anthropic?.model)?.id ?? models[0]?.id ?? '';
+    return {
+      provider: feedbackProvider.id,
+      kind: feedbackProvider.kind,
+      label: feedbackProvider.displayName || 'Anthropic',
+      model: defaultModel,
+      models,
+      maxPromptChars: feedbackProvider.anthropic.maxPromptChars,
+      maxOutputTokens: feedbackProvider.anthropic.maxOutputTokens,
+      anthropic: feedbackProvider.anthropic,
     };
   }
 
@@ -2532,6 +2677,7 @@ function getActiveAiSettings() {
   const defaultModel = models.find((model) => model.id === config.cloudflareAi.model)?.id ?? models[0]?.id ?? '';
   return {
     provider: 'cloudflare' as const,
+    kind: 'cloudflare',
     label: 'Cloudflare AI',
     model: defaultModel,
     models,
@@ -2701,6 +2847,21 @@ function sanitizeAdminAiSettingsSnapshot(snapshot: AdminAiSettingsSnapshot): Adm
       ...snapshot.openrouter,
       apiKey: '',
     },
+    feedbackProviders: snapshot.feedbackProviders.map((provider) => ({
+      ...provider,
+      openai: provider.openai
+        ? {
+            ...provider.openai,
+            apiKey: '',
+          }
+        : provider.openai,
+      anthropic: provider.anthropic
+        ? {
+            ...provider.anthropic,
+            authToken: '',
+          }
+        : provider.anthropic,
+    })),
   };
 }
 
@@ -3353,14 +3514,28 @@ function writeAiQuotaExhausted(response: ServerResponse) {
   });
 }
 
-function getAiConfigurationError(provider: AiProvider) {
-  if (provider === 'openrouter') {
-    if (!config.openrouterAi.apiKey) {
-      return 'OpenAI-compatible API is not configured on this server.';
+function getAiConfigurationError() {
+  const activeAi = getActiveAiSettings();
+
+  if (activeAi.kind === 'openai-compatible') {
+    if (!activeAi.openai?.apiKey) {
+      return `${activeAi.label} is not configured on this server.`;
     }
 
-    if (!config.openrouterAi.model || config.openrouterAi.models.length === 0) {
-      return 'OpenAI-compatible model list is not configured on this server.';
+    if (!activeAi.model || activeAi.models.length === 0) {
+      return `${activeAi.label} model list is not configured on this server.`;
+    }
+
+    return undefined;
+  }
+
+  if (activeAi.kind === 'anthropic') {
+    if (!activeAi.anthropic?.authToken) {
+      return `${activeAi.label} is not configured on this server.`;
+    }
+
+    if (!activeAi.model || activeAi.models.length === 0) {
+      return `${activeAi.label} model list is not configured on this server.`;
     }
 
     return undefined;
@@ -3373,25 +3548,31 @@ function getAiConfigurationError(provider: AiProvider) {
   return undefined;
 }
 
-function getAiModelLabel(provider: 'cloudflare' | 'openrouter', modelId: string) {
-  const source = provider === 'openrouter' ? config.openrouterAi.models : config.cloudflareAi.models;
+function getAiModelLabel(provider: string, modelId: string) {
+  const activeAi = provider === config.aiProvider ? getActiveAiSettings() : undefined;
+  const source = activeAi?.models ?? (
+    provider === 'openrouter'
+      ? config.openrouterAi.models
+      : provider === 'cloudflare'
+        ? config.cloudflareAi.models
+        : getFeedbackAiProvider(provider)?.openai?.models ?? getFeedbackAiProvider(provider)?.anthropic?.models ?? []
+  );
   return source.find((entry) => entry.id === modelId)?.label ?? modelId;
 }
 
 function buildAiQuotaPayload(model: string) {
-  if (config.aiProvider === 'openrouter') {
+  const activeAi = getActiveAiSettings();
+  if (activeAi.kind !== 'cloudflare') {
     return {
       date: new Date().toISOString().slice(0, 10),
       usedNeurons: 0,
       dailyNeuronBudget: 0,
       remainingNeurons: 0,
       freeOnly: false,
-      provider: 'openrouter',
-      limitLabel: 'OpenAI-compatible API billing',
+      provider: activeAi.provider,
+      limitLabel: `${activeAi.label} billing`,
       model,
-      models: config.openrouterAi.models
-        .filter((entry) => entry.enabled !== false)
-        .map((entry) => ({ id: entry.id, label: entry.label })),
+      models: activeAi.models.map((entry) => ({ id: entry.id, label: entry.label })),
     };
   }
 
@@ -4524,7 +4705,7 @@ function handleAiQuotaRequest(
     return;
   }
 
-  const configurationError = getAiConfigurationError(config.aiProvider);
+  const configurationError = getAiConfigurationError();
   if (configurationError) {
     writeJson(response, 503, { error: configurationError });
     return;
@@ -4638,7 +4819,7 @@ async function handleAiChatRequest(
     return;
   }
 
-  const configurationError = getAiConfigurationError(config.aiProvider);
+  const configurationError = getAiConfigurationError();
   if (configurationError) {
     writeJson(response, 503, {
       error: configurationError,
@@ -4685,8 +4866,8 @@ async function handleAiChatRequest(
   }
 
   if (kind === 'quota') {
-    const quotaText = config.aiProvider === 'openrouter'
-      ? formatOpenRouterStatus(model)
+    const quotaText = activeAi.kind !== 'cloudflare'
+      ? formatExternalAiStatus(activeAi.label, model)
       : formatAiQuotaStatus(
           cloudflareAiQuota.getStatus(config.cloudflareAi.dailyNeuronBudget),
         );
@@ -4708,7 +4889,7 @@ async function handleAiChatRequest(
 
     writeJson(response, 200, {
       response: quotaText,
-      provider: config.aiProvider,
+      provider: activeAi.provider,
       model,
       quota: buildAiQuotaPayload(model),
       historyText: saved?.ok ? saved.text : undefined,
@@ -4736,9 +4917,16 @@ async function handleAiChatRequest(
     return;
   }
 
-  if (images.length > 0 && config.aiProvider === 'cloudflare') {
+  if (images.length > 0 && activeAi.kind === 'cloudflare') {
     writeJson(response, 400, {
       error: '当前 Cloudflare AI 文本通道不支持读图，请在后台切换到 OpenAI 兼容的多模态模型。',
+    });
+    return;
+  }
+
+  if (images.length > 0 && activeAi.kind === 'anthropic') {
+    writeJson(response, 400, {
+      error: '当前 Anthropic 文本通道暂不支持读图，请在后台切换到 OpenAI 兼容的多模态模型。',
     });
     return;
   }
@@ -4824,7 +5012,7 @@ async function handleAiChatRequest(
   }
 
   let quotaReservation: AiQuotaReservation | undefined;
-  if (config.aiProvider === 'cloudflare' && config.cloudflareAi.freeOnly) {
+  if (activeAi.kind === 'cloudflare' && config.cloudflareAi.freeOnly) {
     const quota = cloudflareAiQuota.reserve(
       estimateCloudflareAiNeurons(aiPrompt),
       config.cloudflareAi.dailyNeuronBudget,
@@ -4832,9 +5020,9 @@ async function handleAiChatRequest(
 
     if (!quota.ok) {
         aiUsage.record({
-          provider: config.aiProvider,
+          provider: activeAi.provider,
           modelId: model,
-          modelLabel: getAiModelLabel(config.aiProvider, model),
+          modelLabel: getAiModelLabel(activeAi.provider, model),
           outcome: 'quota_rejected',
           promptChars: aiPrompt.length,
         });
@@ -4850,7 +5038,7 @@ async function handleAiChatRequest(
     let promptTokens = 0;
     let completionTokens = 0;
 
-    if (config.aiProvider === 'cloudflare') {
+    if (activeAi.kind === 'cloudflare') {
       const endpoint = new URL(
         `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(config.cloudflareAi.accountId ?? '')}/ai/run/${model}`,
       );
@@ -4887,9 +5075,9 @@ async function handleAiChatRequest(
         }
 
         aiUsage.record({
-          provider: config.aiProvider,
+          provider: activeAi.provider,
           modelId: model,
-          modelLabel: getAiModelLabel(config.aiProvider, model),
+          modelLabel: getAiModelLabel(activeAi.provider, model),
           outcome: 'failed',
           promptChars: aiPrompt.length,
         });
@@ -4898,13 +5086,29 @@ async function handleAiChatRequest(
       }
 
       answer = extractCloudflareAiText(aiPayload);
-    } else {
+    } else if (activeAi.kind === 'openai-compatible' && activeAi.openai) {
+      if (!activeAi.openai.apiKey) {
+        writeJson(response, 503, { error: `${activeAi.label} is not configured on this server.` });
+        return;
+      }
+
       let lastFailure: OpenRouterChatFailure | undefined;
-      for (const candidateModel of getOpenRouterChatCandidates(model)) {
-        const result = await requestOpenRouterChat(candidateModel, aiPrompt, activeAi.maxOutputTokens, images);
+      const openAiClientOptions: OpenAiCompatibleClientOptions = {
+        ...activeAi.openai,
+        apiKey: activeAi.openai.apiKey,
+      };
+
+      for (const candidateModel of getOpenAiCompatibleChatCandidates(model, activeAi.openai)) {
+        const result = await requestOpenAiCompatibleChat(
+          openAiClientOptions,
+          candidateModel,
+          aiPrompt,
+          activeAi.maxOutputTokens,
+          images,
+        );
         if (result.ok) {
           if (candidateModel !== model) {
-            console.warn('OpenRouter fallback model succeeded', {
+            console.warn('OpenAI-compatible fallback model succeeded', {
               requestedModel: model,
               fallbackModel: candidateModel,
             });
@@ -4918,22 +5122,22 @@ async function handleAiChatRequest(
         }
 
         lastFailure = result;
-        console.warn('OpenRouter model attempt failed', {
+        console.warn('OpenAI-compatible model attempt failed', {
           status: result.status,
           model: result.model,
           message: result.message,
         });
         aiUsage.record({
-          provider: config.aiProvider,
+          provider: activeAi.provider,
           modelId: candidateModel,
-          modelLabel: getAiModelLabel(config.aiProvider, candidateModel),
+          modelLabel: getAiModelLabel(activeAi.provider, candidateModel),
           outcome: 'failed',
           promptChars: aiPrompt.length,
         });
       }
 
       if (!answer) {
-        console.error('OpenRouter request failed', {
+        console.error('OpenAI-compatible request failed', {
           status: lastFailure?.status,
           model: lastFailure?.model ?? model,
           message: lastFailure?.message,
@@ -4941,6 +5145,29 @@ async function handleAiChatRequest(
         writeJson(response, 502, { error: 'OpenAI-compatible API request failed.' });
         return;
       }
+    } else if (activeAi.kind === 'anthropic' && activeAi.anthropic) {
+      const result = await requestAnthropicChat(activeAi.anthropic, model, aiPrompt, activeAi.maxOutputTokens);
+      if (!result.ok) {
+        console.error('Anthropic-compatible request failed', {
+          status: result.status,
+          model: result.model,
+          message: result.message,
+        });
+        aiUsage.record({
+          provider: activeAi.provider,
+          modelId: model,
+          modelLabel: getAiModelLabel(activeAi.provider, model),
+          outcome: 'failed',
+          promptChars: aiPrompt.length,
+        });
+        writeJson(response, 502, { error: 'Anthropic-compatible API request failed.' });
+        return;
+      }
+
+      model = result.model;
+      answer = result.answer;
+      promptTokens = result.promptTokens;
+      completionTokens = result.completionTokens;
     }
 
     if (!answer) {
@@ -4949,9 +5176,9 @@ async function handleAiChatRequest(
       }
 
       aiUsage.record({
-        provider: config.aiProvider,
+        provider: activeAi.provider,
         modelId: model,
-        modelLabel: getAiModelLabel(config.aiProvider, model),
+        modelLabel: getAiModelLabel(activeAi.provider, model),
         outcome: 'failed',
         promptChars: aiPrompt.length,
       });
@@ -4976,9 +5203,9 @@ async function handleAiChatRequest(
     }
 
     aiUsage.record({
-      provider: config.aiProvider,
+      provider: activeAi.provider,
       modelId: model,
-      modelLabel: getAiModelLabel(config.aiProvider, model),
+      modelLabel: getAiModelLabel(activeAi.provider, model),
       outcome: 'success',
       promptChars: aiPrompt.length,
       responseChars: answer.length,
@@ -4988,7 +5215,7 @@ async function handleAiChatRequest(
 
     writeJson(response, 200, {
       response: answer,
-      provider: config.aiProvider,
+      provider: activeAi.provider,
       model,
       quota: buildAiQuotaPayload(model),
       historyText: saved?.ok ? saved.text : undefined,
@@ -5004,9 +5231,9 @@ async function handleAiChatRequest(
       message: error instanceof Error ? error.message : String(error),
     });
     aiUsage.record({
-      provider: config.aiProvider,
+      provider: activeAi.provider,
       modelId: model,
-      modelLabel: getAiModelLabel(config.aiProvider, model),
+      modelLabel: getAiModelLabel(activeAi.provider, model),
       outcome: 'failed',
       promptChars: aiPrompt.length,
     });

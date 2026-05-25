@@ -1,10 +1,11 @@
 import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import { useState } from 'react'
-import type { AdminAiSettings, AdminOpenAiReasoningEffort, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
+import type { AdminFeedbackProviderConfig, AdminOpenAiReasoningEffort, AdminOpenRouterConfig } from '../../../lib/ddzhilian-types'
 import type { AdminOpenAiCompatibleDetectInput, AdminOpenAiCompatibleDetectResult } from '../../../lib/use-admin'
 import {
   CLIPROXYAPI_PRESET,
+  createOpenAiFeedbackProvider,
   formatTomlString,
   isHttpBaseUrl,
   normalizeOpenAiCompatibleBaseUrl,
@@ -16,13 +17,11 @@ import { AdminConfigField } from './FormControls'
 export function CliProxyApiPresetPanel({
   settings,
   onDetectModels,
-  onProviderChange,
-  onOpenRouterFieldChange,
+  onFeedbackProviderAdd,
 }: {
   settings: AdminOpenRouterConfig
   onDetectModels: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
-  onProviderChange: (provider: AdminAiSettings['provider']) => void
-  onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
+  onFeedbackProviderAdd: (provider: AdminFeedbackProviderConfig) => void
 }) {
   const [draft, setDraft] = useState<ManualOpenAiApiDraft>(() => ({
     label: CLIPROXYAPI_PRESET.label,
@@ -132,13 +131,30 @@ export function CliProxyApiPresetPanel({
       return
     }
 
-    onProviderChange('openrouter')
-    onOpenRouterFieldChange('baseUrl', baseUrl)
-    onOpenRouterFieldChange('wireApi', draft.wireApi)
-    onOpenRouterFieldChange('reasoningEffort', draft.reasoningEffort)
-    onOpenRouterFieldChange('apiKey', apiKey)
-    onOpenRouterFieldChange('model', modelId)
-    onOpenRouterFieldChange('models', upsertOpenAiCompatibleModel(settings.models, modelId, label))
+    const displayName = 'CLIProxyAPI feedback'
+    onFeedbackProviderAdd(createOpenAiFeedbackProvider({
+      displayName,
+      note: 'feedback',
+      openai: {
+        ...settings,
+        displayName,
+        note: 'feedback',
+        baseUrl,
+        wireApi: draft.wireApi,
+        reasoningEffort: draft.reasoningEffort,
+        apiKey,
+        model: modelId,
+        models: upsertOpenAiCompatibleModel(
+          detectedModels.map((model) => ({
+            id: model.id,
+            label: model.label,
+            enabled: model.id === modelId,
+          })),
+          modelId,
+          label,
+        ),
+      },
+    }))
     setDraft((previous) => ({
       ...previous,
       label,

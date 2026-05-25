@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  type AnthropicProviderConfig,
+  type FeedbackAiProviderConfig,
   type ManagedAiModelOption,
+  type OpenAiCompatibleProviderConfig,
   type OpenAiCompatibleReasoningEffort,
   type OpenAiCompatibleWireApi,
   type ServerConfig,
@@ -15,6 +18,10 @@ const ENV_PATH = fileURLToPath(new URL('../../.env', import.meta.url));
 const defaultOpenRouterDisplayName = 'OpenRouter';
 const defaultOpenRouterHomepageUrl = 'https://openrouter.ai';
 const defaultOpenRouterBaseUrl = 'https://openrouter.ai/api/v1';
+const defaultAnthropicDisplayName = 'Anthropic';
+const defaultAnthropicBaseUrl = 'https://api.anthropic.com';
+const defaultAnthropicMaxPromptChars = 8000;
+const defaultAnthropicMaxOutputTokens = 1000;
 
 export type AdminModelToggleItem = {
   id: string;
@@ -22,8 +29,46 @@ export type AdminModelToggleItem = {
   enabled: boolean;
 };
 
+type AdminOpenAiCompatibleSnapshot = {
+  displayName: string;
+  homepageUrl: string;
+  note: string;
+  apiKey: string;
+  baseUrl: string;
+  wireApi: OpenAiCompatibleWireApi;
+  reasoningEffort: OpenAiCompatibleReasoningEffort;
+  siteUrl: string;
+  siteName: string;
+  model: string;
+  models: AdminModelToggleItem[];
+  maxPromptChars: number;
+  maxOutputTokens: number;
+};
+
+type AdminAnthropicSnapshot = {
+  baseUrl: string;
+  authToken: string;
+  model: string;
+  defaultSonnetModel: string;
+  defaultOpusModel: string;
+  defaultHaikuModel: string;
+  models: AdminModelToggleItem[];
+  maxPromptChars: number;
+  maxOutputTokens: number;
+};
+
+export type AdminFeedbackProviderSnapshot = {
+  id: string;
+  kind: 'openai-compatible' | 'anthropic';
+  displayName: string;
+  note: string;
+  createdAt: string;
+  openai?: AdminOpenAiCompatibleSnapshot;
+  anthropic?: AdminAnthropicSnapshot;
+};
+
 export type AdminAiSettingsSnapshot = {
-  provider: 'cloudflare' | 'openrouter';
+  provider: string;
   systemPrompt: string;
   cloudflare: {
     accountId: string;
@@ -35,24 +80,16 @@ export type AdminAiSettingsSnapshot = {
     maxPromptChars: number;
     maxOutputTokens: number;
   };
-  openrouter: {
-    displayName: string;
-    homepageUrl: string;
-    note: string;
-    apiKey: string;
-    baseUrl: string;
-    wireApi: OpenAiCompatibleWireApi;
-    reasoningEffort: OpenAiCompatibleReasoningEffort;
-    siteUrl: string;
-    siteName: string;
-    model: string;
-    models: AdminModelToggleItem[];
-    maxPromptChars: number;
-    maxOutputTokens: number;
-  };
+  openrouter: AdminOpenAiCompatibleSnapshot;
+  feedbackProviders: AdminFeedbackProviderSnapshot[];
 };
 
 type LegacyProviderSnapshot = {
+  id?: unknown;
+  kind?: unknown;
+  createdAt?: unknown;
+  openai?: unknown;
+  anthropic?: unknown;
   model?: unknown;
   modelsText?: unknown;
   models?: unknown;
@@ -69,6 +106,10 @@ type LegacyProviderSnapshot = {
   reasoningEffort?: unknown;
   siteUrl?: unknown;
   siteName?: unknown;
+  authToken?: unknown;
+  defaultSonnetModel?: unknown;
+  defaultOpusModel?: unknown;
+  defaultHaikuModel?: unknown;
   freeOnly?: unknown;
   dailyNeuronBudget?: unknown;
   maxPromptChars?: unknown;
@@ -81,6 +122,7 @@ type PersistedAdminConfig = {
     systemPrompt?: unknown;
     cloudflare?: LegacyProviderSnapshot;
     openrouter?: LegacyProviderSnapshot;
+    feedbackProviders?: unknown;
   };
 };
 
@@ -152,6 +194,31 @@ function normalizeSystemPrompt(value: unknown, fallback: string) {
   }
 
   return value.trim().slice(0, 20_000);
+}
+
+function normalizeFeedbackProviderId(value: unknown, index: number, usedIds: Set<string>) {
+  const raw = normalizeOptionalString(value).replace(/^feedback:/i, '');
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  const base = `feedback:${slug || `config-${index + 1}`}`;
+  let next = base;
+  let suffix = 2;
+
+  while (usedIds.has(next)) {
+    next = `${base}-${suffix.toString()}`;
+    suffix += 1;
+  }
+
+  usedIds.add(next);
+  return next;
+}
+
+function normalizeCreatedAt(value: unknown) {
+  const normalized = normalizeOptionalString(value);
+  return Number.isFinite(Date.parse(normalized)) ? normalized : new Date().toISOString();
 }
 
 function labelFromAiModelId(modelId: string) {
@@ -298,39 +365,236 @@ function ensureDefaultEnabled(
   return [...next.values()];
 }
 
+function normalizeOpenAiCompatibleSnapshot(
+  input: LegacyProviderSnapshot,
+  fallback: OpenAiCompatibleProviderConfig,
+): AdminOpenAiCompatibleSnapshot {
+  const model = normalizeOptionalString(input.model) || fallback.model;
+  const models = parseModelToggleItems(
+    input.models ?? input.modelsText,
+    model,
+    fallback.models,
+  );
+  const normalizedModel = models.some((entry) => entry.id === model)
+    ? model
+    : models.find((entry) => entry.enabled)?.id ?? models[0]?.id ?? model;
+
+  return {
+    displayName:
+      normalizeOptionalString(input.displayName) ||
+      normalizeOptionalString(input.providerName) ||
+      fallback.displayName ||
+      defaultOpenRouterDisplayName,
+    homepageUrl:
+      normalizeHomepageUrl(input.homepageUrl) ||
+      normalizeHomepageUrl(input.providerUrl) ||
+      fallback.homepageUrl ||
+      defaultOpenRouterHomepageUrl,
+    note: normalizeOptionalString(input.note).slice(0, 240),
+    apiKey: normalizeOptionalString(input.apiKey),
+    baseUrl:
+      normalizeOpenAiCompatibleBaseUrl(input.baseUrl) ||
+      fallback.baseUrl ||
+      defaultOpenRouterBaseUrl,
+    wireApi: normalizeOpenAiCompatibleWireApi(input.wireApi, fallback.wireApi),
+    reasoningEffort: normalizeOpenAiCompatibleReasoningEffort(
+      input.reasoningEffort,
+      fallback.reasoningEffort,
+    ),
+    siteUrl: normalizeOptionalString(input.siteUrl),
+    siteName: normalizeOptionalString(input.siteName) || fallback.siteName,
+    model: normalizedModel,
+    models,
+    maxPromptChars: normalizePositiveInteger(input.maxPromptChars, fallback.maxPromptChars),
+    maxOutputTokens: normalizePositiveInteger(input.maxOutputTokens, fallback.maxOutputTokens),
+  };
+}
+
+function normalizeAnthropicBaseUrl(value: unknown) {
+  return normalizeOpenAiCompatibleBaseUrl(value)
+    .replace(/\/v1\/messages$/i, '')
+    .replace(/\/messages$/i, '')
+    .replace(/\/+$/g, '');
+}
+
+function normalizeAnthropicSnapshot(
+  input: LegacyProviderSnapshot,
+  fallback?: AnthropicProviderConfig,
+): AdminAnthropicSnapshot {
+  const model =
+    normalizeOptionalString(input.model) ||
+    fallback?.model ||
+    normalizeOptionalString(input.defaultOpusModel);
+  const defaultSonnetModel =
+    normalizeOptionalString(input.defaultSonnetModel) ||
+    fallback?.defaultSonnetModel ||
+    model;
+  const defaultOpusModel =
+    normalizeOptionalString(input.defaultOpusModel) ||
+    fallback?.defaultOpusModel ||
+    model;
+  const defaultHaikuModel =
+    normalizeOptionalString(input.defaultHaikuModel) ||
+    fallback?.defaultHaikuModel ||
+    model;
+  const fallbackModels = fallback?.models ?? [];
+  const configuredModels = [
+    model,
+    defaultSonnetModel,
+    defaultOpusModel,
+    defaultHaikuModel,
+  ]
+    .filter(Boolean)
+    .map((id) => ({ id, label: labelFromAiModelId(id), enabled: true }));
+  const models = parseModelToggleItems(
+    input.models ?? input.modelsText,
+    model,
+    fallbackModels.length > 0 ? fallbackModels : configuredModels,
+  );
+  const normalizedModel = models.some((entry) => entry.id === model)
+    ? model
+    : models.find((entry) => entry.enabled)?.id ?? models[0]?.id ?? model;
+
+  return {
+    baseUrl:
+      normalizeAnthropicBaseUrl(input.baseUrl) ||
+      fallback?.baseUrl ||
+      defaultAnthropicBaseUrl,
+    authToken:
+      normalizeOptionalString(input.authToken) ||
+      fallback?.authToken ||
+      '',
+    model: normalizedModel,
+    defaultSonnetModel,
+    defaultOpusModel,
+    defaultHaikuModel,
+    models,
+    maxPromptChars: normalizePositiveInteger(
+      input.maxPromptChars,
+      fallback?.maxPromptChars ?? defaultAnthropicMaxPromptChars,
+    ),
+    maxOutputTokens: normalizePositiveInteger(
+      input.maxOutputTokens,
+      fallback?.maxOutputTokens ?? defaultAnthropicMaxOutputTokens,
+    ),
+  };
+}
+
+function normalizeFeedbackProviders(
+  value: unknown,
+  fallback: ServerConfig,
+): AdminFeedbackProviderSnapshot[] {
+  const usedIds = new Set<string>();
+
+  if (!Array.isArray(value)) {
+    return fallback.feedbackAiProviders.map((provider, index) => {
+      const id = normalizeFeedbackProviderId(provider.id, index, usedIds);
+      return provider.kind === 'anthropic'
+        ? {
+            id,
+            kind: 'anthropic',
+            displayName: provider.displayName || defaultAnthropicDisplayName,
+            note: provider.note || '',
+            createdAt: normalizeCreatedAt(provider.createdAt),
+            anthropic: normalizeAnthropicSnapshot(provider.anthropic ?? {}, provider.anthropic),
+          }
+        : {
+            id,
+            kind: 'openai-compatible',
+            displayName: provider.displayName || provider.openai?.displayName || defaultOpenRouterDisplayName,
+            note: provider.note || provider.openai?.note || '',
+            createdAt: normalizeCreatedAt(provider.createdAt),
+            openai: normalizeOpenAiCompatibleSnapshot(provider.openai ?? {}, fallback.openrouterAi),
+          };
+    });
+  }
+
+  return value.flatMap<AdminFeedbackProviderSnapshot>((entry, index) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+
+    const record = entry as LegacyProviderSnapshot;
+    const kind = record.kind === 'anthropic' || record.kind === 'openai-compatible'
+      ? record.kind
+      : record.anthropic ? 'anthropic' : 'openai-compatible';
+    const id = normalizeFeedbackProviderId(record.id, index, usedIds);
+    const createdAt = normalizeCreatedAt(record.createdAt);
+    const note = normalizeOptionalString(record.note).slice(0, 240);
+
+    if (kind === 'anthropic') {
+      const anthropicInput = ((record.anthropic ?? record) || {}) as LegacyProviderSnapshot;
+      const anthropic = normalizeAnthropicSnapshot(anthropicInput);
+      const displayName =
+        normalizeOptionalString(record.displayName) ||
+        normalizeOptionalString(record.providerName) ||
+        defaultAnthropicDisplayName;
+
+      return [{
+        id,
+        kind,
+        displayName,
+        note,
+        createdAt,
+        anthropic,
+      }];
+    }
+
+    const openaiInput = ((record.openai ?? record) || {}) as LegacyProviderSnapshot;
+    const openai = normalizeOpenAiCompatibleSnapshot(openaiInput, fallback.openrouterAi);
+    const displayName =
+      normalizeOptionalString(record.displayName) ||
+      normalizeOptionalString(record.providerName) ||
+      openai.displayName ||
+      defaultOpenRouterDisplayName;
+
+    return [{
+      id,
+      kind,
+      displayName,
+      note,
+      createdAt,
+      openai: {
+        ...openai,
+        displayName,
+        note,
+      },
+    }];
+  });
+}
+
+function normalizeActiveProvider(value: unknown, feedbackProviders: AdminFeedbackProviderSnapshot[]) {
+  const provider = normalizeOptionalString(value);
+  if (provider === 'cloudflare' || provider === 'openrouter') {
+    return provider;
+  }
+
+  if (feedbackProviders.some((entry) => entry.id === provider)) {
+    return provider;
+  }
+
+  return 'cloudflare';
+}
+
 function normalizeSnapshot(
   input: PersistedAdminConfig['ai'] | AdminAiSettingsSnapshot,
   fallback: ServerConfig,
 ): AdminAiSettingsSnapshot {
-  const provider = input?.provider === 'openrouter' ? 'openrouter' : 'cloudflare';
   const cloudflareInput = (input?.cloudflare ?? {}) as LegacyProviderSnapshot;
   const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
   const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
-  const openrouterModel = normalizeOptionalString(openrouterInput.model) || fallback.openrouterAi.model;
-  const openrouterDisplayName =
-    normalizeOptionalString(openrouterInput.displayName) ||
-    normalizeOptionalString(openrouterInput.providerName) ||
-    fallback.openrouterAi.displayName ||
-    defaultOpenRouterDisplayName;
   const cloudflareModels = parseModelToggleItems(
     cloudflareInput.models ?? cloudflareInput.modelsText,
     cloudflareModel,
     fallback.cloudflareAi.models,
   );
-  const openrouterModels = parseModelToggleItems(
-    openrouterInput.models ?? openrouterInput.modelsText,
-    openrouterModel,
-    fallback.openrouterAi.models,
-  );
   const normalizedCloudflareModel = cloudflareModels.some((model) => model.id === cloudflareModel)
     ? cloudflareModel
     : cloudflareModels.find((model) => model.enabled)?.id ?? cloudflareModels[0]?.id ?? cloudflareModel;
-  const normalizedOpenrouterModel = openrouterModels.some((model) => model.id === openrouterModel)
-    ? openrouterModel
-    : openrouterModels.find((model) => model.enabled)?.id ?? openrouterModels[0]?.id ?? openrouterModel;
+  const feedbackProviders = normalizeFeedbackProviders(input?.feedbackProviders, fallback);
 
   return {
-    provider,
+    provider: normalizeActiveProvider(input?.provider, feedbackProviders),
     systemPrompt: normalizeSystemPrompt(input?.systemPrompt, fallback.aiSystemPrompt),
     cloudflare: {
       accountId: normalizeOptionalString(cloudflareInput.accountId),
@@ -351,40 +615,8 @@ function normalizeSnapshot(
         fallback.cloudflareAi.maxOutputTokens,
       ),
     },
-    openrouter: {
-      displayName: openrouterDisplayName,
-      homepageUrl:
-        normalizeHomepageUrl(openrouterInput.homepageUrl) ||
-        normalizeHomepageUrl(openrouterInput.providerUrl) ||
-        fallback.openrouterAi.homepageUrl ||
-        defaultOpenRouterHomepageUrl,
-      note: normalizeOptionalString(openrouterInput.note).slice(0, 240),
-      apiKey: normalizeOptionalString(openrouterInput.apiKey),
-      baseUrl:
-        normalizeOpenAiCompatibleBaseUrl(openrouterInput.baseUrl) ||
-        fallback.openrouterAi.baseUrl ||
-        defaultOpenRouterBaseUrl,
-      wireApi: normalizeOpenAiCompatibleWireApi(
-        openrouterInput.wireApi,
-        fallback.openrouterAi.wireApi,
-      ),
-      reasoningEffort: normalizeOpenAiCompatibleReasoningEffort(
-        openrouterInput.reasoningEffort,
-        fallback.openrouterAi.reasoningEffort,
-      ),
-      siteUrl: normalizeOptionalString(openrouterInput.siteUrl),
-      siteName: normalizeOptionalString(openrouterInput.siteName) || fallback.openrouterAi.siteName,
-      model: normalizedOpenrouterModel,
-      models: openrouterModels,
-      maxPromptChars: normalizePositiveInteger(
-        openrouterInput.maxPromptChars,
-        fallback.openrouterAi.maxPromptChars,
-      ),
-      maxOutputTokens: normalizePositiveInteger(
-        openrouterInput.maxOutputTokens,
-        fallback.openrouterAi.maxOutputTokens,
-      ),
-    },
+    openrouter: normalizeOpenAiCompatibleSnapshot(openrouterInput, fallback.openrouterAi),
+    feedbackProviders,
   };
 }
 
@@ -394,6 +626,114 @@ function toManagedOptions(models: AdminModelToggleItem[]): ManagedAiModelOption[
     label: model.label,
     enabled: model.enabled,
   }));
+}
+
+function toAdminOpenAiSnapshot(input: OpenAiCompatibleProviderConfig): AdminOpenAiCompatibleSnapshot {
+  return {
+    displayName: input.displayName,
+    homepageUrl: input.homepageUrl,
+    note: input.note,
+    apiKey: input.apiKey ?? '',
+    baseUrl: input.baseUrl,
+    wireApi: input.wireApi,
+    reasoningEffort: input.reasoningEffort,
+    siteUrl: input.siteUrl ?? '',
+    siteName: input.siteName,
+    model: input.model,
+    models: input.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      enabled: model.enabled !== false,
+    })),
+    maxPromptChars: input.maxPromptChars,
+    maxOutputTokens: input.maxOutputTokens,
+  };
+}
+
+function toAdminAnthropicSnapshot(input: AnthropicProviderConfig): AdminAnthropicSnapshot {
+  return {
+    baseUrl: input.baseUrl,
+    authToken: input.authToken ?? '',
+    model: input.model,
+    defaultSonnetModel: input.defaultSonnetModel,
+    defaultOpusModel: input.defaultOpusModel,
+    defaultHaikuModel: input.defaultHaikuModel,
+    models: input.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      enabled: model.enabled !== false,
+    })),
+    maxPromptChars: input.maxPromptChars,
+    maxOutputTokens: input.maxOutputTokens,
+  };
+}
+
+function toRuntimeOpenAiConfig(input: AdminOpenAiCompatibleSnapshot): OpenAiCompatibleProviderConfig {
+  return {
+    displayName: input.displayName,
+    homepageUrl: input.homepageUrl,
+    note: input.note,
+    apiKey: input.apiKey || undefined,
+    baseUrl: input.baseUrl,
+    wireApi: input.wireApi,
+    reasoningEffort: input.reasoningEffort,
+    siteUrl: input.siteUrl || undefined,
+    siteName: input.siteName,
+    model: input.model,
+    models: toManagedOptions(input.models),
+    maxPromptChars: input.maxPromptChars,
+    maxOutputTokens: input.maxOutputTokens,
+  };
+}
+
+function toRuntimeAnthropicConfig(input: AdminAnthropicSnapshot): AnthropicProviderConfig {
+  return {
+    baseUrl: input.baseUrl,
+    authToken: input.authToken || undefined,
+    model: input.model,
+    defaultSonnetModel: input.defaultSonnetModel,
+    defaultOpusModel: input.defaultOpusModel,
+    defaultHaikuModel: input.defaultHaikuModel,
+    models: toManagedOptions(input.models),
+    maxPromptChars: input.maxPromptChars,
+    maxOutputTokens: input.maxOutputTokens,
+  };
+}
+
+function toRuntimeFeedbackProviders(input: AdminFeedbackProviderSnapshot[]): FeedbackAiProviderConfig[] {
+  return input.map((provider) => {
+    if (provider.kind === 'anthropic') {
+      return {
+        id: provider.id,
+        kind: provider.kind,
+        displayName: provider.displayName,
+        note: provider.note,
+        createdAt: provider.createdAt,
+        anthropic: toRuntimeAnthropicConfig(provider.anthropic ?? normalizeAnthropicSnapshot({})),
+      };
+    }
+
+    return {
+      id: provider.id,
+      kind: provider.kind,
+      displayName: provider.displayName,
+      note: provider.note,
+      createdAt: provider.createdAt,
+      openai: toRuntimeOpenAiConfig(provider.openai ?? normalizeOpenAiCompatibleSnapshot({}, {
+        displayName: defaultOpenRouterDisplayName,
+        homepageUrl: defaultOpenRouterHomepageUrl,
+        note: '',
+        baseUrl: defaultOpenRouterBaseUrl,
+        wireApi: 'chat_completions',
+        reasoningEffort: '',
+        siteName: 'ddzhilian',
+        model: '',
+        models: [],
+        maxPromptChars: 8000,
+        maxOutputTokens: 1000,
+      })),
+    };
+  });
 }
 
 function toEnvLine(key: string, value: string) {
@@ -480,6 +820,27 @@ export class AdminConfigRegistry {
         maxPromptChars: this.config.openrouterAi.maxPromptChars,
         maxOutputTokens: this.config.openrouterAi.maxOutputTokens,
       },
+      feedbackProviders: this.config.feedbackAiProviders.map((provider) => {
+        if (provider.kind === 'anthropic') {
+          return {
+            id: provider.id,
+            kind: provider.kind,
+            displayName: provider.displayName,
+            note: provider.note,
+            createdAt: provider.createdAt,
+            anthropic: toAdminAnthropicSnapshot(provider.anthropic ?? normalizeAnthropicSnapshot({})),
+          };
+        }
+
+        return {
+          id: provider.id,
+          kind: provider.kind,
+          displayName: provider.displayName,
+          note: provider.note,
+          createdAt: provider.createdAt,
+          openai: toAdminOpenAiSnapshot(provider.openai ?? normalizeOpenAiCompatibleSnapshot({}, this.config.openrouterAi)),
+        };
+      }),
     };
   }
 
@@ -527,6 +888,7 @@ export class AdminConfigRegistry {
     this.config.openrouterAi.models = toManagedOptions(input.openrouter.models);
     this.config.openrouterAi.maxPromptChars = input.openrouter.maxPromptChars;
     this.config.openrouterAi.maxOutputTokens = input.openrouter.maxOutputTokens;
+    this.config.feedbackAiProviders = toRuntimeFeedbackProviders(input.feedbackProviders);
   }
 
   private persist(payload: PersistedAdminConfig) {

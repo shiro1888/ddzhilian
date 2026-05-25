@@ -1,6 +1,7 @@
 import type {
   AdminAiSettings,
   AdminCloudflareConfig,
+  AdminFeedbackProviderConfig,
   AdminHistoryStats,
   AdminModelToggleItem,
   AdminModelUsage,
@@ -45,6 +46,9 @@ export function DashboardWidgetContent({
   onOpenCatalog,
   onOpenProviders,
   onOpenRouterFieldChange,
+  onFeedbackProviderAdd,
+  onFeedbackProviderChange,
+  onFeedbackProviderDelete,
   onOpenRouterModelsDetect,
   onOpenRouterModelsRefresh,
   onProviderChange,
@@ -71,6 +75,9 @@ export function DashboardWidgetContent({
   onOpenCatalog: () => void
   onOpenProviders: () => void
   onOpenRouterFieldChange: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
+  onFeedbackProviderAdd: (provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderChange: (providerId: string, provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
@@ -125,6 +132,9 @@ export function DashboardWidgetContent({
           settings={currentSettings}
           onCloudflareFieldChange={onCloudflareFieldChange}
           onOpenRouterFieldChange={onOpenRouterFieldChange}
+          onFeedbackProviderAdd={onFeedbackProviderAdd}
+          onFeedbackProviderChange={onFeedbackProviderChange}
+          onFeedbackProviderDelete={onFeedbackProviderDelete}
           onOpenRouterModelsDetect={onOpenRouterModelsDetect}
           onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
           onProviderChange={onProviderChange}

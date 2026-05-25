@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type {
   AdminAiSettings,
   AdminCloudflareConfig,
+  AdminFeedbackProviderConfig,
   AdminHistoryStats,
   AdminOnlineDeviceNameUpdate,
   AdminOnlineDevicesSnapshot,
@@ -37,6 +38,7 @@ import {
   buildKpiCards,
   buildTrendSeries,
   isAdminSection,
+  OPENAI_COMPATIBLE_PROVIDER_LABEL,
 } from './admin/constants'
 import type { AdminSection, DashboardWidgetKey } from './admin/constants'
 
@@ -78,6 +80,9 @@ type AdminStageProps = {
     field: Field,
     value: AdminOpenRouterConfig[Field],
   ) => void
+  onFeedbackProviderAdd: (provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderChange: (providerId: string, provider: AdminFeedbackProviderConfig) => void
+  onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
   onSave: () => void
@@ -121,6 +126,9 @@ export function AdminStage({
   onSystemPromptChange,
   onCloudflareFieldChange,
   onOpenRouterFieldChange,
+  onFeedbackProviderAdd,
+  onFeedbackProviderChange,
+  onFeedbackProviderDelete,
   onOpenRouterModelsDetect,
   onOpenRouterModelsRefresh,
   onSave,
@@ -147,23 +155,51 @@ export function AdminStage({
   const modelList = currentSettings
     ? currentSettings.provider === 'openrouter'
       ? currentSettings.openrouter.models
-      : currentSettings.cloudflare.models
+      : currentSettings.provider === 'cloudflare'
+        ? currentSettings.cloudflare.models
+        : currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.openai?.models ??
+          currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.anthropic?.models ??
+          []
     : []
   const defaultModel = currentSettings
     ? currentSettings.provider === 'openrouter'
       ? currentSettings.openrouter.model
-      : currentSettings.cloudflare.model
+      : currentSettings.provider === 'cloudflare'
+        ? currentSettings.cloudflare.model
+        : currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.openai?.model ??
+          currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.anthropic?.model ??
+          ''
     : ''
   const modelCatalogEntries = currentSettings
     ? [
-        ...currentSettings.cloudflare.models.map((model) => ({ ...model, apiProvider: 'cloudflare' as const })),
-        ...currentSettings.openrouter.models.map((model) => ({ ...model, apiProvider: 'openrouter' as const })),
+        ...currentSettings.cloudflare.models.map((model) => ({
+          ...model,
+          apiProvider: 'cloudflare' as const,
+          apiProviderLabel: 'Cloudflare AI',
+        })),
+        ...currentSettings.openrouter.models.map((model) => ({
+          ...model,
+          apiProvider: 'openrouter' as const,
+          apiProviderLabel: currentSettings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL,
+        })),
+        ...currentSettings.feedbackProviders.flatMap((provider) => {
+          const models = provider.openai?.models ?? provider.anthropic?.models ?? []
+          return models.map((model) => ({
+            ...model,
+            apiProvider: provider.id,
+            apiProviderLabel: provider.displayName || (provider.kind === 'anthropic' ? 'Anthropic feedback' : 'OpenAI feedback'),
+          }))
+        }),
       ]
     : []
   const catalogDefaultModels = currentSettings
     ? {
         cloudflare: currentSettings.cloudflare.model,
         openrouter: currentSettings.openrouter.model,
+        ...Object.fromEntries(currentSettings.feedbackProviders.map((provider) => [
+          provider.id,
+          provider.openai?.model ?? provider.anthropic?.model ?? '',
+        ])),
       }
     : {
         cloudflare: '',
@@ -190,6 +226,29 @@ export function AdminStage({
       return
     }
 
+    const feedbackProvider = currentSettings.feedbackProviders.find((entry) => entry.id === provider)
+    if (feedbackProvider?.openai) {
+      onFeedbackProviderChange(provider, {
+        ...feedbackProvider,
+        openai: {
+          ...feedbackProvider.openai,
+          models: feedbackProvider.openai.models.map((model) => model.id === id ? { ...model, enabled } : model),
+        },
+      })
+      return
+    }
+
+    if (feedbackProvider?.anthropic) {
+      onFeedbackProviderChange(provider, {
+        ...feedbackProvider,
+        anthropic: {
+          ...feedbackProvider.anthropic,
+          models: feedbackProvider.anthropic.models.map((model) => model.id === id ? { ...model, enabled } : model),
+        },
+      })
+      return
+    }
+
     onCloudflareFieldChange(
       'models',
       currentSettings.cloudflare.models.map((model) => model.id === id ? { ...model, enabled } : model),
@@ -203,6 +262,29 @@ export function AdminStage({
 
     if (provider === 'openrouter') {
       onOpenRouterFieldChange('model', id)
+      return
+    }
+
+    const feedbackProvider = currentSettings.feedbackProviders.find((entry) => entry.id === provider)
+    if (feedbackProvider?.openai) {
+      onFeedbackProviderChange(provider, {
+        ...feedbackProvider,
+        openai: {
+          ...feedbackProvider.openai,
+          model: id,
+        },
+      })
+      return
+    }
+
+    if (feedbackProvider?.anthropic) {
+      onFeedbackProviderChange(provider, {
+        ...feedbackProvider,
+        anthropic: {
+          ...feedbackProvider.anthropic,
+          model: id,
+        },
+      })
       return
     }
 
@@ -253,6 +335,9 @@ export function AdminStage({
       onOpenCatalog={() => setActiveSection('models')}
       onOpenProviders={() => setActiveSection('providers')}
       onOpenRouterFieldChange={onOpenRouterFieldChange}
+      onFeedbackProviderAdd={onFeedbackProviderAdd}
+      onFeedbackProviderChange={onFeedbackProviderChange}
+      onFeedbackProviderDelete={onFeedbackProviderDelete}
       onOpenRouterModelsDetect={onOpenRouterModelsDetect}
       onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
       onProviderChange={onProviderChange}
@@ -343,6 +428,9 @@ export function AdminStage({
                   onSystemPromptChange={onSystemPromptChange}
                   onCloudflareFieldChange={onCloudflareFieldChange}
                   onOpenRouterFieldChange={onOpenRouterFieldChange}
+                  onFeedbackProviderAdd={onFeedbackProviderAdd}
+                  onFeedbackProviderChange={onFeedbackProviderChange}
+                  onFeedbackProviderDelete={onFeedbackProviderDelete}
                   onOpenRouterModelsDetect={onOpenRouterModelsDetect}
                   onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
                   onProviderChange={onProviderChange}
