@@ -7067,7 +7067,7 @@ function createPublicRoom(deviceId: string) {
     };
   }
 
-  const [{ room }] = rooms.ensurePublicRooms(device.deviceId, getRestoredPublicRoomId());
+  const { room } = rooms.ensurePublicRoom(device.deviceId, getRestoredPublicRoomId());
 
   broadcastSnapshots();
 
@@ -7204,7 +7204,7 @@ function handleEvent(
         buildNetworkContext(socket.clientAddress ?? socket._socket?.remoteAddress),
       );
       cancelPendingRoomExit(device.deviceId);
-      rooms.ensurePublicRooms(device.deviceId, getRestoredPublicRoomId());
+      rooms.ensurePublicRoom(device.deviceId, getRestoredPublicRoomId());
 
       const snapshot = devices.buildSnapshot(
         device.deviceId,

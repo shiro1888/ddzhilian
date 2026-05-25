@@ -12,7 +12,7 @@ export interface Room {
   updatedAt: string;
 }
 
-export const publicRoomCount = 6;
+export const publicRoomCount = 1;
 
 function uniqueMemberIds(memberIds: string[]) {
   return [...new Set(memberIds)];
