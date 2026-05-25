@@ -46,6 +46,22 @@ export type ThemeSubmissionInput = {
   userAgent?: string;
 };
 
+export type ThemeSubmissionStoredResult = {
+  stored: true;
+  storedIn: 'supabase' | 'local' | 'local-fallback';
+  record: ThemeSubmissionRecord;
+};
+
+export type ThemeSubmissionSkippedReason = 'built-in-theme' | 'duplicate-colors';
+
+export type ThemeSubmissionSkippedResult = {
+  stored: false;
+  storedIn?: undefined;
+  skippedReason: ThemeSubmissionSkippedReason;
+};
+
+export type ThemeSubmissionRecordResult = ThemeSubmissionStoredResult | ThemeSubmissionSkippedResult;
+
 export type ThemeSubmissionRegistryOptions = {
   localFilePath: string;
   supabase?: {
@@ -74,6 +90,57 @@ type LocalThemeSubmissionStore = {
 
 const SNAPLINK_THEME_SOURCE = 'snaplink-beta';
 const DEFAULT_SNAPSHOT_LIMIT = 100;
+const SNAPSHOT_SCAN_LIMIT = 1000;
+const BUILT_IN_THEME_COLOR_KEYS = new Set([
+  { self: '#F9887F', peer: '#F5F4F1', ai: '#EFF6FF' },
+  { self: '#F9887F', peer: '#FFF4F2', ai: '#FFE8E5' },
+  { self: '#95EC69', peer: '#F2F8ED', ai: '#EAF7E1' },
+  { self: '#6EA8FE', peer: '#F3F7FF', ai: '#EAF2FF' },
+  { self: '#B7E36D', peer: '#F6FAEE', ai: '#EEF8D8' },
+  { self: '#F6B35D', peer: '#FFF7ED', ai: '#FFEED8' },
+].map(themeColorsKey));
+
+function normalizeThemeColorKeyPart(color: string) {
+  return color.trim().toUpperCase();
+}
+
+function themeColorsKey(colors: ThemeSubmissionColors) {
+  return [
+    normalizeThemeColorKeyPart(colors.self),
+    normalizeThemeColorKeyPart(colors.peer),
+    normalizeThemeColorKeyPart(colors.ai),
+  ].join('|');
+}
+
+function normalizeThemeColors(colors: ThemeSubmissionColors): ThemeSubmissionColors {
+  return {
+    self: normalizeThemeColorKeyPart(colors.self),
+    peer: normalizeThemeColorKeyPart(colors.peer),
+    ai: normalizeThemeColorKeyPart(colors.ai),
+  };
+}
+
+function isBuiltInThemeColors(colors: ThemeSubmissionColors) {
+  return BUILT_IN_THEME_COLOR_KEYS.has(themeColorsKey(colors));
+}
+
+function containsThemeColors(submissions: ThemeSubmissionRecord[], colors: ThemeSubmissionColors) {
+  const targetKey = themeColorsKey(colors);
+  return submissions.some((submission) => themeColorsKey(submission.colors) === targetKey);
+}
+
+function getReportableSubmissions(submissions: ThemeSubmissionRecord[]) {
+  const seenColorKeys = new Set<string>();
+  return submissions.filter((submission) => {
+    const colorKey = themeColorsKey(submission.colors);
+    if (BUILT_IN_THEME_COLOR_KEYS.has(colorKey) || seenColorKeys.has(colorKey)) {
+      return false;
+    }
+
+    seenColorKeys.add(colorKey);
+    return true;
+  });
+}
 
 function compareCreatedAtDesc(left: ThemeSubmissionRecord, right: ThemeSubmissionRecord) {
   const timeDiff = Date.parse(right.createdAt) - Date.parse(left.createdAt);
@@ -177,11 +244,37 @@ export class ThemeSubmissionRegistry {
     }
   }
 
-  async record(input: ThemeSubmissionInput) {
+  async record(input: ThemeSubmissionInput): Promise<ThemeSubmissionRecordResult> {
+    const colors = normalizeThemeColors(input.colors);
+    if (isBuiltInThemeColors(colors)) {
+      return {
+        stored: false,
+        skippedReason: 'built-in-theme',
+      };
+    }
+
+    if (containsThemeColors(this.localSubmissions, colors)) {
+      return {
+        stored: false,
+        skippedReason: 'duplicate-colors',
+      };
+    }
+
+    if (
+      this.supabaseClient &&
+      this.themeSubmissionsTable &&
+      await this.hasSupabaseThemeColors(colors)
+    ) {
+      return {
+        stored: false,
+        skippedReason: 'duplicate-colors',
+      };
+    }
+
     const record: ThemeSubmissionRecord = {
       submissionId: randomUUID(),
       source: input.source ?? SNAPLINK_THEME_SOURCE,
-      colors: input.colors,
+      colors,
       deviceId: input.deviceId,
       deviceName: input.deviceName,
       accountId: input.accountId,
@@ -196,6 +289,7 @@ export class ThemeSubmissionRegistry {
 
       if (!error) {
         return {
+          stored: true,
           record,
           storedIn: 'supabase' as const,
         };
@@ -208,6 +302,7 @@ export class ThemeSubmissionRegistry {
 
     await this.recordLocal(record);
     return {
+      stored: true,
       record,
       storedIn: this.supabaseClient ? 'local-fallback' as const : 'local' as const,
     };
@@ -217,41 +312,46 @@ export class ThemeSubmissionRegistry {
     const loadedAt = new Date().toISOString();
 
     if (this.supabaseClient && this.themeSubmissionsTable) {
-      const { data, count, error } = await this.supabaseClient
+      const { data, error } = await this.supabaseClient
         .from(this.themeSubmissionsTable)
-        .select('*', { count: 'exact' })
+        .select('*')
         .order('created_at', { ascending: false })
         .order('submission_id', { ascending: false })
-        .limit(limit);
+        .limit(Math.max(limit, SNAPSHOT_SCAN_LIMIT));
 
       if (!error && data) {
-        const submissions = (data as ThemeSubmissionRow[]).map(fromThemeSubmissionRow);
+        const reportableSubmissions = getReportableSubmissions(
+          (data as ThemeSubmissionRow[]).map(fromThemeSubmissionRow),
+        );
+        const submissions = reportableSubmissions.slice(0, limit);
         return {
           configured: true,
           storage: 'supabase',
           submissions,
-          stats: buildStats(submissions, count ?? submissions.length),
+          stats: buildStats(submissions, reportableSubmissions.length),
           loadedAt,
         };
       }
 
-      const fallbackSubmissions = this.getLocalSubmissions(limit);
+      const fallbackReportableSubmissions = this.getLocalReportableSubmissions();
+      const fallbackSubmissions = fallbackReportableSubmissions.slice(0, limit);
       return {
         configured: true,
         storage: 'local-fallback',
         submissions: fallbackSubmissions,
-        stats: buildStats(fallbackSubmissions, this.localSubmissions.length),
+        stats: buildStats(fallbackSubmissions, fallbackReportableSubmissions.length),
         error: error?.message ?? '主题配色提交读取失败。',
         loadedAt,
       };
     }
 
-    const submissions = this.getLocalSubmissions(limit);
+    const reportableSubmissions = this.getLocalReportableSubmissions();
+    const submissions = reportableSubmissions.slice(0, limit);
     return {
       configured: false,
       storage: 'local',
       submissions,
-      stats: buildStats(submissions, this.localSubmissions.length),
+      stats: buildStats(submissions, reportableSubmissions.length),
       loadedAt,
     };
   }
@@ -283,10 +383,32 @@ export class ThemeSubmissionRegistry {
     );
   }
 
-  private getLocalSubmissions(limit: number) {
-    return this.localSubmissions
+  private getLocalReportableSubmissions() {
+    return getReportableSubmissions(this.localSubmissions
       .slice()
-      .sort(compareCreatedAtDesc)
-      .slice(0, limit);
+      .sort(compareCreatedAtDesc));
+  }
+
+  private async hasSupabaseThemeColors(colors: ThemeSubmissionColors) {
+    if (!this.supabaseClient || !this.themeSubmissionsTable) {
+      return false;
+    }
+
+    const { data, error } = await this.supabaseClient
+      .from(this.themeSubmissionsTable)
+      .select('submission_id')
+      .ilike('self_color', colors.self)
+      .ilike('peer_color', colors.peer)
+      .ilike('ai_color', colors.ai)
+      .limit(1);
+
+    if (error) {
+      console.warn('Theme submission duplicate check failed; continuing with insert.', {
+        message: error.message,
+      });
+      return false;
+    }
+
+    return Array.isArray(data) && data.length > 0;
   }
 }

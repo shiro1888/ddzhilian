@@ -1126,7 +1126,7 @@ export function SnapLinkStage({
   }
 
   const resetThemeColors = () => {
-    applyThemeColors(snapLinkDefaultThemeColors, { collect: true })
+    applyThemeColors(snapLinkDefaultThemeColors)
   }
 
   const toggleThemePanel = () => {
@@ -1842,7 +1842,7 @@ export function SnapLinkStage({
                       key={option.label}
                       type="button"
                       className="dd-snaplink__theme-preset"
-                      onClick={() => applyThemeColors(option.colors, { collect: true })}
+                      onClick={() => applyThemeColors(option.colors)}
                     >
                       <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
                         <i style={{ background: option.colors.self }} />
