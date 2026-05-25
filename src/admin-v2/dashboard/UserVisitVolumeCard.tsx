@@ -41,6 +41,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Activity } from 'lucide-react'
 import { formatInteger } from '@/admin-v2/format'
+import { ADMIN_V2_BASE_PATH } from '@/admin-v2/config'
 import { cn } from '@/lib/utils'
 
 type WindowOption = '6' | '12' | '24'
@@ -159,7 +160,7 @@ export function UserVisitVolumeCard({
             </SelectContent>
           </Select>
           <Button asChild variant="outline" size="sm">
-            <Link prefetch={false} href="/admin-v2/users">
+            <Link prefetch={false} href={`${ADMIN_V2_BASE_PATH}/users`}>
               查看用户
             </Link>
           </Button>

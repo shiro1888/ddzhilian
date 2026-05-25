@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react'
 
-export const ADMIN_V2_BASE_PATH = '/admin-v2'
+export const ADMIN_V2_BASE_PATH = '/admin'
 export const ADMIN_V2_LOGIN_PATH = `${ADMIN_V2_BASE_PATH}/login`
 export const ADMIN_V2_DASHBOARD_PATH = `${ADMIN_V2_BASE_PATH}/dashboard`
 

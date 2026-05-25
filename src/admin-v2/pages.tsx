@@ -19,6 +19,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { AdminStateResponse } from '@/lib/ddzhilian-types'
 import {
   ADMIN_V2_DASHBOARD_PATH,
+  ADMIN_V2_BASE_PATH,
   ADMIN_V2_LOGIN_PATH,
   ADMIN_V2_SECTION_META,
   type AdminV2Section,
@@ -394,7 +395,7 @@ export function AdminV2LoginPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Badge>Phase 2</Badge>
-            <Badge variant="outline">/admin-v2</Badge>
+            <Badge variant="outline">{ADMIN_V2_BASE_PATH}</Badge>
           </div>
           <CardTitle className="mt-3 text-2xl">全新独立管理台</CardTitle>
           <CardDescription>

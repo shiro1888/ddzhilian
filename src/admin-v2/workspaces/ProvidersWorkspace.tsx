@@ -24,6 +24,7 @@ import {
   updateAdminCloudflareField,
   updateAdminOpenRouterField,
 } from '@/admin-v2/ai-draft'
+import { ADMIN_V2_BASE_PATH } from '@/admin-v2/config'
 import { adminSelectClassName, formatInteger, normalizeNonNegativeInteger } from '@/admin-v2/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -428,7 +429,7 @@ function CloudflarePanel({
         </div>
         <div className="flex items-end justify-start lg:justify-end">
           <Button asChild type="button" variant="outline">
-            <Link href="/admin-v2/models" prefetch={false}>
+            <Link href={`${ADMIN_V2_BASE_PATH}/models`} prefetch={false}>
               去 models 页管理
             </Link>
           </Button>
@@ -578,7 +579,7 @@ function OpenAiCompatiblePanel({
         </div>
         <div className="flex items-end justify-start lg:justify-end">
           <Button asChild type="button" variant="outline">
-            <Link href="/admin-v2/models" prefetch={false}>
+            <Link href={`${ADMIN_V2_BASE_PATH}/models`} prefetch={false}>
               去 models 页管理
             </Link>
           </Button>
