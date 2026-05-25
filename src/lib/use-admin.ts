@@ -50,18 +50,21 @@ export type AdminOpenAiCompatibleDetectResult = {
   failedModelCount?: number
 }
 
+export type AdminAnthropicDetectInput = {
+  baseUrl: string
+  authToken: string
+  modelId?: string
+}
+
+export type AdminAnthropicDetectResult = {
+  baseUrl: string
+  models: AdminOpenAiCompatibleDetectedModel[]
+  selectedModelId?: string
+}
+
 export type AdminOpenAiCompatibleRefreshResult = AdminOpenAiCompatibleDetectResult & {
   refreshed: boolean
   refreshedAt: string
-}
-
-export type AdminManualOpenAiApiDraft = {
-  label: string
-  baseUrl: string
-  wireApi: AdminOpenRouterConfig['wireApi']
-  reasoningEffort: AdminOpenAiReasoningEffort
-  apiKey: string
-  modelId: string
 }
 
 type UseAdminOptions = {
@@ -537,6 +540,29 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     })
   }
 
+  const handleAdminAnthropicModelsDetect = (
+    input: AdminAnthropicDetectInput,
+  ): Promise<AdminAnthropicDetectResult> => {
+    return fetch(`${resolveAdminApiBaseUrl()}/api/admin/ai-config/detect-anthropic`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    }).then(async (response) => {
+      if (!response.ok) {
+        const message = await readAdminApiError(response, '模型检测失败。')
+        pushAdminToast('error', message)
+        throw new Error(message)
+      }
+
+      const payload = await response.json() as AdminAnthropicDetectResult
+      pushAdminToast('success', `已检测到 ${payload.models.length} 个模型。`)
+      return payload
+    })
+  }
+
   const handleAdminOpenRouterModelsRefresh = (): Promise<AdminOpenAiCompatibleRefreshResult> => {
     if (!isAdminAuthenticated) {
       const message = '请先登录后台。'
@@ -872,6 +898,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     handleAdminFeedbackProviderChange,
     handleAdminFeedbackProviderDelete,
     handleAdminOpenRouterModelsDetect,
+    handleAdminAnthropicModelsDetect,
     handleAdminOpenRouterModelsRefresh,
     handleAdminSave,
     handleAdminClearHistory,

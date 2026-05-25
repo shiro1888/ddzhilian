@@ -331,7 +331,7 @@ function App() {
     handleAdminFeedbackProviderChange,
     handleAdminFeedbackProviderDelete,
     handleAdminOpenRouterModelsDetect,
-    handleAdminOpenRouterModelsRefresh,
+    handleAdminAnthropicModelsDetect,
     handleAdminSave,
     handleAdminClearHistory,
     handleAdminOnlineDeviceRename,
@@ -1599,7 +1599,7 @@ function App() {
       onFeedbackProviderChange={handleAdminFeedbackProviderChange}
       onFeedbackProviderDelete={handleAdminFeedbackProviderDelete}
       onOpenRouterModelsDetect={handleAdminOpenRouterModelsDetect}
-      onOpenRouterModelsRefresh={handleAdminOpenRouterModelsRefresh}
+      onAnthropicModelsDetect={handleAdminAnthropicModelsDetect}
       onSave={handleAdminSave}
       onClearHistory={handleAdminClearHistory}
       onOnlineDeviceRename={handleAdminOnlineDeviceRename}

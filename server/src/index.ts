@@ -160,6 +160,26 @@ type AdminOpenAiCompatibleDetectPayload = {
   wireApi?: unknown;
   reasoningEffort?: unknown;
 };
+type AnthropicModelsResponse = {
+  data?: Array<{
+    id?: unknown;
+    display_name?: unknown;
+    name?: unknown;
+  }>;
+  models?: Array<{
+    id?: unknown;
+    display_name?: unknown;
+    name?: unknown;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+type AdminAnthropicDetectPayload = {
+  baseUrl?: unknown;
+  authToken?: unknown;
+  modelId?: unknown;
+};
 type OpenAiCompatibleClientOptions = {
   baseUrl: string;
   apiKey: string;
@@ -1534,6 +1554,36 @@ function normalizeAdminOpenAiCompatibleBaseUrl(value: unknown) {
   return normalized;
 }
 
+function normalizeAdminAnthropicBaseUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/v1\/messages$/i, '')
+    .replace(/\/v1\/models$/i, '')
+    .replace(/\/messages$/i, '')
+    .replace(/\/models$/i, '')
+    .replace(/\/+$/g, '');
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 function normalizeAdminOpenAiCompatibleWireApi(
   value: unknown,
   fallback: OpenAiCompatibleWireApi,
@@ -1580,6 +1630,31 @@ function toOpenAiCompatibleModelOptions(payload: OpenAiCompatibleModelsResponse 
     models.set(id, {
       id,
       label: name || id,
+    });
+  }
+
+  return [...models.values()];
+}
+
+function toAnthropicModelOptions(payload: AnthropicModelsResponse | null) {
+  const source = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.models)
+      ? payload.models
+      : [];
+  const models = new Map<string, OpenAiCompatibleModelOption>();
+
+  for (const item of source) {
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!id) {
+      continue;
+    }
+
+    const displayName = typeof item.display_name === 'string' ? item.display_name.trim() : '';
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    models.set(id, {
+      id,
+      label: displayName || name || id,
     });
   }
 
@@ -1726,6 +1801,55 @@ async function fetchOpenAiCompatibleModelOptions(
     throw error instanceof Error
       ? error
       : new Error('模型检测失败，请检查 Base URL、API Key 和网络连通性。');
+  } finally {
+    abort.clear();
+  }
+}
+
+function buildAnthropicModelsEndpoint(baseUrl: string) {
+  const normalized = baseUrl.replace(/\/+$/g, '');
+  const suffix = normalized.endsWith('/v1') ? '/models' : '/v1/models';
+  return new URL(`${normalized}${suffix}`);
+}
+
+async function fetchAnthropicModelOptions(
+  baseUrl: string,
+  authToken: string,
+) {
+  const abort = createAbortSignal(openAiCompatibleModelListTimeoutMs);
+
+  try {
+    const modelsResponse = await fetch(buildAnthropicModelsEndpoint(baseUrl), {
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'anthropic-version': '2023-06-01',
+        'x-api-key': authToken,
+      },
+      signal: abort.signal,
+    });
+    const modelsPayload = await modelsResponse.json().catch(() => null) as AnthropicModelsResponse | null;
+
+    if (!modelsResponse.ok) {
+      throw new Error(
+        modelsPayload?.error?.message?.trim() ||
+        `模型检测失败，上游 /models 返回 ${modelsResponse.status.toString()}。`,
+      );
+    }
+
+    const models = toAnthropicModelOptions(modelsPayload);
+    if (models.length === 0) {
+      throw new Error('模型检测失败，上游 /models 没有返回可用模型。');
+    }
+
+    return models;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('模型检测超时，请检查 Base URL 是否可访问。');
+    }
+
+    throw error instanceof Error
+      ? error
+      : new Error('模型检测失败，请检查 Base URL、Token 和网络连通性。');
   } finally {
     abort.clear();
   }
@@ -4411,6 +4535,55 @@ async function handleAdminAiConfigDetect(
   }
 }
 
+async function handleAdminAnthropicConfigDetect(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = requireSuperAdmin(await authenticateAdminRequest(request, response));
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  let payload: AdminAnthropicDetectPayload;
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: 16 * 1024 });
+    payload = JSON.parse(buffer.toString('utf8')) as AdminAnthropicDetectPayload;
+  } catch {
+    writeJson(response, 400, { error: 'Invalid Anthropic detection JSON.' });
+    return;
+  }
+
+  const baseUrl = normalizeAdminAnthropicBaseUrl(payload.baseUrl);
+  const authToken = typeof payload.authToken === 'string' ? payload.authToken.trim() : '';
+  const requestedModelId = typeof payload.modelId === 'string' ? payload.modelId.trim() : '';
+
+  if (!baseUrl || !authToken) {
+    writeJson(response, 400, { error: 'Base URL 和 Token 都需要填写后才能检测模型。' });
+    return;
+  }
+
+  try {
+    const models = await fetchAnthropicModelOptions(baseUrl, authToken);
+    const selectedModelId = requestedModelId
+      ? models.find((model) => model.id === requestedModelId)?.id ?? models[0]?.id
+      : models[0]?.id;
+
+    writeJson(response, 200, {
+      ok: true,
+      baseUrl,
+      selectedModelId,
+      models,
+    });
+  } catch (error) {
+    writeJson(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : '模型检测失败，请检查 Base URL、Token 和网络连通性。',
+    });
+  }
+}
+
 async function handleAdminAiConfigRefreshModels(
   request: IncomingMessage,
   response: ServerResponse,
@@ -5958,6 +6131,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/admin/ai-config/detect' && request.method === 'POST') {
     void handleAdminAiConfigDetect(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/admin/ai-config/detect-anthropic' && request.method === 'POST') {
+    void handleAdminAnthropicConfigDetect(request, response);
     return;
   }
 

@@ -16,9 +16,10 @@ import type {
   AdminUsersSnapshot,
 } from '../../lib/ddzhilian-types'
 import type {
+  AdminAnthropicDetectInput,
+  AdminAnthropicDetectResult,
   AdminOpenAiCompatibleDetectInput,
   AdminOpenAiCompatibleDetectResult,
-  AdminOpenAiCompatibleRefreshResult,
   AdminToast,
 } from '../../lib/use-admin'
 import { AdminLogin } from './admin/AdminLogin'
@@ -84,7 +85,7 @@ type AdminStageProps = {
   onFeedbackProviderChange: (providerId: string, provider: AdminFeedbackProviderConfig) => void
   onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
-  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
+  onAnthropicModelsDetect: (input: AdminAnthropicDetectInput) => Promise<AdminAnthropicDetectResult>
   onSave: () => void
   onClearHistory: () => void
   onOnlineDeviceRename: (input: AdminOnlineDeviceNameUpdate) => Promise<void>
@@ -130,7 +131,7 @@ export function AdminStage({
   onFeedbackProviderChange,
   onFeedbackProviderDelete,
   onOpenRouterModelsDetect,
-  onOpenRouterModelsRefresh,
+  onAnthropicModelsDetect,
   onSave,
   onClearHistory,
   onOnlineDeviceRename,
@@ -339,7 +340,7 @@ export function AdminStage({
       onFeedbackProviderChange={onFeedbackProviderChange}
       onFeedbackProviderDelete={onFeedbackProviderDelete}
       onOpenRouterModelsDetect={onOpenRouterModelsDetect}
-      onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
+      onAnthropicModelsDetect={onAnthropicModelsDetect}
       onProviderChange={onProviderChange}
       onSave={onSave}
       onSetDefaultModel={updateActiveDefaultModel}
@@ -432,7 +433,7 @@ export function AdminStage({
                   onFeedbackProviderChange={onFeedbackProviderChange}
                   onFeedbackProviderDelete={onFeedbackProviderDelete}
                   onOpenRouterModelsDetect={onOpenRouterModelsDetect}
-                  onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
+                  onAnthropicModelsDetect={onAnthropicModelsDetect}
                   onProviderChange={onProviderChange}
                   onSave={onSave}
                   isSaving={isAdminSaving}

@@ -5,7 +5,6 @@ import type {
   AdminHistoryStats,
   AdminModelToggleItem,
   AdminModelUsage,
-  AdminOpenAiReasoningEffort,
   AdminOpenRouterConfig,
   AdminUsageTrendBucket,
 } from '../../../lib/ddzhilian-types'
@@ -15,26 +14,14 @@ export const MODEL_PREVIEW_LIMIT = 5
 export const USAGE_BAR_CHART_LIMIT = 3
 export const OPENAI_COMPATIBLE_PROVIDER_LABEL = 'OpenAI 兼容接口'
 export const OPENAI_COMPATIBLE_BASE_URL_PLACEHOLDER = 'https://api.openai.com/v1'
-export const CLIPROXYAPI_PRESET = {
-  label: 'CLIProxyAPI',
-  baseUrl: 'http://127.0.0.1:8317/v1',
-  wireApi: 'responses' as const,
-  apiKey: 'sk-dummy',
-  modelId: '',
-  reasoningEffort: 'high' as const,
-}
 export const ANTHROPIC_PRESET: AdminAnthropicConfig = {
-  baseUrl: 'https://token-plan-sgp.xiaomimimo.com/anthropic',
+  baseUrl: '',
   authToken: '',
-  model: 'mimo-v2.5-pro',
-  defaultSonnetModel: 'mimo-v2.5',
-  defaultOpusModel: 'mimo-v2.5-pro',
-  defaultHaikuModel: 'mimo-v2.5-omni',
-  models: [
-    { id: 'mimo-v2.5-pro', label: 'mimo-v2.5-pro', enabled: true },
-    { id: 'mimo-v2.5', label: 'mimo-v2.5', enabled: true },
-    { id: 'mimo-v2.5-omni', label: 'mimo-v2.5-omni', enabled: true },
-  ],
+  model: '',
+  defaultSonnetModel: '',
+  defaultOpusModel: '',
+  defaultHaikuModel: '',
+  models: [],
   maxPromptChars: 8000,
   maxOutputTokens: 1000,
 }
@@ -42,10 +29,7 @@ export const ANTHROPIC_PRESET: AdminAnthropicConfig = {
 export type AdminSection = 'dashboard' | 'models' | 'providers' | 'online' | 'users' | 'themes' | 'roles'
 
 export type ManualOpenAiApiDraft = {
-  label: string
   baseUrl: string
-  wireApi: AdminOpenRouterConfig['wireApi']
-  reasoningEffort: AdminOpenAiReasoningEffort
   apiKey: string
   modelId: string
 }
@@ -55,7 +39,7 @@ export type AdminOpenAiCompatibleDetectedModel = {
   label: string
 }
 
-export type ProviderConfigOption = 'params' | 'manual' | 'cliproxy' | 'anthropic'
+export type ProviderConfigOption = 'params' | 'manual' | 'anthropic'
 
 export type AdminNavIconName =
   | 'audit'
@@ -286,7 +270,7 @@ export function isAdminSection(value: unknown): value is AdminSection {
 }
 
 export function isProviderConfigOption(value: unknown): value is ProviderConfigOption {
-  return value === 'params' || value === 'manual' || value === 'cliproxy' || value === 'anthropic'
+  return value === 'params' || value === 'manual' || value === 'anthropic'
 }
 
 export function formatDateTime(value?: string) {
@@ -451,6 +435,17 @@ export function normalizeOpenAiCompatibleBaseUrl(value: string) {
     .replace(/\/+$/g, '')
 }
 
+export function normalizeAnthropicBaseUrl(value: string) {
+  return value
+    .trim()
+    .replace(/\/+$/g, '')
+    .replace(/\/v1\/messages$/i, '')
+    .replace(/\/v1\/models$/i, '')
+    .replace(/\/messages$/i, '')
+    .replace(/\/models$/i, '')
+    .replace(/\/+$/g, '')
+}
+
 export function isHttpBaseUrl(value: string) {
   try {
     const parsed = new URL(value)
@@ -458,10 +453,6 @@ export function isHttpBaseUrl(value: string) {
   } catch {
     return false
   }
-}
-
-export function formatTomlString(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 export function upsertOpenAiCompatibleModel(

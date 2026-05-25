@@ -2,61 +2,68 @@ import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import { useState } from 'react'
 import type { AdminAnthropicConfig, AdminFeedbackProviderConfig } from '../../../lib/ddzhilian-types'
+import type { AdminAnthropicDetectResult } from '../../../lib/use-admin'
 import {
   ANTHROPIC_PRESET,
   createAnthropicFeedbackProvider,
   isHttpBaseUrl,
   labelFromOpenAiModelId,
+  normalizeAnthropicBaseUrl,
 } from './constants'
+import type { AdminOpenAiCompatibleDetectedModel } from './constants'
 import { AdminConfigField } from './FormControls'
 
 type AnthropicJsonConfig = {
   ANTHROPIC_BASE_URL?: unknown
   ANTHROPIC_AUTH_TOKEN?: unknown
   ANTHROPIC_MODEL?: unknown
-  ANTHROPIC_DEFAULT_SONNET_MODEL?: unknown
-  ANTHROPIC_DEFAULT_OPUS_MODEL?: unknown
-  ANTHROPIC_DEFAULT_HAIKU_MODEL?: unknown
 }
 
 function normalizeJsonString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function buildAnthropicModels(draft: AdminAnthropicConfig) {
-  const models = [
-    draft.model,
-    draft.defaultSonnetModel,
-    draft.defaultOpusModel,
-    draft.defaultHaikuModel,
-  ].filter(Boolean)
-  const uniqueModels = new Map<string, { id: string; label: string; enabled: boolean }>()
-
-  for (const model of models) {
-    uniqueModels.set(model, {
-      id: model,
-      label: labelFromOpenAiModelId(model),
-      enabled: true,
-    })
+function buildAnthropicModels(
+  modelId: string,
+  detectedModels: AdminOpenAiCompatibleDetectedModel[],
+) {
+  if (detectedModels.length > 0) {
+    return detectedModels.map((model) => ({
+      id: model.id,
+      label: model.label || labelFromOpenAiModelId(model.id),
+      enabled: model.id === modelId,
+    }))
   }
 
-  return [...uniqueModels.values()]
+  const label = detectedModels.find((model) => model.id === modelId)?.label ?? labelFromOpenAiModelId(modelId)
+  return [{
+    id: modelId,
+    label,
+    enabled: true,
+  }]
 }
 
 export function AnthropicPresetPanel({
+  onDetectModels,
   onFeedbackProviderAdd,
 }: {
+  onDetectModels: (input: { baseUrl: string; authToken: string }) => Promise<AdminAnthropicDetectResult>
   onFeedbackProviderAdd: (provider: AdminFeedbackProviderConfig) => void
 }) {
   const [draft, setDraft] = useState<AdminAnthropicConfig>(ANTHROPIC_PRESET)
   const [jsonDraft, setJsonDraft] = useState('')
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+  const [detectedModels, setDetectedModels] = useState<AdminOpenAiCompatibleDetectedModel[]>([])
+  const [isDetectingModels, setIsDetectingModels] = useState(false)
 
   const updateDraft = <Field extends keyof AdminAnthropicConfig>(field: Field, value: AdminAnthropicConfig[Field]) => {
     setDraft((previous) => ({
       ...previous,
       [field]: value,
     }))
+    if (field === 'baseUrl' || field === 'authToken') {
+      setDetectedModels([])
+    }
     setMessage(null)
   }
 
@@ -68,23 +75,58 @@ export function AnthropicPresetPanel({
         baseUrl: normalizeJsonString(payload.ANTHROPIC_BASE_URL) || previous.baseUrl,
         authToken: normalizeJsonString(payload.ANTHROPIC_AUTH_TOKEN) || previous.authToken,
         model: normalizeJsonString(payload.ANTHROPIC_MODEL) || previous.model,
-        defaultSonnetModel: normalizeJsonString(payload.ANTHROPIC_DEFAULT_SONNET_MODEL) || previous.defaultSonnetModel,
-        defaultOpusModel: normalizeJsonString(payload.ANTHROPIC_DEFAULT_OPUS_MODEL) || previous.defaultOpusModel,
-        defaultHaikuModel: normalizeJsonString(payload.ANTHROPIC_DEFAULT_HAIKU_MODEL) || previous.defaultHaikuModel,
       }))
+      setDetectedModels([])
       setMessage({ tone: 'success', text: '已读取 Anthropic JSON 配置，请确认后增加配置。' })
     } catch {
       setMessage({ tone: 'error', text: 'Anthropic JSON 格式不正确。' })
     }
   }
 
+  const detectModels = () => {
+    const baseUrl = normalizeAnthropicBaseUrl(draft.baseUrl)
+    const authToken = draft.authToken.trim()
+
+    if (!baseUrl || !authToken) {
+      setMessage({ tone: 'error', text: 'Base URL 和 Token 都需要填写后才能检测模型。' })
+      return
+    }
+
+    if (!isHttpBaseUrl(baseUrl)) {
+      setMessage({ tone: 'error', text: 'Base URL 需要是 http 或 https 地址。' })
+      return
+    }
+
+    setIsDetectingModels(true)
+    setMessage(null)
+
+    void onDetectModels({ baseUrl, authToken })
+      .then((result) => {
+        const selectedModelId = result.selectedModelId ?? result.models[0]?.id ?? ''
+        setDetectedModels(result.models)
+        setDraft((previous) => ({
+          ...previous,
+          baseUrl: result.baseUrl,
+          model: selectedModelId || previous.model,
+        }))
+        setMessage({ tone: 'success', text: `检测到 ${result.models.length.toString()} 个模型，可选择或继续手动填写模型名。` })
+      })
+      .catch((error) => {
+        setDetectedModels([])
+        setMessage({ tone: 'error', text: error instanceof Error ? error.message : '模型检测失败。' })
+      })
+      .finally(() => {
+        setIsDetectingModels(false)
+      })
+  }
+
   const addAnthropicConfig = () => {
-    const baseUrl = draft.baseUrl.trim().replace(/\/+$/g, '')
+    const baseUrl = normalizeAnthropicBaseUrl(draft.baseUrl)
     const authToken = draft.authToken.trim()
     const model = draft.model.trim()
 
     if (!baseUrl || !authToken || !model) {
-      setMessage({ tone: 'error', text: 'Base URL、Auth Token 和默认模型都需要填写。' })
+      setMessage({ tone: 'error', text: 'Base URL、Token 和模型名都需要填写。' })
       return
     }
 
@@ -98,21 +140,22 @@ export function AnthropicPresetPanel({
       baseUrl,
       authToken,
       model,
-      defaultSonnetModel: draft.defaultSonnetModel.trim() || model,
-      defaultOpusModel: draft.defaultOpusModel.trim() || model,
-      defaultHaikuModel: draft.defaultHaikuModel.trim() || model,
+      defaultSonnetModel: model,
+      defaultOpusModel: model,
+      defaultHaikuModel: model,
+      models: buildAnthropicModels(model, detectedModels),
     }
+    const displayName = labelFromOpenAiModelId(model) || 'Anthropic feedback'
     onFeedbackProviderAdd(createAnthropicFeedbackProvider({
-      displayName: 'Anthropic feedback',
+      displayName,
       note: 'feedback',
-      anthropic: {
-        ...anthropic,
-        models: buildAnthropicModels(anthropic),
-      },
+      anthropic,
     }))
     setDraft((previous) => ({
       ...previous,
+      baseUrl,
       authToken: '',
+      model,
     }))
     setMessage({ tone: 'success', text: '已增加 Anthropic feedback 配置，点击保存配置后生效。' })
   }
@@ -123,7 +166,7 @@ export function AnthropicPresetPanel({
         <div>
           <p>Anthropic 接入</p>
           <h3>Anthropic feedback</h3>
-          <span>独立追加 Anthropic 协议配置，不覆盖现有 shiro 或 Cloudflare AI。</span>
+          <span>只填写 Base URL、Token 和模型名；检测模型列表只是辅助。</span>
         </div>
       </div>
       <AdminConfigField label="JSON 配置" wide>
@@ -143,28 +186,40 @@ export function AnthropicPresetPanel({
       </div>
       <div className="dd-admin-config-form">
         <AdminConfigField label="Base URL" wide>
-          <Input type="text" value={draft.baseUrl} onChange={(event) => updateDraft('baseUrl', event.currentTarget.value)} />
+          <Input
+            type="text"
+            value={draft.baseUrl}
+            placeholder="https://api.anthropic.com"
+            onChange={(event) => updateDraft('baseUrl', event.currentTarget.value)}
+          />
         </AdminConfigField>
-        <AdminConfigField label="Auth Token" wide>
-          <Input type="password" value={draft.authToken} onChange={(event) => updateDraft('authToken', event.currentTarget.value)} />
+        <AdminConfigField label="Token" wide>
+          <Input
+            type="password"
+            value={draft.authToken}
+            onChange={(event) => updateDraft('authToken', event.currentTarget.value)}
+          />
         </AdminConfigField>
-        <AdminConfigField label="默认模型">
-          <Input type="text" value={draft.model} onChange={(event) => updateDraft('model', event.currentTarget.value)} />
-        </AdminConfigField>
-        <AdminConfigField label="Sonnet 默认">
-          <Input type="text" value={draft.defaultSonnetModel} onChange={(event) => updateDraft('defaultSonnetModel', event.currentTarget.value)} />
-        </AdminConfigField>
-        <AdminConfigField label="Opus 默认">
-          <Input type="text" value={draft.defaultOpusModel} onChange={(event) => updateDraft('defaultOpusModel', event.currentTarget.value)} />
-        </AdminConfigField>
-        <AdminConfigField label="Haiku 默认">
-          <Input type="text" value={draft.defaultHaikuModel} onChange={(event) => updateDraft('defaultHaikuModel', event.currentTarget.value)} />
-        </AdminConfigField>
-        <AdminConfigField label="最大 Prompt 字符">
-          <Input type="number" min="1" value={draft.maxPromptChars} onChange={(event) => updateDraft('maxPromptChars', Number(event.currentTarget.value) || 1)} />
-        </AdminConfigField>
-        <AdminConfigField label="最大输出 Token">
-          <Input type="number" min="1" value={draft.maxOutputTokens} onChange={(event) => updateDraft('maxOutputTokens', Number(event.currentTarget.value) || 1)} />
+        <AdminConfigField label="模型名" wide>
+          {detectedModels.length > 0 ? (
+            <select
+              value={draft.model}
+              onChange={(event) => updateDraft('model', event.target.value)}
+            >
+              {detectedModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label === model.id ? model.id : `${model.label} (${model.id})`}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              type="text"
+              value={draft.model}
+              placeholder="claude-sonnet-4-5"
+              onChange={(event) => updateDraft('model', event.currentTarget.value)}
+            />
+          )}
         </AdminConfigField>
       </div>
       <div className="dd-admin-manual-api-actions">
@@ -173,9 +228,12 @@ export function AnthropicPresetPanel({
             {message.text}
           </p>
         ) : (
-          <p className="dd-admin-manual-api-message">保存前只写入当前后台草稿，不会改动服务器用户目录。</p>
+          <p className="dd-admin-manual-api-message">可直接手动填写模型名；检测模型列表不是必需步骤。</p>
         )}
         <div className="dd-admin-manual-api-buttons">
+          <Button type="button" className="dd-button dd-button--dark" disabled={isDetectingModels} onClick={detectModels}>
+            {isDetectingModels ? '检测中...' : '检测模型列表'}
+          </Button>
           <Button type="button" className="dd-button dd-button--primary" onClick={addAnthropicConfig}>
             增加配置
           </Button>

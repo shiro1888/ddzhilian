@@ -9,9 +9,10 @@ import type {
   AdminUsageSnapshot,
 } from '../../../lib/ddzhilian-types'
 import type {
+  AdminAnthropicDetectInput,
+  AdminAnthropicDetectResult,
   AdminOpenAiCompatibleDetectInput,
   AdminOpenAiCompatibleDetectResult,
-  AdminOpenAiCompatibleRefreshResult,
 } from '../../../lib/use-admin'
 import { DangerZonePanel } from './DangerZonePanel'
 import type { DashboardWidgetKey, KpiCard, TrendPoint } from './constants'
@@ -50,7 +51,7 @@ export function DashboardWidgetContent({
   onFeedbackProviderChange,
   onFeedbackProviderDelete,
   onOpenRouterModelsDetect,
-  onOpenRouterModelsRefresh,
+  onAnthropicModelsDetect,
   onProviderChange,
   onSave,
   onSetDefaultModel,
@@ -79,7 +80,7 @@ export function DashboardWidgetContent({
   onFeedbackProviderChange: (providerId: string, provider: AdminFeedbackProviderConfig) => void
   onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
-  onOpenRouterModelsRefresh: () => Promise<AdminOpenAiCompatibleRefreshResult>
+  onAnthropicModelsDetect: (input: AdminAnthropicDetectInput) => Promise<AdminAnthropicDetectResult>
   onProviderChange: (provider: AdminAiSettings['provider']) => void
   onSave: () => void
   onSetDefaultModel: (id: string) => void
@@ -136,7 +137,7 @@ export function DashboardWidgetContent({
           onFeedbackProviderChange={onFeedbackProviderChange}
           onFeedbackProviderDelete={onFeedbackProviderDelete}
           onOpenRouterModelsDetect={onOpenRouterModelsDetect}
-          onOpenRouterModelsRefresh={onOpenRouterModelsRefresh}
+          onAnthropicModelsDetect={onAnthropicModelsDetect}
           onProviderChange={onProviderChange}
           onSave={onSave}
           isSaving={isAdminSaving}
