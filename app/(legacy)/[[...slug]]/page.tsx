@@ -10,7 +10,6 @@ export function generateStaticParams() {
     { slug: ['chat'] },
     { slug: ['image'] },
     { slug: ['sessions'] },
-    { slug: ['admin'] },
   ]
 }
 

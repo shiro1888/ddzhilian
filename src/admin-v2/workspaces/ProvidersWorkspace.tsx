@@ -340,6 +340,16 @@ function RuntimeSummaryPanel({
       modelCount: savedSettings.openrouter.models.length,
       current: aiDraft.provider === 'openrouter',
     },
+    ...savedSettings.feedbackProviders.map((provider) => ({
+      key: provider.id,
+      title: provider.displayName.trim() || (provider.kind === 'anthropic' ? 'Anthropic feedback' : 'OpenAI feedback'),
+      configured: provider.openai
+        ? providerConfigured(provider.openai)
+        : Boolean(provider.anthropic?.baseUrl.trim() && provider.anthropic?.authToken.trim()),
+      defaultModel: provider.openai?.model ?? provider.anthropic?.model ?? '',
+      modelCount: provider.openai?.models.length ?? provider.anthropic?.models.length ?? 0,
+      current: aiDraft.provider === provider.id,
+    })),
   ]
 
   return (
@@ -1166,7 +1176,7 @@ export function AdminV2ProvidersWorkspace({
             <div>
               <CardTitle>供应商配置</CardTitle>
               <CardDescription>
-                这页只保留主运行供应商链路。`systemPrompt` 已剥离到 AI 策略页，模型启用与默认值去 models 页管理。
+                在这里统一管理主运行供应商、各供应商连接配置，以及新增反馈供应商配置。
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
