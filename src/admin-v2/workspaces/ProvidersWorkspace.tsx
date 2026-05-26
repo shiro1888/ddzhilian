@@ -1300,7 +1300,7 @@ export function AdminV2ProvidersWorkspace({
 
             {selectedDetail !== 'runtime' && selectedDetail !== 'cloudflare' && selectedDetail !== 'openai' ? (
               (() => {
-                const provider = savedSettings.feedbackProviders.find((item) => item.id === selectedDetail)
+                const provider = aiDraft.feedbackProviders.find((item) => item.id === selectedDetail)
                 if (!provider) {
                   return null
                 }
