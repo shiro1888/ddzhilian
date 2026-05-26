@@ -87,6 +87,13 @@ export function updateAdminAiSystemPrompt(settings: AdminAiSettings, systemPromp
   }
 }
 
+export function addAdminFeedbackProvider(settings: AdminAiSettings, provider: AdminFeedbackProviderConfig) {
+  return {
+    ...settings,
+    feedbackProviders: [...settings.feedbackProviders, provider],
+  }
+}
+
 export function updateAdminCloudflareField<Field extends keyof AdminAiSettings['cloudflare']>(
   settings: AdminAiSettings,
   field: Field,

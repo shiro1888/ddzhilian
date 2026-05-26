@@ -617,6 +617,7 @@ export function AdminV2WorkspacePage({
     updateAiDraft,
     resetAiDraft,
     saveAiDraft,
+    detectAnthropicModels,
     refreshOpenAiCompatibleModels,
     detectOpenAiCompatibleModels,
     refreshOnlineDevices,
@@ -672,6 +673,7 @@ export function AdminV2WorkspacePage({
         onAutosave={(draftOverride, options) => {
           return saveAiDraft(draftOverride, options)
         }}
+        onDetectAnthropicModels={detectAnthropicModels}
         onDetectOpenAiCompatibleModels={detectOpenAiCompatibleModels}
       />
     )

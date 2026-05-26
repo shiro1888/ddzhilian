@@ -6,24 +6,36 @@ import {
   Bot,
   Cloud,
   KeyRound,
+  Plus,
   RefreshCcw,
   SearchCheck,
 } from 'lucide-react'
 import type {
   AdminAiSettings,
   AdminCloudflareConfig,
+  AdminFeedbackProviderConfig,
   AdminOpenRouterConfig,
 } from '@/lib/ddzhilian-types'
 import type {
+  AdminAnthropicDetectResult,
   AdminOpenAiCompatibleDetectInput,
   AdminOpenAiCompatibleDetectResult,
 } from '@/admin-v2/api'
 import {
+  addAdminFeedbackProvider,
+  applyAnthropicDetectionToAdminSettings,
   applyOpenAiDetectionToAdminSettings,
+  removeAdminFeedbackProvider,
   updateAdminAiProvider,
   updateAdminCloudflareField,
   updateAdminOpenRouterField,
 } from '@/admin-v2/ai-draft'
+import {
+  ANTHROPIC_PRESET,
+  createAnthropicFeedbackProvider,
+  createOpenAiFeedbackProvider,
+  labelFromOpenAiModelId,
+} from '@/app/components/admin/constants'
 import { ADMIN_V2_BASE_PATH } from '@/admin-v2/config'
 import { adminSelectClassName, formatInteger, normalizeNonNegativeInteger } from '@/admin-v2/format'
 import { Badge } from '@/components/ui/badge'
@@ -35,11 +47,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-type ProviderDetailKey = 'runtime' | 'cloudflare' | 'openai'
+type ProviderDetailKey = 'runtime' | 'cloudflare' | 'openai' | string
 
 type DetectionState = {
   tone: 'success' | 'error'
@@ -57,6 +75,7 @@ type ProviderWorkspaceProps = {
   onClearError: () => void
   onChange: (updater: (current: AdminAiSettings) => AdminAiSettings) => void
   onAutosave: (draftOverride?: AdminAiSettings, options?: { showSuccessToast?: boolean }) => Promise<boolean>
+  onDetectAnthropicModels: (input: { baseUrl: string; authToken: string }) => Promise<AdminAnthropicDetectResult>
   onDetectOpenAiCompatibleModels: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onRefreshModels: () => Promise<void>
   isRefreshingModels: boolean
@@ -506,6 +525,7 @@ function OpenAiCompatiblePanel({
   aiDraft,
   savedSettings,
   disabled,
+  statusAction,
   onClearError,
   detectionState,
   isRefreshingModels,
@@ -518,6 +538,7 @@ function OpenAiCompatiblePanel({
   aiDraft: AdminAiSettings
   savedSettings: AdminAiSettings
   disabled: boolean
+  statusAction?: ReactNode
   onClearError: () => void
   detectionState: DetectionState
   isRefreshingModels: boolean
@@ -538,10 +559,20 @@ function OpenAiCompatiblePanel({
         <div className="flex gap-2">
           <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
           <Badge variant="outline">模型 {formatInteger(savedSettings.openrouter.models.length)}</Badge>
+          {statusAction}
         </div>
       )}
     >
       <div className="grid gap-4 lg:grid-cols-2">
+        <AutoSaveTextField
+          label="显示名称"
+          value={aiDraft.openrouter.displayName}
+          savedValue={savedSettings.openrouter.displayName}
+          disabled={disabled}
+          onChange={(value) => onChangeField('displayName', value)}
+          onAutosave={() => onAutoSave()}
+          onClearError={onClearError}
+        />
         <AutoSaveTextField
           label="Base URL"
           type="url"
@@ -664,25 +695,6 @@ function OpenAiCompatiblePanel({
             </select>
           </Field>
           <AutoSaveTextField
-            label="Site URL"
-            type="url"
-            value={aiDraft.openrouter.siteUrl}
-            savedValue={savedSettings.openrouter.siteUrl}
-            disabled={disabled}
-            onChange={(value) => onChangeField('siteUrl', value)}
-            onAutosave={() => onAutoSave()}
-            onClearError={onClearError}
-          />
-          <AutoSaveTextField
-            label="Site Name"
-            value={aiDraft.openrouter.siteName}
-            savedValue={savedSettings.openrouter.siteName}
-            disabled={disabled}
-            onChange={(value) => onChangeField('siteName', value)}
-            onAutosave={() => onAutoSave()}
-            onClearError={onClearError}
-          />
-          <AutoSaveTextField
             label="主页链接"
             type="url"
             value={aiDraft.openrouter.homepageUrl}
@@ -732,6 +744,303 @@ function OpenAiCompatiblePanel({
   )
 }
 
+function FeedbackProviderPanel({
+  provider,
+  disabled,
+  onClearError,
+  onChange,
+  onDelete,
+  onAutoSave,
+  onDetectOpenAiCompatibleModels,
+  onDetectAnthropicModels,
+}: Readonly<{
+  provider: AdminFeedbackProviderConfig
+  disabled: boolean
+  onClearError: () => void
+  onChange: (updater: (current: AdminFeedbackProviderConfig) => AdminFeedbackProviderConfig) => void
+  onDelete: () => void
+  onAutoSave: () => void
+  onDetectOpenAiCompatibleModels: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
+  onDetectAnthropicModels: (input: { baseUrl: string; authToken: string }) => Promise<AdminAnthropicDetectResult>
+}>) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [openAiDetectionState, setOpenAiDetectionState] = useState<DetectionState>(null)
+  const [anthropicMessage, setAnthropicMessage] = useState<string | null>(null)
+
+  if (provider.openai) {
+    return (
+      <OpenAiCompatiblePanel
+        aiDraft={{ openrouter: provider.openai } as AdminAiSettings}
+        savedSettings={{ openrouter: provider.openai } as AdminAiSettings}
+        disabled={disabled}
+        statusAction={(
+          <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
+            删除配置
+          </Button>
+        )}
+        onClearError={onClearError}
+        detectionState={openAiDetectionState}
+        isRefreshingModels={false}
+        onDetect={() => {
+          onClearError()
+          setOpenAiDetectionState(null)
+          void onDetectOpenAiCompatibleModels({
+            baseUrl: provider.openai!.baseUrl,
+            apiKey: provider.openai!.apiKey,
+            modelId: provider.openai!.model || undefined,
+            wireApi: provider.openai!.wireApi,
+            reasoningEffort: provider.openai!.reasoningEffort,
+          })
+            .then((result) => {
+              setOpenAiDetectionState({
+                tone: 'success',
+                message: `已从 ${result.baseUrl} 读取模型列表。`,
+                result,
+              })
+            })
+            .catch((nextError) => {
+              setOpenAiDetectionState({
+                tone: 'error',
+                message: nextError instanceof Error ? nextError.message : '模型检测失败。',
+                result: null,
+              })
+            })
+        }}
+        onApplyDetectedModels={() => {
+          if (!openAiDetectionState?.result) {
+            return
+          }
+
+          const detectedOpenAi = applyOpenAiDetectionToAdminSettings(
+            {
+              provider: 'openrouter',
+              systemPrompt: '',
+              cloudflare: {} as AdminCloudflareConfig,
+              openrouter: {} as AdminOpenRouterConfig,
+              feedbackProviders: [provider],
+            },
+            provider.id,
+            openAiDetectionState.result,
+          ).feedbackProviders[0]?.openai
+
+          onChange((current) => ({
+            ...current,
+            openai: current.openai && detectedOpenAi ? detectedOpenAi : current.openai,
+          }))
+          onAutoSave()
+        }}
+        onRefreshModels={() => undefined}
+        onChangeField={(field, value) => {
+          onChange((current) => ({
+            ...current,
+            displayName: field === 'displayName' ? String(value).trim() || current.displayName : current.displayName,
+            note: field === 'note' ? String(value) : current.note,
+            openai: current.openai
+              ? {
+                  ...current.openai,
+                  [field]: value,
+                }
+              : current.openai,
+          }))
+        }}
+        onAutoSave={onAutoSave}
+      />
+    )
+  }
+
+  if (!provider.anthropic) {
+    return null
+  }
+
+  return (
+    <DetailSection
+      title={provider.displayName || 'Anthropic feedback'}
+      description="高频区只保留连接与鉴权，模型启用和默认值只读展示。"
+      status={(
+        <div className="flex gap-2">
+          <Badge variant={provider.anthropic.baseUrl.trim() && provider.anthropic.authToken.trim() ? 'secondary' : 'outline'}>
+            {buildConfiguredLabel(Boolean(provider.anthropic.baseUrl.trim() && provider.anthropic.authToken.trim()))}
+          </Badge>
+          <Badge variant="outline">模型 {formatInteger(provider.anthropic.models.length)}</Badge>
+          <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
+            删除配置
+          </Button>
+        </div>
+      )}
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AutoSaveTextField
+          label="显示名称"
+          value={provider.displayName}
+          savedValue={provider.displayName}
+          disabled={disabled}
+          onChange={(value) => {
+            onChange((current) => ({
+              ...current,
+              displayName: value.trim() || current.displayName,
+            }))
+          }}
+          onAutosave={onAutoSave}
+          onClearError={onClearError}
+        />
+        <AutoSaveTextField
+          label="Base URL"
+          type="url"
+          value={provider.anthropic.baseUrl}
+          savedValue={provider.anthropic.baseUrl}
+          disabled={disabled}
+          onChange={(value) => {
+            onChange((current) => ({
+              ...current,
+              anthropic: current.anthropic ? { ...current.anthropic, baseUrl: value } : current.anthropic,
+            }))
+          }}
+          onAutosave={onAutoSave}
+          onClearError={onClearError}
+        />
+        <AutoSaveTextField
+          label="Token"
+          type="password"
+          value={provider.anthropic.authToken}
+          savedValue={provider.anthropic.authToken}
+          disabled={disabled}
+          onChange={(value) => {
+            onChange((current) => ({
+              ...current,
+              anthropic: current.anthropic ? { ...current.anthropic, authToken: value } : current.anthropic,
+            }))
+          }}
+          onAutosave={onAutoSave}
+          onClearError={onClearError}
+        />
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground lg:grid-cols-4">
+        <div>
+          <p className="font-medium text-foreground">显示名称</p>
+          <p>{provider.displayName || 'Anthropic feedback'}</p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">当前默认模型</p>
+          <p>{provider.anthropic.model || '未设置'}</p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">模型总数</p>
+          <p>{formatInteger(provider.anthropic.models.length)}</p>
+        </div>
+        <div className="flex items-end justify-start lg:justify-end">
+          <Button asChild type="button" variant="outline">
+            <Link href={`${ADMIN_V2_BASE_PATH}/models`} prefetch={false}>
+              去 models 页管理
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => {
+            onClearError()
+            setAnthropicMessage(null)
+            void onDetectAnthropicModels({
+              baseUrl: provider.anthropic!.baseUrl,
+              authToken: provider.anthropic!.authToken,
+            })
+              .then((result) => {
+                setAnthropicMessage(`已检测到 ${formatInteger(result.models.length)} 个模型。`)
+                onChange((current) => ({
+                  ...current,
+                  displayName: labelFromOpenAiModelId(result.selectedModelId || result.models[0]?.id || current.displayName),
+                  anthropic: applyAnthropicDetectionToAdminSettings(
+                    {
+                      provider: 'openrouter',
+                      systemPrompt: '',
+                      cloudflare: {} as AdminCloudflareConfig,
+                      openrouter: {} as AdminOpenRouterConfig,
+                      feedbackProviders: [current],
+                    },
+                    current.id,
+                    result,
+                  ).feedbackProviders[0].anthropic,
+                }))
+                onAutoSave()
+              })
+              .catch((nextError) => {
+                setAnthropicMessage(nextError instanceof Error ? nextError.message : '模型检测失败。')
+              })
+          }}
+        >
+          <SearchCheck data-icon="inline-start" />
+          检测模型
+        </Button>
+      </div>
+
+      {anthropicMessage ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          {anthropicMessage}
+        </div>
+      ) : null}
+
+      <details
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen((event.currentTarget as HTMLDetailsElement).open)}
+        className="rounded-xl border border-border bg-background"
+      >
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-foreground">
+          高级设置
+        </summary>
+        <div className="grid gap-4 border-t border-border px-4 py-4 lg:grid-cols-2">
+          <AutoSaveTextField
+            label="备注"
+            value={provider.note}
+            savedValue={provider.note}
+            disabled={disabled}
+            onChange={(value) => {
+              onChange((current) => ({ ...current, note: value }))
+            }}
+            onAutosave={onAutoSave}
+            onClearError={onClearError}
+            multiline
+          />
+          <AutoSaveNumberField
+            label="最大 Prompt 字符"
+            value={provider.anthropic.maxPromptChars}
+            savedValue={provider.anthropic.maxPromptChars}
+            min={1}
+            disabled={disabled}
+            onCommit={(value) => {
+              onChange((current) => ({
+                ...current,
+                anthropic: current.anthropic ? { ...current.anthropic, maxPromptChars: value } : current.anthropic,
+              }))
+              onAutoSave()
+            }}
+            onClearError={onClearError}
+          />
+          <AutoSaveNumberField
+            label="最大输出 Token"
+            value={provider.anthropic.maxOutputTokens}
+            savedValue={provider.anthropic.maxOutputTokens}
+            min={1}
+            disabled={disabled}
+            onCommit={(value) => {
+              onChange((current) => ({
+                ...current,
+                anthropic: current.anthropic ? { ...current.anthropic, maxOutputTokens: value } : current.anthropic,
+              }))
+              onAutoSave()
+            }}
+            onClearError={onClearError}
+          />
+        </div>
+      </details>
+    </DetailSection>
+  )
+}
+
 export function AdminV2ProvidersWorkspace({
   aiDraft,
   savedSettings,
@@ -742,6 +1051,7 @@ export function AdminV2ProvidersWorkspace({
   onClearError,
   onChange,
   onAutosave,
+  onDetectAnthropicModels,
   onDetectOpenAiCompatibleModels,
   onRefreshModels,
   isRefreshingModels,
@@ -760,6 +1070,37 @@ export function AdminV2ProvidersWorkspace({
 
   const autoSaveDraft = (draftOverride?: AdminAiSettings, showSuccessToast = false) => {
     void onAutosave(draftOverride, { showSuccessToast })
+  }
+
+  const addOpenAiFeedbackProvider = () => {
+    const displayName = `OpenAI Compatible ${String(savedSettings.feedbackProviders.length + 1)}`
+    const provider = createOpenAiFeedbackProvider({
+      displayName,
+      note: 'feedback',
+      openai: {
+        ...savedSettings.openrouter,
+        displayName,
+        note: 'feedback',
+        apiKey: '',
+      },
+    })
+
+    const nextDraft = commitDraftChange((current) => addAdminFeedbackProvider(current, provider))
+    setSelectedDetail(provider.id)
+    autoSaveDraft(nextDraft)
+  }
+
+  const addAnthropicFeedbackProvider = () => {
+    const displayName = `Anthropic ${String(savedSettings.feedbackProviders.length + 1)}`
+    const provider = createAnthropicFeedbackProvider({
+      displayName,
+      note: 'feedback',
+      anthropic: { ...ANTHROPIC_PRESET },
+    })
+
+    const nextDraft = commitDraftChange((current) => addAdminFeedbackProvider(current, provider))
+    setSelectedDetail(provider.id)
+    autoSaveDraft(nextDraft)
   }
 
   const detailList: Array<{
@@ -798,6 +1139,23 @@ export function AdminV2ProvidersWorkspace({
         </Badge>
       ),
     },
+    ...savedSettings.feedbackProviders.map((provider) => ({
+      key: provider.id,
+      title: provider.displayName || (provider.kind === 'anthropic' ? 'Anthropic feedback' : 'OpenAI feedback'),
+      description: provider.kind === 'anthropic' ? 'Anthropic Messages 配置' : 'OpenAI 兼容反馈配置',
+      icon: provider.kind === 'anthropic' ? Bot : KeyRound,
+      badge: (
+        <Badge
+          variant={provider.openai
+            ? (providerConfigured(provider.openai) ? 'secondary' : 'outline')
+            : (provider.anthropic?.baseUrl.trim() && provider.anthropic?.authToken.trim() ? 'secondary' : 'outline')}
+        >
+          {provider.openai
+            ? buildConfiguredLabel(providerConfigured(provider.openai))
+            : buildConfiguredLabel(Boolean(provider.anthropic?.baseUrl.trim() && provider.anthropic?.authToken.trim()))}
+        </Badge>
+      ),
+    })),
   ]
 
   return (
@@ -811,7 +1169,21 @@ export function AdminV2ProvidersWorkspace({
                 这页只保留主运行供应商链路。`systemPrompt` 已剥离到 AI 策略页，模型启用与默认值去 models 页管理。
               </CardDescription>
             </div>
-            <AutoSaveStatus isSaving={isSaving} hasUnsavedChanges={hasUnsavedChanges} error={error} />
+            <div className="flex flex-wrap items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" disabled={!canEdit || isSaving}>
+                    <Plus data-icon="inline-start" />
+                    添加配置
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={addOpenAiFeedbackProvider}>新增 OpenAI Compatible</DropdownMenuItem>
+                  <DropdownMenuItem onClick={addAnthropicFeedbackProvider}>新增 Anthropic</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <AutoSaveStatus isSaving={isSaving} hasUnsavedChanges={hasUnsavedChanges} error={error} />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
@@ -914,6 +1286,43 @@ export function AdminV2ProvidersWorkspace({
                   autoSaveDraft()
                 }}
               />
+            ) : null}
+
+            {selectedDetail !== 'runtime' && selectedDetail !== 'cloudflare' && selectedDetail !== 'openai' ? (
+              (() => {
+                const provider = savedSettings.feedbackProviders.find((item) => item.id === selectedDetail)
+                if (!provider) {
+                  return null
+                }
+
+                return (
+                  <FeedbackProviderPanel
+                    provider={provider}
+                    disabled={!canEdit || isSaving}
+                    onClearError={onClearError}
+                    onChange={(updater) => {
+                      onChange((current) => ({
+                        ...current,
+                        feedbackProviders: current.feedbackProviders.map((item) =>
+                          item.id === provider.id ? updater(item) : item,
+                        ),
+                      }))
+                    }}
+                    onDelete={() => {
+                      const nextDraft = commitDraftChange((current) =>
+                        removeAdminFeedbackProvider(current, provider.id),
+                      )
+                      setSelectedDetail('openai')
+                      autoSaveDraft(nextDraft)
+                    }}
+                    onAutoSave={() => {
+                      autoSaveDraft()
+                    }}
+                    onDetectOpenAiCompatibleModels={onDetectOpenAiCompatibleModels}
+                    onDetectAnthropicModels={onDetectAnthropicModels}
+                  />
+                )
+              })()
             ) : null}
           </div>
         </CardContent>
