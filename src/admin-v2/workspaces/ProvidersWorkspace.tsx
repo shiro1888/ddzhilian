@@ -340,7 +340,7 @@ function RuntimeSummaryPanel({
       modelCount: savedSettings.openrouter.models.length,
       current: aiDraft.provider === 'openrouter',
     },
-    ...savedSettings.feedbackProviders.map((provider) => ({
+    ...aiDraft.feedbackProviders.map((provider) => ({
       key: provider.id,
       title: provider.displayName.trim() || (provider.kind === 'anthropic' ? 'Anthropic feedback' : 'OpenAI feedback'),
       configured: provider.openai
