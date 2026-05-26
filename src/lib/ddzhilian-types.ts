@@ -564,6 +564,12 @@ export type AdminHistoryStats = {
   lastFileAt?: string
   lastTextAt?: string
   lastActivityAt?: string
+  textTrendBuckets: AdminHistoryTextTrendBucket[]
+}
+
+export type AdminHistoryTextTrendBucket = {
+  bucketStartAt: string
+  messageCount: number
 }
 
 export type AdminCloudflareConfig = {

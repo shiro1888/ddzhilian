@@ -784,9 +784,14 @@ function FeedbackProviderPanel({
         savedSettings={{ openrouter: provider.openai } as AdminAiSettings}
         disabled={disabled}
         statusAction={(
-          <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
-            删除配置
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAutoSave}>
+              保存配置
+            </Button>
+            <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
+              删除配置
+            </Button>
+          </div>
         )}
         onClearError={onClearError}
         detectionState={openAiDetectionState}
@@ -872,6 +877,9 @@ function FeedbackProviderPanel({
             {buildConfiguredLabel(Boolean(provider.anthropic.baseUrl.trim() && provider.anthropic.authToken.trim()))}
           </Badge>
           <Badge variant="outline">模型 {formatInteger(provider.anthropic.models.length)}</Badge>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAutoSave}>
+            保存配置
+          </Button>
           <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
             删除配置
           </Button>

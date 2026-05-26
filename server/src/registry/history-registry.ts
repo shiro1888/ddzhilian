@@ -50,6 +50,51 @@ export interface HistoryStats {
   lastFileAt?: string;
   lastTextAt?: string;
   lastActivityAt?: string;
+  textTrendBuckets: HistoryTextTrendBucket[];
+}
+
+export interface HistoryTextTrendBucket {
+  bucketStartAt: string;
+  messageCount: number;
+}
+
+const HOUR_BUCKET_MS = 60 * 60 * 1000;
+
+function toHourBucketIso(value: Date) {
+  const bucket = new Date(value);
+  bucket.setUTCMinutes(0, 0, 0);
+  return bucket.toISOString();
+}
+
+function buildTextTrendBuckets(records: HistoryTextRecord[], hours: number) {
+  const bucketsByIso = new Map<string, number>();
+
+  for (const record of records) {
+    if (record.sourceDeviceId.startsWith('bot_')) {
+      continue;
+    }
+
+    const timestamp = Date.parse(record.createdAt);
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+
+    const bucketStartAt = toHourBucketIso(new Date(timestamp));
+    bucketsByIso.set(bucketStartAt, (bucketsByIso.get(bucketStartAt) ?? 0) + 1);
+  }
+
+  const now = Date.now();
+  const buckets: HistoryTextTrendBucket[] = [];
+
+  for (let offset = hours - 1; offset >= 0; offset -= 1) {
+    const bucketStartAt = toHourBucketIso(new Date(now - offset * HOUR_BUCKET_MS));
+    buckets.push({
+      bucketStartAt,
+      messageCount: bucketsByIso.get(bucketStartAt) ?? 0,
+    });
+  }
+
+  return buckets;
 }
 
 export interface HistoryTextRoomStats {
@@ -385,6 +430,7 @@ export class HistoryRegistry {
       lastFileAt,
       lastTextAt,
       lastActivityAt,
+      textTrendBuckets: buildTextTrendBuckets(textRecords, 24),
     };
   }
 

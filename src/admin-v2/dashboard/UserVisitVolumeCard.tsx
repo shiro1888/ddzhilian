@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format as formatDate, parseISO } from 'date-fns'
-import { Area, CartesianGrid, ComposedChart, Line, XAxis } from 'recharts'
+import { Area, CartesianGrid, ComposedChart, XAxis } from 'recharts'
 import type { AdminStateResponse } from '@/lib/ddzhilian-types'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,8 +17,6 @@ import {
 import {
   type ChartConfig,
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
@@ -38,67 +36,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { Activity } from 'lucide-react'
 import { formatInteger } from '@/admin-v2/format'
 import { ADMIN_V2_BASE_PATH } from '@/admin-v2/config'
 import { cn } from '@/lib/utils'
 
 type WindowOption = '6' | '12' | '24'
-type SeriesMode = 'all' | 'success' | 'issues'
 
 type VisitPoint = {
   date: string
-  visits: number
-  success: number
-  issues: number
+  messages: number
 }
 
 const chartConfig = {
-  visits: {
-    label: '访问量',
+  messages: {
+    label: '消息数',
     color: 'var(--chart-1)',
-  },
-  success: {
-    label: '成功请求',
-    color: 'var(--chart-2)',
-  },
-  issues: {
-    label: '异常请求',
-    color: 'var(--chart-3)',
   },
 } satisfies ChartConfig
 
-function getPrimaryProviderLabel(snapshot: AdminStateResponse) {
-  if (snapshot.ai.provider === 'cloudflare') {
-    return 'Cloudflare AI'
-  }
-
-  if (snapshot.ai.provider === 'openrouter') {
-    return snapshot.ai.openrouter.displayName.trim() || 'OpenAI Compatible'
-  }
-
-  return snapshot.ai.provider
-}
-
 function buildVisitPoints(snapshot: AdminStateResponse, windowHours: number): VisitPoint[] {
-  if (snapshot.ai.provider !== 'cloudflare' && snapshot.ai.provider !== 'openrouter') {
-    return []
-  }
-
-  return snapshot.usage.trendBuckets
-    .filter((bucket) => bucket.provider === snapshot.ai.provider)
+  return snapshot.history.textTrendBuckets
     .slice(-windowHours)
-    .map((bucket) => ({
-      date: bucket.bucketStartAt,
-      visits: bucket.totalCalls,
-      success: bucket.successCalls,
-      issues: bucket.failedCalls + bucket.quotaRejectedCalls,
-    }))
+    .map((bucket) => ({ date: bucket.bucketStartAt, messages: bucket.messageCount }))
 }
 
 function hasVisitData(points: VisitPoint[]) {
-  return points.some((point) => point.visits > 0 || point.success > 0 || point.issues > 0)
+  return points.some((point) => point.messages > 0)
 }
 
 export function UserVisitVolumeCard({
@@ -109,9 +73,7 @@ export function UserVisitVolumeCard({
   className?: string
 }>) {
   const [windowHours, setWindowHours] = useState<WindowOption>('24')
-  const [seriesMode, setSeriesMode] = useState<SeriesMode>('all')
 
-  const providerLabel = getPrimaryProviderLabel(snapshot)
   const points = useMemo(
     () => buildVisitPoints(snapshot, Number(windowHours)),
     [snapshot, windowHours],
@@ -125,14 +87,13 @@ export function UserVisitVolumeCard({
         <CardTitle className="font-normal leading-none">用户访问量</CardTitle>
         <CardDescription>
           <span className="@[540px]/card:block hidden">
-            基于当前主运行供应商请求记录聚合的最近 {windowHours} 小时访问活跃度
+            基于 ddzhilian 用户发送文本消息聚合的最近 {windowHours} 小时活跃度
           </span>
           <span className="@[540px]/card:hidden">
             最近 {windowHours} 小时
           </span>
         </CardDescription>
         <CardAction className="flex items-center gap-2">
-          <Badge variant="outline">{providerLabel}</Badge>
           <Select value={windowHours} onValueChange={(value) => setWindowHours(value as WindowOption)}>
             <SelectTrigger size="sm" className="w-24">
               <SelectValue placeholder="24 小时" />
@@ -143,19 +104,6 @@ export function UserVisitVolumeCard({
                 <SelectItem value="24">24 小时</SelectItem>
                 <SelectItem value="12">12 小时</SelectItem>
                 <SelectItem value="6">6 小时</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Select value={seriesMode} onValueChange={(value) => setSeriesMode(value as SeriesMode)}>
-            <SelectTrigger size="sm" className="w-28">
-              <SelectValue placeholder="全部请求" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>展示口径</SelectLabel>
-                <SelectItem value="all">全部请求</SelectItem>
-                <SelectItem value="success">成功请求</SelectItem>
-                <SelectItem value="issues">异常请求</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
@@ -193,40 +141,20 @@ export function UserVisitVolumeCard({
                 content={(
                   <ChartTooltipContent
                     className="w-52"
-                    indicator="line"
                     labelFormatter={(value) => formatDate(parseISO(String(value)), 'yyyy-MM-dd HH:mm')}
                   />
                 )}
               />
-              <ChartLegend verticalAlign="top" content={<ChartLegendContent className="mb-5 justify-end" />} />
 
               <Area
-                dataKey="visits"
+                dataKey="messages"
                 type="natural"
                 fill="url(#fillVisits)"
-                stroke="var(--color-visits)"
+                stroke="var(--color-messages)"
                 strokeWidth={1.25}
                 dot={false}
                 fillOpacity={1}
               />
-              {seriesMode !== 'issues' ? (
-                <Line
-                  dataKey="success"
-                  type="natural"
-                  stroke="var(--color-success)"
-                  strokeWidth={1.4}
-                  dot={false}
-                />
-              ) : null}
-              {seriesMode !== 'success' ? (
-                <Line
-                  dataKey="issues"
-                  type="natural"
-                  stroke="var(--color-issues)"
-                  strokeWidth={1.2}
-                  dot={false}
-                />
-              ) : null}
             </ComposedChart>
           </ChartContainer>
         ) : (
@@ -235,9 +163,9 @@ export function UserVisitVolumeCard({
               <EmptyMedia variant="icon">
                 <Activity />
               </EmptyMedia>
-              <EmptyTitle>当前供应商暂无访问记录</EmptyTitle>
+              <EmptyTitle>最近时段暂无消息记录</EmptyTitle>
               <EmptyDescription>
-                这里展示基于当前主运行供应商请求记录聚合的访问活跃度。
+                这里展示 ddzhilian 用户发送文本消息聚合后的活跃度。
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -245,7 +173,7 @@ export function UserVisitVolumeCard({
 
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>活跃用户 {formatInteger(activeUserCount)}</span>
-          <span>数据口径：请求记录聚合</span>
+          <span>数据口径：文本消息聚合</span>
         </div>
       </CardContent>
     </Card>
