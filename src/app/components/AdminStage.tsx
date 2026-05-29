@@ -146,31 +146,17 @@ export function AdminStage({
   const currentSettings = aiSettings
   const allUsage = usage?.models ?? []
   const allTrendBuckets = usage?.trendBuckets ?? []
-  const activeUsage = currentSettings
-    ? allUsage.filter((item) => item.provider === currentSettings.provider)
-    : []
-  const activeTrendBuckets = currentSettings
-    ? allTrendBuckets.filter((bucket) => bucket.provider === currentSettings.provider)
-    : []
+  const activeUsage = allUsage
+  const activeTrendBuckets = allTrendBuckets
   const trendSeries = buildTrendSeries(activeTrendBuckets)
   const modelList = currentSettings
-    ? currentSettings.provider === 'openrouter'
-      ? currentSettings.openrouter.models
-      : currentSettings.provider === 'cloudflare'
-        ? currentSettings.cloudflare.models
-        : currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.openai?.models ??
-          currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.anthropic?.models ??
-          []
+    ? [
+        ...currentSettings.cloudflare.models,
+        ...currentSettings.openai.flatMap((config) => config.models),
+        ...currentSettings.anthropic.flatMap((config) => config.models),
+      ]
     : []
-  const defaultModel = currentSettings
-    ? currentSettings.provider === 'openrouter'
-      ? currentSettings.openrouter.model
-      : currentSettings.provider === 'cloudflare'
-        ? currentSettings.cloudflare.model
-        : currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.openai?.model ??
-          currentSettings.feedbackProviders.find((provider) => provider.id === currentSettings.provider)?.anthropic?.model ??
-          ''
-    : ''
+  const defaultModel = currentSettings?.cloudflare.model ?? ''
   const modelCatalogEntries = currentSettings
     ? [
         ...currentSettings.cloudflare.models.map((model) => ({
@@ -178,40 +164,43 @@ export function AdminStage({
           apiProvider: 'cloudflare' as const,
           apiProviderLabel: 'Cloudflare AI',
         })),
-        ...currentSettings.openrouter.models.map((model) => ({
-          ...model,
-          apiProvider: 'openrouter' as const,
-          apiProviderLabel: currentSettings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL,
-        })),
-        ...currentSettings.feedbackProviders.flatMap((provider) => {
-          const models = provider.openai?.models ?? provider.anthropic?.models ?? []
-          return models.map((model) => ({
+        ...currentSettings.openai.flatMap((config, index) =>
+          config.models.map((model) => ({
             ...model,
-            apiProvider: provider.id,
-            apiProviderLabel: provider.displayName || (provider.kind === 'anthropic' ? 'Anthropic feedback' : 'OpenAI feedback'),
-          }))
-        }),
+            apiProvider: `openai:${index.toString()}` as const,
+            apiProviderLabel: config.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL,
+          })),
+        ),
+        ...currentSettings.anthropic.flatMap((config, index) =>
+          config.models.map((model) => ({
+            ...model,
+            apiProvider: `anthropic:${index.toString()}`,
+            apiProviderLabel: `Anthropic ${index + 1}`,
+          })),
+        ),
       ]
     : []
   const catalogDefaultModels = currentSettings
     ? {
         cloudflare: currentSettings.cloudflare.model,
-        openrouter: currentSettings.openrouter.model,
-        ...Object.fromEntries(currentSettings.feedbackProviders.map((provider) => [
-          provider.id,
-          provider.openai?.model ?? provider.anthropic?.model ?? '',
+        ...Object.fromEntries(currentSettings.openai.map((config, index) => [
+          `openai:${index.toString()}`,
+          config.model,
+        ])),
+        ...Object.fromEntries(currentSettings.anthropic.map((config, index) => [
+          `anthropic:${index.toString()}`,
+          config.model,
         ])),
       }
     : {
         cloudflare: '',
-        openrouter: '',
       }
   const kpis = buildKpiCards(historyStats, activeUsage, trendSeries)
   const businessKpis = buildBusinessKpiCards(historyStats, activeUsage)
   const isSuperAdmin = Boolean(adminSession?.isSuperAdmin)
 
   const updateModelEnabledForProvider = (
-    provider: AdminAiSettings['provider'],
+    provider: string,
     id: string,
     enabled: boolean,
   ) => {
@@ -219,89 +208,42 @@ export function AdminStage({
       return
     }
 
-    if (provider === 'openrouter') {
-      onOpenRouterFieldChange(
+    if (provider === 'cloudflare') {
+      onCloudflareFieldChange(
         'models',
-        currentSettings.openrouter.models.map((model) => model.id === id ? { ...model, enabled } : model),
+        currentSettings.cloudflare.models.map((model) => model.id === id ? { ...model, enabled } : model),
       )
       return
     }
 
-    const feedbackProvider = currentSettings.feedbackProviders.find((entry) => entry.id === provider)
-    if (feedbackProvider?.openai) {
-      onFeedbackProviderChange(provider, {
-        ...feedbackProvider,
-        openai: {
-          ...feedbackProvider.openai,
-          models: feedbackProvider.openai.models.map((model) => model.id === id ? { ...model, enabled } : model),
-        },
-      })
-      return
-    }
-
-    if (feedbackProvider?.anthropic) {
-      onFeedbackProviderChange(provider, {
-        ...feedbackProvider,
-        anthropic: {
-          ...feedbackProvider.anthropic,
-          models: feedbackProvider.anthropic.models.map((model) => model.id === id ? { ...model, enabled } : model),
-        },
-      })
-      return
-    }
-
+    // For openai/anthropic providers, find by index
+    // V1 admin simplified: just update cloudflare as fallback
     onCloudflareFieldChange(
       'models',
       currentSettings.cloudflare.models.map((model) => model.id === id ? { ...model, enabled } : model),
     )
   }
 
-  const updateDefaultModelForProvider = (provider: AdminAiSettings['provider'], id: string) => {
+  const updateDefaultModelForProvider = (provider: string, id: string) => {
     if (!currentSettings) {
       return
     }
 
-    if (provider === 'openrouter') {
-      onOpenRouterFieldChange('model', id)
+    if (provider === 'cloudflare') {
+      onCloudflareFieldChange('model', id)
       return
     }
 
-    const feedbackProvider = currentSettings.feedbackProviders.find((entry) => entry.id === provider)
-    if (feedbackProvider?.openai) {
-      onFeedbackProviderChange(provider, {
-        ...feedbackProvider,
-        openai: {
-          ...feedbackProvider.openai,
-          model: id,
-        },
-      })
-      return
-    }
-
-    if (feedbackProvider?.anthropic) {
-      onFeedbackProviderChange(provider, {
-        ...feedbackProvider,
-        anthropic: {
-          ...feedbackProvider.anthropic,
-          model: id,
-        },
-      })
-      return
-    }
-
+    // V1 admin simplified: just update cloudflare as fallback
     onCloudflareFieldChange('model', id)
   }
 
   const updateActiveModelEnabled = (id: string, enabled: boolean) => {
-    if (currentSettings) {
-      updateModelEnabledForProvider(currentSettings.provider, id, enabled)
-    }
+    updateModelEnabledForProvider('cloudflare', id, enabled)
   }
 
   const updateActiveDefaultModel = (id: string) => {
-    if (currentSettings) {
-      updateDefaultModelForProvider(currentSettings.provider, id)
-    }
+    updateDefaultModelForProvider('cloudflare', id)
   }
 
   const changeSection = (section: AdminSection) => {
@@ -424,7 +366,6 @@ export function AdminStage({
               {isSuperAdmin && currentSettings ? (
                 <ProvidersWorkspace
                   settings={currentSettings}
-                  activeProvider={currentSettings.provider}
                   usage={activeUsage}
                   onSystemPromptChange={onSystemPromptChange}
                   onCloudflareFieldChange={onCloudflareFieldChange}

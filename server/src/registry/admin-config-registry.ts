@@ -26,6 +26,7 @@ const defaultAnthropicMaxOutputTokens = 1000;
 export type AdminModelToggleItem = {
   id: string;
   label: string;
+  alias: string;
   enabled: boolean;
 };
 
@@ -68,7 +69,6 @@ export type AdminFeedbackProviderSnapshot = {
 };
 
 export type AdminAiSettingsSnapshot = {
-  provider: string;
   systemPrompt: string;
   cloudflare: {
     accountId: string;
@@ -80,8 +80,8 @@ export type AdminAiSettingsSnapshot = {
     maxPromptChars: number;
     maxOutputTokens: number;
   };
-  openrouter: AdminOpenAiCompatibleSnapshot;
-  feedbackProviders: AdminFeedbackProviderSnapshot[];
+  openai: AdminOpenAiCompatibleSnapshot[];
+  anthropic: AdminAnthropicSnapshot[];
 };
 
 type LegacyProviderSnapshot = {
@@ -122,6 +122,8 @@ type PersistedAdminConfig = {
     systemPrompt?: unknown;
     cloudflare?: LegacyProviderSnapshot;
     openrouter?: LegacyProviderSnapshot;
+    openai?: unknown;
+    anthropic?: unknown;
     feedbackProviders?: unknown;
   };
 };
@@ -563,25 +565,11 @@ function normalizeFeedbackProviders(
   });
 }
 
-function normalizeActiveProvider(value: unknown, feedbackProviders: AdminFeedbackProviderSnapshot[]) {
-  const provider = normalizeOptionalString(value);
-  if (provider === 'cloudflare' || provider === 'openrouter') {
-    return provider;
-  }
-
-  if (feedbackProviders.some((entry) => entry.id === provider)) {
-    return provider;
-  }
-
-  return 'cloudflare';
-}
-
 function normalizeSnapshot(
   input: PersistedAdminConfig['ai'] | AdminAiSettingsSnapshot,
   fallback: ServerConfig,
 ): AdminAiSettingsSnapshot {
   const cloudflareInput = (input?.cloudflare ?? {}) as LegacyProviderSnapshot;
-  const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
   const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
   const cloudflareModels = parseModelToggleItems(
     cloudflareInput.models ?? cloudflareInput.modelsText,
@@ -591,10 +579,37 @@ function normalizeSnapshot(
   const normalizedCloudflareModel = cloudflareModels.some((model) => model.id === cloudflareModel)
     ? cloudflareModel
     : cloudflareModels.find((model) => model.enabled)?.id ?? cloudflareModels[0]?.id ?? cloudflareModel;
-  const feedbackProviders = normalizeFeedbackProviders(input?.feedbackProviders, fallback);
+
+  // Migrate old format: if input has openai[] directly, use it; otherwise migrate from openrouter + feedbackProviders
+  let openaiList: AdminOpenAiCompatibleSnapshot[];
+  let anthropicList: AdminAnthropicSnapshot[];
+
+  if (Array.isArray((input as AdminAiSettingsSnapshot)?.openai)) {
+    // New format: already has openai[] and anthropic[]
+    openaiList = ((input as AdminAiSettingsSnapshot).openai).map((item) =>
+      normalizeOpenAiCompatibleSnapshot(item as LegacyProviderSnapshot, fallback.openrouterAi),
+    );
+    anthropicList = ((input as AdminAiSettingsSnapshot).anthropic ?? []).map((item) =>
+      normalizeAnthropicSnapshot(item as LegacyProviderSnapshot),
+    );
+  } else {
+    // Old format: migrate from openrouter + feedbackProviders
+    const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
+    const mainOpenAi = normalizeOpenAiCompatibleSnapshot(openrouterInput, fallback.openrouterAi);
+    const feedbackProviders = normalizeFeedbackProviders(input?.feedbackProviders, fallback);
+
+    const feedbackOpenAi = feedbackProviders
+      .filter((p) => p.kind === 'openai-compatible' && p.openai)
+      .map((p) => p.openai!);
+    const feedbackAnthropic = feedbackProviders
+      .filter((p) => p.kind === 'anthropic' && p.anthropic)
+      .map((p) => p.anthropic!);
+
+    openaiList = [mainOpenAi, ...feedbackOpenAi];
+    anthropicList = feedbackAnthropic;
+  }
 
   return {
-    provider: normalizeActiveProvider(input?.provider, feedbackProviders),
     systemPrompt: normalizeSystemPrompt(input?.systemPrompt, fallback.aiSystemPrompt),
     cloudflare: {
       accountId: normalizeOptionalString(cloudflareInput.accountId),
@@ -615,8 +630,8 @@ function normalizeSnapshot(
         fallback.cloudflareAi.maxOutputTokens,
       ),
     },
-    openrouter: normalizeOpenAiCompatibleSnapshot(openrouterInput, fallback.openrouterAi),
-    feedbackProviders,
+    openai: openaiList,
+    anthropic: anthropicList,
   };
 }
 
@@ -784,8 +799,18 @@ export class AdminConfigRegistry {
   }
 
   getAiSettingsSnapshot(): AdminAiSettingsSnapshot {
+    const feedbackProviders = this.config.feedbackAiProviders;
+    const openaiList: AdminOpenAiCompatibleSnapshot[] = [
+      toAdminOpenAiSnapshot(this.config.openrouterAi),
+      ...feedbackProviders
+        .filter((p) => p.kind === 'openai-compatible' && p.openai)
+        .map((p) => toAdminOpenAiSnapshot(p.openai!)),
+    ];
+    const anthropicList: AdminAnthropicSnapshot[] = feedbackProviders
+      .filter((p) => p.kind === 'anthropic' && p.anthropic)
+      .map((p) => toAdminAnthropicSnapshot(p.anthropic!));
+
     return {
-      provider: this.config.aiProvider,
       systemPrompt: this.config.aiSystemPrompt,
       cloudflare: {
         accountId: this.config.cloudflareAi.accountId ?? '',
@@ -801,46 +826,8 @@ export class AdminConfigRegistry {
         maxPromptChars: this.config.cloudflareAi.maxPromptChars,
         maxOutputTokens: this.config.cloudflareAi.maxOutputTokens,
       },
-      openrouter: {
-        displayName: this.config.openrouterAi.displayName,
-        homepageUrl: this.config.openrouterAi.homepageUrl,
-        note: this.config.openrouterAi.note,
-        apiKey: this.config.openrouterAi.apiKey ?? '',
-        baseUrl: this.config.openrouterAi.baseUrl,
-        wireApi: this.config.openrouterAi.wireApi,
-        reasoningEffort: this.config.openrouterAi.reasoningEffort,
-        siteUrl: this.config.openrouterAi.siteUrl ?? '',
-        siteName: this.config.openrouterAi.siteName,
-        model: this.config.openrouterAi.model,
-        models: this.config.openrouterAi.models.map((model) => ({
-          id: model.id,
-          label: model.label,
-          enabled: model.enabled !== false,
-        })),
-        maxPromptChars: this.config.openrouterAi.maxPromptChars,
-        maxOutputTokens: this.config.openrouterAi.maxOutputTokens,
-      },
-      feedbackProviders: this.config.feedbackAiProviders.map((provider) => {
-        if (provider.kind === 'anthropic') {
-          return {
-            id: provider.id,
-            kind: provider.kind,
-            displayName: provider.displayName,
-            note: provider.note,
-            createdAt: provider.createdAt,
-            anthropic: toAdminAnthropicSnapshot(provider.anthropic ?? normalizeAnthropicSnapshot({})),
-          };
-        }
-
-        return {
-          id: provider.id,
-          kind: provider.kind,
-          displayName: provider.displayName,
-          note: provider.note,
-          createdAt: provider.createdAt,
-          openai: toAdminOpenAiSnapshot(provider.openai ?? normalizeOpenAiCompatibleSnapshot({}, this.config.openrouterAi)),
-        };
-      }),
+      openai: openaiList,
+      anthropic: anthropicList,
     };
   }
 
@@ -864,7 +851,7 @@ export class AdminConfigRegistry {
   }
 
   private applyAiSettings(input: AdminAiSettingsSnapshot) {
-    this.config.aiProvider = input.provider;
+    this.config.aiProvider = 'cloudflare';
     this.config.aiSystemPrompt = input.systemPrompt;
     this.config.cloudflareAi.accountId = input.cloudflare.accountId || undefined;
     this.config.cloudflareAi.apiToken = input.cloudflare.apiToken || undefined;
@@ -875,20 +862,54 @@ export class AdminConfigRegistry {
     this.config.cloudflareAi.maxPromptChars = input.cloudflare.maxPromptChars;
     this.config.cloudflareAi.maxOutputTokens = input.cloudflare.maxOutputTokens;
 
-    this.config.openrouterAi.apiKey = input.openrouter.apiKey || undefined;
-    this.config.openrouterAi.displayName = input.openrouter.displayName;
-    this.config.openrouterAi.homepageUrl = input.openrouter.homepageUrl;
-    this.config.openrouterAi.note = input.openrouter.note;
-    this.config.openrouterAi.baseUrl = input.openrouter.baseUrl;
-    this.config.openrouterAi.wireApi = input.openrouter.wireApi;
-    this.config.openrouterAi.reasoningEffort = input.openrouter.reasoningEffort;
-    this.config.openrouterAi.siteUrl = input.openrouter.siteUrl || undefined;
-    this.config.openrouterAi.siteName = input.openrouter.siteName;
-    this.config.openrouterAi.model = input.openrouter.model;
-    this.config.openrouterAi.models = toManagedOptions(input.openrouter.models);
-    this.config.openrouterAi.maxPromptChars = input.openrouter.maxPromptChars;
-    this.config.openrouterAi.maxOutputTokens = input.openrouter.maxOutputTokens;
-    this.config.feedbackAiProviders = toRuntimeFeedbackProviders(input.feedbackProviders);
+    // openai[0] is the main openrouter-compatible config
+    const mainOpenAi = input.openai[0];
+    if (mainOpenAi) {
+      this.config.openrouterAi.apiKey = mainOpenAi.apiKey || undefined;
+      this.config.openrouterAi.displayName = mainOpenAi.displayName;
+      this.config.openrouterAi.homepageUrl = mainOpenAi.homepageUrl;
+      this.config.openrouterAi.note = mainOpenAi.note;
+      this.config.openrouterAi.baseUrl = mainOpenAi.baseUrl;
+      this.config.openrouterAi.wireApi = mainOpenAi.wireApi;
+      this.config.openrouterAi.reasoningEffort = mainOpenAi.reasoningEffort;
+      this.config.openrouterAi.siteUrl = mainOpenAi.siteUrl || undefined;
+      this.config.openrouterAi.siteName = mainOpenAi.siteName;
+      this.config.openrouterAi.model = mainOpenAi.model;
+      this.config.openrouterAi.models = toManagedOptions(mainOpenAi.models);
+      this.config.openrouterAi.maxPromptChars = mainOpenAi.maxPromptChars;
+      this.config.openrouterAi.maxOutputTokens = mainOpenAi.maxOutputTokens;
+    } else {
+      // Clear openrouter config when no openai providers exist
+      this.config.openrouterAi.apiKey = undefined;
+      this.config.openrouterAi.model = '';
+      this.config.openrouterAi.models = [];
+    }
+
+    // Convert openai[1..] + anthropic[] back to feedbackAiProviders for runtime
+    const feedbackProviders: FeedbackAiProviderConfig[] = [];
+    for (let i = 1; i < input.openai.length; i++) {
+      const openai = input.openai[i];
+      feedbackProviders.push({
+        id: `feedback:openai-${i}`,
+        kind: 'openai-compatible',
+        displayName: openai.displayName,
+        note: openai.note,
+        createdAt: new Date().toISOString(),
+        openai: toRuntimeOpenAiConfig(openai),
+      });
+    }
+    for (let i = 0; i < input.anthropic.length; i++) {
+      const anthropic = input.anthropic[i];
+      feedbackProviders.push({
+        id: `feedback:anthropic-${i}`,
+        kind: 'anthropic',
+        displayName: `Anthropic ${i + 1}`,
+        note: '',
+        createdAt: new Date().toISOString(),
+        anthropic: toRuntimeAnthropicConfig(anthropic),
+      });
+    }
+    this.config.feedbackAiProviders = feedbackProviders;
   }
 
   private persist(payload: PersistedAdminConfig) {

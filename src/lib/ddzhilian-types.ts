@@ -627,15 +627,15 @@ export type AdminOpenAiReasoningEffort = '' | 'low' | 'medium' | 'high'
 export type AdminModelToggleItem = {
   id: string
   label: string
+  alias: string
   enabled: boolean
 }
 
 export type AdminAiSettings = {
-  provider: string
   systemPrompt: string
   cloudflare: AdminCloudflareConfig
-  openrouter: AdminOpenRouterConfig
-  feedbackProviders: AdminFeedbackProviderConfig[]
+  openai: AdminOpenRouterConfig[]
+  anthropic: AdminAnthropicConfig[]
 }
 
 export type AdminModelUsage = {

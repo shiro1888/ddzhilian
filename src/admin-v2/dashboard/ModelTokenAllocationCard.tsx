@@ -58,24 +58,19 @@ const tokenMetrics = {
 } as const
 
 function getPrimaryProviderLabel(snapshot: AdminStateResponse) {
-  if (snapshot.ai.provider === "cloudflare") {
-    return "Cloudflare AI"
+  if (snapshot.ai.openai.length > 0) {
+    return snapshot.ai.openai[0].displayName.trim() || "OpenAI Compatible"
   }
 
-  if (snapshot.ai.provider === "openrouter") {
-    return snapshot.ai.openrouter.displayName.trim() || "OpenAI Compatible"
+  if (snapshot.ai.anthropic.length > 0) {
+    return "Anthropic"
   }
 
-  return snapshot.ai.provider
+  return "Cloudflare AI"
 }
 
 function buildTokenSlices(snapshot: AdminStateResponse): ModelTokenSlice[] {
-  if (snapshot.ai.provider !== "cloudflare" && snapshot.ai.provider !== "openrouter") {
-    return []
-  }
-
   const usageItems = snapshot.usage.models
-    .filter((item) => item.provider === snapshot.ai.provider)
     .map((item) => ({
       modelId: item.modelId,
       modelLabel: item.modelLabel || item.modelId,

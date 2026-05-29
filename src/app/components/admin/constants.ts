@@ -481,13 +481,46 @@ export function createFeedbackProviderId(prefix: string) {
   return `feedback:${safePrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
+export function createOpenAiProviderConfig(input: {
+  displayName: string
+  note?: string
+  openai: AdminOpenRouterConfig
+}): AdminOpenRouterConfig {
+  return {
+    ...input.openai,
+    displayName: input.displayName,
+    note: input.note ?? input.openai.note,
+  }
+}
+
+export function createAnthropicProviderConfig(input: {
+  anthropic: AdminAnthropicConfig
+}): AdminAnthropicConfig {
+  return input.anthropic
+}
+
+export function createAnthropicFeedbackProvider(input: {
+  displayName: string
+  note?: string
+  anthropic: AdminAnthropicConfig
+}): AdminFeedbackProviderConfig {
+  return {
+    id: `feedback:anthropic-${Date.now().toString(36)}`,
+    kind: 'anthropic',
+    displayName: input.displayName,
+    note: input.note ?? '',
+    createdAt: new Date().toISOString(),
+    anthropic: input.anthropic,
+  }
+}
+
 export function createOpenAiFeedbackProvider(input: {
   displayName: string
   note?: string
   openai: AdminOpenRouterConfig
 }): AdminFeedbackProviderConfig {
   return {
-    id: createFeedbackProviderId(input.displayName),
+    id: `feedback:openai-${Date.now().toString(36)}`,
     kind: 'openai-compatible',
     displayName: input.displayName,
     note: input.note ?? '',
@@ -500,40 +533,22 @@ export function createOpenAiFeedbackProvider(input: {
   }
 }
 
-export function createAnthropicFeedbackProvider(input: {
-  displayName: string
-  note?: string
-  anthropic: AdminAnthropicConfig
-}): AdminFeedbackProviderConfig {
-  return {
-    id: createFeedbackProviderId(input.displayName),
-    kind: 'anthropic',
-    displayName: input.displayName,
-    note: input.note ?? '',
-    createdAt: new Date().toISOString(),
-    anthropic: input.anthropic,
-  }
-}
-
 export function describeProviderStatus(settings: AdminAiSettings) {
   return [
     {
       name: 'Cloudflare AI',
       state: settings.cloudflare.accountId && settings.cloudflare.apiToken ? '健康' : '待配置',
       modelCount: settings.cloudflare.models.filter((model) => model.enabled).length,
-      enabled: settings.provider === 'cloudflare',
     },
-    {
-      name: settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL,
-      state: settings.openrouter.apiKey ? '健康' : '待配置',
-      modelCount: settings.openrouter.models.filter((model) => model.enabled).length,
-      enabled: settings.provider === 'openrouter',
-    },
-    ...settings.feedbackProviders.map((provider) => ({
-      name: provider.displayName,
-      state: provider.openai?.apiKey || provider.anthropic?.authToken ? '健康' : '待配置',
-      modelCount: (provider.openai?.models ?? provider.anthropic?.models ?? []).filter((model) => model.enabled).length,
-      enabled: settings.provider === provider.id,
+    ...settings.openai.map((config) => ({
+      name: config.displayName.trim() || OPENAI_COMPATIBLE_PROVIDER_LABEL,
+      state: config.apiKey ? '健康' : '待配置',
+      modelCount: config.models.filter((model) => model.enabled).length,
+    })),
+    ...settings.anthropic.map((config, index) => ({
+      name: `Anthropic ${index + 1}`,
+      state: config.authToken ? '健康' : '待配置',
+      modelCount: config.models.filter((model) => model.enabled).length,
     })),
   ]
 }

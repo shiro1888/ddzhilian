@@ -1,22 +1,17 @@
 import type { AdminAiSettings } from '../../../lib/ddzhilian-types'
-import { describeProviderStatus, OPENAI_COMPATIBLE_PROVIDER_LABEL } from './constants'
+import { describeProviderStatus } from './constants'
 
 export function ProviderTable({
   settings,
-  activeProvider,
   action,
 }: {
   settings: AdminAiSettings
-  activeProvider: AdminAiSettings['provider']
   action?: {
     label: string
     onClick: () => void
   }
 }) {
   const providers = describeProviderStatus(settings)
-  const activeProviderName = activeProvider === 'openrouter'
-    ? settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL
-    : 'Cloudflare'
 
   return (
     <section className="dd-admin-table-card">
@@ -35,7 +30,6 @@ export function ProviderTable({
             <th>供应商</th>
             <th>状态</th>
             <th>可用模型</th>
-            <th>当前接管</th>
           </tr>
         </thead>
         <tbody>
@@ -44,7 +38,6 @@ export function ProviderTable({
               <td>{provider.name}</td>
               <td><span className={`dd-admin-status-dot ${provider.state === '健康' ? 'is-green' : 'is-amber'}`}>{provider.state}</span></td>
               <td>{provider.modelCount}</td>
-              <td>{provider.enabled ? activeProviderName : '待切换'}</td>
             </tr>
           ))}
         </tbody>
@@ -52,4 +45,3 @@ export function ProviderTable({
     </section>
   )
 }
-

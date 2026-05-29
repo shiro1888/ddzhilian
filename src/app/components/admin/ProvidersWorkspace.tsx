@@ -18,7 +18,6 @@ import { UsageTable } from './UsageTable'
 
 export function ProvidersWorkspace({
   settings,
-  activeProvider,
   usage,
   onSystemPromptChange,
   onCloudflareFieldChange,
@@ -33,7 +32,6 @@ export function ProvidersWorkspace({
   isSaving,
 }: {
   settings: AdminAiSettings
-  activeProvider: AdminAiSettings['provider']
   usage: AdminModelUsage[]
   onSystemPromptChange: (value: string) => void
   onCloudflareFieldChange: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
@@ -43,13 +41,13 @@ export function ProvidersWorkspace({
   onFeedbackProviderDelete: (providerId: string) => void
   onOpenRouterModelsDetect: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
   onAnthropicModelsDetect: (input: AdminAnthropicDetectInput) => Promise<AdminAnthropicDetectResult>
-  onProviderChange: (provider: AdminAiSettings['provider']) => void
+  onProviderChange: (provider: string) => void
   onSave: () => void
   isSaving: boolean
 }) {
   return (
     <section className="dd-admin-page-stack">
-      <ProviderTable settings={settings} activeProvider={activeProvider} />
+      <ProviderTable settings={settings} />
       <SystemPromptPanel
         settings={settings}
         onSystemPromptChange={onSystemPromptChange}

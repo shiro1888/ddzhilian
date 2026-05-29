@@ -50,6 +50,7 @@ export type SearxngSafeSearchLevel = 0 | 1 | 2;
 export type AiModelOption = {
   id: string;
   label: string;
+  alias?: string;
 };
 
 export type CloudflareAiModelOption = AiModelOption;

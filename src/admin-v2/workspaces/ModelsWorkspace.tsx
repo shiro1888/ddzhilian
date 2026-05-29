@@ -30,7 +30,6 @@ import {
 
 type AdminV2ModelsWorkspaceProps = {
   aiDraft: AdminAiSettings
-  activeProvider: AdminAiSettings['provider']
   canEdit: boolean
   hasChanges: boolean
   isSaving: boolean
@@ -45,13 +44,11 @@ function summarizeEnabledModels(models: AdminModelToggleItem[]) {
 
 function ModelGroupCard({
   group,
-  isCurrentProvider,
   canEdit,
   onToggle,
   onSetDefault,
 }: Readonly<{
   group: AdminAiModelGroup
-  isCurrentProvider: boolean
   canEdit: boolean
   onToggle: (group: AdminAiModelGroup, modelId: string, enabled: boolean) => void
   onSetDefault: (group: AdminAiModelGroup, modelId: string) => void
@@ -63,7 +60,6 @@ function ModelGroupCard({
           <div>
             <CardTitle className="flex items-center gap-2">
               {group.providerLabel}
-              {isCurrentProvider ? <Badge variant="secondary">当前接管</Badge> : null}
             </CardTitle>
             <CardDescription>
               {group.providerTypeLabel} · 默认模型 {group.defaultModel || '未设置'}
@@ -89,7 +85,7 @@ function ModelGroupCard({
             {group.models.map((model) => {
               const isDefault = group.defaultModel === model.id
               return (
-                <TableRow key={`${group.providerId}:${model.id}`}>
+                <TableRow key={`${group.providerKey}:${model.id}`}>
                   <TableCell className="font-medium">{model.label}</TableCell>
                   <TableCell className="max-w-[22rem] truncate text-muted-foreground">{model.id}</TableCell>
                   <TableCell>
@@ -134,7 +130,6 @@ function ModelGroupCard({
 
 export function AdminV2ModelsWorkspace({
   aiDraft,
-  activeProvider,
   canEdit,
   hasChanges,
   isSaving,
@@ -148,7 +143,7 @@ export function AdminV2ModelsWorkspace({
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
   const visibleGroups = groups
-    .filter((group) => providerFilter === 'all' || group.providerId === providerFilter)
+    .filter((group) => providerFilter === 'all' || group.providerKey === providerFilter)
     .map((group) => ({
       ...group,
       models: normalizedSearchQuery
@@ -167,7 +162,7 @@ export function AdminV2ModelsWorkspace({
             <div>
               <CardTitle>模型目录</CardTitle>
               <CardDescription>
-                当前页面直接编辑本地 `AdminAiSettings` 草稿，保存时统一提交到 `/api/admin/ai-config`。
+                管理所有供应商的模型启用状态和默认模型。
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -180,7 +175,7 @@ export function AdminV2ModelsWorkspace({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+        <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem]">
           <Input
             type="search"
             value={searchQuery}
@@ -194,29 +189,24 @@ export function AdminV2ModelsWorkspace({
           >
             <option value="all">全部供应商</option>
             {groups.map((group) => (
-              <option key={group.providerId} value={group.providerId}>
+              <option key={group.providerKey} value={group.providerKey}>
                 {group.providerLabel}
               </option>
             ))}
           </select>
-          <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline">当前接管 {activeProvider}</Badge>
-            {!canEdit ? <Badge variant="secondary">只读</Badge> : null}
-          </div>
         </CardContent>
       </Card>
 
       {visibleGroups.map((group) => (
         <ModelGroupCard
-          key={group.providerId}
+          key={group.providerKey}
           group={group}
-          isCurrentProvider={activeProvider === group.providerId}
           canEdit={canEdit}
           onToggle={(currentGroup, modelId, enabled) => {
-            onChange((current) => toggleAdminProviderModel(current, currentGroup.providerId, modelId, enabled))
+            onChange((current) => toggleAdminProviderModel(current, currentGroup.providerKey, modelId, enabled))
           }}
           onSetDefault={(currentGroup, modelId) => {
-            onChange((current) => setAdminProviderDefaultModel(current, currentGroup.providerId, modelId))
+            onChange((current) => setAdminProviderDefaultModel(current, currentGroup.providerKey, modelId))
           }}
         />
       ))}

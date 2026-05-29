@@ -85,6 +85,7 @@ type OpenRouterChatResponse = {
   choices?: Array<{
     message?: {
       content?: unknown;
+      reasoning_content?: unknown;
     };
     text?: unknown;
   }>;
@@ -418,7 +419,7 @@ const openRouterFallbackModelIds = [
 const openAiCompatibleModelRefreshIntervalMs = 60 * 60 * 1000;
 const openAiCompatibleModelListTimeoutMs = 12_000;
 const openAiCompatibleModelProbeTimeoutMs = 10_000;
-const openAiCompatibleModelProbeMaxOutputTokens = 8;
+const openAiCompatibleModelProbeMaxOutputTokens = 256;
 const openAiCompatibleModelProbeConcurrency = 3;
 const openAiCompatibleNonChatModelPattern =
   /\b(audio|clip|dall-e|embedding|image|moderation|ocr|realtime|speech|tts|transcribe|translation|whisper)\b/i;
@@ -1177,7 +1178,7 @@ function extractOpenRouterText(payload: OpenRouterChatResponse) {
 
   const choice = payload.choices?.[0];
   const messageContent = choice?.message?.content;
-  if (typeof messageContent === 'string') {
+  if (typeof messageContent === 'string' && messageContent.trim()) {
     return messageContent.trim();
   }
 
@@ -1186,7 +1187,12 @@ function extractOpenRouterText(payload: OpenRouterChatResponse) {
     return contentText;
   }
 
-  if (typeof choice?.text === 'string') {
+  const reasoningContent = choice?.message?.reasoning_content;
+  if (typeof reasoningContent === 'string' && reasoningContent.trim()) {
+    return reasoningContent.trim();
+  }
+
+  if (typeof choice?.text === 'string' && choice.text.trim()) {
     return choice.text.trim();
   }
 
@@ -1895,10 +1901,19 @@ async function detectUsableOpenAiCompatibleModels(
     .filter((entry) => entry.result.ok)
     .map((entry) => entry.model);
 
+  const probeErrors = probeResults
+    .filter((entry) => !entry.result.ok)
+    .map((entry) => ({
+      model: entry.model.id,
+      status: entry.result.status,
+      message: entry.result.message,
+    }));
+
   return {
     models,
     checkedModelCount: listedModels.length,
     failedModelCount: listedModels.length - models.length,
+    probeErrors,
   };
 }
 
@@ -1977,7 +1992,17 @@ function refreshConfiguredOpenAiCompatibleModels() {
     });
 
     if (detected.models.length === 0) {
-      throw new Error('没有检测到可用模型，已保留原模型列表。');
+      const firstProbeError = detected.probeErrors[0];
+      const probeDetail = firstProbeError
+        ? ` (示例: 模型 ${firstProbeError.model} 返回 ${String(firstProbeError.status)} — ${firstProbeError.message ?? '无详细信息'})`
+        : '';
+      console.warn('OpenAI-compatible refresh: all probes failed', {
+        baseUrl,
+        checkedModelCount: detected.checkedModelCount,
+        failedModelCount: detected.failedModelCount,
+        probeErrors: detected.probeErrors.slice(0, 3),
+      });
+      throw new Error(`没有检测到可用模型，已保留原模型列表。已检测 ${String(detected.checkedModelCount)} 个模型，全部失败。${probeDetail}`);
     }
 
     const usableModelIds = new Set(detected.models.map((model) => model.id));
@@ -4510,7 +4535,22 @@ async function handleAdminAiConfigDetect(
       siteName: config.openrouterAi.siteName,
     });
     if (detected.models.length === 0) {
-      writeJson(response, 502, { error: '没有检测到可用模型，请检查 API Key、接口类型和模型权限。' });
+      const firstProbeError = detected.probeErrors[0];
+      const probeDetail = firstProbeError
+        ? ` (示例: 模型 ${firstProbeError.model} 返回 ${String(firstProbeError.status)} — ${firstProbeError.message ?? '无详细信息'})`
+        : '';
+      console.warn('OpenAI-compatible detect: all probes failed', {
+        baseUrl,
+        checkedModelCount: detected.checkedModelCount,
+        failedModelCount: detected.failedModelCount,
+        probeErrors: detected.probeErrors.slice(0, 3),
+      });
+      writeJson(response, 502, {
+        error: `没有检测到可用模型，请检查 API Key、接口类型和模型权限。已检测 ${String(detected.checkedModelCount)} 个模型，全部失败。${probeDetail}`,
+        checkedModelCount: detected.checkedModelCount,
+        failedModelCount: detected.failedModelCount,
+        probeErrors: detected.probeErrors.slice(0, 5),
+      });
       return;
     }
 

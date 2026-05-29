@@ -115,23 +115,19 @@ function buildDashboardSummary(snapshot: AdminStateResponse): SummaryItem[] {
 }
 
 function getPrimaryProviderLabel(snapshot: AdminStateResponse) {
-  if (snapshot.ai.provider === 'cloudflare') {
-    return 'Cloudflare AI'
+  if (snapshot.ai.openai.length > 0) {
+    return snapshot.ai.openai[0].displayName.trim() || 'OpenAI Compatible'
   }
 
-  if (snapshot.ai.provider === 'openrouter') {
-    return snapshot.ai.openrouter.displayName.trim() || 'OpenAI Compatible'
+  if (snapshot.ai.anthropic.length > 0) {
+    return 'Anthropic'
   }
 
-  return snapshot.ai.provider
+  return 'Cloudflare AI'
 }
 
 function buildCurrentProviderUsageOverview(snapshot: AdminStateResponse) {
-  if (snapshot.ai.provider !== 'cloudflare' && snapshot.ai.provider !== 'openrouter') {
-    return null
-  }
-
-  const currentProviderItems = snapshot.usage.models.filter((item) => item.provider === snapshot.ai.provider)
+  const currentProviderItems = snapshot.usage.models
   if (currentProviderItems.length === 0) {
     return null
   }
@@ -497,7 +493,7 @@ export function AdminV2DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>模型调用概览</CardTitle>
-          <CardDescription>按当前主运行供应商聚合的调用结果</CardDescription>
+          <CardDescription>按所有已配置供应商聚合的调用结果</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {usageOverview ? (
@@ -510,7 +506,7 @@ export function AdminV2DashboardPage() {
                 </EmptyMedia>
                 <EmptyTitle>当前供应商暂无调用记录</EmptyTitle>
                 <EmptyDescription>
-                  这里仅展示 `cloudflare` 或 `openrouter` 当前主运行供应商的模型调用概览。
+                  这里展示所有已配置供应商的模型调用概览。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -633,7 +629,6 @@ export function AdminV2WorkspacePage({
     return (
       <AdminV2ModelsWorkspace
         aiDraft={aiDraft}
-        activeProvider={snapshot.ai.provider}
         canEdit={Boolean(adminSession?.isSuperAdmin)}
         hasChanges={hasAiDraftChanges}
         isSaving={isAiSaving}
@@ -651,7 +646,7 @@ export function AdminV2WorkspacePage({
       return (
         <SuperAdminPermissionGuard
           title="供应商配置页"
-          description="修改主运行供应商、连接配置和模型探测设置"
+          description="修改连接配置和模型探测设置"
         />
       )
     }
