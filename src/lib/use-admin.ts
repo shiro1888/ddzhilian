@@ -456,66 +456,20 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     )
   }
 
+  // V1 handlers — kept as no-ops to preserve prop signatures until v1 removal.
   const handleAdminOpenRouterFieldChange = <Field extends keyof AdminOpenRouterConfig,>(
-    field: Field,
-    value: AdminOpenRouterConfig[Field],
-  ) => {
-    setAdminAiSettings((previous) =>
-      previous
-        ? {
-            ...previous,
-            openrouter: {
-              ...previous.openrouter,
-              [field]: value,
-            },
-          }
-        : previous,
-    )
-  }
+    _field: Field,
+    _value: AdminOpenRouterConfig[Field],
+  ) => { /* no-op */ }
 
-  const handleAdminFeedbackProviderAdd = (provider: AdminFeedbackProviderConfig) => {
-    setAdminAiSettings((previous) =>
-      previous
-        ? {
-            ...previous,
-            feedbackProviders: [
-              ...previous.feedbackProviders.filter((entry) => entry.id !== provider.id),
-              provider,
-            ],
-          }
-        : previous,
-    )
-  }
+  const handleAdminFeedbackProviderAdd = (_provider: AdminFeedbackProviderConfig) => { /* no-op */ }
 
   const handleAdminFeedbackProviderChange = (
-    providerId: string,
-    provider: AdminFeedbackProviderConfig,
-  ) => {
-    setAdminAiSettings((previous) =>
-      previous
-        ? {
-            ...previous,
-            feedbackProviders: previous.feedbackProviders.map((entry) =>
-              entry.id === providerId ? provider : entry,
-            ),
-          }
-        : previous,
-    )
-  }
+    _providerId: string,
+    _provider: AdminFeedbackProviderConfig,
+  ) => { /* no-op */ }
 
-  const handleAdminFeedbackProviderDelete = (providerId: string) => {
-    setAdminAiSettings((previous) => {
-      if (!previous) {
-        return previous
-      }
-
-      return {
-        ...previous,
-        provider: previous.provider === providerId ? 'openrouter' : previous.provider,
-        feedbackProviders: previous.feedbackProviders.filter((entry) => entry.id !== providerId),
-      }
-    })
-  }
+  const handleAdminFeedbackProviderDelete = (_providerId: string) => { /* no-op */ }
 
   const handleAdminOpenRouterModelsDetect = (
     input: AdminOpenAiCompatibleDetectInput,

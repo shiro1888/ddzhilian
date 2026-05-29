@@ -122,7 +122,6 @@ type PersistedAdminConfig = {
     systemPrompt?: unknown;
     cloudflare?: LegacyProviderSnapshot;
     openrouter?: LegacyProviderSnapshot;
-    feedbackProviders?: unknown;
   };
 };
 
@@ -480,109 +479,11 @@ function normalizeAnthropicSnapshot(
   };
 }
 
-function normalizeFeedbackProviders(
-  value: unknown,
-  fallback: ServerConfig,
-): AdminFeedbackProviderSnapshot[] {
-  const usedIds = new Set<string>();
-
-  if (!Array.isArray(value)) {
-    return fallback.feedbackAiProviders.map((provider, index) => {
-      const id = normalizeFeedbackProviderId(provider.id, index, usedIds);
-      return provider.kind === 'anthropic'
-        ? {
-            id,
-            kind: 'anthropic',
-            displayName: provider.displayName || defaultAnthropicDisplayName,
-            note: provider.note || '',
-            createdAt: normalizeCreatedAt(provider.createdAt),
-            anthropic: normalizeAnthropicSnapshot(provider.anthropic ?? {}, provider.anthropic),
-          }
-        : {
-            id,
-            kind: 'openai-compatible',
-            displayName: provider.displayName || provider.openai?.displayName || defaultOpenRouterDisplayName,
-            note: provider.note || provider.openai?.note || '',
-            createdAt: normalizeCreatedAt(provider.createdAt),
-            openai: normalizeOpenAiCompatibleSnapshot(provider.openai ?? {}, fallback.openrouterAi),
-          };
-    });
-  }
-
-  return value.flatMap<AdminFeedbackProviderSnapshot>((entry, index) => {
-    if (!entry || typeof entry !== 'object') {
-      return [];
-    }
-
-    const record = entry as LegacyProviderSnapshot;
-    const kind = record.kind === 'anthropic' || record.kind === 'openai-compatible'
-      ? record.kind
-      : record.anthropic ? 'anthropic' : 'openai-compatible';
-    const id = normalizeFeedbackProviderId(record.id, index, usedIds);
-    const createdAt = normalizeCreatedAt(record.createdAt);
-    const note = normalizeOptionalString(record.note).slice(0, 240);
-
-    if (kind === 'anthropic') {
-      const anthropicInput = ((record.anthropic ?? record) || {}) as LegacyProviderSnapshot;
-      const anthropic = normalizeAnthropicSnapshot(anthropicInput);
-      const displayName =
-        normalizeOptionalString(record.displayName) ||
-        normalizeOptionalString(record.providerName) ||
-        defaultAnthropicDisplayName;
-
-      return [{
-        id,
-        kind,
-        displayName,
-        note,
-        createdAt,
-        anthropic,
-      }];
-    }
-
-    const openaiInput = ((record.openai ?? record) || {}) as LegacyProviderSnapshot;
-    const openai = normalizeOpenAiCompatibleSnapshot(openaiInput, fallback.openrouterAi);
-    const displayName =
-      normalizeOptionalString(record.displayName) ||
-      normalizeOptionalString(record.providerName) ||
-      openai.displayName ||
-      defaultOpenRouterDisplayName;
-
-    return [{
-      id,
-      kind,
-      displayName,
-      note,
-      createdAt,
-      openai: {
-        ...openai,
-        displayName,
-        note,
-      },
-    }];
-  });
-}
-
-function normalizeActiveProvider(value: unknown, feedbackProviders: AdminFeedbackProviderSnapshot[]) {
-  const provider = normalizeOptionalString(value);
-  if (provider === 'cloudflare' || provider === 'openrouter') {
-    return provider;
-  }
-
-  if (feedbackProviders.some((entry) => entry.id === provider)) {
-    return provider;
-  }
-
-  return 'cloudflare';
-}
-
 function normalizeSnapshot(
   input: PersistedAdminConfig['ai'] | AdminAiSettingsSnapshot,
   fallback: ServerConfig,
 ): AdminAiSettingsSnapshot {
   const cloudflareInput = (input?.cloudflare ?? {}) as LegacyProviderSnapshot;
-  const persistedInput = input as PersistedAdminConfig['ai'];
-  const openrouterInput = (persistedInput?.openrouter ?? {}) as LegacyProviderSnapshot;
   const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
   const cloudflareModels = parseModelToggleItems(
     cloudflareInput.models ?? cloudflareInput.modelsText,
@@ -592,39 +493,20 @@ function normalizeSnapshot(
   const normalizedCloudflareModel = cloudflareModels.some((model) => model.id === cloudflareModel)
     ? cloudflareModel
     : cloudflareModels.find((model) => model.enabled)?.id ?? cloudflareModels[0]?.id ?? cloudflareModel;
-  const feedbackProviders = normalizeFeedbackProviders(persistedInput?.feedbackProviders, fallback);
 
-  // Build openai[] and anthropic[] from input or legacy feedbackProviders
   const openaiFromInput = (input as AdminAiSettingsSnapshot).openai;
   const anthropicFromInput = (input as AdminAiSettingsSnapshot).anthropic;
 
-  let openaiList: AdminOpenAiCompatibleSnapshot[];
-  let anthropicList: AdminAnthropicSnapshot[];
+  const openaiList: AdminOpenAiCompatibleSnapshot[] = Array.isArray(openaiFromInput)
+    ? openaiFromInput.map((item) => normalizeOpenAiCompatibleSnapshot(item as LegacyProviderSnapshot, fallback.openrouterAi))
+    : [normalizeOpenAiCompatibleSnapshot({}, fallback.openrouterAi)];
 
-  if (Array.isArray(openaiFromInput)) {
-    openaiList = openaiFromInput.map((item) => normalizeOpenAiCompatibleSnapshot(item as LegacyProviderSnapshot, fallback.openrouterAi));
-  } else if (openrouterInput.baseUrl || openrouterInput.apiKey) {
-    openaiList = [normalizeOpenAiCompatibleSnapshot(openrouterInput, fallback.openrouterAi)];
-  } else {
-    openaiList = [normalizeOpenAiCompatibleSnapshot({}, fallback.openrouterAi)];
-  }
-
-  if (Array.isArray(anthropicFromInput)) {
-    anthropicList = anthropicFromInput.map((item) => normalizeAnthropicSnapshot(item as LegacyProviderSnapshot));
-  } else {
-    anthropicList = feedbackProviders
-      .filter((p) => p.kind === 'anthropic')
-      .map((p) => normalizeAnthropicSnapshot(p.anthropic as LegacyProviderSnapshot));
-  }
-
-  // Add feedback providers of openai-compatible kind that aren't already in openaiList
-  const feedbackOpenAi = feedbackProviders.filter((p) => p.kind === 'openai-compatible');
-  for (const fb of feedbackOpenAi) {
-    openaiList.push(normalizeOpenAiCompatibleSnapshot(fb.openai as LegacyProviderSnapshot, fallback.openrouterAi));
-  }
+  const anthropicList: AdminAnthropicSnapshot[] = Array.isArray(anthropicFromInput)
+    ? anthropicFromInput.map((item) => normalizeAnthropicSnapshot(item as LegacyProviderSnapshot))
+    : [];
 
   return {
-    provider: normalizeActiveProvider(input?.provider, feedbackProviders),
+    provider: normalizeOptionalString(input?.provider) || 'cloudflare',
     systemPrompt: normalizeSystemPrompt(input?.systemPrompt, fallback.aiSystemPrompt),
     cloudflare: {
       accountId: normalizeOptionalString(cloudflareInput.accountId),
@@ -909,6 +791,14 @@ export class AdminConfigRegistry {
 
   private persist(payload: PersistedAdminConfig) {
     mkdirSync(ADMIN_CONFIG_ROOT, { recursive: true });
+
+    // When saving from the new-format UI (openai[] array), clear legacy
+    // feedbackProviders so they don't reappear on the next load via
+    // normalizeSnapshot → getAiSettingsSnapshot.
+    if (Array.isArray((payload.ai as AdminAiSettingsSnapshot | undefined)?.openai)) {
+      (payload.ai as Record<string, unknown>).feedbackProviders = [];
+    }
+
     writeFileSync(ADMIN_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
   }
 }

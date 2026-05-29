@@ -34,7 +34,6 @@ import type {
   RoomSummary,
 } from './lib/ddzhilian-types'
 import { useAccountAuth } from './lib/use-account-auth'
-import { useAdmin } from './lib/use-admin'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
@@ -295,50 +294,6 @@ function App() {
   const isAiChatView = activeView === 'chat'
   const isImageView = activeView === 'image'
   const isAdminProtectedView = isAdminView
-  const {
-    adminEmailDraft,
-    adminPasswordDraft,
-    adminSession,
-    isAdminAuthenticated,
-    isAdminLoading,
-    isAdminLoginTransitioning,
-    isAdminSaving,
-    isAdminClearingHistory,
-    isAdminRenamingOnlineDevice,
-    isAdminUpdatingUser,
-    isAdminUpdatingRole,
-    adminError,
-    adminHistoryStats,
-    adminAiSettings,
-    adminUsage,
-    adminOnlineDevices,
-    adminUsers,
-    adminRoles,
-    adminThemeSubmissions,
-    adminToasts,
-    isAdminDevLoginEnabled,
-    setAdminEmailDraft,
-    setAdminPasswordDraft,
-    dismissAdminToast,
-    handleAdminConnect,
-    handleAdminDevConnect,
-    handleAdminDisconnect,
-    handleAdminProviderChange,
-    handleAdminSystemPromptChange,
-    handleAdminCloudflareFieldChange,
-    handleAdminOpenRouterFieldChange,
-    handleAdminFeedbackProviderAdd,
-    handleAdminFeedbackProviderChange,
-    handleAdminFeedbackProviderDelete,
-    handleAdminOpenRouterModelsDetect,
-    handleAdminAnthropicModelsDetect,
-    handleAdminSave,
-    handleAdminClearHistory,
-    handleAdminOnlineDeviceRename,
-    handleAdminUserQuotaUpdate,
-    handleAdminRoleCreate,
-    handleAdminRoleDelete,
-  } = useAdmin({ enabled: isAdminProtectedView })
   const imageAccount = useAccountAuth()
   const { canRecallAnyMessage } = useAdminPermissions({
     enabled: !isAdminProtectedView,
@@ -1562,52 +1517,7 @@ function App() {
     setLocalError(null)
   }
 
-  const adminRouteElement = (
-    <AdminStage
-      adminEmailDraft={adminEmailDraft}
-      adminPasswordDraft={adminPasswordDraft}
-      adminSession={adminSession}
-      isAdminAuthenticated={isAdminAuthenticated}
-      isAdminLoading={isAdminLoading}
-      isAdminLoginTransitioning={isAdminLoginTransitioning}
-      isAdminSaving={isAdminSaving}
-      isAdminClearingHistory={isAdminClearingHistory}
-      isAdminRenamingOnlineDevice={isAdminRenamingOnlineDevice}
-      isAdminUpdatingUser={isAdminUpdatingUser}
-      isAdminUpdatingRole={isAdminUpdatingRole}
-      isAdminDevLoginEnabled={isAdminDevLoginEnabled}
-      adminError={adminError}
-      adminToasts={adminToasts}
-      historyStats={adminHistoryStats}
-      aiSettings={adminAiSettings}
-      usage={adminUsage}
-      onlineDevices={adminOnlineDevices}
-      users={adminUsers}
-      roles={adminRoles}
-      themeSubmissions={adminThemeSubmissions}
-      onAdminEmailDraftChange={setAdminEmailDraft}
-      onAdminPasswordDraftChange={setAdminPasswordDraft}
-      onAdminToastDismiss={dismissAdminToast}
-      onConnect={handleAdminConnect}
-      onDevConnect={handleAdminDevConnect}
-      onDisconnect={handleAdminDisconnect}
-      onProviderChange={handleAdminProviderChange}
-      onSystemPromptChange={handleAdminSystemPromptChange}
-      onCloudflareFieldChange={handleAdminCloudflareFieldChange}
-      onOpenRouterFieldChange={handleAdminOpenRouterFieldChange}
-      onFeedbackProviderAdd={handleAdminFeedbackProviderAdd}
-      onFeedbackProviderChange={handleAdminFeedbackProviderChange}
-      onFeedbackProviderDelete={handleAdminFeedbackProviderDelete}
-      onOpenRouterModelsDetect={handleAdminOpenRouterModelsDetect}
-      onAnthropicModelsDetect={handleAdminAnthropicModelsDetect}
-      onSave={handleAdminSave}
-      onClearHistory={handleAdminClearHistory}
-      onOnlineDeviceRename={handleAdminOnlineDeviceRename}
-      onUserQuotaUpdate={handleAdminUserQuotaUpdate}
-      onRoleCreate={handleAdminRoleCreate}
-      onRoleDelete={handleAdminRoleDelete}
-    />
-  )
+  const adminRouteElement = <AdminStage />
 
   const imageAuthGateElement = (
     <ImageAccountGate
