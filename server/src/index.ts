@@ -1903,14 +1903,11 @@ async function detectUsableOpenAiCompatibleModels(
 
   const probeErrors = probeResults
     .filter((entry) => !entry.result.ok)
-    .map((entry) => {
-      const result = entry.result as OpenRouterChatFailure;
-      return {
-        model: entry.model.id,
-        status: result.status,
-        message: result.message,
-      };
-    });
+    .map((entry) => ({
+      model: entry.model.id,
+      status: entry.result.status,
+      message: entry.result.message,
+    }));
 
   return {
     models,
@@ -1922,7 +1919,7 @@ async function detectUsableOpenAiCompatibleModels(
 
 function toOpenAiCompatibleModelToggles(
   models: OpenAiCompatibleModelOption[],
-  previousModels: AdminAiSettingsSnapshot['openai'][number]['models'],
+  previousModels: AdminAiSettingsSnapshot['openrouter']['models'],
   selectedModelId: string,
 ) {
   const previousById = new Map(previousModels.map((model) => [model.id, model]));
@@ -1932,7 +1929,6 @@ function toOpenAiCompatibleModelToggles(
     return {
       id: model.id,
       label: model.label || previous?.label || model.id,
-      alias: '',
       enabled: previous?.enabled ?? !hadPreviousModels,
     };
   });
@@ -1967,19 +1963,18 @@ function refreshConfiguredOpenAiCompatibleModels() {
   openAiCompatibleModelRefreshPromise = (async () => {
     const snapshot = adminConfig.getAiSettingsSnapshot();
     const refreshedAt = new Date().toISOString();
-    const openAiMain = snapshot.openai[0];
-    const baseUrl = openAiMain ? normalizeAdminOpenAiCompatibleBaseUrl(openAiMain.baseUrl) ?? '' : '';
-    const apiKey = openAiMain?.apiKey?.trim() ?? '';
+    const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(snapshot.openrouter.baseUrl) ?? '';
+    const apiKey = snapshot.openrouter.apiKey.trim();
 
     if (!baseUrl || !apiKey) {
       return {
         refreshed: false,
         baseUrl,
-        selectedModelId: openAiMain?.model || undefined,
-        models: openAiMain?.models.map((model) => ({
+        selectedModelId: snapshot.openrouter.model || undefined,
+        models: snapshot.openrouter.models.map((model) => ({
           id: model.id,
           label: model.label,
-        })) ?? [],
+        })),
         checkedModelCount: 0,
         failedModelCount: 0,
         refreshedAt,
@@ -1990,10 +1985,10 @@ function refreshConfiguredOpenAiCompatibleModels() {
     const detected = await detectUsableOpenAiCompatibleModels({
       baseUrl,
       apiKey,
-      wireApi: openAiMain.wireApi,
-      reasoningEffort: openAiMain.reasoningEffort,
-      siteUrl: openAiMain.siteUrl,
-      siteName: openAiMain.siteName,
+      wireApi: snapshot.openrouter.wireApi,
+      reasoningEffort: snapshot.openrouter.reasoningEffort,
+      siteUrl: snapshot.openrouter.siteUrl,
+      siteName: snapshot.openrouter.siteName,
     });
 
     if (detected.models.length === 0) {
@@ -2011,23 +2006,23 @@ function refreshConfiguredOpenAiCompatibleModels() {
     }
 
     const usableModelIds = new Set(detected.models.map((model) => model.id));
-    const selectedModelId = usableModelIds.has(openAiMain.model)
-      ? openAiMain.model
+    const selectedModelId = usableModelIds.has(snapshot.openrouter.model)
+      ? snapshot.openrouter.model
       : detected.models[0].id;
     const nextModels = toOpenAiCompatibleModelToggles(
       detected.models,
-      openAiMain.models,
+      snapshot.openrouter.models,
       selectedModelId,
     );
 
     adminConfig.updateAiSettings({
       ...snapshot,
-      openai: [{
-        ...openAiMain,
+      openrouter: {
+        ...snapshot.openrouter,
         baseUrl,
         model: selectedModelId,
         models: nextModels,
-      }],
+      },
     });
 
     return {
@@ -2997,13 +2992,24 @@ function sanitizeAdminAiSettingsSnapshot(snapshot: AdminAiSettingsSnapshot): Adm
       ...snapshot.cloudflare,
       apiToken: '',
     },
-    openai: snapshot.openai.map((provider) => ({
-      ...provider,
+    openrouter: {
+      ...snapshot.openrouter,
       apiKey: '',
-    })),
-    anthropic: snapshot.anthropic.map((provider) => ({
+    },
+    feedbackProviders: snapshot.feedbackProviders.map((provider) => ({
       ...provider,
-      authToken: '',
+      openai: provider.openai
+        ? {
+            ...provider.openai,
+            apiKey: '',
+          }
+        : provider.openai,
+      anthropic: provider.anthropic
+        ? {
+            ...provider.anthropic,
+            authToken: '',
+          }
+        : provider.anthropic,
     })),
   };
 }

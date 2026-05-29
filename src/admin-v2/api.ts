@@ -17,6 +17,7 @@ type AdminStatePayload = Partial<AdminStateResponse> & {
 export type AdminOpenAiCompatibleDetectedModel = {
   id: string
   label: string
+  enabled?: boolean
 }
 
 export type AdminOpenAiCompatibleDetectInput = {

@@ -235,12 +235,15 @@ function buildDetectedModelList(
 ) {
   const enabledIds = new Set(currentModels.filter((model) => model.enabled).map((model) => model.id))
 
-  return result.models.map((model) => ({
-    id: model.id,
-    label: model.label || model.id,
-    alias: '',
-    enabled: enabledIds.has(model.id) || model.id === selectedModelId,
-  }))
+  return result.models.map((model) => {
+    const probeEnabled = model.enabled ?? !enabledIds.has(model.id)
+    return {
+      id: model.id,
+      label: model.label || model.id,
+      alias: '',
+      enabled: enabledIds.has(model.id) || model.id === selectedModelId || probeEnabled,
+    }
+  })
 }
 
 export function applyOpenAiDetectionToAdminSettings(
