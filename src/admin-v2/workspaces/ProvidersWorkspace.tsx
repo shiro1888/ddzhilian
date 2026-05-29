@@ -474,7 +474,6 @@ function OpenAiCompatiblePanel({
   onClearError,
   detectionState,
   onDetect,
-  onApplyDetectedModels,
   onChangeField,
   onAutoSave,
   onDelete,
@@ -486,7 +485,6 @@ function OpenAiCompatiblePanel({
   onClearError: () => void
   detectionState: DetectionState
   onDetect: () => void
-  onApplyDetectedModels: () => void
   onChangeField: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
   onAutoSave: (showSuccessToast?: boolean) => void
   onDelete: () => void
@@ -605,17 +603,7 @@ function OpenAiCompatiblePanel({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-1">
               <p>{detectionState.message}</p>
-              {detectionState.result ? (
-                <p className="text-xs opacity-80">
-                  检测到 {formatInteger(detectionState.result.models.length)} 个模型，仅在你确认应用后写入本地草稿。
-                </p>
-              ) : null}
             </div>
-            {detectionState.result ? (
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onApplyDetectedModels}>
-                应用到草稿并自动保存
-              </Button>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -1065,10 +1053,13 @@ export function AdminV2ProvidersWorkspace({
                           ...prev,
                           [selectedDetail]: {
                             tone: 'success',
-                            message: `已从 ${result.baseUrl} 读取模型列表。`,
+                            message: `已从 ${result.baseUrl} 读取模型列表并自动应用到草稿。`,
                             result,
                           },
                         }))
+                        commitDraftChange((current) =>
+                          applyOpenAiDetectionToAdminSettings(current, index, result),
+                        )
                       })
                       .catch((nextError) => {
                         setDetectionStates((prev) => ({
@@ -1080,13 +1071,6 @@ export function AdminV2ProvidersWorkspace({
                           },
                         }))
                       })
-                  }}
-                  onApplyDetectedModels={() => {
-                    const detection = detectionStates[selectedDetail]
-                    if (!detection?.result) return
-                    commitDraftChange((current) =>
-                      applyOpenAiDetectionToAdminSettings(current, index, detection.result!),
-                    )
                   }}
                   onChangeField={(field, value) => {
                     onChange((current) => updateAdminOpenAiField(current, index, field, value))
