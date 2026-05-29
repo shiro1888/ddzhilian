@@ -248,6 +248,7 @@ function parseModelToggleItems(
         return {
           id,
           label: normalizeOptionalString(record.label) || labelFromAiModelId(id),
+          alias: '',
           enabled: record.enabled !== false,
         } satisfies AdminModelToggleItem;
       })
@@ -262,6 +263,7 @@ function parseModelToggleItems(
       fallbackModels.map((model) => ({
         id: model.id,
         label: model.label,
+        alias: '',
         enabled: model.enabled !== false,
       })),
       defaultModelId,
@@ -283,6 +285,7 @@ function parseModelToggleItems(
       return [{
         id,
         label: labelParts.join('|').trim() || labelFromAiModelId(id),
+        alias: '',
         enabled: true,
       } satisfies AdminModelToggleItem];
     });
@@ -333,6 +336,7 @@ function ensureDefaultEnabled(
       next.set(fallbackModel.id, {
         id: fallbackModel.id,
         label: fallbackModel.label,
+        alias: '',
         enabled: fallbackModel.enabled !== false,
       });
     }
@@ -352,6 +356,7 @@ function ensureDefaultEnabled(
       next.set(safeDefaultId, {
         id: safeDefaultId,
         label: labelFromAiModelId(safeDefaultId),
+        alias: '',
         enabled: true,
       });
     }
@@ -447,7 +452,7 @@ function normalizeAnthropicSnapshot(
     defaultHaikuModel,
   ]
     .filter(Boolean)
-    .map((id) => ({ id, label: labelFromAiModelId(id), enabled: true }));
+    .map((id) => ({ id, label: labelFromAiModelId(id), alias: '', enabled: true }));
   const models = parseModelToggleItems(
     input.models ?? input.modelsText,
     model,
@@ -594,9 +599,10 @@ function normalizeSnapshot(
     );
   } else {
     // Old format: migrate from openrouter + feedbackProviders
-    const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
+    const persistedInput = input as PersistedAdminConfig['ai'];
+    const openrouterInput = (persistedInput?.openrouter ?? {}) as LegacyProviderSnapshot;
     const mainOpenAi = normalizeOpenAiCompatibleSnapshot(openrouterInput, fallback.openrouterAi);
-    const feedbackProviders = normalizeFeedbackProviders(input?.feedbackProviders, fallback);
+    const feedbackProviders = normalizeFeedbackProviders(persistedInput?.feedbackProviders, fallback);
 
     const feedbackOpenAi = feedbackProviders
       .filter((p) => p.kind === 'openai-compatible' && p.openai)
@@ -658,6 +664,7 @@ function toAdminOpenAiSnapshot(input: OpenAiCompatibleProviderConfig): AdminOpen
     models: input.models.map((model) => ({
       id: model.id,
       label: model.label,
+      alias: '',
       enabled: model.enabled !== false,
     })),
     maxPromptChars: input.maxPromptChars,
@@ -676,6 +683,7 @@ function toAdminAnthropicSnapshot(input: AnthropicProviderConfig): AdminAnthropi
     models: input.models.map((model) => ({
       id: model.id,
       label: model.label,
+      alias: '',
       enabled: model.enabled !== false,
     })),
     maxPromptChars: input.maxPromptChars,
@@ -820,6 +828,7 @@ export class AdminConfigRegistry {
         models: this.config.cloudflareAi.models.map((model) => ({
           id: model.id,
           label: model.label,
+          alias: '',
           enabled: model.enabled !== false,
         })),
         freeOnly: this.config.cloudflareAi.freeOnly,
