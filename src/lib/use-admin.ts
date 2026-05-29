@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AdminAiSettings,
   AdminCloudflareConfig,
-  AdminFeedbackProviderConfig,
   AdminHistoryStats,
   AdminOnlineDeviceNameUpdate,
   AdminOnlineDevicesSnapshot,
@@ -457,19 +456,13 @@ export function useAdmin({ enabled }: UseAdminOptions) {
   }
 
   // V1 handlers — kept as no-ops to preserve prop signatures until v1 removal.
-  const handleAdminOpenRouterFieldChange = <Field extends keyof AdminOpenRouterConfig,>(
-    _field: Field,
-    _value: AdminOpenRouterConfig[Field],
-  ) => { /* no-op */ }
+  const handleAdminOpenRouterFieldChange = () => {}
 
-  const handleAdminFeedbackProviderAdd = (_provider: AdminFeedbackProviderConfig) => { /* no-op */ }
+  const handleAdminFeedbackProviderAdd = () => {}
 
-  const handleAdminFeedbackProviderChange = (
-    _providerId: string,
-    _provider: AdminFeedbackProviderConfig,
-  ) => { /* no-op */ }
+  const handleAdminFeedbackProviderChange = () => {}
 
-  const handleAdminFeedbackProviderDelete = (_providerId: string) => { /* no-op */ }
+  const handleAdminFeedbackProviderDelete = () => {}
 
   const handleAdminOpenRouterModelsDetect = (
     input: AdminOpenAiCompatibleDetectInput,

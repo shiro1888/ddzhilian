@@ -18,7 +18,6 @@ const ENV_PATH = fileURLToPath(new URL('../../.env', import.meta.url));
 const defaultOpenRouterDisplayName = 'OpenRouter';
 const defaultOpenRouterHomepageUrl = 'https://openrouter.ai';
 const defaultOpenRouterBaseUrl = 'https://openrouter.ai/api/v1';
-const defaultAnthropicDisplayName = 'Anthropic';
 const defaultAnthropicBaseUrl = 'https://api.anthropic.com';
 const defaultAnthropicMaxPromptChars = 8000;
 const defaultAnthropicMaxOutputTokens = 1000;
@@ -193,31 +192,6 @@ function normalizeSystemPrompt(value: unknown, fallback: string) {
   }
 
   return value.trim().slice(0, 20_000);
-}
-
-function normalizeFeedbackProviderId(value: unknown, index: number, usedIds: Set<string>) {
-  const raw = normalizeOptionalString(value).replace(/^feedback:/i, '');
-  const slug = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-  const base = `feedback:${slug || `config-${index + 1}`}`;
-  let next = base;
-  let suffix = 2;
-
-  while (usedIds.has(next)) {
-    next = `${base}-${suffix.toString()}`;
-    suffix += 1;
-  }
-
-  usedIds.add(next);
-  return next;
-}
-
-function normalizeCreatedAt(value: unknown) {
-  const normalized = normalizeOptionalString(value);
-  return Number.isFinite(Date.parse(normalized)) ? normalized : new Date().toISOString();
 }
 
 function labelFromAiModelId(modelId: string) {
