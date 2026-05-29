@@ -71,7 +71,7 @@ type AdminStageProps = {
   onConnect: () => void
   onDevConnect: () => void
   onDisconnect: () => void
-  onProviderChange: (provider: AdminAiSettings['provider']) => void
+  onProviderChange: (provider: string) => void
   onSystemPromptChange: (value: string) => void
   onCloudflareFieldChange: <Field extends keyof AdminCloudflareConfig>(
     field: Field,

@@ -431,7 +431,7 @@ export function useAdmin({ enabled }: UseAdminOptions) {
     pushAdminToast('success', '已退出后台。')
   }
 
-  const handleAdminProviderChange = (provider: AdminAiSettings['provider']) => {
+  const handleAdminProviderChange = (provider: string) => {
     setAdminAiSettings((previous) => (previous ? { ...previous, provider } : previous))
   }
 
