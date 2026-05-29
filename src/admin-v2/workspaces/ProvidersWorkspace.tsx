@@ -7,7 +7,6 @@ import {
   Cloud,
   KeyRound,
   Plus,
-  RefreshCcw,
   SearchCheck,
   Trash2,
 } from 'lucide-react'
@@ -25,7 +24,6 @@ import type {
 import {
   addAdminAnthropicConfig,
   addAdminOpenAiConfig,
-  applyAnthropicDetectionToAdminSettings,
   applyOpenAiDetectionToAdminSettings,
   removeAdminAnthropicConfig,
   removeAdminOpenAiConfig,
@@ -80,8 +78,6 @@ type ProviderWorkspaceProps = {
   onAutosave: (draftOverride?: AdminAiSettings, options?: { showSuccessToast?: boolean }) => Promise<boolean>
   onDetectAnthropicModels: (input: { baseUrl: string; authToken: string }) => Promise<AdminAnthropicDetectResult>
   onDetectOpenAiCompatibleModels: (input: AdminOpenAiCompatibleDetectInput) => Promise<AdminOpenAiCompatibleDetectResult>
-  onRefreshModels: () => Promise<void>
-  isRefreshingModels: boolean
 }
 
 function upsertModelInList(models: AdminModelToggleItem[], modelId: string): AdminModelToggleItem[] {
@@ -317,14 +313,12 @@ function CloudflarePanel({
   disabled,
   onClearError,
   onChangeField,
-  onAutoSave,
 }: Readonly<{
   aiDraft: AdminAiSettings
   savedSettings: AdminAiSettings
   disabled: boolean
   onClearError: () => void
   onChangeField: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
-  onAutoSave: (showSuccessToast?: boolean) => void
 }>) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const configured = providerConfigured(aiDraft.cloudflare)
@@ -478,10 +472,8 @@ function OpenAiCompatiblePanel({
   disabled,
   onClearError,
   detectionState,
-  isRefreshingModels,
   onDetect,
   onApplyDetectedModels,
-  onRefreshModels,
   onChangeField,
   onAutoSave,
   onDelete,
@@ -492,10 +484,8 @@ function OpenAiCompatiblePanel({
   disabled: boolean
   onClearError: () => void
   detectionState: DetectionState
-  isRefreshingModels: boolean
   onDetect: () => void
   onApplyDetectedModels: () => void
-  onRefreshModels: () => void
   onChangeField: <Field extends keyof AdminOpenRouterConfig>(field: Field, value: AdminOpenRouterConfig[Field]) => void
   onAutoSave: (showSuccessToast?: boolean) => void
   onDelete: () => void
@@ -902,8 +892,6 @@ export function AdminV2ProvidersWorkspace({
   onAutosave,
   onDetectAnthropicModels,
   onDetectOpenAiCompatibleModels,
-  onRefreshModels,
-  isRefreshingModels,
 }: ProviderWorkspaceProps) {
   const [selectedDetail, setSelectedDetail] = useState<ProviderDetailKey>('cloudflare')
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>({})
@@ -937,7 +925,7 @@ export function AdminV2ProvidersWorkspace({
       },
     })
 
-    const nextDraft = commitDraftChange((current) => addAdminOpenAiConfig(current, config))
+    commitDraftChange((current) => addAdminOpenAiConfig(current, config))
     setSelectedDetail(`openai:${String(aiDraft.openai.length)}`)
   }
 
@@ -946,7 +934,7 @@ export function AdminV2ProvidersWorkspace({
       anthropic: { ...ANTHROPIC_PRESET },
     })
 
-    const nextDraft = commitDraftChange((current) => addAdminAnthropicConfig(current, config))
+    commitDraftChange((current) => addAdminAnthropicConfig(current, config))
     setSelectedDetail(`anthropic:${String(aiDraft.anthropic.length)}`)
   }
 
@@ -1046,9 +1034,6 @@ export function AdminV2ProvidersWorkspace({
                 onChangeField={(field, value) => {
                   onChange((current) => updateAdminCloudflareField(current, field, value))
                 }}
-                onAutoSave={() => {
-                  autoSaveDraft()
-                }}
               />
             ) : null}
 
@@ -1062,7 +1047,6 @@ export function AdminV2ProvidersWorkspace({
                   disabled={!canEdit || isSaving}
                   onClearError={onClearError}
                   detectionState={detectionStates[selectedDetail] ?? null}
-                  isRefreshingModels={isRefreshingModels}
                   onDetect={() => {
                     onClearError()
                     setDetectionStates((prev) => ({ ...prev, [selectedDetail]: null }))
@@ -1102,11 +1086,6 @@ export function AdminV2ProvidersWorkspace({
                     commitDraftChange((current) =>
                       applyOpenAiDetectionToAdminSettings(current, index, detection.result!),
                     )
-                  }}
-                  onRefreshModels={() => {
-                    onClearError()
-                    setDetectionStates((prev) => ({ ...prev, [selectedDetail]: null }))
-                    void onRefreshModels()
                   }}
                   onChangeField={(field, value) => {
                     onChange((current) => updateAdminOpenAiField(current, index, field, value))

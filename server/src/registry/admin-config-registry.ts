@@ -715,6 +715,7 @@ function toRuntimeAnthropicConfig(input: AdminAnthropicSnapshot): AnthropicProvi
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for multi-provider runtime expansion
 function toRuntimeFeedbackProviders(input: AdminFeedbackProviderSnapshot[]): FeedbackAiProviderConfig[] {
   return input.map((provider) => {
     if (provider.kind === 'anthropic') {

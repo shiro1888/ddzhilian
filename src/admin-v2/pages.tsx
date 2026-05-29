@@ -603,7 +603,6 @@ export function AdminV2WorkspacePage({
     adminSession,
     snapshot,
     isAiSaving,
-    isModelRefreshSubmitting,
     isOnlineDevicesRefreshing,
     isRenamingOnlineDevice,
     isUpdatingUser,
@@ -614,7 +613,6 @@ export function AdminV2WorkspacePage({
     resetAiDraft,
     saveAiDraft,
     detectAnthropicModels,
-    refreshOpenAiCompatibleModels,
     detectOpenAiCompatibleModels,
     refreshOnlineDevices,
     renameOnlineDevice,
@@ -660,10 +658,6 @@ export function AdminV2WorkspacePage({
         hasUnsavedChanges={hasAiDraftChanges}
         error={error}
         onClearError={clearError}
-        isRefreshingModels={isModelRefreshSubmitting}
-        onRefreshModels={async () => {
-          await refreshOpenAiCompatibleModels()
-        }}
         onChange={updateAiDraft}
         onAutosave={(draftOverride, options) => {
           return saveAiDraft(draftOverride, options)
