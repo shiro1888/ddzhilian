@@ -238,6 +238,7 @@ function buildDetectedModelList(
   return result.models.map((model) => ({
     id: model.id,
     label: model.label || model.id,
+    alias: '',
     enabled: enabledIds.has(model.id) || model.id === selectedModelId,
   }))
 }
