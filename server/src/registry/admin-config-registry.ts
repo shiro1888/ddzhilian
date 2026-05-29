@@ -628,12 +628,18 @@ function syncSystemPromptToEnvFile(systemPrompt: string) {
 }
 
 export class AdminConfigRegistry {
+  private lastNormalizedSnapshot: AdminAiSettingsSnapshot | null = null;
+
   constructor(private readonly config: ServerConfig) {
     mkdirSync(ADMIN_CONFIG_ROOT, { recursive: true });
     this.load();
   }
 
   getAiSettingsSnapshot(): AdminAiSettingsSnapshot {
+    if (this.lastNormalizedSnapshot) {
+      return this.lastNormalizedSnapshot;
+    }
+
     const mainOpenAi: AdminOpenAiCompatibleSnapshot = {
       displayName: this.config.openrouterAi.displayName,
       homepageUrl: this.config.openrouterAi.homepageUrl,
@@ -690,6 +696,7 @@ export class AdminConfigRegistry {
   updateAiSettings(input: AdminAiSettingsSnapshot) {
     const normalized = normalizeSnapshot(input, this.config);
     this.applyAiSettings(normalized);
+    this.lastNormalizedSnapshot = normalized;
     this.persist({ ai: normalized });
     syncSystemPromptToEnvFile(normalized.systemPrompt);
     return this.getAiSettingsSnapshot();
@@ -699,7 +706,9 @@ export class AdminConfigRegistry {
     try {
       const parsed = JSON.parse(readFileSync(ADMIN_CONFIG_PATH, 'utf8')) as PersistedAdminConfig;
       if (parsed.ai) {
-        this.applyAiSettings(normalizeSnapshot(parsed.ai, this.config));
+        const normalized = normalizeSnapshot(parsed.ai, this.config);
+        this.applyAiSettings(normalized);
+        this.lastNormalizedSnapshot = normalized;
       }
     } catch {
       // Use environment defaults when no persisted admin overrides are present.
