@@ -35,7 +35,7 @@ import {
   type ConnectedDevice,
   DeviceRegistry,
 } from './registry/device-registry.js';
-import { AdminConfigRegistry, type AdminAiSettingsSnapshot } from './registry/admin-config-registry.js';
+import { AdminConfigRegistry, type AdminAiSettingsSnapshot, type AdminModelToggleItem } from './registry/admin-config-registry.js';
 import { AdminSessionRegistry } from './registry/admin-session-registry.js';
 import { AiChatConversationRegistry } from './registry/ai-chat-conversation-registry.js';
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
@@ -1747,6 +1747,10 @@ function normalizeImageSizeOption(value: unknown, fallback: string) {
   };
 }
 
+function isChatProbeFailure(result: OpenRouterChatSuccess | OpenRouterChatFailure): result is OpenRouterChatFailure {
+  return !result.ok;
+}
+
 function isLikelyOpenAiCompatibleChatModel(model: OpenAiCompatibleModelOption) {
   return !openAiCompatibleNonChatModelPattern.test(`${model.id} ${model.label}`);
 }
@@ -1884,10 +1888,11 @@ async function detectUsableOpenAiCompatibleModels(
       );
 
       if (!result.ok) {
+        const failure = result;
         console.warn('OpenAI-compatible model probe failed', {
           model: model.id,
-          status: result.status,
-          message: result.message,
+          status: failure.status,
+          message: failure.message,
         });
       }
 
@@ -1902,12 +1907,15 @@ async function detectUsableOpenAiCompatibleModels(
     .map((entry) => entry.model);
 
   const probeErrors = probeResults
-    .filter((entry) => !entry.result.ok)
-    .map((entry) => ({
-      model: entry.model.id,
-      status: entry.result.status,
-      message: entry.result.message,
-    }));
+    .filter((entry) => isChatProbeFailure(entry.result))
+    .map((entry) => {
+      const failure = entry.result as OpenRouterChatFailure;
+      return {
+        model: entry.model.id,
+        status: failure.status,
+        message: failure.message,
+      };
+    });
 
   return {
     models,
@@ -1919,7 +1927,7 @@ async function detectUsableOpenAiCompatibleModels(
 
 function toOpenAiCompatibleModelToggles(
   models: OpenAiCompatibleModelOption[],
-  previousModels: AdminAiSettingsSnapshot['openrouter']['models'],
+  previousModels: AdminModelToggleItem[],
   selectedModelId: string,
 ) {
   const previousById = new Map(previousModels.map((model) => [model.id, model]));
@@ -1962,16 +1970,17 @@ function refreshConfiguredOpenAiCompatibleModels() {
 
   openAiCompatibleModelRefreshPromise = (async () => {
     const snapshot = adminConfig.getAiSettingsSnapshot();
+    const mainOpenAi = snapshot.openai[0];
     const refreshedAt = new Date().toISOString();
-    const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(snapshot.openrouter.baseUrl) ?? '';
-    const apiKey = snapshot.openrouter.apiKey.trim();
+    const baseUrl = normalizeAdminOpenAiCompatibleBaseUrl(mainOpenAi?.baseUrl) ?? '';
+    const apiKey = (mainOpenAi?.apiKey ?? '').trim();
 
     if (!baseUrl || !apiKey) {
       return {
         refreshed: false,
         baseUrl,
-        selectedModelId: snapshot.openrouter.model || undefined,
-        models: snapshot.openrouter.models.map((model) => ({
+        selectedModelId: mainOpenAi?.model || undefined,
+        models: (mainOpenAi?.models ?? []).map((model) => ({
           id: model.id,
           label: model.label,
         })),
@@ -1985,10 +1994,10 @@ function refreshConfiguredOpenAiCompatibleModels() {
     const detected = await detectUsableOpenAiCompatibleModels({
       baseUrl,
       apiKey,
-      wireApi: snapshot.openrouter.wireApi,
-      reasoningEffort: snapshot.openrouter.reasoningEffort,
-      siteUrl: snapshot.openrouter.siteUrl,
-      siteName: snapshot.openrouter.siteName,
+      wireApi: mainOpenAi!.wireApi,
+      reasoningEffort: mainOpenAi!.reasoningEffort,
+      siteUrl: mainOpenAi!.siteUrl,
+      siteName: mainOpenAi!.siteName,
     });
 
     if (detected.models.length === 0) {
@@ -2006,23 +2015,23 @@ function refreshConfiguredOpenAiCompatibleModels() {
     }
 
     const usableModelIds = new Set(detected.models.map((model) => model.id));
-    const selectedModelId = usableModelIds.has(snapshot.openrouter.model)
-      ? snapshot.openrouter.model
+    const selectedModelId = usableModelIds.has(mainOpenAi!.model)
+      ? mainOpenAi!.model
       : detected.models[0].id;
     const nextModels = toOpenAiCompatibleModelToggles(
       detected.models,
-      snapshot.openrouter.models,
+      mainOpenAi?.models ?? [],
       selectedModelId,
     );
 
     adminConfig.updateAiSettings({
       ...snapshot,
-      openrouter: {
-        ...snapshot.openrouter,
-        baseUrl,
-        model: selectedModelId,
-        models: nextModels,
-      },
+      openai: [
+        ...(mainOpenAi
+          ? [{ ...mainOpenAi, baseUrl, model: selectedModelId, models: nextModels }]
+          : []),
+        ...snapshot.openai.slice(1),
+      ],
     });
 
     return {
@@ -2986,30 +2995,20 @@ function toAdminSessionPayload(admin: AdminAccountSession) {
 }
 
 function sanitizeAdminAiSettingsSnapshot(snapshot: AdminAiSettingsSnapshot): AdminAiSettingsSnapshot {
+  const mainOpenAi = snapshot.openai[0];
   return {
     ...snapshot,
     cloudflare: {
       ...snapshot.cloudflare,
       apiToken: '',
     },
-    openrouter: {
-      ...snapshot.openrouter,
-      apiKey: '',
-    },
-    feedbackProviders: snapshot.feedbackProviders.map((provider) => ({
-      ...provider,
-      openai: provider.openai
-        ? {
-            ...provider.openai,
-            apiKey: '',
-          }
-        : provider.openai,
-      anthropic: provider.anthropic
-        ? {
-            ...provider.anthropic,
-            authToken: '',
-          }
-        : provider.anthropic,
+    openai: [
+      ...(mainOpenAi ? [{ ...mainOpenAi, apiKey: '' }] : []),
+      ...snapshot.openai.slice(1).map((entry) => ({ ...entry, apiKey: '' })),
+    ],
+    anthropic: snapshot.anthropic.map((entry) => ({
+      ...entry,
+      authToken: '',
     })),
   };
 }
@@ -5335,10 +5334,11 @@ async function handleAiChatRequest(
         }
 
         lastFailure = result;
+        const failure = result as OpenRouterChatFailure;
         console.warn('OpenAI-compatible model attempt failed', {
-          status: result.status,
-          model: result.model,
-          message: result.message,
+          status: failure.status,
+          model: failure.model,
+          message: failure.message,
         });
         aiUsage.record({
           provider: activeAi.provider,
@@ -5361,10 +5361,11 @@ async function handleAiChatRequest(
     } else if (activeAi.kind === 'anthropic' && activeAi.anthropic) {
       const result = await requestAnthropicChat(activeAi.anthropic, model, aiPrompt, activeAi.maxOutputTokens);
       if (!result.ok) {
+        const failure = result as OpenRouterChatFailure;
         console.error('Anthropic-compatible request failed', {
-          status: result.status,
-          model: result.model,
-          message: result.message,
+          status: failure.status,
+          model: failure.model,
+          message: failure.message,
         });
         aiUsage.record({
           provider: activeAi.provider,

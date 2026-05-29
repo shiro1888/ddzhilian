@@ -581,7 +581,8 @@ function normalizeSnapshot(
   fallback: ServerConfig,
 ): AdminAiSettingsSnapshot {
   const cloudflareInput = (input?.cloudflare ?? {}) as LegacyProviderSnapshot;
-  const openrouterInput = (input?.openrouter ?? {}) as LegacyProviderSnapshot;
+  const persistedInput = input as PersistedAdminConfig['ai'];
+  const openrouterInput = (persistedInput?.openrouter ?? {}) as LegacyProviderSnapshot;
   const cloudflareModel = normalizeOptionalString(cloudflareInput.model) || fallback.cloudflareAi.model;
   const cloudflareModels = parseModelToggleItems(
     cloudflareInput.models ?? cloudflareInput.modelsText,
@@ -591,7 +592,7 @@ function normalizeSnapshot(
   const normalizedCloudflareModel = cloudflareModels.some((model) => model.id === cloudflareModel)
     ? cloudflareModel
     : cloudflareModels.find((model) => model.enabled)?.id ?? cloudflareModels[0]?.id ?? cloudflareModel;
-  const feedbackProviders = normalizeFeedbackProviders(input?.feedbackProviders, fallback);
+  const feedbackProviders = normalizeFeedbackProviders(persistedInput?.feedbackProviders, fallback);
 
   // Build openai[] and anthropic[] from input or legacy feedbackProviders
   const openaiFromInput = (input as AdminAiSettingsSnapshot).openai;
@@ -897,7 +898,7 @@ export class AdminConfigRegistry {
       feedbackProviders.push({
         id: `feedback:anthropic-${i}`,
         kind: 'anthropic',
-        displayName: anthropic.displayName || 'Anthropic',
+        displayName: anthropic.model || 'Anthropic',
         note: '',
         createdAt: new Date().toISOString(),
         anthropic: toRuntimeAnthropicConfig(anthropic),
