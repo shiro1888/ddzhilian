@@ -507,7 +507,7 @@ function OpenAiCompatiblePanel({
         <div className="flex gap-2">
           <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
           <Badge variant="outline">模型 {formatInteger(savedConfig.models.length)}</Badge>
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAutoSave}>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAutoSave()}>
             保存配置
           </Button>
           <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
@@ -742,7 +742,7 @@ function AnthropicPanel({
         <div className="flex gap-2">
           <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
           <Badge variant="outline">模型 {formatInteger(savedConfig.models.length)}</Badge>
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAutoSave}>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAutoSave()}>
             保存配置
           </Button>
           <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
