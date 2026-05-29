@@ -729,42 +729,6 @@ function toRuntimeAnthropicConfig(input: AdminAnthropicSnapshot): AnthropicProvi
   };
 }
 
-function toRuntimeFeedbackProviders(input: AdminFeedbackProviderSnapshot[]): FeedbackAiProviderConfig[] {
-  return input.map((provider) => {
-    if (provider.kind === 'anthropic') {
-      return {
-        id: provider.id,
-        kind: provider.kind,
-        displayName: provider.displayName,
-        note: provider.note,
-        createdAt: provider.createdAt,
-        anthropic: toRuntimeAnthropicConfig(provider.anthropic ?? normalizeAnthropicSnapshot({})),
-      };
-    }
-
-    return {
-      id: provider.id,
-      kind: provider.kind,
-      displayName: provider.displayName,
-      note: provider.note,
-      createdAt: provider.createdAt,
-      openai: toRuntimeOpenAiConfig(provider.openai ?? normalizeOpenAiCompatibleSnapshot({}, {
-        displayName: defaultOpenRouterDisplayName,
-        homepageUrl: defaultOpenRouterHomepageUrl,
-        note: '',
-        baseUrl: defaultOpenRouterBaseUrl,
-        wireApi: 'chat_completions',
-        reasoningEffort: '',
-        siteName: 'ddzhilian',
-        model: '',
-        models: [],
-        maxPromptChars: 8000,
-        maxOutputTokens: 1000,
-      })),
-    };
-  });
-}
-
 function toEnvLine(key: string, value: string) {
   return `${key}=${JSON.stringify(value)}`;
 }
