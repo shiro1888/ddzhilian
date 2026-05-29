@@ -466,6 +466,7 @@ export function upsertOpenAiCompatibleModel(
   next.set(modelId, {
     id: modelId,
     label: label || previous?.label || labelFromOpenAiModelId(modelId),
+    alias: '',
     enabled: true,
   })
 

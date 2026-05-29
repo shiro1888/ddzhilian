@@ -35,6 +35,7 @@ function mergeDetectedModels(
     return {
       id: detectedModel.id,
       label: detectedModel.label || current?.label || detectedModel.id,
+      alias: current?.alias ?? '',
       enabled: detectedModel.id === selectedModelId ? true : current?.enabled ?? false,
     }
   })

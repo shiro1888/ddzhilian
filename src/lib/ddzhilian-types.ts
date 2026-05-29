@@ -632,6 +632,7 @@ export type AdminModelToggleItem = {
 }
 
 export type AdminAiSettings = {
+  provider: string
   systemPrompt: string
   cloudflare: AdminCloudflareConfig
   openai: AdminOpenRouterConfig[]

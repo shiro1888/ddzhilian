@@ -31,6 +31,7 @@ function buildAnthropicModels(
     return detectedModels.map((model) => ({
       id: model.id,
       label: model.label || labelFromOpenAiModelId(model.id),
+      alias: '',
       enabled: model.id === modelId,
     }))
   }
@@ -39,6 +40,7 @@ function buildAnthropicModels(
   return [{
     id: modelId,
     label,
+    alias: '',
     enabled: true,
   }]
 }

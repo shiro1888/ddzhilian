@@ -1,9 +1,9 @@
 import { Button } from '@base-ui/react/button'
 import { useMemo, useState } from 'react'
-import type { AdminAiSettings, AdminModelToggleItem } from '../../../lib/ddzhilian-types'
+import type { AdminModelToggleItem } from '../../../lib/ddzhilian-types'
 import { AdminBaseSwitch } from './FormControls'
 
-type ModelCatalogApiProvider = AdminAiSettings['provider']
+type ModelCatalogApiProvider = string
 type ModelCatalogApiProviderFilter = ModelCatalogApiProvider | 'all'
 
 export type AdminModelCatalogEntry = AdminModelToggleItem & {

@@ -112,7 +112,6 @@ export function DashboardWidgetContent({
       return currentSettings ? (
         <ProviderTable
           settings={currentSettings}
-          activeProvider={currentSettings.provider}
           action={{ label: '进入供应商页面', onClick: onOpenProviders }}
         />
       ) : null

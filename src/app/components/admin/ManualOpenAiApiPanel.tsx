@@ -120,6 +120,7 @@ export function ManualOpenAiApiPanel({
           detectedModels.map((model) => ({
             id: model.id,
             label: model.label,
+            alias: '',
             enabled: model.id === modelId,
           })),
           modelId,

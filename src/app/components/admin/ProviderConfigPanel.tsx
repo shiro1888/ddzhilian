@@ -51,11 +51,12 @@ function buildAnthropicModelList(
     return detectedModels.map((model) => ({
       id: model.id,
       label: model.label || labelFromOpenAiModelId(model.id),
+      alias: '',
       enabled: model.id === modelId,
     }))
   }
 
-  return [{ id: modelId, label: labelFromOpenAiModelId(modelId), enabled: true }]
+  return [{ id: modelId, label: labelFromOpenAiModelId(modelId), alias: '', enabled: true }]
 }
 
 function withAnthropicModel(
@@ -105,10 +106,11 @@ export function ProviderConfigPanel({
   const [expandedProvider, setExpandedProvider] = useState<AdminAiSettings['provider'] | null>('openrouter')
   const [anthropicDetectionByProvider, setAnthropicDetectionByProvider] = useState<Record<string, AnthropicProviderDetectionState>>({})
   const isOpenRouter = settings.provider === 'openrouter'
+  const openRouterConfig = settings.openai[0]
   const isCloudflareExpanded = expandedProvider === 'cloudflare'
   const isOpenRouterExpanded = expandedProvider === 'openrouter'
   const enabledCloudflareModels = settings.cloudflare.models.filter((model) => model.enabled).length
-  const openRouterDisplayName = settings.openrouter.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL
+  const openRouterDisplayName = settings.openai[0]?.displayName || OPENAI_COMPATIBLE_PROVIDER_LABEL
   const toggleProviderDetails = (provider: AdminAiSettings['provider']) => {
     setExpandedProvider((current) => current === provider ? null : provider)
   }
@@ -370,8 +372,8 @@ export function ProviderConfigPanel({
                   <span className="dd-admin-provider-config-item__expand">{isOpenRouterExpanded ? '收起' : '展开'}</span>
                 </button>
                 <div className="dd-admin-provider-config-item__actions">
-                  <span className={`dd-admin-status-dot ${settings.openrouter.apiKey ? 'is-green' : 'is-amber'}`}>
-                    {settings.openrouter.apiKey ? '已配置' : '待配置'}
+                  <span className={`dd-admin-status-dot ${openRouterConfig.apiKey ? 'is-green' : 'is-amber'}`}>
+                    {openRouterConfig.apiKey ? '已配置' : '待配置'}
                   </span>
                   <Button
                     type="button"
@@ -386,7 +388,7 @@ export function ProviderConfigPanel({
               {isOpenRouterExpanded ? (
                 <div id="admin-provider-openrouter-details" className="dd-admin-provider-config-item__details">
                   <OpenAiProviderTemplatePanel
-                    settings={settings.openrouter}
+                    settings={openRouterConfig}
                     onDetectModels={onOpenRouterModelsDetect}
                     onProviderChange={onProviderChange}
                     onOpenRouterFieldChange={onOpenRouterFieldChange}
@@ -523,7 +525,7 @@ export function ProviderConfigPanel({
         </Tabs.Panel>
         <Tabs.Panel className="dd-admin-provider-panel" value="manual" keepMounted>
           <ManualOpenAiApiPanel
-            settings={settings.openrouter}
+            settings={openRouterConfig}
             onDetectModels={onOpenRouterModelsDetect}
             onFeedbackProviderAdd={onFeedbackProviderAdd}
           />
