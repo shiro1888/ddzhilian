@@ -14,6 +14,7 @@ import type {
   AdminAiSettings,
   AdminAnthropicConfig,
   AdminCloudflareConfig,
+  AdminModelToggleItem,
   AdminOpenRouterConfig,
 } from '@/lib/ddzhilian-types'
 import type {
