@@ -1137,6 +1137,12 @@ function shouldRenderAsCodeBlock(value: string, root: Element) {
     return false
   }
 
+  // Detect HTML structural elements (form, table, select, etc.) in the original
+  // markup — DOMParser strips tags before text extraction, so we must check value.
+  if (/<(?:form|table|thead|tbody|tr|td|th|select|option|fieldset|legend|label)\b/i.test(value)) {
+    return true
+  }
+
   const codeText = normalizeCodeText(extractTextWithLineBreaks(root))
   return shouldRenderPlainTextAsSingleCodeBlock(codeText, root.querySelectorAll('span[class], span[style], font[color]').length)
 }
