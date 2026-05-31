@@ -108,6 +108,15 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '' }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || '' }}
         run: |
+          echo "=== VERIFY known_hosts ==="
+          ls -la ~/.ssh/known_hosts
+          wc -c < ~/.ssh/known_hosts
+          head -c 20 ~/.ssh/known_hosts | od -c | head -3
+          echo "=== VERIFY env ==="
+          echo "DEPLOY_HOST=${DEPLOY_HOST:0:8}..."
+          echo "DEPLOY_USER=${DEPLOY_USER:0:4}..."
+          echo "DEPLOY_PORT=$DEPLOY_PORT"
+          echo "=== END VERIFY ==="
           ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
           release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           remote_release="${DEPLOY_RELEASE_ROOT%/}/$release_id"
@@ -127,7 +136,8 @@ jobs:
           echo "--- end debug ---"
 
           echo "--- SSH -vvv debug (first attempt) ---"
-          ssh -vvv "${ssh_options[@]}" "$ssh_target" echo "connection test" 2>&1 | grep -E "identity file|known hosts|Authentications|host key|Offering|Server accepts|debug1: (Connecting|Connection established|Will attempt)" | head -30 || true
+          echo "Actual SSH args: ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=$host_check -o ConnectTimeout=20 $ssh_target echo test"
+          ssh -vvv -i "$HOME/.ssh/deploy_key" -p "$DEPLOY_PORT" -o IdentitiesOnly=yes -o "StrictHostKeyChecking=$host_check" "$ssh_target" echo test 2>&1 | tail -40 || true
           echo "--- SSH -vvv done ---"
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
