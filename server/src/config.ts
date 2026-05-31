@@ -204,7 +204,10 @@ function readBoolean(name: string, fallback: boolean) {
   return fallback;
 }
 
-function readSearxngSafeSearchLevel(name: string, fallback: SearxngSafeSearchLevel): SearxngSafeSearchLevel {
+function readSearxngSafeSearchLevel(
+  name: string,
+  fallback: SearxngSafeSearchLevel
+): SearxngSafeSearchLevel {
   const value = readIntegerInRange(name, fallback, 0, 2);
   return value === 0 || value === 1 || value === 2 ? value : fallback;
 }
@@ -307,11 +310,7 @@ function labelFromAiModelId(modelId: string) {
   return modelId.split('/').pop() || modelId;
 }
 
-function readAiModelOptions(
-  name: string,
-  defaultModelId: string,
-  fallbackModels: AiModelOption[],
-) {
+function readAiModelOptions(name: string, defaultModelId: string, fallbackModels: AiModelOption[]) {
   const configuredModels = readStringList(name)
     .map((entry) => {
       const [rawId, rawLabel] = entry.split('|');
@@ -328,9 +327,7 @@ function readAiModelOptions(
       };
     })
     .filter((model): model is ManagedAiModelOption => Boolean(model));
-  const models = configuredModels.length > 0
-    ? configuredModels
-    : fallbackModels;
+  const models = configuredModels.length > 0 ? configuredModels : fallbackModels;
   const uniqueModels = new Map<string, ManagedAiModelOption>();
 
   for (const model of models) {
@@ -381,8 +378,7 @@ function joinUrlPath(baseUrl: string | undefined, path: string) {
 export function loadConfig(): ServerConfig {
   const host = process.env.HOST || '0.0.0.0';
   const port = readNumber('PORT', 8787);
-  const publicWsUrl =
-    process.env.PUBLIC_WS_URL || `ws://localhost:${port.toString()}/ws`;
+  const publicWsUrl = process.env.PUBLIC_WS_URL || `ws://localhost:${port.toString()}/ws`;
   const allowedOrigins = new Set<string>([
     ...defaultAllowedOrigins,
     ...readStringList('ALLOWED_ORIGINS'),
@@ -392,20 +388,17 @@ export function loadConfig(): ServerConfig {
   const turnUsername = process.env.TURN_USERNAME?.trim();
   const turnCredential = process.env.TURN_CREDENTIAL?.trim();
   const cloudflareAiDefaultModel =
-    process.env.CLOUDFLARE_AI_MODEL?.trim() ||
-    defaultCloudflareAiModels[0].id;
+    process.env.CLOUDFLARE_AI_MODEL?.trim() || defaultCloudflareAiModels[0].id;
   const openrouterModelIds = readStringList('OPENROUTER_MODELS')
     .map((entry) => entry.split('|')[0]?.trim())
     .filter((modelId): modelId is string => Boolean(modelId));
   const openrouterAiDefaultModel =
-    process.env.OPENROUTER_MODEL?.trim() ||
-    openrouterModelIds[0] ||
-    '';
+    process.env.OPENROUTER_MODEL?.trim() || openrouterModelIds[0] || '';
   const codexImageBaseUrl =
     process.env.CODEX_IMAGE_BASE_URL?.trim() ||
     process.env.OPENAI_IMAGE_BASE_URL?.trim() ||
     process.env.OPENAI_BASE_URL?.trim() ||
-    'https://cpa.shiro1888.com/v1';
+    'https://ai.openai.com/v1';
   const codexImageModel = process.env.CODEX_IMAGE_MODEL?.trim() || defaultCodexImageModel;
   const configuredCodexImageFallbackModels = readStringList('CODEX_IMAGE_FALLBACK_MODELS');
   const codexImageModels = [
@@ -433,7 +426,10 @@ export function loadConfig(): ServerConfig {
     sessionIdleMs: readNumber('SESSION_IDLE_MS', 120_000),
     roomExitGraceMs: readNumber('ROOM_EXIT_GRACE_MS', 30 * 60 * 1000),
     historyRetentionMs: readHistoryRetentionMs('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
-    historyTextRetentionMs: readHistoryRetentionMs('HISTORY_TEXT_RETENTION_MS', maxHistoryRetentionMs),
+    historyTextRetentionMs: readHistoryRetentionMs(
+      'HISTORY_TEXT_RETENTION_MS',
+      maxHistoryRetentionMs
+    ),
     historyMaxBytes: readNumber('HISTORY_MAX_BYTES', 10 * 1024 * 1024 * 1024),
     historyPageSize: Math.max(1, readNumber('HISTORY_PAGE_SIZE', 50)),
     supabase:
@@ -448,7 +444,8 @@ export function loadConfig(): ServerConfig {
             historyFilesTable: process.env.SUPABASE_HISTORY_FILES_TABLE?.trim() || 'history_files',
             historyTextsTable: process.env.SUPABASE_HISTORY_TEXTS_TABLE?.trim() || 'history_texts',
             userProfilesTable: process.env.SUPABASE_USER_PROFILES_TABLE?.trim() || 'user_profiles',
-            imageGenerationsTable: process.env.SUPABASE_IMAGE_GENERATIONS_TABLE?.trim() || 'image_generations',
+            imageGenerationsTable:
+              process.env.SUPABASE_IMAGE_GENERATIONS_TABLE?.trim() || 'image_generations',
             adminRolesTable: process.env.SUPABASE_ADMIN_ROLES_TABLE?.trim() || 'admin_roles',
             themeSubmissionsTable:
               process.env.SUPABASE_THEME_SUBMISSIONS_TABLE?.trim() || 'snaplink_theme_submissions',
@@ -463,7 +460,7 @@ export function loadConfig(): ServerConfig {
       enabled: readBoolean('AI_WEB_SEARCH_ENABLED', false),
       searxngBaseUrl: normalizeHttpBaseUrl(
         process.env.SEARXNG_BASE_URL || 'http://127.0.0.1:8080',
-        'http://127.0.0.1:8080',
+        'http://127.0.0.1:8080'
       ),
       maxResults: readIntegerInRange('SEARXNG_MAX_RESULTS', 5, 1, 10),
       timeoutMs: readIntegerInRange('SEARXNG_TIMEOUT_MS', 8000, 1000, 30000),
@@ -472,16 +469,17 @@ export function loadConfig(): ServerConfig {
       categories: process.env.SEARXNG_CATEGORIES?.trim() || 'general',
     },
     rtcConfig: {
-      iceServers: turnUrls.length > 0
-        ? [
-            ...defaultIceServers,
-            {
-              urls: turnUrls,
-              username: turnUsername,
-              credential: turnCredential,
-            },
-          ]
-        : defaultIceServers,
+      iceServers:
+        turnUrls.length > 0
+          ? [
+              ...defaultIceServers,
+              {
+                urls: turnUrls,
+                username: turnUsername,
+                credential: turnCredential,
+              },
+            ]
+          : defaultIceServers,
     },
     cloudflareAi: {
       accountId: process.env.CLOUDFLARE_AI_ACCOUNT_ID?.trim() || undefined,
@@ -490,7 +488,7 @@ export function loadConfig(): ServerConfig {
       models: readAiModelOptions(
         'CLOUDFLARE_AI_MODELS',
         cloudflareAiDefaultModel,
-        defaultCloudflareAiModels,
+        defaultCloudflareAiModels
       ),
       maxPromptChars: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_PROMPT_CHARS', 8000)),
       maxOutputTokens: Math.max(1, readNumber('CLOUDFLARE_AI_MAX_OUTPUT_TOKENS', 1000)),
@@ -498,11 +496,11 @@ export function loadConfig(): ServerConfig {
       dailyNeuronBudget: Math.max(0, readNumber('CLOUDFLARE_AI_DAILY_NEURON_BUDGET', 10_000)),
       estimatedInputNeuronsPerMillionTokens: Math.max(
         1,
-        readNumber('CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS', 4625),
+        readNumber('CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS', 4625)
       ),
       estimatedOutputNeuronsPerMillionTokens: Math.max(
         1,
-        readNumber('CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS', 30475),
+        readNumber('CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS', 30475)
       ),
     },
     openrouterAi: {
@@ -510,7 +508,9 @@ export function loadConfig(): ServerConfig {
       homepageUrl: process.env.OPENROUTER_PROVIDER_URL?.trim() || 'https://openrouter.ai',
       note: process.env.OPENROUTER_PROVIDER_NOTE?.trim() || '',
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
-      baseUrl: normalizeOpenAiCompatibleBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
+      baseUrl: normalizeOpenAiCompatibleBaseUrl(
+        process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
+      ),
       wireApi: readOpenAiCompatibleWireApi(process.env.OPENROUTER_WIRE_API),
       reasoningEffort: readOpenAiCompatibleReasoningEffort(process.env.OPENROUTER_REASONING_EFFORT),
       siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || undefined,
@@ -540,7 +540,7 @@ export function loadConfig(): ServerConfig {
         'CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES',
         8 * 60,
         -12 * 60,
-        14 * 60,
+        14 * 60
       ),
     },
   };

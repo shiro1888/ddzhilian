@@ -27,15 +27,15 @@ SSH 连接、产物上传和远程部署脚本执行都有 3 次重试；如果�
 
 | 名称 | 必填 | 说明 |
 | --- | --- | --- |
-| `DEPLOY_HOST` | 否 | VPS IP 或域名；默认 `43.99.138.40`。非敏感，也可以放在 Variables。 |
+| `DEPLOY_HOST` | 否 | VPS IP 或域名；非敏感，也可以放在 Variables。 |
 | `DEPLOY_USER` | 否 | SSH 登录用户；默认 `root`。非敏感，也可以放在 Variables。 |
 | `DEPLOY_SSH_KEY` | 是 | GitHub Actions 登录服务器用的私钥。 |
-| `DEPLOY_KNOWN_HOSTS` | 否 | 服务器 SSH host key；已内置当前服务器 ed25519 host key。非敏感，也可以放在 Variables。 |
+| `DEPLOY_KNOWN_HOSTS` | 否 | 服务器 SSH host key；非敏感，也可以放在 Variables。 |
 
 生成 `DEPLOY_KNOWN_HOSTS` 的示例：
 
 ```bash
-ssh-keyscan -p 22 43.99.138.40
+ssh-keyscan -p 22 你的服务器地址
 ```
 
 ## GitHub Variables
