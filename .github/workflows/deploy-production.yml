@@ -125,6 +125,10 @@ jobs:
             -o "StrictHostKeyChecking=$host_check" \
             "$DEPLOY_USER@$DEPLOY_HOST" 2>&1 | grep -E "stricthostkeychecking|user|hostname|port|identityfile" | head -10 || true
           echo "--- end debug ---"
+
+          echo "--- SSH -vvv debug (first attempt) ---"
+          ssh -vvv "${ssh_options[@]}" "$ssh_target" echo "connection test" 2>&1 | grep -E "identity file|known hosts|Authentications|host key|Offering|Server accepts|debug1: (Connecting|Connection established|Will attempt)" | head -30 || true
+          echo "--- SSH -vvv done ---"
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$DEPLOY_PORT"
