@@ -92,6 +92,9 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          echo "--- known_hosts content ---"
+          cat -A ~/.ssh/known_hosts
+          echo "--- end ---"
           if [ ! -s ~/.ssh/known_hosts ]; then
             echo "::warning::DEPLOY_KNOWN_HOSTS is empty, falling back to StrictHostKeyChecking=accept-new"
           fi
@@ -114,6 +117,10 @@ jobs:
           else
             host_check=accept-new
           fi
+          echo "--- host_check=$host_check ---"
+          echo "--- known_hosts in deploy step ---"
+          cat -A ~/.ssh/known_hosts || echo "(empty)"
+          echo "--- ssh_target=$ssh_target ---"
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$DEPLOY_PORT"
