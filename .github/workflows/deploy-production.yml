@@ -76,10 +76,10 @@ jobs:
 
       - name: Prepare SSH key
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '43.99.138.40' }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || 'root' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || '' }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS || vars.DEPLOY_KNOWN_HOSTS || '[43.99.138.40]:22 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDUmsMFUYFGYerSeTcivpY6ADOMNGUJOzeGeEaxNSQqP' }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS || vars.DEPLOY_KNOWN_HOSTS || '' }}
         run: |
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [ -z "${!name:-}" ]; then
@@ -92,10 +92,6 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-          default_host_key='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDUmsMFUYFGYerSeTcivpY6ADOMNGUJOzeGeEaxNSQqP'
-          printf '%s %s\n' "$DEPLOY_HOST" "$default_host_key" >> ~/.ssh/known_hosts
-          printf '[%s]:%s %s\n' "$DEPLOY_HOST" "$DEPLOY_PORT" "$default_host_key" >> ~/.ssh/known_hosts
-          sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
           if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null; then
             echo "::error::DEPLOY_SSH_KEY is not a valid OpenSSH private key. Paste the full private key into an Actions Secret."
@@ -104,8 +100,8 @@ jobs:
 
       - name: Deploy on VPS
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '43.99.138.40' }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || 'root' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || '' }}
         run: |
           ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
           release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
