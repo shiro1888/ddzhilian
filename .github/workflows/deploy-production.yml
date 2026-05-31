@@ -92,9 +92,8 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-          echo "--- known_hosts content ---"
-          cat -A ~/.ssh/known_hosts
-          echo "--- end ---"
+          echo "--- known_hosts written: lines=$(wc -l < ~/.ssh/known_hosts) bytes=$(wc -c < ~/.ssh/known_hosts) ---"
+          head -c 200 ~/.ssh/known_hosts | od -c | head -10
           if [ ! -s ~/.ssh/known_hosts ]; then
             echo "::warning::DEPLOY_KNOWN_HOSTS is empty, falling back to StrictHostKeyChecking=accept-new"
           fi
@@ -118,9 +117,14 @@ jobs:
             host_check=accept-new
           fi
           echo "--- host_check=$host_check ---"
-          echo "--- known_hosts in deploy step ---"
-          cat -A ~/.ssh/known_hosts || echo "(empty)"
-          echo "--- ssh_target=$ssh_target ---"
+          echo "--- known_hosts lines=$(wc -l < ~/.ssh/known_hosts) size=$(wc -c < ~/.ssh/known_hosts) ---"
+          echo "--- known_hosts hex (first 100 bytes) ---"
+          head -c 100 ~/.ssh/known_hosts | od -c | head -10
+          echo "--- ssh -G test ---"
+          ssh -G -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key \
+            -o "StrictHostKeyChecking=$host_check" \
+            "$DEPLOY_USER@$DEPLOY_HOST" 2>&1 | grep -E "stricthostkeychecking|user|hostname|port|identityfile" | head -10 || true
+          echo "--- end debug ---"
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$DEPLOY_PORT"
