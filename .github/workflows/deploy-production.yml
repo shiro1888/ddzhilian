@@ -81,7 +81,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS || vars.DEPLOY_KNOWN_HOSTS || '' }}
         run: |
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "::error::$name is required for production deployment."
               exit 1
@@ -91,12 +91,16 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-          echo "--- known_hosts written: lines=$(wc -l < ~/.ssh/known_hosts) bytes=$(wc -c < ~/.ssh/known_hosts) ---"
-          head -c 200 ~/.ssh/known_hosts | od -c | head -10
-          if [ ! -s ~/.ssh/known_hosts ]; then
-            echo "::warning::DEPLOY_KNOWN_HOSTS is empty, falling back to StrictHostKeyChecking=accept-new"
+
+          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+            echo "Using DEPLOY_KNOWN_HOSTS secret ($(wc -l < ~/.ssh/known_hosts) entries)"
+          else
+            echo "DEPLOY_KNOWN_HOSTS not set, fetching host key with ssh-keyscan..."
+            ssh-keyscan -t ed25519,rsa -p "$DEPLOY_PORT" "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+            echo "Fetched $(wc -l < ~/.ssh/known_hosts) host key(s)"
           fi
+
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
           if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null; then
             echo "::error::DEPLOY_SSH_KEY is not a valid OpenSSH private key. Paste the full private key into an Actions Secret."
@@ -108,47 +112,19 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST || '' }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER || '' }}
         run: |
-          echo "=== VERIFY known_hosts ==="
-          ls -la ~/.ssh/known_hosts
-          wc -c < ~/.ssh/known_hosts
-          head -c 20 ~/.ssh/known_hosts | od -c | head -3
-          echo "=== VERIFY env ==="
-          echo "DEPLOY_HOST=${DEPLOY_HOST:0:8}..."
-          echo "DEPLOY_USER=${DEPLOY_USER:0:4}..."
-          echo "DEPLOY_PORT=$DEPLOY_PORT"
-          echo "=== END VERIFY ==="
           ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
           release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           remote_release="${DEPLOY_RELEASE_ROOT%/}/$release_id"
-          if [ -s ~/.ssh/known_hosts ]; then
-            host_check=yes
-          else
-            host_check=accept-new
-          fi
-          echo "--- host_check=$host_check ---"
-          echo "--- known_hosts lines=$(wc -l < ~/.ssh/known_hosts) size=$(wc -c < ~/.ssh/known_hosts) ---"
-          echo "--- known_hosts hex (first 100 bytes) ---"
-          head -c 100 ~/.ssh/known_hosts | od -c | head -10
-          echo "--- ssh -G test ---"
-          ssh -G -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key \
-            -o "StrictHostKeyChecking=$host_check" \
-            "$DEPLOY_USER@$DEPLOY_HOST" 2>&1 | grep -E "stricthostkeychecking|user|hostname|port|identityfile" | head -10 || true
-          echo "--- end debug ---"
-
-          echo "--- SSH -vvv debug (first attempt) ---"
-          echo "Actual SSH args: ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=$host_check -o ConnectTimeout=20 $ssh_target echo test"
-          ssh -vvv -i "$HOME/.ssh/deploy_key" -p "$DEPLOY_PORT" -o IdentitiesOnly=yes -o "StrictHostKeyChecking=$host_check" "$ssh_target" echo test 2>&1 | tail -40 || true
-          echo "--- SSH -vvv done ---"
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$DEPLOY_PORT"
             -o IdentitiesOnly=yes
-            -o "StrictHostKeyChecking=$host_check"
+            -o StrictHostKeyChecking=yes
             -o ConnectTimeout=20
             -o ServerAliveInterval=10
             -o ServerAliveCountMax=3
           )
-          rsync_ssh="ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=$host_check -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          rsync_ssh="ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
 
           ssh_with_retry() {
             local label="$1"
