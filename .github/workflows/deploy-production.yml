@@ -92,6 +92,9 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::warning::DEPLOY_KNOWN_HOSTS is empty, falling back to StrictHostKeyChecking=accept-new"
+          fi
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
           if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null; then
             echo "::error::DEPLOY_SSH_KEY is not a valid OpenSSH private key. Paste the full private key into an Actions Secret."
@@ -106,16 +109,21 @@ jobs:
           ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
           release_id="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           remote_release="${DEPLOY_RELEASE_ROOT%/}/$release_id"
+          if [ -s ~/.ssh/known_hosts ]; then
+            host_check=yes
+          else
+            host_check=accept-new
+          fi
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$DEPLOY_PORT"
             -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
+            -o "StrictHostKeyChecking=$host_check"
             -o ConnectTimeout=20
             -o ServerAliveInterval=10
             -o ServerAliveCountMax=3
           )
-          rsync_ssh="ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          rsync_ssh="ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=$host_check -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
 
           ssh_with_retry() {
             local label="$1"
