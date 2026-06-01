@@ -81,7 +81,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS || vars.DEPLOY_KNOWN_HOSTS || '' }}
         run: |
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [ -z "${!name:-}" ]; then
               echo "::error::$name is required for production deployment."
               exit 1
@@ -92,14 +92,13 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
 
-          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
-            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-            echo "Using DEPLOY_KNOWN_HOSTS secret ($(wc -l < ~/.ssh/known_hosts) entries)"
-          else
-            echo "DEPLOY_KNOWN_HOSTS not set, fetching host key with ssh-keyscan..."
-            ssh-keyscan -t ed25519,rsa -p "$DEPLOY_PORT" "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
-            echo "Fetched $(wc -l < ~/.ssh/known_hosts) host key(s)"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::error::DEPLOY_KNOWN_HOSTS is empty after write. Generate it with: ssh-keyscan -p <PORT> <HOST>"
+            exit 1
           fi
+          echo "Using DEPLOY_KNOWN_HOSTS ($(wc -l < ~/.ssh/known_hosts) entries)"
 
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
           if ! ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null; then

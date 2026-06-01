@@ -19,7 +19,7 @@
 8. 服务器检查公网 `https://ddzhilian.com/health`。
 
 当前部署 job 只在主仓库 `707LTeam/ddzhilian` 执行。镜像仓库 `CGR-MIX/ddzhilian` 可以同步代码，但不会同时部署到同一台服务器，避免两个仓库的 Actions 互相抢发布。
-SSH 连接、产物上传和远程部署脚本执行都有 3 次重试；如果私钥格式粘贴错误，`Prepare SSH key` 会先给出明确错误。workflow 会同时写入默认端口和显式端口两种 `known_hosts` 格式，避免 22 端口严格校验时找不到主机指纹。
+SSH 连接、产物上传和远程部署脚本执行都有 3 次重试；如果私钥格式粘贴错误，`Prepare SSH key` 会先给出明确错误。`DEPLOY_KNOWN_HOSTS` 为必填项，workflow 会在写入后验证内容不为空。
 
 ## GitHub Secrets
 
@@ -30,7 +30,7 @@ SSH 连接、产物上传和远程部署脚本执行都有 3 次重试；如果�
 | `DEPLOY_HOST` | 否 | VPS IP 或域名；非敏感，也可以放在 Variables。 |
 | `DEPLOY_USER` | 否 | SSH 登录用户；默认 `root`。非敏感，也可以放在 Variables。 |
 | `DEPLOY_SSH_KEY` | 是 | GitHub Actions 登录服务器用的私钥。 |
-| `DEPLOY_KNOWN_HOSTS` | 否 | 服务器 SSH host key；非敏感，也可以放在 Variables。 |
+| `DEPLOY_KNOWN_HOSTS` | 是 | 服务器 SSH host key；非敏感，也可以放在 Variables。 |
 
 生成 `DEPLOY_KNOWN_HOSTS` 的示例：
 
