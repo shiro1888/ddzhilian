@@ -1600,7 +1600,6 @@ function App() {
       onDeviceNameChange={handleDeviceNameChange}
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
-      onOpenImageView={() => handleViewChange('image')}
       onChatDraftChange={setChatDraft}
       onAiModelChange={setSelectedAiModel}
       onPastedImageSelection={(files) => {

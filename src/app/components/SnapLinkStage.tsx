@@ -75,7 +75,6 @@ const snapLinkQuickEmojis = [
 ]
 
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
-const snapLinkImageSelectionValue = '__snaplink_image__'
 const snapLinkComposerMaxHeight = 120
 const snapLinkInitialMessageRenderCount = 80
 const snapLinkMessageRenderStep = 80
@@ -225,7 +224,6 @@ type SnapLinkStageProps = {
   onDeviceNameChange: (deviceName: string) => void
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
-  onOpenImageView: () => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onPastedImageSelection: (files: File[]) => void
@@ -679,7 +677,6 @@ export function SnapLinkStage({
   onDeviceNameChange,
   onOpenRoomHome,
   onOpenAiChatView,
-  onOpenImageView,
   onChatDraftChange,
   onAiModelChange,
   onPastedImageSelection,
@@ -1067,12 +1064,6 @@ export function SnapLinkStage({
     onOpenAiChatView()
   }
 
-  const handleOpenImage = () => {
-    setActiveSharedTab(null)
-    setIsLobbyOpen(false)
-    onOpenImageView()
-  }
-
   const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
     if (typeof window === 'undefined') {
       return
@@ -1139,11 +1130,6 @@ export function SnapLinkStage({
   const handleRoomSelection = (roomId: string) => {
     if (roomId === snapLinkAiChatSelectionValue) {
       handleOpenAiChat()
-      return
-    }
-
-    if (roomId === snapLinkImageSelectionValue) {
-      handleOpenImage()
       return
     }
 
@@ -1777,7 +1763,7 @@ export function SnapLinkStage({
               aria-label="选择对话"
               value={
                 isImageOpen
-                  ? snapLinkImageSelectionValue
+                  ? ''
                   : isAiChatOpen
                     ? snapLinkAiChatSelectionValue
                       : hasActiveRoom ? selectedRoomId ?? '' : ''
@@ -1786,7 +1772,6 @@ export function SnapLinkStage({
             >
               <option value="">大厅</option>
               <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
-              <option value={snapLinkImageSelectionValue}>生图</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -1872,13 +1857,6 @@ export function SnapLinkStage({
             onClick={handleOpenAiChat}
           >
             AI 聊天
-          </button>
-          <button
-            type="button"
-            className={isImageOpen ? 'is-active' : ''}
-            onClick={handleOpenImage}
-          >
-            生图
           </button>
         </div>
       </header>

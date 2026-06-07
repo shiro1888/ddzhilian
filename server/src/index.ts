@@ -2722,7 +2722,7 @@ function formatCodexImageFailureMessage(
   const message = formatCodexImageError(payload);
   if (message) {
     if (/auth_unavailable|no auth available/i.test(message)) {
-      return '图片模型上游认证不可用，请检查 CODEX_IMAGE_MODEL / CODEX_IMAGE_FALLBACK_MODELS 是否仍在上游 /models 中可用，或更换为支持该模型的上游认证。';
+      return '图片模型上游认证不可用，请检查 CODEX_IMAGE_MODEL 是否仍在上游 /models 中可用，或更换为支持该模型的上游认证。';
     }
 
     return message;
@@ -5785,10 +5785,7 @@ async function handleAiImageRequest(
     return;
   }
 
-  const requestedModel = typeof payload.model === 'string' && payload.model.trim()
-    ? payload.model.trim()
-    : '';
-  const modelCandidates = requestedModel ? [requestedModel] : config.codexImageAi.models;
+  const modelCandidates = config.codexImageAi.models;
   const model = modelCandidates[0] ?? config.codexImageAi.model;
   const sizeResult = normalizeImageSizeOption(payload.size, config.codexImageAi.size);
   if (!sizeResult.ok) {

@@ -60,7 +60,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
 - `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
-- `HISTORY_RETENTION_MS`: file history retention window, default 6 hours, capped at 24 hours
+- `HISTORY_RETENTION_MS`: file history retention window, default 24 hours, capped at 24 hours
 - `HISTORY_TEXT_RETENTION_MS`: text history retention window, default 24 hours, capped at 24 hours
 - `HISTORY_PAGE_SIZE`: history text lazy-load page size, default `50`
 - `TURN_URL`: optional single TURN server URL
@@ -141,7 +141,7 @@ Admin access uses Supabase account login instead of a shared admin password. Sup
 
 Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
 
-- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 6 hours, and the server caps it at 24 hours.
+- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 24 hours, and the server caps it at 24 hours.
 - `HISTORY_TEXT_RETENTION_MS` removes text records older than the configured retention window. The default and maximum are 24 hours.
 - `HISTORY_MAX_BYTES` caps historical file storage per room. The default is 10 GiB.
 - `HISTORY_PAGE_SIZE` controls how many historical texts are returned per request. The default is 50.

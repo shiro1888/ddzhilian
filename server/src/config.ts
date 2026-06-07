@@ -19,7 +19,6 @@ const defaultCloudflareAiModels = [
   },
 ];
 const defaultCodexImageModel = 'gpt-image-2';
-const defaultCodexImageFallbackModels = ['gemini-3.1-flash-image'];
 const defaultAiSystemPrompt = [
   'You are an isolated chat assistant inside ddzhilian.',
   'You cannot access this website source code, files, database, server environment variables, user devices, network services, or admin tools.',
@@ -284,6 +283,12 @@ function normalizeOpenAiImageBaseUrl(value: string) {
     .replace(/\/+$/g, '');
 }
 
+function normalizeCodexImageModelId(value: string) {
+  const modelId = value.trim();
+  const compactModelId = modelId.toLowerCase().replace(/[\s_-]+/g, '');
+  return compactModelId === 'gptimage2' ? defaultCodexImageModel : modelId;
+}
+
 function readOpenAiCompatibleWireApi(value: unknown): OpenAiCompatibleWireApi {
   if (typeof value !== 'string') {
     return 'chat_completions';
@@ -399,16 +404,10 @@ export function loadConfig(): ServerConfig {
     process.env.OPENAI_IMAGE_BASE_URL?.trim() ||
     process.env.OPENAI_BASE_URL?.trim() ||
     'https://ai.openai.com/v1';
-  const codexImageModel = process.env.CODEX_IMAGE_MODEL?.trim() || defaultCodexImageModel;
-  const configuredCodexImageFallbackModels = readStringList('CODEX_IMAGE_FALLBACK_MODELS');
-  const codexImageModels = [
-    ...new Set([
-      codexImageModel,
-      ...(configuredCodexImageFallbackModels.length > 0
-        ? configuredCodexImageFallbackModels
-        : defaultCodexImageFallbackModels),
-    ]),
-  ];
+  const codexImageModel = normalizeCodexImageModelId(
+    process.env.CODEX_IMAGE_MODEL?.trim() || defaultCodexImageModel,
+  );
+  const codexImageModels = [codexImageModel];
 
   if (publicHttpBaseUrl) {
     allowedOrigins.add(publicHttpBaseUrl);
@@ -425,7 +424,7 @@ export function loadConfig(): ServerConfig {
     pingIntervalMs: readNumber('PING_INTERVAL_MS', 20_000),
     sessionIdleMs: readNumber('SESSION_IDLE_MS', 120_000),
     roomExitGraceMs: readNumber('ROOM_EXIT_GRACE_MS', 30 * 60 * 1000),
-    historyRetentionMs: readHistoryRetentionMs('HISTORY_RETENTION_MS', 6 * 60 * 60 * 1000),
+    historyRetentionMs: readHistoryRetentionMs('HISTORY_RETENTION_MS', maxHistoryRetentionMs),
     historyTextRetentionMs: readHistoryRetentionMs(
       'HISTORY_TEXT_RETENTION_MS',
       maxHistoryRetentionMs
