@@ -1,10 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useState, type ChangeEvent, type ComponentType, type ReactNode } from 'react'
 import {
   Bot,
-  Cloud,
   KeyRound,
   Plus,
   SearchCheck,
@@ -13,7 +11,6 @@ import {
 import type {
   AdminAiSettings,
   AdminAnthropicConfig,
-  AdminCloudflareConfig,
   AdminModelToggleItem,
   AdminOpenRouterConfig,
 } from '@/lib/ddzhilian-types'
@@ -25,11 +22,11 @@ import type {
 import {
   addAdminAnthropicConfig,
   addAdminOpenAiConfig,
+  applyAnthropicDetectionToAdminSettings,
   applyOpenAiDetectionToAdminSettings,
   removeAdminAnthropicConfig,
   removeAdminOpenAiConfig,
   updateAdminAnthropicField,
-  updateAdminCloudflareField,
   updateAdminOpenAiField,
 } from '@/admin-v2/ai-draft'
 import {
@@ -38,7 +35,6 @@ import {
   createOpenAiProviderConfig,
   labelFromOpenAiModelId,
 } from '@/app/components/admin/constants'
-import { ADMIN_V2_BASE_PATH } from '@/admin-v2/config'
 import { adminSelectClassName, formatInteger, normalizeNonNegativeInteger } from '@/admin-v2/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,7 +55,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-type ProviderDetailKey = 'cloudflare' | string
+type ProviderDetailKey = string
 
 type DetectionState = {
   tone: 'success' | 'error'
@@ -84,7 +80,7 @@ type ProviderWorkspaceProps = {
 function upsertModelInList(models: AdminModelToggleItem[], modelId: string): AdminModelToggleItem[] {
   if (!modelId.trim()) return models
   const exists = models.some((m) => m.id === modelId)
-  if (exists) return models.map((m) => ({ ...m, enabled: m.id === modelId }))
+  if (exists) return models.map((m) => (m.id === modelId ? { ...m, enabled: true } : m))
   return [...models, { id: modelId, label: labelFromOpenAiModelId(modelId), alias: '', enabled: true }]
 }
 
@@ -92,12 +88,8 @@ function buildConfiguredLabel(isConfigured: boolean) {
   return isConfigured ? '已配置' : '待配置'
 }
 
-function providerConfigured(settings: Pick<AdminOpenRouterConfig, 'baseUrl' | 'apiKey'> | Pick<AdminCloudflareConfig, 'accountId' | 'apiToken'>) {
-  if ('apiKey' in settings) {
-    return Boolean(settings.baseUrl.trim() && settings.apiKey.trim())
-  }
-
-  return Boolean(settings.accountId.trim() && settings.apiToken.trim())
+function providerConfigured(settings: Pick<AdminOpenRouterConfig, 'baseUrl' | 'apiKey'>) {
+  return Boolean(settings.baseUrl.trim() && settings.apiKey.trim())
 }
 
 function AutoSaveStatus({
@@ -308,164 +300,6 @@ function AutoSaveNumberField({
   )
 }
 
-function CloudflarePanel({
-  aiDraft,
-  savedSettings,
-  disabled,
-  onClearError,
-  onChangeField,
-}: Readonly<{
-  aiDraft: AdminAiSettings
-  savedSettings: AdminAiSettings
-  disabled: boolean
-  onClearError: () => void
-  onChangeField: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
-}>) {
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const configured = providerConfigured(aiDraft.cloudflare)
-  const enabledModelCount = aiDraft.cloudflare.models.filter((model) => model.enabled).length
-
-  return (
-    <DetailSection
-      title="Cloudflare AI"
-      description="高频配置只保留鉴权与连接本身，模型编辑统一回到 models 页。"
-      status={(
-        <div className="flex gap-2">
-          <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
-          <Badge variant="outline">启用模型 {formatInteger(enabledModelCount)}</Badge>
-        </div>
-      )}
-    >
-      <div className="grid gap-4 lg:grid-cols-2">
-        <AutoSaveTextField
-          label="Account ID"
-          value={aiDraft.cloudflare.accountId}
-          disabled={disabled}
-          onChange={(value) => onChangeField('accountId', value)}
-          onClearError={onClearError}
-        />
-        <AutoSaveTextField
-          label="API Token"
-          type="password"
-          value={aiDraft.cloudflare.apiToken}
-          disabled={disabled}
-          onChange={(value) => onChangeField('apiToken', value)}
-          onClearError={onClearError}
-        />
-        <Field label="模型名称">
-          {aiDraft.cloudflare.models.length > 0 ? (
-            <select
-              className={adminSelectClassName}
-              value={aiDraft.cloudflare.model}
-              disabled={disabled}
-              onChange={(event) => {
-                onClearError()
-                const modelId = event.target.value
-                onChangeField('model', modelId)
-                onChangeField('models', upsertModelInList(aiDraft.cloudflare.models, modelId))
-              }}
-            >
-              {aiDraft.cloudflare.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label === model.id ? model.id : `${model.label} (${model.id})`}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <Input
-              type="text"
-              value={aiDraft.cloudflare.model}
-              disabled={disabled}
-              placeholder="@cf/google/gemma-4-26b-a4b-it"
-              onChange={(event) => {
-                onClearError()
-                const modelId = event.target.value
-                onChangeField('model', modelId)
-                if (modelId.trim()) {
-                  onChangeField('models', upsertModelInList(aiDraft.cloudflare.models, modelId.trim()))
-                }
-              }}
-            />
-          )}
-        </Field>
-      </div>
-
-      <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground lg:grid-cols-2">
-        <div>
-          <p className="font-medium text-foreground">启用模型数</p>
-          <p>{formatInteger(enabledModelCount)} / {formatInteger(savedSettings.cloudflare.models.length)}</p>
-        </div>
-        <div className="flex items-end justify-start lg:justify-end">
-          <Button asChild type="button" variant="outline">
-            <Link href={`${ADMIN_V2_BASE_PATH}/models`} prefetch={false}>
-              去 models 页管理
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      <details
-        open={advancedOpen}
-        onToggle={(event) => setAdvancedOpen((event.currentTarget as HTMLDetailsElement).open)}
-        className="rounded-xl border border-border bg-background"
-      >
-        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-foreground">
-          高级设置
-        </summary>
-        <div className="grid gap-4 border-t border-border px-4 py-4 lg:grid-cols-2">
-          <Field label="免费额度保护">
-            <select
-              className={adminSelectClassName}
-              value={aiDraft.cloudflare.freeOnly ? 'true' : 'false'}
-              disabled={disabled}
-              onChange={(event) => {
-                onClearError()
-                onChangeField('freeOnly', event.target.value === 'true')
-              }}
-            >
-              <option value="true">启用</option>
-              <option value="false">关闭</option>
-            </select>
-          </Field>
-          <AutoSaveNumberField
-            label="每日预算"
-            value={aiDraft.cloudflare.dailyNeuronBudget}
-            savedValue={savedSettings.cloudflare.dailyNeuronBudget}
-            min={0}
-            disabled={disabled}
-            onCommit={(value) => {
-              onChangeField('dailyNeuronBudget', value)
-            }}
-            onClearError={onClearError}
-          />
-          <AutoSaveNumberField
-            label="最大 Prompt 字符"
-            value={aiDraft.cloudflare.maxPromptChars}
-            savedValue={savedSettings.cloudflare.maxPromptChars}
-            min={1}
-            disabled={disabled}
-            onCommit={(value) => {
-              onChangeField('maxPromptChars', value)
-            }}
-            onClearError={onClearError}
-          />
-          <AutoSaveNumberField
-            label="最大输出 Token"
-            value={aiDraft.cloudflare.maxOutputTokens}
-            savedValue={savedSettings.cloudflare.maxOutputTokens}
-            min={1}
-            disabled={disabled}
-            onCommit={(value) => {
-              onChangeField('maxOutputTokens', value)
-            }}
-            onClearError={onClearError}
-          />
-        </div>
-      </details>
-    </DetailSection>
-  )
-}
-
 function OpenAiCompatiblePanel({
   configIndex,
   aiDraft,
@@ -491,10 +325,10 @@ function OpenAiCompatiblePanel({
 }>) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const config = aiDraft.openai[configIndex]
-  const savedConfig = savedSettings.openai[configIndex]
-  if (!config || !savedConfig) {
+  if (!config) {
     return null
   }
+  const savedConfig = savedSettings.openai[configIndex] ?? config
   const configured = providerConfigured(config)
 
   return (
@@ -701,6 +535,7 @@ function AnthropicPanel({
   onDelete,
   onAutoSave,
   onDetectAnthropicModels,
+  onApplyDetection,
 }: Readonly<{
   configIndex: number
   aiDraft: AdminAiSettings
@@ -711,15 +546,16 @@ function AnthropicPanel({
   onDelete: () => void
   onAutoSave: () => void
   onDetectAnthropicModels: (input: { baseUrl: string; authToken: string }) => Promise<AdminAnthropicDetectResult>
+  onApplyDetection: (result: AdminAnthropicDetectResult) => void
 }>) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [anthropicMessage, setAnthropicMessage] = useState<string | null>(null)
   const [detectedModels, setDetectedModels] = useState<Array<{ id: string; label: string }>>([])
   const config = aiDraft.anthropic[configIndex]
-  const savedConfig = savedSettings.anthropic[configIndex]
-  if (!config || !savedConfig) {
+  if (!config) {
     return null
   }
+  const savedConfig = savedSettings.anthropic[configIndex] ?? config
   const configured = Boolean(config.baseUrl.trim() && config.authToken.trim())
 
   return (
@@ -810,7 +646,7 @@ function AnthropicPanel({
                     .then((result) => {
                       setDetectedModels(result.models.map((m) => ({ id: m.id, label: m.label || m.id })))
                       setAnthropicMessage(`已检测到 ${formatInteger(result.models.length)} 个模型，可从下拉中选择。`)
-                      onChangeField('model', result.selectedModelId || result.models[0]?.id || '')
+                      onApplyDetection(result)
                     })
                     .catch((nextError) => {
                       setDetectedModels([])
@@ -869,6 +705,18 @@ function AnthropicPanel({
   )
 }
 
+function getFirstProviderDetailKey(settings: AdminAiSettings): ProviderDetailKey {
+  if (settings.openai.length > 0) {
+    return 'openai:0'
+  }
+
+  if (settings.anthropic.length > 0) {
+    return 'anthropic:0'
+  }
+
+  return ''
+}
+
 export function AdminV2ProvidersWorkspace({
   aiDraft,
   savedSettings,
@@ -882,7 +730,7 @@ export function AdminV2ProvidersWorkspace({
   onDetectAnthropicModels,
   onDetectOpenAiCompatibleModels,
 }: ProviderWorkspaceProps) {
-  const [selectedDetail, setSelectedDetail] = useState<ProviderDetailKey>('cloudflare')
+  const [selectedDetail, setSelectedDetail] = useState<ProviderDetailKey>(() => getFirstProviderDetailKey(aiDraft))
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>({})
 
   const commitDraftChange = (updater: (current: AdminAiSettings) => AdminAiSettings) => {
@@ -934,17 +782,6 @@ export function AdminV2ProvidersWorkspace({
     icon: React.ComponentType<{ className?: string }>
     badge: ReactNode
   }> = [
-    {
-      key: 'cloudflare',
-      title: 'Cloudflare AI',
-      description: '连接与预算控制',
-      icon: Cloud,
-      badge: (
-        <Badge variant={providerConfigured(aiDraft.cloudflare) ? 'secondary' : 'outline'}>
-          {buildConfiguredLabel(providerConfigured(aiDraft.cloudflare))}
-        </Badge>
-      ),
-    },
     ...aiDraft.openai.map((config, index) => ({
       key: `openai:${index.toString()}` as ProviderDetailKey,
       title: config.displayName || 'OpenAI Compatible',
@@ -968,6 +805,9 @@ export function AdminV2ProvidersWorkspace({
       ),
     })),
   ]
+  const activeDetail = detailList.some((item) => item.key === selectedDetail)
+    ? selectedDetail
+    : detailList[0]?.key ?? ''
 
   return (
     <div className="grid gap-6">
@@ -1002,7 +842,7 @@ export function AdminV2ProvidersWorkspace({
             {detailList.map((item) => (
               <NavItemButton
                 key={item.key}
-                active={selectedDetail === item.key}
+                active={activeDetail === item.key}
                 title={item.title}
                 description={item.description}
                 icon={item.icon}
@@ -1014,20 +854,16 @@ export function AdminV2ProvidersWorkspace({
           </div>
 
           <div className="grid gap-6">
-            {selectedDetail === 'cloudflare' ? (
-              <CloudflarePanel
-                aiDraft={aiDraft}
-                savedSettings={savedSettings}
-                disabled={!canEdit || isSaving}
-                onClearError={onClearError}
-                onChangeField={(field, value) => {
-                  onChange((current) => updateAdminCloudflareField(current, field, value))
-                }}
-              />
+            {!activeDetail ? (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  暂无供应商配置，请先添加 OpenAI Compatible 或 Anthropic。
+                </CardContent>
+              </Card>
             ) : null}
 
-            {selectedDetail.startsWith('openai:') ? (() => {
-              const index = Number.parseInt(selectedDetail.slice(7), 10)
+            {activeDetail.startsWith('openai:') ? (() => {
+              const index = Number.parseInt(activeDetail.slice(7), 10)
               return (
                 <OpenAiCompatiblePanel
                   configIndex={index}
@@ -1035,10 +871,10 @@ export function AdminV2ProvidersWorkspace({
                   savedSettings={savedSettings}
                   disabled={!canEdit || isSaving}
                   onClearError={onClearError}
-                  detectionState={detectionStates[selectedDetail] ?? null}
+                  detectionState={detectionStates[activeDetail] ?? null}
                   onDetect={() => {
                     onClearError()
-                    setDetectionStates((prev) => ({ ...prev, [selectedDetail]: null }))
+                    setDetectionStates((prev) => ({ ...prev, [activeDetail]: null }))
                     const config = aiDraft.openai[index]
                     if (!config) return
                     void onDetectOpenAiCompatibleModels({
@@ -1051,20 +887,21 @@ export function AdminV2ProvidersWorkspace({
                       .then((result) => {
                         setDetectionStates((prev) => ({
                           ...prev,
-                          [selectedDetail]: {
+                          [activeDetail]: {
                             tone: 'success',
                             message: `已从 ${result.baseUrl} 读取模型列表并自动应用到草稿。`,
                             result,
                           },
                         }))
-                        commitDraftChange((current) =>
+                        const nextDraft = commitDraftChange((current) =>
                           applyOpenAiDetectionToAdminSettings(current, index, result),
                         )
+                        autoSaveDraft(nextDraft, false)
                       })
                       .catch((nextError) => {
                         setDetectionStates((prev) => ({
                           ...prev,
-                          [selectedDetail]: {
+                          [activeDetail]: {
                             tone: 'error',
                             message: nextError instanceof Error ? nextError.message : '模型检测失败。',
                             result: null,
@@ -1079,22 +916,22 @@ export function AdminV2ProvidersWorkspace({
                     autoSaveDraft()
                   }}
                   onDelete={() => {
-                    commitDraftChange((current) =>
+                    const nextDraft = commitDraftChange((current) =>
                       removeAdminOpenAiConfig(current, index),
                     )
                     setDetectionStates((prev) => {
                       const next = { ...prev }
-                      delete next[selectedDetail]
+                      delete next[activeDetail]
                       return next
                     })
-                    setSelectedDetail('cloudflare')
+                    setSelectedDetail(getFirstProviderDetailKey(nextDraft ?? aiDraft))
                   }}
                 />
               )
             })() : null}
 
-            {selectedDetail.startsWith('anthropic:') ? (() => {
-              const index = Number.parseInt(selectedDetail.slice(10), 10)
+            {activeDetail.startsWith('anthropic:') ? (() => {
+              const index = Number.parseInt(activeDetail.slice(10), 10)
               return (
                 <AnthropicPanel
                   configIndex={index}
@@ -1106,20 +943,26 @@ export function AdminV2ProvidersWorkspace({
                     onChange((current) => updateAdminAnthropicField(current, index, field, value))
                   }}
                   onDelete={() => {
-                    commitDraftChange((current) =>
+                    const nextDraft = commitDraftChange((current) =>
                       removeAdminAnthropicConfig(current, index),
                     )
                     setDetectionStates((prev) => {
                       const next = { ...prev }
-                      delete next[selectedDetail]
+                      delete next[activeDetail]
                       return next
                     })
-                    setSelectedDetail('cloudflare')
+                    setSelectedDetail(getFirstProviderDetailKey(nextDraft ?? aiDraft))
                   }}
                   onAutoSave={() => {
                     autoSaveDraft()
                   }}
                   onDetectAnthropicModels={onDetectAnthropicModels}
+                  onApplyDetection={(result) => {
+                    const nextDraft = commitDraftChange((current) =>
+                      applyAnthropicDetectionToAdminSettings(current, index, result),
+                    )
+                    autoSaveDraft(nextDraft, false)
+                  }}
                 />
               )
             })() : null}

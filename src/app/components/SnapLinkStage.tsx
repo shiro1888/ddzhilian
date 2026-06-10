@@ -27,6 +27,7 @@ import {
   sanitizeRichTextHtml,
   shouldInsertDivider,
 } from '../utils'
+import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
 
 type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }>['file']
 type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
@@ -573,6 +574,10 @@ function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) 
   }
 
   return `${room.title} · 等待连接`
+}
+
+function getAiModelOptionValue(option: AiModelOption) {
+  return option.value ?? (option.provider ? `${option.provider}::${option.id}` : option.id)
 }
 
 function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
@@ -2101,10 +2106,8 @@ export function SnapLinkStage({
                             <span className="dd-snaplink__sender-badge is-ai">AI</span>
                           </div>
                           <div className="dd-snaplink__bubble dd-snaplink__thinking" role="status" aria-live="polite">
-                            <span>thinking</span>
-                            <i aria-hidden="true" />
-                            <i aria-hidden="true" />
-                            <i aria-hidden="true" />
+                            <TextThinkingMatrixLoader />
+                            <span className="dd-snaplink__thinking-label">thinking</span>
                           </div>
                         </div>
                       </div>
@@ -2207,7 +2210,7 @@ export function SnapLinkStage({
                       >
                         {aiModelOptions.length > 0 ? (
                           aiModelOptions.map((model) => (
-                            <option key={model.id} value={model.id}>
+                            <option key={getAiModelOptionValue(model)} value={getAiModelOptionValue(model)}>
                               {model.label}
                             </option>
                           ))

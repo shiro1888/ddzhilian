@@ -245,6 +245,14 @@ function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
 }
 
+function getAiModelOptionValue(option: AiModelOption) {
+  return option.value ?? (option.provider ? `${option.provider}::${option.id}` : option.id)
+}
+
+function findAiModelOption(options: AiModelOption[], value: string) {
+  return options.find((option) => getAiModelOptionValue(option) === value || option.id === value)
+}
+
 type RoomPreviewEvent = {
   createdAt: string
   previewText: string
@@ -379,15 +387,19 @@ function App() {
           const models = status.models ?? []
           setAiModelOptions(models)
           setSelectedAiModel((current) => {
-            if (current && models.some((model) => model.id === current)) {
+            if (current && findAiModelOption(models, current)) {
               return current
             }
 
-            if (status.model && models.some((model) => model.id === status.model)) {
-              return status.model
+            const defaultModel = models.find((model) =>
+              model.id === status.model &&
+              (!status.provider || !model.provider || model.provider === status.provider),
+            )
+            if (defaultModel) {
+              return getAiModelOptionValue(defaultModel)
             }
 
-            return models[0]?.id ?? status.model ?? ''
+            return models[0] ? getAiModelOptionValue(models[0]) : status.model ?? ''
           })
         }
       })
@@ -948,8 +960,9 @@ function App() {
       ? (aiQuotaStatus.limitLabel ?? '外部 API 计费')
       : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
     : 'AI 额度加载中'
+  const selectedAiModelOption = findAiModelOption(aiModelOptions, selectedAiModel)
   const selectedAiModelLabel =
-    aiModelOptions.find((model) => model.id === selectedAiModel)?.label ||
+    selectedAiModelOption?.label ||
     selectedAiModel ||
     aiQuotaStatus?.model ||
     'AI 模型'
@@ -1415,7 +1428,8 @@ function App() {
             kind: isAiBotQuotaPrompt ? 'quota' : 'chat',
             historyId: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
-            model: selectedAiModel || undefined,
+            provider: selectedAiModelOption?.provider,
+            model: selectedAiModelOption?.id ?? (selectedAiModel || undefined),
             images: aiBotImages,
           })
 
@@ -1536,14 +1550,17 @@ function App() {
       selectedAiModelLabel={selectedAiModelLabel}
       isConversationSyncReady={Boolean(self?.historyAuthToken)}
       onAiModelChange={setSelectedAiModel}
-      onAskAi={(prompt, options) =>
-        askAi(prompt, {
+      onAskAi={(prompt, options) => {
+        const requestedModelOption = findAiModelOption(aiModelOptions, options?.model ?? selectedAiModel)
+        return askAi(prompt, {
           kind: 'chat',
-          model: options?.model,
+          provider: requestedModelOption?.provider ?? options?.provider,
+          model: requestedModelOption?.id ?? options?.model,
           images: options?.images,
           webSearch: options?.webSearch,
           signal: options?.signal,
-        })}
+        })
+      }}
       onListConversations={listAiChatConversations}
       onSaveConversations={saveAiChatConversations}
       onDeleteConversationRemote={deleteAiChatConversation}

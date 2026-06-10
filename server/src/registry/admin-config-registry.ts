@@ -480,7 +480,7 @@ function normalizeSnapshot(
     : [];
 
   return {
-    provider: normalizeOptionalString(input?.provider) || 'cloudflare',
+    provider: normalizeOptionalString(input?.provider) || 'openrouter',
     systemPrompt: normalizeSystemPrompt(input?.systemPrompt, fallback.aiSystemPrompt),
     cloudflare: {
       accountId: normalizeOptionalString(cloudflareInput.accountId),
@@ -716,9 +716,13 @@ export class AdminConfigRegistry {
   }
 
   private applyAiSettings(input: AdminAiSettingsSnapshot) {
-    const hasOpenAi = Boolean(input.openai[0]?.baseUrl && input.openai[0]?.apiKey);
-    const hasCloudflare = Boolean(input.cloudflare.accountId && input.cloudflare.apiToken);
-    this.config.aiProvider = hasOpenAi ? 'openrouter' : hasCloudflare ? 'cloudflare' : this.config.aiProvider;
+    const firstOpenAiIndex = input.openai.findIndex((provider) => provider.baseUrl && provider.apiKey);
+    const firstAnthropicIndex = input.anthropic.findIndex((provider) => provider.baseUrl && provider.authToken);
+    this.config.aiProvider = firstOpenAiIndex >= 0
+      ? firstOpenAiIndex === 0 ? 'openrouter' : `feedback:openai-${firstOpenAiIndex}`
+      : firstAnthropicIndex >= 0
+        ? `feedback:anthropic-${firstAnthropicIndex}`
+        : this.config.aiProvider;
     this.config.aiSystemPrompt = input.systemPrompt;
     this.config.cloudflareAi.accountId = input.cloudflare.accountId || undefined;
     this.config.cloudflareAi.apiToken = input.cloudflare.apiToken || undefined;

@@ -58,6 +58,7 @@ type ChatAiStageProps = {
   onAskAi: (
     prompt: string,
     options?: {
+      provider?: string
       model?: string
       images?: AiChatImageInput[]
       webSearch?: boolean
@@ -395,6 +396,10 @@ function buildAttachmentSummaries(attachments: ChatAiAttachment[]): AiChatMessag
       ? { textPreview: attachment.text.replace(/\s+/g, ' ').trim().slice(0, 180) }
       : {}),
   }))
+}
+
+function getAiModelOptionValue(option: AiModelOption) {
+  return option.value ?? (option.provider ? `${option.provider}::${option.id}` : option.id)
 }
 
 function buildConversationMarkdown(conversation: ChatAiConversation) {
@@ -1247,7 +1252,7 @@ export function ChatAiStage({
                     >
                       {aiModelOptions.length > 0 ? (
                         aiModelOptions.map((model) => (
-                          <option key={model.id} value={model.id}>
+                          <option key={getAiModelOptionValue(model)} value={getAiModelOptionValue(model)}>
                             {model.label}
                           </option>
                         ))

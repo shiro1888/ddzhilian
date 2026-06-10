@@ -3001,6 +3001,7 @@ export function useDdzhilian() {
       kind?: 'chat' | 'quota'
       historyId?: string
       createdAt?: string
+      provider?: string
       model?: string
       images?: AiChatImageInput[]
       webSearch?: boolean
@@ -3032,6 +3033,7 @@ export function useDdzhilian() {
         kind: options?.kind,
         historyId: options?.historyId,
         createdAt: options?.createdAt,
+        provider: options?.provider,
         model: options?.model,
         images,
         webSearch: options?.webSearch === true,

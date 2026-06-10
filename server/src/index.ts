@@ -211,6 +211,7 @@ type AiChatRequestPayload = {
   createdAt?: unknown;
   replyToName?: unknown;
   kind?: unknown;
+  provider?: unknown;
   model?: unknown;
   images?: unknown;
   webSearch?: unknown;
@@ -2784,53 +2785,47 @@ function getFeedbackAiProvider(providerId: string): FeedbackAiProviderConfig | u
   return config.feedbackAiProviders.find((provider) => provider.id === providerId);
 }
 
-function getActiveAiSettings(): ActiveAiSettings {
-  if (config.aiProvider === 'openrouter') {
-    const models = config.openrouterAi.models.filter((model) => model.enabled !== false);
-    const defaultModel = models.find((model) => model.id === config.openrouterAi.model)?.id ?? models[0]?.id ?? '';
-    return {
-      provider: 'openrouter' as const,
-      kind: 'openai-compatible',
-      label: 'OpenAI 兼容接口',
-      model: defaultModel,
-      models,
-      maxPromptChars: config.openrouterAi.maxPromptChars,
-      maxOutputTokens: config.openrouterAi.maxOutputTokens,
-      openai: config.openrouterAi,
-    };
+function createOpenAiSettings(
+  provider: string,
+  providerConfig: OpenAiCompatibleProviderConfig,
+  label: string,
+): ActiveAiSettings {
+  const models = providerConfig.models.filter((model) => model.enabled !== false);
+  const defaultModel = models.find((model) => model.id === providerConfig.model)?.id ?? models[0]?.id ?? '';
+  return {
+    provider,
+    kind: 'openai-compatible',
+    label: label.trim() || providerConfig.displayName.trim() || 'OpenAI Compatible',
+    model: defaultModel,
+    models,
+    maxPromptChars: providerConfig.maxPromptChars,
+    maxOutputTokens: providerConfig.maxOutputTokens,
+    openai: providerConfig,
+  };
+}
+
+function createAnthropicSettings(
+  provider: FeedbackAiProviderConfig,
+): ActiveAiSettings | null {
+  if (!provider.anthropic) {
+    return null;
   }
 
-  const feedbackProvider = getFeedbackAiProvider(config.aiProvider);
-  if (feedbackProvider?.kind === 'openai-compatible' && feedbackProvider.openai) {
-    const models = feedbackProvider.openai.models.filter((model) => model.enabled !== false);
-    const defaultModel = models.find((model) => model.id === feedbackProvider.openai?.model)?.id ?? models[0]?.id ?? '';
-    return {
-      provider: feedbackProvider.id,
-      kind: feedbackProvider.kind,
-      label: feedbackProvider.displayName || feedbackProvider.openai.displayName || 'OpenAI 兼容接口',
-      model: defaultModel,
-      models,
-      maxPromptChars: feedbackProvider.openai.maxPromptChars,
-      maxOutputTokens: feedbackProvider.openai.maxOutputTokens,
-      openai: feedbackProvider.openai,
-    };
-  }
+  const models = provider.anthropic.models.filter((model) => model.enabled !== false);
+  const defaultModel = models.find((model) => model.id === provider.anthropic?.model)?.id ?? models[0]?.id ?? '';
+  return {
+    provider: provider.id,
+    kind: 'anthropic',
+    label: provider.displayName || 'Anthropic',
+    model: defaultModel,
+    models,
+    maxPromptChars: provider.anthropic.maxPromptChars,
+    maxOutputTokens: provider.anthropic.maxOutputTokens,
+    anthropic: provider.anthropic,
+  };
+}
 
-  if (feedbackProvider?.kind === 'anthropic' && feedbackProvider.anthropic) {
-    const models = feedbackProvider.anthropic.models.filter((model) => model.enabled !== false);
-    const defaultModel = models.find((model) => model.id === feedbackProvider.anthropic?.model)?.id ?? models[0]?.id ?? '';
-    return {
-      provider: feedbackProvider.id,
-      kind: feedbackProvider.kind,
-      label: feedbackProvider.displayName || 'Anthropic',
-      model: defaultModel,
-      models,
-      maxPromptChars: feedbackProvider.anthropic.maxPromptChars,
-      maxOutputTokens: feedbackProvider.anthropic.maxOutputTokens,
-      anthropic: feedbackProvider.anthropic,
-    };
-  }
-
+function createCloudflareSettings(): ActiveAiSettings {
   const models = config.cloudflareAi.models.filter((model) => model.enabled !== false);
   const defaultModel = models.find((model) => model.id === config.cloudflareAi.model)?.id ?? models[0]?.id ?? '';
   return {
@@ -2842,6 +2837,59 @@ function getActiveAiSettings(): ActiveAiSettings {
     maxPromptChars: config.cloudflareAi.maxPromptChars,
     maxOutputTokens: config.cloudflareAi.maxOutputTokens,
   };
+}
+
+function isConfiguredAiSettings(settings: ActiveAiSettings) {
+  if (settings.kind === 'openai-compatible') {
+    return Boolean(settings.openai?.baseUrl && settings.openai.apiKey && settings.model && settings.models.length > 0);
+  }
+
+  if (settings.kind === 'anthropic') {
+    return Boolean(settings.anthropic?.baseUrl && settings.anthropic.authToken && settings.model && settings.models.length > 0);
+  }
+
+  return Boolean(config.cloudflareAi.accountId && config.cloudflareAi.apiToken && settings.model && settings.models.length > 0);
+}
+
+function getConfiguredTextAiSettings() {
+  const providers: ActiveAiSettings[] = [];
+  const primaryOpenAi = createOpenAiSettings(
+    'openrouter',
+    config.openrouterAi,
+    config.openrouterAi.displayName || 'OpenAI Compatible',
+  );
+
+  if (isConfiguredAiSettings(primaryOpenAi)) {
+    providers.push(primaryOpenAi);
+  }
+
+  for (const provider of config.feedbackAiProviders) {
+    const settings = provider.kind === 'openai-compatible' && provider.openai
+      ? createOpenAiSettings(provider.id, provider.openai, provider.displayName)
+      : provider.kind === 'anthropic'
+        ? createAnthropicSettings(provider)
+        : null;
+
+    if (settings && isConfiguredAiSettings(settings)) {
+      providers.push(settings);
+    }
+  }
+
+  return providers;
+}
+
+function getAvailableAiSettings() {
+  const configuredProviders = getConfiguredTextAiSettings();
+  if (configuredProviders.length > 0) {
+    return configuredProviders;
+  }
+
+  const cloudflare = createCloudflareSettings();
+  return isConfiguredAiSettings(cloudflare) ? [cloudflare] : [];
+}
+
+function getAiSettingsByProvider(providerId: string) {
+  return getAvailableAiSettings().find((provider) => provider.provider === providerId);
 }
 
 type AdminAuthResult =
@@ -3165,13 +3213,41 @@ async function authenticateAccountRequest(
   }
 }
 
-function resolveAiModel(value: unknown) {
-  const activeAi = getActiveAiSettings();
-  const requestedModel = normalizeOptionalString(value);
+function parseProviderQualifiedModel(value: string) {
+  const separatorIndex = value.indexOf('::');
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const provider = value.slice(0, separatorIndex).trim();
+  const model = value.slice(separatorIndex + 2).trim();
+  return provider && model ? { provider, model } : null;
+}
+
+function resolveAiModelSelection(providerValue: unknown, modelValue: unknown) {
+  const modelText = normalizeOptionalString(modelValue) ?? '';
+  const qualifiedModel = parseProviderQualifiedModel(modelText);
+  const requestedProvider = normalizeOptionalString(providerValue) ?? qualifiedModel?.provider ?? '';
+  const requestedModel = qualifiedModel?.model ?? modelText;
+  const providers = getAvailableAiSettings();
+  const activeAi = requestedProvider
+    ? providers.find((provider) => provider.provider === requestedProvider)
+    : providers[0];
+
+  if (!activeAi) {
+    return {
+      ok: false as const,
+      statusCode: 503,
+      message: requestedProvider
+        ? 'Requested AI provider is not configured.'
+        : 'No AI provider is configured on this server.',
+    };
+  }
 
   if (!requestedModel && activeAi.model) {
     return {
       ok: true as const,
+      activeAi,
       model: activeAi.model,
     };
   }
@@ -3179,6 +3255,7 @@ function resolveAiModel(value: unknown) {
   if (!requestedModel) {
     return {
       ok: false as const,
+      statusCode: 400,
       message: `${activeAi.label} default model is not configured.`,
     };
   }
@@ -3192,12 +3269,14 @@ function resolveAiModel(value: unknown) {
   if (!model) {
     return {
       ok: false as const,
+      statusCode: 400,
       message: `Unsupported ${activeAi.label} model.`,
     };
   }
 
   return {
     ok: true as const,
+    activeAi,
     model: model.id,
   };
 }
@@ -3662,9 +3741,7 @@ function writeAiQuotaExhausted(response: ServerResponse) {
   });
 }
 
-function getAiConfigurationError() {
-  const activeAi = getActiveAiSettings();
-
+function getAiConfigurationError(activeAi: ActiveAiSettings) {
   if (activeAi.kind === 'openai-compatible') {
     if (!activeAi.openai?.apiKey) {
       return `${activeAi.label} is not configured on this server.`;
@@ -3697,8 +3774,8 @@ function getAiConfigurationError() {
 }
 
 function getAiModelLabel(provider: string, modelId: string) {
-  const activeAi = provider === config.aiProvider ? getActiveAiSettings() : undefined;
-  const source = activeAi?.models ?? (
+  const providerSettings = getAiSettingsByProvider(provider);
+  const source = providerSettings?.models ?? (
     provider === 'openrouter'
       ? config.openrouterAi.models
       : provider === 'cloudflare'
@@ -3708,8 +3785,20 @@ function getAiModelLabel(provider: string, modelId: string) {
   return source.find((entry) => entry.id === modelId)?.label ?? modelId;
 }
 
-function buildAiQuotaPayload(model: string) {
-  const activeAi = getActiveAiSettings();
+function buildAiModelOptionsPayload(providers: ActiveAiSettings[]) {
+  return providers.flatMap((provider) =>
+    provider.models.map((entry) => ({
+      id: entry.id,
+      label: `${provider.label} · ${entry.label}`,
+      provider: provider.provider,
+      providerLabel: provider.label,
+      value: `${provider.provider}::${entry.id}`,
+    })),
+  );
+}
+
+function buildAiQuotaPayload(activeAi: ActiveAiSettings, model: string) {
+  const providers = getAvailableAiSettings();
   if (activeAi.kind !== 'cloudflare') {
     return {
       date: new Date().toISOString().slice(0, 10),
@@ -3720,14 +3809,13 @@ function buildAiQuotaPayload(model: string) {
       provider: activeAi.provider,
       limitLabel: `${activeAi.label} billing`,
       model,
-      models: activeAi.models.map((entry) => ({ id: entry.id, label: entry.label })),
+      models: buildAiModelOptionsPayload(providers),
     };
   }
 
   const {
     freeOnly,
     dailyNeuronBudget,
-    models,
   } = config.cloudflareAi;
 
   return {
@@ -3735,7 +3823,7 @@ function buildAiQuotaPayload(model: string) {
     freeOnly,
     provider: 'cloudflare',
     model,
-    models: models.filter((entry) => entry.enabled !== false).map((entry) => ({ id: entry.id, label: entry.label })),
+    models: buildAiModelOptionsPayload(providers),
   };
 }
 
@@ -4917,20 +5005,23 @@ function handleAiQuotaRequest(
     return;
   }
 
-  const configurationError = getAiConfigurationError();
+  const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+  const modelSelection = resolveAiModelSelection(
+    requestUrl.searchParams.get('provider'),
+    requestUrl.searchParams.get('model'),
+  );
+  if (!modelSelection.ok) {
+    writeJson(response, modelSelection.statusCode, { error: modelSelection.message });
+    return;
+  }
+
+  const configurationError = getAiConfigurationError(modelSelection.activeAi);
   if (configurationError) {
     writeJson(response, 503, { error: configurationError });
     return;
   }
 
-  const requestUrl = new URL(request.url ?? '/', 'http://localhost');
-  const modelSelection = resolveAiModel(requestUrl.searchParams.get('model'));
-  if (!modelSelection.ok) {
-    writeJson(response, 400, { error: modelSelection.message });
-    return;
-  }
-
-  writeJson(response, 200, buildAiQuotaPayload(modelSelection.model));
+  writeJson(response, 200, buildAiQuotaPayload(modelSelection.activeAi, modelSelection.model));
 }
 
 async function handleAiChatConversationsRequest(
@@ -5031,15 +5122,6 @@ async function handleAiChatRequest(
     return;
   }
 
-  const configurationError = getAiConfigurationError();
-  if (configurationError) {
-    writeJson(response, 503, {
-      error: configurationError,
-    });
-    return;
-  }
-
-  const activeAi = getActiveAiSettings();
   let payload: AiChatRequestPayload;
   try {
     const buffer = await readRequestBuffer(request, { maxBytes: aiRequestMaxBytes });
@@ -5061,9 +5143,18 @@ async function handleAiChatRequest(
   const createdAt = normalizeCreatedAt(payload.createdAt);
   const kind = payload.kind === 'quota' ? 'quota' : 'chat';
   const shouldUseWebSearch = kind === 'chat' && payload.webSearch === true;
-  const modelSelection = resolveAiModel(payload.model);
+  const modelSelection = resolveAiModelSelection(payload.provider, payload.model);
   if (!modelSelection.ok) {
-    writeJson(response, 400, { error: modelSelection.message });
+    writeJson(response, modelSelection.statusCode, { error: modelSelection.message });
+    return;
+  }
+
+  const activeAi = modelSelection.activeAi;
+  const configurationError = getAiConfigurationError(activeAi);
+  if (configurationError) {
+    writeJson(response, 503, {
+      error: configurationError,
+    });
     return;
   }
 
@@ -5103,7 +5194,7 @@ async function handleAiChatRequest(
       response: quotaText,
       provider: activeAi.provider,
       model,
-      quota: buildAiQuotaPayload(model),
+      quota: buildAiQuotaPayload(activeAi, model),
       historyText: saved?.ok ? saved.text : undefined,
     });
     return;
@@ -5431,7 +5522,7 @@ async function handleAiChatRequest(
       response: answer,
       provider: activeAi.provider,
       model,
-      quota: buildAiQuotaPayload(model),
+      quota: buildAiQuotaPayload(activeAi, model),
       historyText: saved?.ok ? saved.text : undefined,
       webSearch: webSearchContext,
     });

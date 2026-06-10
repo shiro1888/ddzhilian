@@ -10,7 +10,11 @@
     "lint": "eslint .",
     "openrouter:sync": "node scripts/sync-openrouter-free-models.mjs",
     "openrouter:sync:env": "node scripts/sync-openrouter-free-models.mjs --write-env server/.env",
-    "preview": "node scripts/serve-out.mjs"
+    "preview": "node scripts/serve-out.mjs",
+    "test": "vitest run",
+    "test:admin": "vitest run tests/admin-v2-provider-api.test.ts tests/admin-v2-provider-page.test.tsx tests/admin-v2-providers-workspace.test.tsx tests/admin-v2-ai-draft-providers.test.ts",
+    "test:admin:providers": "vitest run tests/admin-v2-provider-api.test.ts tests/admin-v2-provider-page.test.tsx tests/admin-v2-providers-workspace.test.tsx tests/admin-v2-ai-draft-providers.test.ts",
+    "test:full": "npm run test && npm run lint && npm run build && npm run build --prefix server"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -35,16 +39,22 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@tailwindcss/postcss": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^17.4.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.1.5",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.58.0"
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^4.1.8"
   }
 }

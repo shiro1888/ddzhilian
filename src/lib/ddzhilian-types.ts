@@ -541,6 +541,9 @@ export type AccountEmailCheckResponse = {
 export type AiModelOption = {
   id: string
   label: string
+  provider?: string
+  providerLabel?: string
+  value?: string
 }
 
 export type AiQuotaStatus = {
