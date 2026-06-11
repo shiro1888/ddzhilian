@@ -10,6 +10,7 @@ import type {
   AiQuotaStatus,
 } from '../../lib/ddzhilian-types'
 import { extractPlainTextFromRichText, openHtmlDocumentFullscreenPreview, sanitizeRichTextHtml } from '../utils'
+import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
 
 const AI_CHAT_STORAGE_KEY = 'ddzhilian-ai-chat-conversations'
 const MAX_STORED_CONVERSATIONS = 50
@@ -37,6 +38,10 @@ const quickPromptSuggestions = [
 
 type ChatAiMessage = AiChatConversationMessage
 type ChatAiConversation = AiChatConversationRecord
+
+export function resolveAiChatPendingStatusLabel(message: Pick<ChatAiMessage, 'webSearch'>) {
+  return message.webSearch ? 'searching' : 'thinking'
+}
 
 type ChatAiAttachment = {
   id: string
@@ -965,6 +970,7 @@ export function ChatAiStage({
         createdAt: now,
         status: 'streaming' as const,
         model: selectedAiModelLabel,
+        webSearch: shouldUseWebSearch ? { query: normalizedPrompt, sources: [] } : undefined,
       },
     ]
 
@@ -1332,10 +1338,8 @@ export function ChatAiStage({
                   </div>
                   {message.status === 'streaming' && !message.content ? (
                     <div className="dd-ai-chat__bubble dd-ai-chat__thinking" role="status" aria-live="polite">
-                      <span>thinking</span>
-                      <i aria-hidden="true" />
-                      <i aria-hidden="true" />
-                      <i aria-hidden="true" />
+                      <TextThinkingMatrixLoader />
+                      <span className="dd-ai-chat__thinking-label">{resolveAiChatPendingStatusLabel(message)}</span>
                     </div>
                   ) : (
                     <div
