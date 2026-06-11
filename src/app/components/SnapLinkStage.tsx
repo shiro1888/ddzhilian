@@ -1912,20 +1912,13 @@ export function SnapLinkStage({
               <h1 className="dd-snaplink__lobby-title" aria-label={snapLinkLobbyGreetingText}>
                 <span className="dd-snaplink__lobby-type" aria-hidden="true">{snapLinkLobbyGreetingText}<span className="dd-snaplink__lobby-cursor">_</span></span>
               </h1>
-              <p>选择工作区</p>
+              <p>选择 AI 聊天</p>
               <button
                 type="button"
                 className="dd-snaplink__create dd-snaplink__create--ai"
                 onClick={handleOpenAiChat}
               >
                 Chat with AI
-              </button>
-              <button
-                type="button"
-                className="dd-snaplink__create"
-                onClick={handleOpenCommand}
-              >
-                Web 命令行
               </button>
               {(localError || errorMessage) && (
                 <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
