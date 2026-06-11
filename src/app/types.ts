@@ -1,4 +1,4 @@
-export type NavView = 'text' | 'chat' | 'image' | 'admin'
+export type NavView = 'text' | 'chat' | 'image' | 'admin' | 'command'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
 export type RoomListStatus = 'connected' | 'online' | 'history'
 export type SharedContentTab = 'chat' | 'media' | 'files' | 'links'

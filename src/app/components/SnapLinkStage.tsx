@@ -38,7 +38,7 @@ type SnapLinkSharedLinkEntry = {
   sourceName: string
   createdAt: string
 }
-type SnapLinkActiveView = 'conversation' | 'ai-chat' | 'image' | 'admin'
+type SnapLinkActiveView = 'conversation' | 'ai-chat' | 'image' | 'admin' | 'command'
 
 type BotMentionTriggerRange = {
   start: number
@@ -76,6 +76,7 @@ const snapLinkQuickEmojis = [
 ]
 
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
+const snapLinkCommandSelectionValue = '__snaplink_command__'
 const snapLinkComposerMaxHeight = 120
 const snapLinkInitialMessageRenderCount = 80
 const snapLinkMessageRenderStep = 80
@@ -221,10 +222,12 @@ type SnapLinkStageProps = {
   aiChatElement: ReactNode
   imageElement: ReactNode
   adminElement: ReactNode
+  commandElement: ReactNode
   onOpenRoomConversation: (roomId: string) => void
   onDeviceNameChange: (deviceName: string) => void
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
+  onOpenCommandView: () => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onPastedImageSelection: (files: File[]) => void
@@ -678,10 +681,12 @@ export function SnapLinkStage({
   aiChatElement,
   imageElement,
   adminElement,
+  commandElement,
   onOpenRoomConversation,
   onDeviceNameChange,
   onOpenRoomHome,
   onOpenAiChatView,
+  onOpenCommandView,
   onChatDraftChange,
   onAiModelChange,
   onPastedImageSelection,
@@ -741,6 +746,7 @@ export function SnapLinkStage({
   const isAiChatOpen = activeView === 'ai-chat'
   const isImageOpen = activeView === 'image'
   const isAdminOpen = activeView === 'admin'
+  const isCommandOpen = activeView === 'command'
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
@@ -760,7 +766,8 @@ export function SnapLinkStage({
       }),
     [roomListItems],
   )
-  const hasActiveRoom = Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen
+  const hasActiveRoom =
+    Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen
   if (messageRenderState.roomId !== selectedRoomId) {
     setMessageRenderState({
       roomId: selectedRoomId,
@@ -1069,6 +1076,12 @@ export function SnapLinkStage({
     onOpenAiChatView()
   }
 
+  const handleOpenCommand = () => {
+    setActiveSharedTab(null)
+    setIsLobbyOpen(false)
+    onOpenCommandView()
+  }
+
   const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
     if (typeof window === 'undefined') {
       return
@@ -1135,6 +1148,11 @@ export function SnapLinkStage({
   const handleRoomSelection = (roomId: string) => {
     if (roomId === snapLinkAiChatSelectionValue) {
       handleOpenAiChat()
+      return
+    }
+
+    if (roomId === snapLinkCommandSelectionValue) {
+      handleOpenCommand()
       return
     }
 
@@ -1769,6 +1787,8 @@ export function SnapLinkStage({
               value={
                 isImageOpen
                   ? ''
+                  : isCommandOpen
+                    ? snapLinkCommandSelectionValue
                   : isAiChatOpen
                     ? snapLinkAiChatSelectionValue
                       : hasActiveRoom ? selectedRoomId ?? '' : ''
@@ -1777,6 +1797,7 @@ export function SnapLinkStage({
             >
               <option value="">大厅</option>
               <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
+              <option value={snapLinkCommandSelectionValue}>命令行</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   {room.title} · {room.roomId}
@@ -1851,7 +1872,7 @@ export function SnapLinkStage({
           </div>
           <button
             type="button"
-            className={!isAiChatOpen && !isImageOpen && !isAdminOpen ? 'is-active' : ''}
+            className={!isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen ? 'is-active' : ''}
             onClick={handleBackToLobby}
           >
             对话
@@ -1863,18 +1884,27 @@ export function SnapLinkStage({
           >
             AI 聊天
           </button>
+          <button
+            type="button"
+            className={isCommandOpen ? 'is-active' : ''}
+            onClick={handleOpenCommand}
+          >
+            命令行
+          </button>
         </div>
       </header>
 
-      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : 'is-lobby'}`}>
+      <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}>
         <div
-          className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : 'is-lobby'}`}
+          className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}
           style={isAdminOpen ? { border: 0, borderRadius: 0, background: 'transparent' } : undefined}
         >
           {isAdminOpen ? (
             adminElement
           ) : isImageOpen ? (
             imageElement
+          ) : isCommandOpen ? (
+            commandElement
           ) : isAiChatOpen ? (
             aiChatElement
           ) : !hasActiveRoom ? (
@@ -1882,13 +1912,20 @@ export function SnapLinkStage({
               <h1 className="dd-snaplink__lobby-title" aria-label={snapLinkLobbyGreetingText}>
                 <span className="dd-snaplink__lobby-type" aria-hidden="true">{snapLinkLobbyGreetingText}<span className="dd-snaplink__lobby-cursor">_</span></span>
               </h1>
-              <p>选择 AI 聊天</p>
+              <p>选择工作区</p>
               <button
                 type="button"
                 className="dd-snaplink__create dd-snaplink__create--ai"
                 onClick={handleOpenAiChat}
               >
                 Chat with AI
+              </button>
+              <button
+                type="button"
+                className="dd-snaplink__create"
+                onClick={handleOpenCommand}
+              >
+                Web 命令行
               </button>
               {(localError || errorMessage) && (
                 <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>

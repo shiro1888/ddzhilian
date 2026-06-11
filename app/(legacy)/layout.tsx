@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Script from 'next/script'
+import '@xterm/xterm/css/xterm.css'
 import '../../src/index.css'
 import '../../src/App.css'
 

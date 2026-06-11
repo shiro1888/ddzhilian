@@ -7977,6 +7977,10 @@
   align-items: stretch;
 }
 
+.dd-snaplink__canvas.is-command {
+  align-items: stretch;
+}
+
 .dd-snaplink__canvas.is-admin {
   align-items: stretch;
   justify-content: stretch;
@@ -8017,6 +8021,11 @@
   padding: 16px;
 }
 
+.dd-snaplink__app.is-command {
+  width: min(100%, 1120px);
+  min-height: calc(100svh - 80px);
+}
+
 .dd-snaplink__app.is-admin {
   width: 100%;
   min-height: calc(100svh - 48px);
@@ -8048,6 +8057,214 @@
   min-height: calc(100svh - 48px);
   border: 0;
   border-radius: 0;
+}
+
+.dd-web-command {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  background: var(--snap-surface);
+  color: var(--snap-ink);
+  animation: dd-snaplink-view-in 180ms ease both;
+}
+
+.dd-web-command__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--snap-border);
+  background: var(--snap-surface);
+}
+
+.dd-web-command__head h1 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.dd-web-command__eyebrow {
+  color: var(--snap-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.dd-web-command__head-actions,
+.dd-web-command__head-actions label,
+.dd-web-command__terminal-head,
+.dd-web-command__terminal-head div {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dd-web-command__head-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dd-web-command__head-actions label {
+  min-height: 32px;
+  color: var(--snap-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dd-web-command__head-actions select {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--snap-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--snap-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dd-web-command button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--snap-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--snap-ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dd-web-command button:hover {
+  border-color: var(--snap-muted);
+  background: var(--snap-bg);
+  color: var(--snap-ink);
+}
+
+.dd-web-command button svg {
+  flex: none;
+}
+
+.dd-web-command__primary {
+  border-color: transparent;
+  background: var(--snap-green);
+  color: #ffffff;
+}
+
+.dd-web-command__primary:hover {
+  border-color: transparent;
+  background: #15803d;
+  color: #ffffff;
+}
+
+.dd-web-command__workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
+  min-height: 0;
+}
+
+.dd-web-command__source,
+.dd-web-command__output {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dd-web-command__source {
+  grid-template-rows: auto minmax(0, 1fr);
+  border-right: 1px solid var(--snap-border);
+  background: #fafafa;
+}
+
+.dd-web-command__output {
+  grid-template-rows: auto minmax(220px, 1fr) auto minmax(180px, 0.6fr);
+  background: var(--snap-surface);
+}
+
+.dd-web-command__panel-head,
+.dd-web-command__result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--snap-border);
+  color: var(--snap-ink);
+  font-size: 12px;
+}
+
+.dd-web-command__panel-head span,
+.dd-web-command__result-head span {
+  color: var(--snap-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dd-web-command__result-head span.is-ok {
+  color: var(--snap-green);
+}
+
+.dd-web-command__result-head span.is-error {
+  color: #b42318;
+}
+
+.dd-web-command__source textarea {
+  width: 100%;
+  min-height: 0;
+  padding: 14px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: #ffffff;
+  color: #18181b;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.dd-web-command__terminal-head {
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--snap-border);
+  color: var(--snap-ink);
+  font-size: 12px;
+}
+
+.dd-web-command__terminal {
+  min-width: 0;
+  min-height: 220px;
+  padding: 8px;
+  background: #111111;
+  overflow: hidden;
+}
+
+.dd-web-command__terminal .xterm {
+  height: 100%;
+}
+
+.dd-web-command__result {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  background: #f7f7f7;
+  color: #18181b;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .dd-snaplink__lobby {
@@ -9952,6 +10169,50 @@
       min-height: 0;
     }
 
+  .dd-web-command {
+      height: 100%;
+      min-height: 0;
+    }
+
+  .dd-web-command__head {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      padding: 10px;
+    }
+
+  .dd-web-command__head-actions {
+      justify-content: flex-start;
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+  .dd-web-command__head-actions label,
+  .dd-web-command button {
+      flex: none;
+    }
+
+  .dd-web-command__workspace {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(190px, 0.46fr) minmax(0, 0.54fr);
+      min-height: 0;
+    }
+
+  .dd-web-command__source {
+      border-right: 0;
+      border-bottom: 1px solid var(--snap-border);
+    }
+
+  .dd-web-command__output {
+      grid-template-rows: auto minmax(170px, 1fr) auto minmax(128px, 0.55fr);
+    }
+
+  .dd-web-command__terminal {
+      min-height: 170px;
+    }
+
   .dd-snaplink__room {
       grid-template-rows: minmax(0, 1fr) auto auto;
       height: 100%;
@@ -9987,6 +10248,20 @@
 }
 
 @media (max-width: 900px) {
+  .dd-web-command__workspace {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(260px, 0.48fr) minmax(0, 0.52fr);
+    }
+
+  .dd-web-command__source {
+      border-right: 0;
+      border-bottom: 1px solid var(--snap-border);
+    }
+
+  .dd-web-command__output {
+      grid-template-rows: auto minmax(190px, 1fr) auto minmax(150px, 0.58fr);
+    }
+
   .dd-ai-chat {
       display: flex;
       flex-direction: column;

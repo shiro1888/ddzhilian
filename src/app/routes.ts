@@ -7,6 +7,7 @@ export const viewPaths: Record<NavView, string> = {
   chat: '/chat',
   image: '/image',
   admin: '/admin',
+  command: '/web-command',
 }
 
 const legacyTextPaths = new Set(['/', '/connect', '/send', '/receive', '/sessions'])

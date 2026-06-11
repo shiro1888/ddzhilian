@@ -9,6 +9,7 @@ export function generateStaticParams() {
     { slug: ['text'] },
     { slug: ['chat'] },
     { slug: ['image'] },
+    { slug: ['web-command'] },
     { slug: ['sessions'] },
   ]
 }

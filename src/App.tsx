@@ -6,6 +6,7 @@ import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
+import { WebCommandStage } from './app/components/WebCommandStage'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
   ComposerImageDraft,
@@ -301,6 +302,7 @@ function App() {
   const isAdminView = activeView === 'admin'
   const isAiChatView = activeView === 'chat'
   const isImageView = activeView === 'image'
+  const isCommandView = activeView === 'command'
   const isAdminProtectedView = isAdminView
   const imageAccount = useAccountAuth()
   const { canRecallAnyMessage } = useAdminPermissions({
@@ -1579,10 +1581,12 @@ function App() {
     />
   ) : imageAuthGateElement
 
+  const webCommandElement = <WebCommandStage />
+
   const snapLinkStageElement = (
     <SnapLinkStage
       isDragging={isDragging}
-      activeView={isAdminView ? 'admin' : isImageView ? 'image' : isAiChatView ? 'ai-chat' : 'conversation'}
+      activeView={isAdminView ? 'admin' : isImageView ? 'image' : isCommandView ? 'command' : isAiChatView ? 'ai-chat' : 'conversation'}
       deviceId={self?.deviceId ?? localIdentity.deviceId}
       deviceName={selfName}
       accountId={self?.accountId ?? localIdentity.accountId}
@@ -1613,10 +1617,12 @@ function App() {
       aiChatElement={aiChatElement}
       imageElement={imageGenerationElement}
       adminElement={adminRouteElement}
+      commandElement={webCommandElement}
       onOpenRoomConversation={handleOpenRoomConversation}
       onDeviceNameChange={handleDeviceNameChange}
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
+      onOpenCommandView={() => handleViewChange('command')}
       onChatDraftChange={setChatDraft}
       onAiModelChange={setSelectedAiModel}
       onPastedImageSelection={(files) => {
