@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer } from 'ws';
 
+import { runJavaInDockerSandbox } from './code-runner/java-docker-runner.js';
 import {
   loadConfig,
   type AnthropicProviderConfig,
@@ -576,6 +577,77 @@ function parseThemeSubmissionInput(payload: unknown): ThemeSubmissionInput | nul
     deviceName: normalizeThemeSubmissionString(payload.deviceName, 120),
     accountId: normalizeThemeSubmissionString(payload.accountId, 120),
   };
+}
+
+async function handleWebCommandJavaRunRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!config.javaDockerSandbox.enabled) {
+    writeJson(response, 503, {
+      error: 'Java Docker 沙箱未启用。生产环境需要显式设置 JAVA_DOCKER_SANDBOX_ENABLED=true。',
+    });
+    return;
+  }
+
+  const maxPayloadBytes =
+    config.javaDockerSandbox.maxSourceBytes +
+    config.javaDockerSandbox.maxStdinBytes +
+    4096;
+  let payload: unknown;
+
+  try {
+    const buffer = await readRequestBuffer(request, { maxBytes: maxPayloadBytes });
+    payload = JSON.parse(buffer.toString('utf8')) as unknown;
+  } catch (error) {
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error: error instanceof RequestBodyTooLargeError
+        ? 'Java 运行请求超过大小限制。'
+        : 'Invalid Java run JSON.',
+    });
+    return;
+  }
+
+  if (!isObjectRecord(payload)) {
+    writeJson(response, 400, { error: 'Invalid Java run payload.' });
+    return;
+  }
+
+  const source = payload.source;
+  const stdin = payload.stdin;
+
+  if (typeof source !== 'string' || !source.trim()) {
+    writeJson(response, 400, { error: 'Java 源码不能为空。' });
+    return;
+  }
+
+  if (stdin !== undefined && typeof stdin !== 'string') {
+    writeJson(response, 400, { error: 'Java stdin 必须是字符串。' });
+    return;
+  }
+
+  if (Buffer.byteLength(source, 'utf8') > config.javaDockerSandbox.maxSourceBytes) {
+    writeJson(response, 413, {
+      error: `Java 源码不能超过 ${config.javaDockerSandbox.maxSourceBytes.toString()} bytes。`,
+    });
+    return;
+  }
+
+  const normalizedStdin = stdin ?? '';
+  if (Buffer.byteLength(normalizedStdin, 'utf8') > config.javaDockerSandbox.maxStdinBytes) {
+    writeJson(response, 413, {
+      error: `Java 标准输入不能超过 ${config.javaDockerSandbox.maxStdinBytes.toString()} bytes。`,
+    });
+    return;
+  }
+
+  const result = await runJavaInDockerSandbox({
+    source,
+    stdin: normalizedStdin,
+    config: config.javaDockerSandbox,
+  });
+
+  writeJson(response, 200, result as unknown as Record<string, unknown>);
 }
 
 function firstHeaderValue(value: string | string[] | undefined) {
@@ -6215,6 +6287,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/snaplink/theme-submissions' && request.method === 'POST') {
     void handleSnapLinkThemeSubmissionRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/web-command/java' && request.method === 'POST') {
+    void handleWebCommandJavaRunRequest(request, response);
     return;
   }
 

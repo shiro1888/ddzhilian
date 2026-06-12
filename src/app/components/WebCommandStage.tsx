@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Play, RotateCcw, Trash2 } from 'lucide-react'
+import { Copy, Loader2, Play, RotateCcw, Trash2 } from 'lucide-react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import {
@@ -36,16 +36,146 @@ async function copyText(value: string) {
   textarea.remove()
 }
 
+function resolveWebCommandApiBaseUrl() {
+  const env = process.env as Record<string, string | undefined>
+  const configuredUrl = env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '')
+  }
+
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const { protocol, hostname, host } = window.location
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8787'
+  }
+
+  return `${protocol}//${host}`
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+async function readWebCommandApiError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallback
+}
+
+async function runJavaDockerSandbox({
+  source,
+  stdin,
+}: {
+  source: string
+  stdin: string
+}) {
+  const response = await fetch(`${resolveWebCommandApiBaseUrl()}/api/web-command/java`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ source, stdin }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readWebCommandApiError(response, 'Java 沙箱请求失败。'))
+  }
+
+  return normalizeJavaRunResult(await response.json())
+}
+
+function normalizeJavaRunResult(payload: unknown): WebCommandRunResult {
+  const resultPayload = isObjectRecord(payload) ? payload : {}
+  const stdout = typeof resultPayload.stdout === 'string' ? resultPayload.stdout : ''
+  const stderr = typeof resultPayload.stderr === 'string' ? resultPayload.stderr : ''
+  const exitCode = typeof resultPayload.exitCode === 'number'
+    ? resultPayload.exitCode
+    : resultPayload.ok === true ? 0 : 1
+  const startedAt = typeof resultPayload.startedAt === 'string'
+    ? resultPayload.startedAt
+    : new Date().toISOString()
+  const finishedAt = typeof resultPayload.finishedAt === 'string'
+    ? resultPayload.finishedAt
+    : new Date().toISOString()
+  const result = isObjectRecord(resultPayload.result) ? resultPayload.result : {}
+  const lines = Array.isArray(result.lines)
+    ? result.lines.filter((line): line is string => typeof line === 'string')
+    : stdout.trimEnd() ? stdout.trimEnd().split('\n') : []
+
+  return {
+    ok: resultPayload.ok === true,
+    language: 'java',
+    sandbox: 'docker-java',
+    exitCode,
+    durationMs: typeof resultPayload.durationMs === 'number' ? resultPayload.durationMs : 0,
+    startedAt,
+    finishedAt,
+    stdout,
+    stderr,
+    blocked: [],
+    violations: [],
+    timedOut: resultPayload.timedOut === true,
+    outputTruncated: resultPayload.outputTruncated === true,
+    compileFailed: resultPayload.compileFailed === true,
+    result: {
+      lines,
+      text: typeof result.text === 'string' ? result.text : stdout,
+      parsedJson: 'parsedJson' in result ? result.parsedJson : null,
+    },
+  }
+}
+
+function createWebCommandErrorResult({
+  language,
+  started,
+  error,
+}: {
+  language: WebCommandLanguage
+  started: number
+  error: unknown
+}): WebCommandRunResult {
+  const finished = Date.now()
+  const message = error instanceof Error ? error.message : '运行失败。'
+
+  return {
+    ok: false,
+    language,
+    sandbox: language === 'java' ? 'docker-java' : 'browser-output-sandbox',
+    exitCode: 1,
+    durationMs: finished - started,
+    startedAt: new Date(started).toISOString(),
+    finishedAt: new Date(finished).toISOString(),
+    stdout: '',
+    stderr: message,
+    blocked: [],
+    violations: [],
+    result: {
+      lines: [],
+      text: '',
+      parsedJson: null,
+    },
+  }
+}
+
 export function WebCommandStage() {
   const [language, setLanguage] = useState<WebCommandLanguage>('python')
   const [source, setSource] = useState(webCommandDefaultSources.python)
+  const [stdin, setStdin] = useState('')
   const [result, setResult] = useState<WebCommandRunResult | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
   const [copyLabel, setCopyLabel] = useState('复制结果')
   const terminalHostRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const languageRef = useRef(language)
   const sourceRef = useRef(source)
+  const stdinRef = useRef(stdin)
+  const runSequenceRef = useRef(0)
 
   useEffect(() => {
     languageRef.current = language
@@ -55,9 +185,13 @@ export function WebCommandStage() {
     sourceRef.current = source
   }, [source])
 
+  useEffect(() => {
+    stdinRef.current = stdin
+  }, [stdin])
+
   const resultOutput = useMemo(() => {
     if (!result) {
-      return '暂无输出。运行代码后这里显示输出结果。'
+      return isRunning ? '运行中。' : '暂无输出。运行代码后这里显示输出结果。'
     }
 
     const outputBlocks = [
@@ -66,7 +200,19 @@ export function WebCommandStage() {
     ].filter(Boolean)
 
     return outputBlocks.length > 0 ? outputBlocks.join('\n') : '无输出。'
-  }, [result])
+  }, [isRunning, result])
+
+  const resultStatus = useMemo(() => {
+    if (!result) {
+      return isRunning ? 'running' : 'idle'
+    }
+
+    if (result.timedOut) {
+      return 'timeout'
+    }
+
+    return `exit ${result.exitCode.toString()}`
+  }, [isRunning, result])
 
   const writeOutputToTerminal = useCallback((value: string) => {
     const terminal = terminalRef.current
@@ -97,18 +243,56 @@ export function WebCommandStage() {
   }, [writeOutputToTerminal])
 
   const executeCurrentSource = useCallback(() => {
-    const nextResult = runWebCommandSandbox({
-      language: languageRef.current,
-      source: sourceRef.current,
-    })
-    setResult(nextResult)
-    writeRunResult(nextResult)
+    const currentLanguage = languageRef.current
+    const currentSource = sourceRef.current
+    const currentStdin = stdinRef.current
+    const runId = runSequenceRef.current + 1
+    const started = Date.now()
+    runSequenceRef.current = runId
+    setIsRunning(true)
+
+    void (async () => {
+      try {
+        const nextResult = currentLanguage === 'java'
+          ? await runJavaDockerSandbox({ source: currentSource, stdin: currentStdin })
+          : runWebCommandSandbox({
+              language: currentLanguage,
+              source: currentSource,
+            })
+
+        if (runSequenceRef.current !== runId) {
+          return
+        }
+
+        setResult(nextResult)
+        writeRunResult(nextResult)
+      } catch (error) {
+        if (runSequenceRef.current !== runId) {
+          return
+        }
+
+        const nextResult = createWebCommandErrorResult({
+          language: currentLanguage,
+          started,
+          error,
+        })
+        setResult(nextResult)
+        writeRunResult(nextResult)
+      } finally {
+        if (runSequenceRef.current === runId) {
+          setIsRunning(false)
+        }
+      }
+    })()
   }, [writeRunResult])
 
   const switchLanguage = useCallback((nextLanguage: WebCommandLanguage) => {
+    runSequenceRef.current += 1
     setLanguage(nextLanguage)
     setSource(webCommandDefaultSources[nextLanguage])
+    setStdin('')
     setResult(null)
+    setIsRunning(false)
   }, [])
 
   useEffect(() => {
@@ -166,6 +350,7 @@ export function WebCommandStage() {
 
   const handleResetSource = () => {
     setSource(webCommandDefaultSources[language])
+    setStdin('')
     setResult(null)
   }
 
@@ -185,7 +370,9 @@ export function WebCommandStage() {
     <section className="dd-web-command" aria-label="Web 命令行">
       <header className="dd-web-command__head">
         <div>
-          <span className="dd-web-command__eyebrow">浏览器沙箱</span>
+          <span className="dd-web-command__eyebrow">
+            {language === 'java' ? 'Docker 沙箱' : '浏览器沙箱'}
+          </span>
           <h1>Web 命令行</h1>
         </div>
         <div className="dd-web-command__head-actions">
@@ -202,11 +389,16 @@ export function WebCommandStage() {
               ))}
             </select>
           </label>
-          <button type="button" className="dd-web-command__primary" onClick={executeCurrentSource}>
-            <Play size={15} aria-hidden="true" />
-            运行
+          <button
+            type="button"
+            className="dd-web-command__primary"
+            disabled={isRunning}
+            onClick={executeCurrentSource}
+          >
+            {isRunning ? <Loader2 size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
+            {isRunning ? '运行中' : '运行'}
           </button>
-          <button type="button" onClick={handleResetSource}>
+          <button type="button" disabled={isRunning} onClick={handleResetSource}>
             <RotateCcw size={15} aria-hidden="true" />
             重置
           </button>
@@ -214,7 +406,10 @@ export function WebCommandStage() {
       </header>
 
       <div className="dd-web-command__workspace">
-        <section className="dd-web-command__source" aria-label="源码">
+        <section
+          className={`dd-web-command__source${language === 'java' ? ' has-stdin' : ''}`}
+          aria-label="源码"
+        >
           <div className="dd-web-command__panel-head">
             <strong>{languageLabels[language]}</strong>
             <span>{source.length.toString()} 字符</span>
@@ -224,6 +419,21 @@ export function WebCommandStage() {
             spellCheck={false}
             onChange={(event) => setSource(event.target.value)}
           />
+          {language === 'java' ? (
+            <>
+              <div className="dd-web-command__panel-head">
+                <strong>stdin</strong>
+                <span>{stdin.length.toString()} 字符</span>
+              </div>
+              <textarea
+                className="dd-web-command__stdin-input"
+                value={stdin}
+                spellCheck={false}
+                aria-label="Java 标准输入"
+                onChange={(event) => setStdin(event.target.value)}
+              />
+            </>
+          ) : null}
         </section>
 
         <section className="dd-web-command__output" aria-label="运行输出">
@@ -244,7 +454,7 @@ export function WebCommandStage() {
           <div className="dd-web-command__result-head">
             <strong>输出结果</strong>
             <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
-              {result ? `exit ${result.exitCode.toString()}` : 'idle'}
+              {resultStatus}
             </span>
           </div>
           <pre className="dd-web-command__result">{resultOutput}</pre>

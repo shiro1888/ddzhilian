@@ -8148,6 +8148,11 @@
   color: var(--snap-ink);
 }
 
+.dd-web-command button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .dd-web-command button svg {
   flex: none;
 }
@@ -8181,6 +8186,10 @@
   grid-template-rows: auto minmax(0, 1fr);
   border-right: 1px solid var(--snap-border);
   background: #fafafa;
+}
+
+.dd-web-command__source.has-stdin {
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(92px, 0.32fr);
 }
 
 .dd-web-command__output {
@@ -8229,6 +8238,11 @@
   font-size: 13px;
   line-height: 1.6;
   tab-size: 2;
+}
+
+.dd-web-command__stdin-input {
+  min-height: 92px;
+  background: #fbfbfb;
 }
 
 .dd-web-command__terminal-head {
@@ -10203,6 +10217,10 @@
   .dd-web-command__source {
       border-right: 0;
       border-bottom: 1px solid var(--snap-border);
+    }
+
+  .dd-web-command__source.has-stdin {
+      grid-template-rows: auto minmax(0, 1fr) auto minmax(74px, 0.28fr);
     }
 
   .dd-web-command__output {

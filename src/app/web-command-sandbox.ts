@@ -3,13 +3,14 @@ export type WebCommandLanguage = 'python' | 'java' | 'c'
 export type WebCommandRunRequest = {
   language: WebCommandLanguage
   source: string
+  stdin?: string
 }
 
 export type WebCommandRunResult = {
   ok: boolean
   language: WebCommandLanguage
-  sandbox: 'browser-output-sandbox'
-  exitCode: 0 | 1
+  sandbox: 'browser-output-sandbox' | 'docker-java'
+  exitCode: number
   durationMs: number
   startedAt: string
   finishedAt: string
@@ -17,6 +18,9 @@ export type WebCommandRunResult = {
   stderr: string
   blocked: string[]
   violations: WebCommandSecurityViolation[]
+  timedOut?: boolean
+  outputTruncated?: boolean
+  compileFailed?: boolean
   result: {
     lines: string[]
     text: string
@@ -42,10 +46,23 @@ export const webCommandDefaultSources: Record<WebCommandLanguage, string> = {
     'print("answer =", 40 + 2)',
   ].join('\n'),
   java: [
-    'public class Main {',
+    'import java.util.HashSet;',
+    'import java.util.Iterator;',
+    '',
+    'public class HashSetDemo {',
     '  public static void main(String[] args) {',
-    '    System.out.println("hello from java");',
-    '    System.out.println("answer = " + (40 + 2));',
+    '    HashSet<String> set = new HashSet<>();',
+    '    set.add("Java");',
+    '    set.add("Python");',
+    '    set.add("TypeScript");',
+    '    set.add("C++");',
+    '',
+    '    Iterator<String> iterator = set.iterator();',
+    '    System.out.println("HashSet 遍历结果：");',
+    '    while (iterator.hasNext()) {',
+    '      String element = iterator.next();',
+    '      System.out.println(element);',
+    '    }',
     '  }',
     '}',
   ].join('\n'),

@@ -133,6 +133,17 @@ export interface ServerConfig {
     language?: string;
     categories?: string;
   };
+  javaDockerSandbox: {
+    enabled: boolean;
+    dockerImage: string;
+    timeoutMs: number;
+    memoryMb: number;
+    cpus: number;
+    pidsLimit: number;
+    maxSourceBytes: number;
+    maxStdinBytes: number;
+    maxOutputBytes: number;
+  };
   rtcConfig: {
     iceServers: Array<{
       urls: string | string[];
@@ -466,6 +477,17 @@ export function loadConfig(): ServerConfig {
       safeSearch: readSearxngSafeSearchLevel('SEARXNG_SAFE_SEARCH', 1),
       language: process.env.SEARXNG_LANGUAGE?.trim() || undefined,
       categories: process.env.SEARXNG_CATEGORIES?.trim() || 'general',
+    },
+    javaDockerSandbox: {
+      enabled: readBoolean('JAVA_DOCKER_SANDBOX_ENABLED', process.env.NODE_ENV !== 'production'),
+      dockerImage: process.env.JAVA_DOCKER_SANDBOX_IMAGE?.trim() || 'eclipse-temurin:21-jdk',
+      timeoutMs: readIntegerInRange('JAVA_DOCKER_SANDBOX_TIMEOUT_MS', 3000, 500, 15_000),
+      memoryMb: readIntegerInRange('JAVA_DOCKER_SANDBOX_MEMORY_MB', 128, 64, 512),
+      cpus: Math.min(2, Math.max(0.25, readNumber('JAVA_DOCKER_SANDBOX_CPUS', 1))),
+      pidsLimit: readIntegerInRange('JAVA_DOCKER_SANDBOX_PIDS_LIMIT', 64, 16, 256),
+      maxSourceBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_SOURCE_BYTES', 64 * 1024, 1, 256 * 1024),
+      maxStdinBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_STDIN_BYTES', 16 * 1024, 0, 128 * 1024),
+      maxOutputBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_OUTPUT_BYTES', 64 * 1024, 1024, 512 * 1024),
     },
     rtcConfig: {
       iceServers:
