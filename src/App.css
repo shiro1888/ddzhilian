@@ -5383,8 +5383,61 @@
 }
 
 .dd-ai-chat__workspace {
+  position: relative;
   grid-template-rows: 44px auto minmax(0, 1fr) auto auto;
   background: var(--ai-snap-surface);
+}
+
+.dd-ai-chat__drag-overlay {
+  position: absolute;
+  z-index: 18;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed color-mix(in srgb, var(--ai-snap-green) 52%, var(--ai-snap-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ai-snap-surface) 78%, var(--ai-snap-green) 22%);
+  color: var(--ai-snap-ink);
+  pointer-events: none;
+  animation: dd-snaplink-drag-overlay-in 140ms ease both;
+}
+
+.dd-ai-chat__drag-panel {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-width: min(280px, calc(100% - 32px));
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--ai-snap-green) 32%, var(--ai-snap-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ai-snap-surface) 94%, #ffffff);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  text-align: center;
+}
+
+.dd-ai-chat__drag-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--ai-snap-green);
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dd-ai-chat__drag-panel strong {
+  color: var(--ai-snap-ink);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.dd-ai-chat__drag-panel span:last-child {
+  color: var(--ai-snap-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .dd-ai-chat__topbar {
@@ -5510,6 +5563,11 @@
   gap: 8px;
   width: 100%;
   max-width: 100%;
+}
+
+.dd-ai-chat__message.is-new-message {
+  animation: dd-snaplink-new-outgoing-message 500ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+  will-change: transform;
 }
 
 .dd-ai-chat__message.is-user {
@@ -8782,6 +8840,58 @@
   text-align: center;
 }
 
+.dd-snaplink__drag-overlay {
+  position: absolute;
+  z-index: 18;
+  inset: 52px 12px 12px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed color-mix(in srgb, var(--snap-green) 52%, var(--snap-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--snap-surface) 78%, var(--snap-green) 22%);
+  color: var(--snap-ink);
+  pointer-events: none;
+  animation: dd-snaplink-drag-overlay-in 140ms ease both;
+}
+
+.dd-snaplink__drag-panel {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-width: min(280px, calc(100% - 32px));
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--snap-green) 32%, var(--snap-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--snap-surface) 94%, #ffffff);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  text-align: center;
+}
+
+.dd-snaplink__drag-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--snap-green);
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dd-snaplink__drag-panel strong {
+  color: var(--snap-ink);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.dd-snaplink__drag-panel span:last-child {
+  color: var(--snap-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .dd-snaplink__messages {
   display: flex;
   flex-direction: column;
@@ -8836,6 +8946,11 @@
 
 .dd-snaplink__row.is-peer {
   justify-content: flex-start;
+}
+
+.dd-snaplink__row.is-new-outgoing {
+  animation: dd-snaplink-new-outgoing-message 500ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+  will-change: transform;
 }
 
 .dd-snaplink__message-main {
@@ -10101,11 +10216,35 @@
   }
 }
 
+@keyframes dd-snaplink-new-outgoing-message {
+  from {
+    transform: translateY(16px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes dd-snaplink-drag-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dd-snaplink__app,
   .dd-snaplink__lobby,
   .dd-snaplink__room,
-  .dd-snaplink__room-item {
+  .dd-snaplink__room-item,
+  .dd-snaplink__drag-overlay,
+  .dd-ai-chat__drag-overlay,
+  .dd-snaplink__row.is-new-outgoing,
+  .dd-ai-chat__message.is-new-message {
       animation: none;
       transition: none;
     }
@@ -10245,6 +10384,14 @@
 
   .dd-snaplink__room-head {
       display: none;
+    }
+
+  .dd-snaplink__drag-overlay {
+      inset: 10px;
+    }
+
+  .dd-ai-chat__drag-overlay {
+      inset: 8px;
     }
 
   .dd-snaplink__lobby {

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, CompositionEvent as ReactCompositionEvent, FormEvent, KeyboardEvent, MouseEvent } from 'react'
+import type {
+  ChangeEvent,
+  CompositionEvent as ReactCompositionEvent,
+  DragEvent,
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+} from 'react'
 import type {
   AiChatConversationMessage,
   AiChatConversationRecord,
@@ -19,6 +26,8 @@ const MAX_TEXT_ATTACHMENTS = 4
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 const MAX_TEXT_BYTES = 96 * 1024
 const MAX_TEXT_CONTEXT_CHARS = 18_000
+const NEW_AI_MESSAGE_ANIMATION_MS = 500
+const NEW_AI_MESSAGE_ANIMATION_CLEANUP_MS = NEW_AI_MESSAGE_ANIMATION_MS + 150
 const REMOTE_SAVE_DEBOUNCE_MS = 700
 const SHOW_SAMPLE_OUTPUT = process.env.NODE_ENV === 'development'
 const quickPromptSuggestions = [
@@ -327,6 +336,11 @@ function isReadableTextFile(file: File) {
   ].includes(getFileExtension(file.name))
 }
 
+function hasAiDraggedFiles(event: DragEvent<HTMLElement>) {
+  const { dataTransfer } = event
+  return dataTransfer.files.length > 0 || Array.from(dataTransfer.types).includes('Files')
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -491,8 +505,11 @@ export function ChatAiStage({
   const [pendingDeleteConversationId, setPendingDeleteConversationId] = useState<string | null>(null)
   const [conversationContextMenu, setConversationContextMenu] = useState<ConversationContextMenu | null>(null)
   const [activeGeneration, setActiveGeneration] = useState<ActiveGeneration | null>(null)
+  const [animatedMessageIds, setAnimatedMessageIds] = useState<Set<string>>(() => new Set())
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const activeGenerationRef = useRef<ActiveGeneration | null>(null)
   const threadRef = useRef<HTMLDivElement | null>(null)
+  const messageAnimationTimeoutsRef = useRef<Map<string, number>>(new Map())
   const hasLoadedRemoteRef = useRef(false)
   const isApplyingRemoteRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -614,6 +631,17 @@ export function ChatAiStage({
       thread.scrollTop = thread.scrollHeight
     }
   }, [activeConversation?.messages])
+
+  useEffect(() => {
+    const animationTimeouts = messageAnimationTimeoutsRef.current
+
+    return () => {
+      for (const timeoutId of animationTimeouts.values()) {
+        window.clearTimeout(timeoutId)
+      }
+      animationTimeouts.clear()
+    }
+  }, [])
 
   useEffect(() => {
     if (!conversationContextMenu) {
@@ -803,9 +831,7 @@ export function ChatAiStage({
     setLocalError(null)
   }
 
-  const handleAttachmentSelection = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    event.target.value = ''
+  const addAiAttachments = (files: File[]) => {
     if (files.length === 0) {
       return
     }
@@ -880,6 +906,65 @@ export function ChatAiStage({
     })
   }
 
+  const handleAttachmentSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    addAiAttachments(files)
+  }
+
+  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!hasAiDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingFiles(true)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!hasAiDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    if (!isDraggingFiles) {
+      setIsDraggingFiles(true)
+    }
+  }
+
+  const handleDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (!hasAiDraggedFiles(event)) {
+      return
+    }
+
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return
+    }
+
+    event.stopPropagation()
+    setIsDraggingFiles(false)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    if (!hasAiDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingFiles(false)
+
+    if (isGenerating) {
+      setLocalError('请先停止当前生成，再添加附件。')
+      return
+    }
+
+    addAiAttachments(Array.from(event.dataTransfer.files))
+  }
+
   const requestAssistantResponse = async (
     conversationId: string,
     prompt: string,
@@ -935,6 +1020,42 @@ export function ChatAiStage({
     }
   }
 
+  const armAiMessageAnimations = (messageIds: string[]) => {
+    if (messageIds.length === 0) {
+      return
+    }
+
+    setAnimatedMessageIds((current) => {
+      const nextIds = new Set(current)
+      for (const messageId of messageIds) {
+        nextIds.add(messageId)
+      }
+      return nextIds
+    })
+
+    for (const messageId of messageIds) {
+      const previousTimeoutId = messageAnimationTimeoutsRef.current.get(messageId)
+      if (previousTimeoutId !== undefined) {
+        window.clearTimeout(previousTimeoutId)
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        messageAnimationTimeoutsRef.current.delete(messageId)
+        setAnimatedMessageIds((current) => {
+          if (!current.has(messageId)) {
+            return current
+          }
+
+          const nextIds = new Set(current)
+          nextIds.delete(messageId)
+          return nextIds
+        })
+      }, NEW_AI_MESSAGE_ANIMATION_CLEANUP_MS)
+
+      messageAnimationTimeoutsRef.current.set(messageId, timeoutId)
+    }
+  }
+
   const sendPrompt = (prompt: string, options?: { appendUserMessage?: boolean }) => {
     const normalizedPrompt = prompt.trim()
     if (!activeConversation || (!normalizedPrompt && attachments.length === 0) || isGenerating) {
@@ -951,12 +1072,13 @@ export function ChatAiStage({
     const images = buildImageInputs(attachmentsForRequest)
     const shouldUseWebSearch = isWebSearchEnabled && Boolean(normalizedPrompt)
     const now = new Date().toISOString()
+    const userMessageId = createId('ai-message')
     const assistantMessageId = createId('ai-message')
     const nextMessages: ChatAiMessage[] = [
       ...(options?.appendUserMessage === false
         ? []
         : [{
-            id: createId('ai-message'),
+            id: userMessageId,
             role: 'user' as const,
             content: displayPrompt,
             createdAt: now,
@@ -973,6 +1095,8 @@ export function ChatAiStage({
         webSearch: shouldUseWebSearch ? { query: normalizedPrompt, sources: [] } : undefined,
       },
     ]
+    const nextAnimatedMessageIds = nextMessages.map((message) => message.id)
+    armAiMessageAnimations(nextAnimatedMessageIds)
 
     updateConversation(activeConversation.id, (conversation) => ({
       ...conversation,
@@ -1072,7 +1196,14 @@ export function ChatAiStage({
   }
 
   return (
-    <section className="dd-ai-chat" aria-label="AI 聊天">
+    <section
+      className={`dd-ai-chat${isDraggingFiles ? ' is-dragging-files' : ''}`}
+      aria-label="AI 聊天"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <aside className="dd-ai-chat__rail">
         <div className="dd-ai-chat__rail-head">
           <strong>AI 聊天</strong>
@@ -1193,6 +1324,15 @@ export function ChatAiStage({
       </aside>
 
       <div className="dd-ai-chat__workspace">
+        {isDraggingFiles ? (
+          <div className="dd-ai-chat__drag-overlay" role="status" aria-live="polite">
+            <div className="dd-ai-chat__drag-panel">
+              <span className="dd-ai-chat__drag-icon" aria-hidden="true">+</span>
+              <strong>{isGenerating ? '生成中暂不能添加附件' : '松开添加附件'}</strong>
+              <span>{isGenerating ? '请先停止当前生成' : '支持图片、文本和代码文件'}</span>
+            </div>
+          </div>
+        ) : null}
         <header className="dd-ai-chat__topbar">
           <div>
             {renamingConversationId === activeConversation?.id ? (
@@ -1326,7 +1466,13 @@ export function ChatAiStage({
             activeConversation.messages.map((message) => (
               <article
                 key={message.id}
-                className={`dd-ai-chat__message is-${message.role}${message.status ? ` is-${message.status}` : ''}`}
+                className={[
+                  'dd-ai-chat__message',
+                  `is-${message.role}`,
+                  message.status ? `is-${message.status}` : '',
+                  animatedMessageIds.has(message.id) ? 'is-new-message' : '',
+                ].filter(Boolean).join(' ')}
+                data-ai-chat-message-id={message.id}
               >
                 <div className="dd-ai-chat__avatar" aria-hidden="true">
                   {message.role === 'user' ? '我' : 'AI'}

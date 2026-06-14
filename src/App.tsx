@@ -47,6 +47,10 @@ function wait(durationMs: number) {
   })
 }
 
+function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+  return event.dataTransfer.files.length > 0 || Array.from(event.dataTransfer.types).includes('Files')
+}
+
 async function keepAiThinkingVisibleSince(startedAt: number | null) {
   if (startedAt === null) {
     return
@@ -1492,11 +1496,19 @@ function App() {
     await handleSendFilesToCurrentConversation(nextFiles)
   }
 
-  const handleDragEnter = () => {
+  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+
     setIsDragging(true)
   }
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+
     event.preventDefault()
     if (!isDragging) {
       setIsDragging(true)

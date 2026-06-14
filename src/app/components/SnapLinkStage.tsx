@@ -81,6 +81,9 @@ const snapLinkComposerMaxHeight = 120
 const snapLinkInitialMessageRenderCount = 80
 const snapLinkMessageRenderStep = 80
 const snapLinkHistoryLoadThreshold = 72
+const snapLinkNewOutgoingEntryAnimationMs = 500
+const snapLinkNewOutgoingEntryAnimationCleanupMs = snapLinkNewOutgoingEntryAnimationMs + 150
+const snapLinkPendingOutgoingEntryAnimationMs = 12_000
 const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
@@ -240,7 +243,7 @@ type SnapLinkStageProps = {
   canRecallAnyMessage: boolean
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
-  onDragEnter: () => void
+  onDragEnter: (event: DragEvent<HTMLElement>) => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
   onDrop: (event: DragEvent<HTMLElement>) => void
@@ -651,6 +654,18 @@ function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entry
   return `peer:${entry.senderName.trim() || 'unknown'}`
 }
 
+function getSnapLinkEntryCreatedAtMs(entry: UnifiedConversationEntry) {
+  const createdAtMs = Date.parse(entry.createdAt)
+  return Number.isNaN(createdAtMs) ? 0 : createdAtMs
+}
+
+function getLatestSnapLinkEntryCreatedAtMs(entries: UnifiedConversationEntry[]) {
+  return entries.reduce(
+    (latestCreatedAtMs, entry) => Math.max(latestCreatedAtMs, getSnapLinkEntryCreatedAtMs(entry)),
+    Number.NEGATIVE_INFINITY,
+  )
+}
+
 export function SnapLinkStage({
   isDragging,
   activeView,
@@ -718,6 +733,7 @@ export function SnapLinkStage({
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
+  const [animatedOutgoingEntryIds, setAnimatedOutgoingEntryIds] = useState<Set<string>>(() => new Set())
   const [messageRenderState, setMessageRenderState] = useState<{ roomId: string | null; count: number }>(() => ({
     roomId: null,
     count: snapLinkInitialMessageRenderCount,
@@ -725,6 +741,20 @@ export function SnapLinkStage({
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messageScrollRestoreRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null)
+  const outgoingEntryAnimationStateRef = useRef<{
+    roomId: string | null
+    ids: Set<string>
+    latestCreatedAtMs: number
+    initialized: boolean
+  }>({
+    roomId: null,
+    ids: new Set(),
+    latestCreatedAtMs: Number.NEGATIVE_INFINITY,
+    initialized: false,
+  })
+  const outgoingEntryAnimationTimeoutsRef = useRef<Map<string, number>>(new Map())
+  const shouldAnimateNextOutgoingEntryRef = useRef(false)
+  const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const isComposerComposingRef = useRef(false)
   const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
@@ -815,6 +845,105 @@ export function SnapLinkStage({
   useEffect(() => {
     messageScrollRestoreRef.current = null
   }, [selectedRoomId])
+
+  useEffect(() => {
+    const nextEntryIds = new Set(unifiedConversationEntries.map((entry) => entry.id))
+    const nextLatestCreatedAtMs = getLatestSnapLinkEntryCreatedAtMs(unifiedConversationEntries)
+    const previousState = outgoingEntryAnimationStateRef.current
+    const isSameRoom = previousState.initialized && previousState.roomId === selectedRoomId
+
+    if (!isSameRoom) {
+      for (const timeoutId of outgoingEntryAnimationTimeoutsRef.current.values()) {
+        window.clearTimeout(timeoutId)
+      }
+      if (pendingOutgoingEntryAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(pendingOutgoingEntryAnimationTimeoutRef.current)
+        pendingOutgoingEntryAnimationTimeoutRef.current = null
+      }
+      outgoingEntryAnimationTimeoutsRef.current.clear()
+      shouldAnimateNextOutgoingEntryRef.current = false
+      window.requestAnimationFrame(() => {
+        setAnimatedOutgoingEntryIds((current) => (current.size > 0 ? new Set() : current))
+      })
+      outgoingEntryAnimationStateRef.current = {
+        roomId: selectedRoomId,
+        ids: nextEntryIds,
+        latestCreatedAtMs: nextLatestCreatedAtMs,
+        initialized: true,
+      }
+      return
+    }
+
+    const newOutgoingEntryIds = shouldAnimateNextOutgoingEntryRef.current
+      ? unifiedConversationEntries
+          .filter((entry) =>
+            entry.entryType !== 'notice' &&
+            entry.fromSelf &&
+            !previousState.ids.has(entry.id) &&
+            getSnapLinkEntryCreatedAtMs(entry) >= previousState.latestCreatedAtMs,
+          )
+          .map((entry) => entry.id)
+      : []
+
+    outgoingEntryAnimationStateRef.current = {
+      roomId: selectedRoomId,
+      ids: nextEntryIds,
+      latestCreatedAtMs: nextLatestCreatedAtMs,
+      initialized: true,
+    }
+
+    if (newOutgoingEntryIds.length === 0) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      setAnimatedOutgoingEntryIds((current) => {
+        const nextIds = new Set(current)
+        for (const entryId of newOutgoingEntryIds) {
+          nextIds.add(entryId)
+        }
+        return nextIds
+      })
+    })
+
+    for (const entryId of newOutgoingEntryIds) {
+      const previousTimeoutId = outgoingEntryAnimationTimeoutsRef.current.get(entryId)
+      if (previousTimeoutId !== undefined) {
+        window.clearTimeout(previousTimeoutId)
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        outgoingEntryAnimationTimeoutsRef.current.delete(entryId)
+        setAnimatedOutgoingEntryIds((current) => {
+          if (!current.has(entryId)) {
+            return current
+          }
+
+          const nextIds = new Set(current)
+          nextIds.delete(entryId)
+          return nextIds
+        })
+      }, snapLinkNewOutgoingEntryAnimationCleanupMs)
+
+      outgoingEntryAnimationTimeoutsRef.current.set(entryId, timeoutId)
+    }
+  }, [selectedRoomId, unifiedConversationEntries])
+
+  useEffect(() => {
+    const animationTimeouts = outgoingEntryAnimationTimeoutsRef.current
+    const pendingAnimationTimeoutRef = pendingOutgoingEntryAnimationTimeoutRef
+
+    return () => {
+      for (const timeoutId of animationTimeouts.values()) {
+        window.clearTimeout(timeoutId)
+      }
+      if (pendingAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(pendingAnimationTimeoutRef.current)
+        pendingAnimationTimeoutRef.current = null
+      }
+      animationTimeouts.clear()
+    }
+  }, [])
 
   const handleMessagesScroll = useCallback(() => {
     const messages = messagesRef.current
@@ -1210,6 +1339,18 @@ export function SnapLinkStage({
     window.setTimeout(() => setCopiedRoomId(null), 1000)
   }
 
+  const armOutgoingEntryAnimation = () => {
+    shouldAnimateNextOutgoingEntryRef.current = true
+    if (pendingOutgoingEntryAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(pendingOutgoingEntryAnimationTimeoutRef.current)
+    }
+
+    pendingOutgoingEntryAnimationTimeoutRef.current = window.setTimeout(() => {
+      shouldAnimateNextOutgoingEntryRef.current = false
+      pendingOutgoingEntryAnimationTimeoutRef.current = null
+    }, snapLinkPendingOutgoingEntryAnimationMs)
+  }
+
   const submitComposerDraft = () => {
     if (isComposerComposingRef.current) {
       return
@@ -1221,6 +1362,7 @@ export function SnapLinkStage({
       setIsBotPanelOpen(false)
       setIsThemePanelOpen(false)
       botMentionTriggerRangeRef.current = null
+      armOutgoingEntryAnimation()
       onSendText(quoteHtml)
       setQuoteDraft(null)
     }
@@ -1732,7 +1874,12 @@ export function SnapLinkStage({
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
-        onDrop={onDrop}
+        onDrop={(event) => {
+          if (event.dataTransfer.files.length > 0) {
+            armOutgoingEntryAnimation()
+          }
+          onDrop(event)
+        }}
       >
       <header className="dd-snaplink__topbar">
         <div className="dd-snaplink__top-left">
@@ -2024,6 +2171,18 @@ export function SnapLinkStage({
                 </div>
               ) : null}
 
+              {isDragging ? (
+                <div className="dd-snaplink__drag-overlay" role="status" aria-live="polite">
+                  <div className="dd-snaplink__drag-panel">
+                    <span className="dd-snaplink__drag-icon" aria-hidden="true">
+                      +
+                    </span>
+                    <strong>松开发送文件</strong>
+                    <span>拖到此处即可发送到当前对话</span>
+                  </div>
+                </div>
+              ) : null}
+
               <div ref={messagesRef} className="dd-snaplink__messages" onScroll={handleMessagesScroll}>
                 {visibleConversationEntries.length > 0 || shouldShowAiThinking ? (
                   <>
@@ -2056,6 +2215,7 @@ export function SnapLinkStage({
                       isBotMessage ? 'is-bot' : '',
                       isGroupedWithPrevious ? 'is-grouped-with-previous' : '',
                       isGroupedWithNext ? 'is-grouped-with-next' : '',
+                      animatedOutgoingEntryIds.has(entry.id) ? 'is-new-outgoing' : '',
                     ].filter(Boolean).join(' ')
                     const actorIdentity = resolveActorIdentity(entry, isBotMessage)
                     const showSenderIdentity = !isGroupedWithPrevious
@@ -2069,7 +2229,7 @@ export function SnapLinkStage({
 
                     return (
                       <div key={entry.id} className="dd-snaplink__entry">
-                        <div className={rowClassName}>
+                        <div className={rowClassName} data-snaplink-entry-id={entry.id}>
                           {!entry.fromSelf ? (
                             <span className={avatarClassName} aria-hidden="true">
                               {actorIdentity.avatarLabel}
@@ -2199,6 +2359,9 @@ export function SnapLinkStage({
                     onChange={(event) => {
                       const files = Array.from(event.target.files ?? [])
                       event.target.value = ''
+                      if (files.length > 0) {
+                        armOutgoingEntryAnimation()
+                      }
                       onDirectFileSelection(files)
                     }}
                   />
