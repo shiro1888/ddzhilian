@@ -272,6 +272,7 @@ export type ServerEvent =
     }
 
 export type ChannelMessage =
+  | { type: 'heartbeat'; createdAt: string }
   | { type: 'text'; id: string; text: string; createdAt: string }
   | { type: 'text-recall'; id: string; createdAt: string }
   | {
@@ -340,6 +341,7 @@ export type TransferItem = {
   targetDeviceName?: string
   sessionId?: string
   roomId?: string
+  archiveHistory?: boolean
   status: TransferStatus
   progress: number
   sentBytes: number

@@ -87,3 +87,11 @@ export type RoomListItem = {
   pinned: boolean
   unreadCount: number
 }
+
+export type OnlineDeviceListItem = {
+  deviceId: string
+  deviceName: string
+  platform: string
+  scopeLabel: string
+  lastSeenLabel: string
+}

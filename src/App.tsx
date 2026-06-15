@@ -337,6 +337,7 @@ function App() {
     lastCreatedPublicRoomId,
     lastCreatedPrivateRoomId,
     joinRoom,
+    requestConnect,
     updateSettings,
     updateRoomState,
     createTransferItems,
@@ -461,7 +462,7 @@ function App() {
     handledPrivateRoomRef.current = lastCreatedPrivateRoomId
     setPendingRoomSelectionId(lastCreatedPrivateRoomId)
     setSelectedRoomId(lastCreatedPrivateRoomId)
-    setLocalError('已创建私密聊天。')
+    setLocalError(null)
 
     if (activeView !== 'text') {
       navigate(pathForView('text'))
@@ -475,6 +476,36 @@ function App() {
   const roomStateById = useMemo(
     () => new Map(roomStates.map((state) => [state.roomId, state] as const)),
     [roomStates],
+  )
+  const onlineDeviceItems = useMemo(
+    () =>
+      [...onlinePeers]
+        .sort((left, right) => {
+          if (left.relation.sameAccount !== right.relation.sameAccount) {
+            return left.relation.sameAccount ? -1 : 1
+          }
+
+          if (left.relation.sameLan !== right.relation.sameLan) {
+            return left.relation.sameLan ? -1 : 1
+          }
+
+          return left.deviceName.localeCompare(right.deviceName, 'zh-CN')
+        })
+        .map((peer) => {
+          const relationLabels = [
+            peer.relation.sameAccount ? '同账号' : '',
+            peer.relation.sameLan ? '局域网' : '',
+          ].filter(Boolean)
+
+          return {
+            deviceId: peer.deviceId,
+            deviceName: peer.deviceName,
+            platform: peer.platform,
+            scopeLabel: relationLabels.join(' · ') || '可发现设备',
+            lastSeenLabel: formatRelativeTime(peer.lastSeenAt),
+          }
+        }),
+    [onlinePeers],
   )
   const deviceNameById = useMemo(() => {
     const next = new Map<string, string>()
@@ -1253,8 +1284,9 @@ function App() {
       return
     }
 
+    const isPrivateDeviceRoom = !selectedRoom.isPublic && !isSelectedBotRoom
     const shouldSendRoomFilesThroughHistory =
-      selectedRoom.isPublic || selectedRoomConnectedTargets.length === 0
+      !isPrivateDeviceRoom && (selectedRoom.isPublic || selectedRoomConnectedTargets.length === 0)
 
     try {
       if (shouldSendRoomFilesThroughHistory) {
@@ -1276,7 +1308,9 @@ function App() {
           return
         }
 
-        const created = createTransferItems(files, targetSessionIds)
+        const created = createTransferItems(files, targetSessionIds, {
+          archiveHistory: !isPrivateDeviceRoom,
+        })
         await startPendingTransfers(
           created.map((item) => item.id),
           null,
@@ -1373,8 +1407,10 @@ function App() {
     }
 
     const isPublicRoom = Boolean(selectedRoom?.isPublic)
+    const isPrivateDeviceRoom = Boolean(selectedRoom && !selectedRoom.isPublic && !isSelectedBotRoom)
     const shouldSendRoomContentThroughHistory =
       Boolean(selectedRoom) &&
+      !isPrivateDeviceRoom &&
       (isPublicRoom || selectedRoomConnectedTargets.length === 0 || hasImageContent)
 
     if (selectedRoomConnectedTargets.length === 0 && !shouldSendRoomContentThroughHistory) {
@@ -1417,6 +1453,7 @@ function App() {
               logLocalRecord: index === 0,
               recordId,
               createdAt,
+              archiveHistory: !isPrivateDeviceRoom,
             })
           }
         }
@@ -1534,6 +1571,12 @@ function App() {
     updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
   }
 
+  const handleStartPrivateChat = (deviceId: string) => {
+    setSelectedPeerId(deviceId)
+    setLocalError(null)
+    requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
+  }
+
   const handleDeviceNameChange = (deviceName: string) => {
     const normalizedName = deviceName.trim().slice(0, 80)
     if (!normalizedName) {
@@ -1606,6 +1649,7 @@ function App() {
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
       roomListItems={roomListItems}
+      onlineDeviceItems={onlineDeviceItems}
       chatDraft={chatDraft}
       composerImageDrafts={composerImageDrafts}
       fileInputId={fileInputId}
@@ -1631,6 +1675,7 @@ function App() {
       adminElement={adminRouteElement}
       commandElement={webCommandElement}
       onOpenRoomConversation={handleOpenRoomConversation}
+      onStartPrivateChat={handleStartPrivateChat}
       onDeviceNameChange={handleDeviceNameChange}
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}

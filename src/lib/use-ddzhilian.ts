@@ -39,6 +39,7 @@ const CHUNK_SIZE = 64 * 1024
 const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
+const DATA_CHANNEL_HEARTBEAT_INTERVAL_MS = 1_000
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
 const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
@@ -468,6 +469,7 @@ export function useDdzhilian() {
   const rtcConfigRef = useRef<RTCConfiguration | null>(null)
   const peerConnectionsRef = useRef(new Map<string, RTCPeerConnection>())
   const dataChannelsRef = useRef(new Map<string, RTCDataChannel>())
+  const dataChannelHeartbeatIntervalsRef = useRef(new Map<string, number>())
   const sessionsRef = useRef<Record<string, LiveSession>>({})
   const connectionStatesRef = useRef<Record<string, PeerConnectionState>>({})
   const transferItemsRef = useRef<TransferItem[]>([])
@@ -1176,6 +1178,10 @@ export function useDdzhilian() {
       return
     }
 
+    if (message.type === 'heartbeat') {
+      return
+    }
+
     if (message.type === 'text') {
       mergeSession(sessionId, { kind: 'text' })
       startTransition(() => {
@@ -1387,7 +1393,43 @@ export function useDdzhilian() {
     dataChannelsRef.current.set(sessionId, channel)
     mergeSession(sessionId, { channelState: 'opening' })
 
+    const stopHeartbeat = () => {
+      const heartbeatIntervalId = dataChannelHeartbeatIntervalsRef.current.get(sessionId)
+      if (heartbeatIntervalId === undefined) {
+        return
+      }
+
+      window.clearInterval(heartbeatIntervalId)
+      dataChannelHeartbeatIntervalsRef.current.delete(sessionId)
+    }
+
+    const startHeartbeat = () => {
+      stopHeartbeat()
+
+      const heartbeatIntervalId = window.setInterval(() => {
+        if (channel.readyState !== 'open') {
+          stopHeartbeat()
+          return
+        }
+
+        try {
+          channel.send(
+            JSON.stringify({
+              type: 'heartbeat',
+              createdAt: new Date().toISOString(),
+            } satisfies ChannelMessage),
+          )
+        } catch (error) {
+          debugLog('datachannel heartbeat failed', { sessionId, error })
+          stopHeartbeat()
+        }
+      }, DATA_CHANNEL_HEARTBEAT_INTERVAL_MS)
+
+      dataChannelHeartbeatIntervalsRef.current.set(sessionId, heartbeatIntervalId)
+    }
+
     channel.addEventListener('open', () => {
+      startHeartbeat()
       mergeSession(sessionId, { channelState: 'open' })
       updateConnectionState(sessionId, {
         peerId,
@@ -1408,6 +1450,7 @@ export function useDdzhilian() {
     })
 
     channel.addEventListener('close', () => {
+      stopHeartbeat()
       mergeSession(sessionId, { channelState: 'closed' })
       updateConnectionState(sessionId, {
         peerId,
@@ -1743,6 +1786,7 @@ export function useDdzhilian() {
     let disposed = false
     const objectUrls = objectUrlsRef.current
     const peerConnections = peerConnectionsRef.current
+    const dataChannelHeartbeatIntervals = dataChannelHeartbeatIntervalsRef.current
 
     const connect = () => {
       if (disposed) {
@@ -1834,6 +1878,11 @@ export function useDdzhilian() {
       for (const peerConnection of peerConnections.values()) {
         peerConnection.close()
       }
+
+      for (const heartbeatIntervalId of dataChannelHeartbeatIntervals.values()) {
+        window.clearInterval(heartbeatIntervalId)
+      }
+      dataChannelHeartbeatIntervals.clear()
 
       socketRef.current?.close()
     }
@@ -1958,6 +2007,7 @@ export function useDdzhilian() {
   const createTransferItems = (
     files: File[],
     preferredSessionIds?: string | string[] | null,
+    options?: { archiveHistory?: boolean },
   ) => {
     const connected = getCurrentConnectedTargets()
     const connectingCount = Object.values(connectionStatesRef.current).filter(
@@ -2028,6 +2078,7 @@ export function useDdzhilian() {
           targetDeviceId: target?.peerId,
           targetDeviceName: target?.peerName,
           sessionId: target?.sessionId,
+          archiveHistory: options?.archiveHistory ?? true,
           status,
           progress: 0,
           sentBytes: 0,
@@ -2453,7 +2504,7 @@ export function useDdzhilian() {
         completedAt: ack.completed ? new Date().toISOString() : undefined,
         errorMessage: ack.completed ? undefined : '接收端未完成确认。',
       })
-      if (ack.completed) {
+      if (ack.completed && transfer.archiveHistory !== false) {
         void archiveTransferHistory(
           transferId,
           transfer.historyId,
@@ -2567,6 +2618,11 @@ export function useDdzhilian() {
     }
 
     dataChannelsRef.current.delete(sessionId)
+    const heartbeatIntervalId = dataChannelHeartbeatIntervalsRef.current.get(sessionId)
+    if (heartbeatIntervalId !== undefined) {
+      window.clearInterval(heartbeatIntervalId)
+      dataChannelHeartbeatIntervalsRef.current.delete(sessionId)
+    }
     peerConnectionsRef.current.delete(sessionId)
     pendingIceCandidatesRef.current.delete(sessionId)
 
@@ -2715,7 +2771,7 @@ export function useDdzhilian() {
   const sendText = async (
     sessionId: string,
     text: string,
-    options?: { logLocalRecord?: boolean; recordId?: string; createdAt?: string },
+    options?: { logLocalRecord?: boolean; recordId?: string; createdAt?: string; archiveHistory?: boolean },
   ) => {
     const channel = dataChannelsRef.current.get(sessionId)
     if (!channel || channel.readyState !== 'open') {
@@ -2750,7 +2806,9 @@ export function useDdzhilian() {
       clearTextRecordStatusLater(record.id, startedAt)
     }
 
-    void archiveTextHistory(record)
+    if (options?.archiveHistory !== false) {
+      void archiveTextHistory(record)
+    }
 
     mergeSession(sessionId, { kind: 'text' })
   }
