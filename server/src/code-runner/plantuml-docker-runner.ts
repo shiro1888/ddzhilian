@@ -8,6 +8,7 @@ export type PlantUmlDockerRunnerConfig = {
   memoryMb: number;
   cpus: number;
   pidsLimit: number;
+  fontPath?: string;
   maxSourceBytes: number;
   maxOutputBytes: number;
 };
@@ -221,6 +222,19 @@ export function buildDockerArgs({
     config.pidsLimit.toString(),
     '--ulimit',
     'nofile=64:64',
+    '--workdir',
+    '/tmp',
+    '--env',
+    'HOME=/tmp',
+    '--env',
+    'XDG_CACHE_HOME=/tmp/.cache',
+    '--env',
+    'LANG=C.UTF-8',
+    '--env',
+    'LC_ALL=C.UTF-8',
+    '--env',
+    'JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8',
+    ...buildFontMountArgs(config.fontPath),
     '--cap-drop',
     'ALL',
     '--security-opt',
@@ -231,6 +245,13 @@ export function buildDockerArgs({
     config.dockerImage,
     '-tpng',
   ];
+}
+
+function buildFontMountArgs(fontPath: string | undefined) {
+  const normalizedFontPath = fontPath?.trim();
+  return normalizedFontPath
+    ? ['--volume', `${normalizedFontPath}:/usr/local/share/fonts/plantuml:ro`]
+    : [];
 }
 
 function forceRemoveContainer(containerName: string) {

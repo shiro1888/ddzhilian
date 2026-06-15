@@ -151,6 +151,7 @@ export interface ServerConfig {
     memoryMb: number;
     cpus: number;
     pidsLimit: number;
+    fontPath: string;
     maxSourceBytes: number;
     maxOutputBytes: number;
   };
@@ -502,10 +503,11 @@ export function loadConfig(): ServerConfig {
     plantUmlDockerSandbox: {
       enabled: readBoolean('PLANTUML_DOCKER_SANDBOX_ENABLED', process.env.NODE_ENV !== 'production'),
       dockerImage: process.env.PLANTUML_DOCKER_SANDBOX_IMAGE?.trim() || 'aplr/plantuml',
-      timeoutMs: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_TIMEOUT_MS', 8000, 1000, 30_000),
+      timeoutMs: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_TIMEOUT_MS', 20_000, 1000, 30_000),
       memoryMb: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MEMORY_MB', 256, 128, 1024),
       cpus: Math.min(2, Math.max(0.25, readNumber('PLANTUML_DOCKER_SANDBOX_CPUS', 1))),
       pidsLimit: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_PIDS_LIMIT', 64, 16, 256),
+      fontPath: process.env.PLANTUML_DOCKER_SANDBOX_FONT_PATH?.trim() || '',
       maxSourceBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_SOURCE_BYTES', 64 * 1024, 1, 256 * 1024),
       maxOutputBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_OUTPUT_BYTES', 2 * 1024 * 1024, 64 * 1024, 8 * 1024 * 1024),
     },

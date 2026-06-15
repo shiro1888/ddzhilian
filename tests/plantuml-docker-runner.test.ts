@@ -12,15 +12,37 @@ describe('plantuml docker runner helpers', () => {
         memoryMb: 256,
         cpus: 1,
         pidsLimit: 64,
+        fontPath: '',
         maxSourceBytes: 64 * 1024,
         maxOutputBytes: 2 * 1024 * 1024,
       },
     })
 
     expect(args).toContain('-i')
+    expect(args).toContain('JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8')
     expect(args.at(-2)).toBe('aplr/plantuml')
     expect(args.at(-1)).toBe('-tpng')
     expect(args).not.toContain('-pipe')
+  })
+
+  it('mounts a configured font directory as read-only', () => {
+    const args = buildDockerArgs({
+      containerName: 'ddz-plantuml-test',
+      config: {
+        enabled: true,
+        dockerImage: 'aplr/plantuml',
+        timeoutMs: 20_000,
+        memoryMb: 256,
+        cpus: 1,
+        pidsLimit: 64,
+        fontPath: '/usr/share/fonts',
+        maxSourceBytes: 64 * 1024,
+        maxOutputBytes: 2 * 1024 * 1024,
+      },
+    })
+
+    expect(args).toContain('--volume')
+    expect(args).toContain('/usr/share/fonts:/usr/local/share/fonts/plantuml:ro')
   })
 
   it('detects PNG output by signature', () => {
