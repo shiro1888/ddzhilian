@@ -195,7 +195,7 @@ function runDockerContainer({
   });
 }
 
-function buildDockerArgs({
+export function buildDockerArgs({
   containerName,
   config,
 }: {
@@ -228,7 +228,6 @@ function buildDockerArgs({
     '--tmpfs',
     '/tmp:rw,nosuid,nodev,size=64m',
     config.dockerImage,
-    '-pipe',
     '-tpng',
   ];
 }
