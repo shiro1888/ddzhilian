@@ -1,4 +1,4 @@
-export type WebCommandLanguage = 'python' | 'java' | 'c'
+export type WebCommandLanguage = 'python' | 'java' | 'c' | 'plantuml'
 
 export type WebCommandRunRequest = {
   language: WebCommandLanguage
@@ -9,7 +9,7 @@ export type WebCommandRunRequest = {
 export type WebCommandRunResult = {
   ok: boolean
   language: WebCommandLanguage
-  sandbox: 'browser-output-sandbox' | 'docker-java'
+  sandbox: 'browser-output-sandbox' | 'docker-java' | 'docker-plantuml'
   exitCode: number
   durationMs: number
   startedAt: string
@@ -21,6 +21,12 @@ export type WebCommandRunResult = {
   timedOut?: boolean
   outputTruncated?: boolean
   compileFailed?: boolean
+  image?: {
+    format: 'png'
+    mimeType: 'image/png'
+    dataUrl: string
+    sizeBytes: number
+  }
   result: {
     lines: string[]
     text: string
@@ -75,6 +81,18 @@ export const webCommandDefaultSources: Record<WebCommandLanguage, string> = {
     '  return 0;',
     '}',
   ].join('\n'),
+  plantuml: [
+    '@startuml',
+    'actor 用户',
+    'participant Web命令行 as Web',
+    'participant Docker沙箱 as Sandbox',
+    '',
+    '用户 -> Web: 输入 PlantUML',
+    'Web -> Sandbox: 渲染图片',
+    'Sandbox --> Web: PNG',
+    'Web --> 用户: 显示图片',
+    '@enduml',
+  ].join('\n'),
 }
 
 const securityRules: Record<WebCommandLanguage, SecurityRule[]> = {
@@ -124,6 +142,7 @@ const securityRules: Record<WebCommandLanguage, SecurityRule[]> = {
       message: '已拦截 C 进程替换函数',
     },
   ],
+  plantuml: [],
 }
 
 export function runWebCommandSandbox({ language, source }: WebCommandRunRequest): WebCommandRunResult {
@@ -276,6 +295,8 @@ function collectSandboxStdout(language: WebCommandLanguage, source: string) {
       return collectFunctionCallStdout(source, /System\.out\.(println|print)\s*\(/g, 'java')
     case 'c':
       return collectFunctionCallStdout(source, /\b(printf|puts)\s*\(/g, 'c')
+    case 'plantuml':
+      return ''
   }
 }
 

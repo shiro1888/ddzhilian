@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import WebSocket, { WebSocketServer } from 'ws';
 
 import { runJavaInDockerSandbox } from './code-runner/java-docker-runner.js';
+import { runPlantUmlInDockerSandbox } from './code-runner/plantuml-docker-runner.js';
 import {
   loadConfig,
   type AnthropicProviderConfig,
@@ -645,6 +646,59 @@ async function handleWebCommandJavaRunRequest(
     source,
     stdin: normalizedStdin,
     config: config.javaDockerSandbox,
+  });
+
+  writeJson(response, 200, result as unknown as Record<string, unknown>);
+}
+
+async function handleWebCommandPlantUmlRunRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!config.plantUmlDockerSandbox.enabled) {
+    writeJson(response, 503, {
+      error: 'PlantUML Docker 沙箱未启用。生产环境需要显式设置 PLANTUML_DOCKER_SANDBOX_ENABLED=true。',
+    });
+    return;
+  }
+
+  let payload: unknown;
+
+  try {
+    const buffer = await readRequestBuffer(request, {
+      maxBytes: config.plantUmlDockerSandbox.maxSourceBytes + 1024,
+    });
+    payload = JSON.parse(buffer.toString('utf8')) as unknown;
+  } catch (error) {
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error: error instanceof RequestBodyTooLargeError
+        ? 'PlantUML 渲染请求超过大小限制。'
+        : 'Invalid PlantUML render JSON.',
+    });
+    return;
+  }
+
+  if (!isObjectRecord(payload)) {
+    writeJson(response, 400, { error: 'Invalid PlantUML render payload.' });
+    return;
+  }
+
+  const source = payload.source;
+  if (typeof source !== 'string' || !source.trim()) {
+    writeJson(response, 400, { error: 'PlantUML 源码不能为空。' });
+    return;
+  }
+
+  if (Buffer.byteLength(source, 'utf8') > config.plantUmlDockerSandbox.maxSourceBytes) {
+    writeJson(response, 413, {
+      error: `PlantUML 源码不能超过 ${config.plantUmlDockerSandbox.maxSourceBytes.toString()} bytes。`,
+    });
+    return;
+  }
+
+  const result = await runPlantUmlInDockerSandbox({
+    source,
+    config: config.plantUmlDockerSandbox,
   });
 
   writeJson(response, 200, result as unknown as Record<string, unknown>);
@@ -6252,6 +6306,11 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/web-command/java' && request.method === 'POST') {
     void handleWebCommandJavaRunRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/web-command/plantuml' && request.method === 'POST') {
+    void handleWebCommandPlantUmlRunRequest(request, response);
     return;
   }
 

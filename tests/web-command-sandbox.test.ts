@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { runWebCommandSandbox } from '../src/app/web-command-sandbox'
+import { runWebCommandSandbox, webCommandDefaultSources } from '../src/app/web-command-sandbox'
 
 describe('web command sandbox', () => {
   it('collects Python print output and parses JSON stdout', () => {
@@ -42,6 +42,11 @@ describe('web command sandbox', () => {
 
     expect(result.ok).toBe(true)
     expect(result.stdout).toBe('answer = 42\n')
+  })
+
+  it('keeps a PlantUML default source for the backend renderer', () => {
+    expect(webCommandDefaultSources.plantuml).toContain('@startuml')
+    expect(webCommandDefaultSources.plantuml).toContain('@enduml')
   })
 
   it('blocks process and file APIs before collecting output', () => {

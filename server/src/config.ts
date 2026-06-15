@@ -144,6 +144,16 @@ export interface ServerConfig {
     maxStdinBytes: number;
     maxOutputBytes: number;
   };
+  plantUmlDockerSandbox: {
+    enabled: boolean;
+    dockerImage: string;
+    timeoutMs: number;
+    memoryMb: number;
+    cpus: number;
+    pidsLimit: number;
+    maxSourceBytes: number;
+    maxOutputBytes: number;
+  };
   rtcConfig: {
     iceServers: Array<{
       urls: string | string[];
@@ -488,6 +498,16 @@ export function loadConfig(): ServerConfig {
       maxSourceBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_SOURCE_BYTES', 64 * 1024, 1, 256 * 1024),
       maxStdinBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_STDIN_BYTES', 16 * 1024, 0, 128 * 1024),
       maxOutputBytes: readIntegerInRange('JAVA_DOCKER_SANDBOX_MAX_OUTPUT_BYTES', 64 * 1024, 1024, 512 * 1024),
+    },
+    plantUmlDockerSandbox: {
+      enabled: readBoolean('PLANTUML_DOCKER_SANDBOX_ENABLED', process.env.NODE_ENV !== 'production'),
+      dockerImage: process.env.PLANTUML_DOCKER_SANDBOX_IMAGE?.trim() || 'aplr/plantuml',
+      timeoutMs: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_TIMEOUT_MS', 8000, 1000, 30_000),
+      memoryMb: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MEMORY_MB', 256, 128, 1024),
+      cpus: Math.min(2, Math.max(0.25, readNumber('PLANTUML_DOCKER_SANDBOX_CPUS', 1))),
+      pidsLimit: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_PIDS_LIMIT', 64, 16, 256),
+      maxSourceBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_SOURCE_BYTES', 64 * 1024, 1, 256 * 1024),
+      maxOutputBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_OUTPUT_BYTES', 2 * 1024 * 1024, 64 * 1024, 8 * 1024 * 1024),
     },
     rtcConfig: {
       iceServers:

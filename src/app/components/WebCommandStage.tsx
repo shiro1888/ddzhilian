@@ -15,9 +15,10 @@ const languageLabels: Record<WebCommandLanguage, string> = {
   python: 'Python',
   java: 'Java',
   c: 'C',
+  plantuml: 'PlantUML',
 }
 
-const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c']
+const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c', 'plantuml']
 
 async function copyText(value: string) {
   if (navigator.clipboard) {
@@ -89,6 +90,22 @@ async function runJavaDockerSandbox({
   return normalizeJavaRunResult(await response.json())
 }
 
+async function runPlantUmlDockerSandbox({ source }: { source: string }) {
+  const response = await fetch(`${resolveWebCommandApiBaseUrl()}/api/web-command/plantuml`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ source }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readWebCommandApiError(response, 'PlantUML 渲染失败。'))
+  }
+
+  return normalizePlantUmlRunResult(await response.json())
+}
+
 function normalizeJavaRunResult(payload: unknown): WebCommandRunResult {
   const resultPayload = isObjectRecord(payload) ? payload : {}
   const stdout = typeof resultPayload.stdout === 'string' ? resultPayload.stdout : ''
@@ -130,6 +147,51 @@ function normalizeJavaRunResult(payload: unknown): WebCommandRunResult {
   }
 }
 
+function normalizePlantUmlRunResult(payload: unknown): WebCommandRunResult {
+  const resultPayload = isObjectRecord(payload) ? payload : {}
+  const imagePayload = isObjectRecord(resultPayload.image) ? resultPayload.image : null
+  const image = typeof imagePayload?.dataUrl === 'string'
+    && imagePayload.dataUrl.startsWith('data:image/png;base64,')
+    ? {
+        format: 'png' as const,
+        mimeType: 'image/png' as const,
+        dataUrl: imagePayload.dataUrl,
+        sizeBytes: typeof imagePayload.sizeBytes === 'number' ? imagePayload.sizeBytes : 0,
+      }
+    : undefined
+  const stdout = typeof resultPayload.stdout === 'string' ? resultPayload.stdout : ''
+  const stderr = typeof resultPayload.stderr === 'string' ? resultPayload.stderr : ''
+  const exitCode = typeof resultPayload.exitCode === 'number'
+    ? resultPayload.exitCode
+    : resultPayload.ok === true ? 0 : 1
+
+  return {
+    ok: resultPayload.ok === true,
+    language: 'plantuml',
+    sandbox: 'docker-plantuml',
+    exitCode,
+    durationMs: typeof resultPayload.durationMs === 'number' ? resultPayload.durationMs : 0,
+    startedAt: typeof resultPayload.startedAt === 'string'
+      ? resultPayload.startedAt
+      : new Date().toISOString(),
+    finishedAt: typeof resultPayload.finishedAt === 'string'
+      ? resultPayload.finishedAt
+      : new Date().toISOString(),
+    stdout,
+    stderr,
+    blocked: [],
+    violations: [],
+    timedOut: resultPayload.timedOut === true,
+    outputTruncated: resultPayload.outputTruncated === true,
+    image,
+    result: {
+      lines: [],
+      text: '',
+      parsedJson: null,
+    },
+  }
+}
+
 function createWebCommandErrorResult({
   language,
   started,
@@ -145,7 +207,9 @@ function createWebCommandErrorResult({
   return {
     ok: false,
     language,
-    sandbox: language === 'java' ? 'docker-java' : 'browser-output-sandbox',
+    sandbox: language === 'java'
+      ? 'docker-java'
+      : language === 'plantuml' ? 'docker-plantuml' : 'browser-output-sandbox',
     exitCode: 1,
     durationMs: finished - started,
     startedAt: new Date(started).toISOString(),
@@ -194,6 +258,10 @@ export function WebCommandStage() {
       return isRunning ? '运行中。' : '暂无输出。运行代码后这里显示输出结果。'
     }
 
+    if (result.image && !result.stderr) {
+      return `图片已生成（PNG，${result.image.sizeBytes.toString()} bytes）。`
+    }
+
     const outputBlocks = [
       result.stdout.trimEnd(),
       result.stderr ? `错误：${result.stderr}` : '',
@@ -237,7 +305,7 @@ export function WebCommandStage() {
     if (nextResult.stderr) {
       writeOutputToTerminal(nextResult.stderr)
     }
-    if (!nextResult.stdout && !nextResult.stderr) {
+    if (!nextResult.stdout && !nextResult.stderr && !nextResult.image) {
       writeOutputToTerminal('无输出。')
     }
   }, [writeOutputToTerminal])
@@ -253,12 +321,11 @@ export function WebCommandStage() {
 
     void (async () => {
       try {
-        const nextResult = currentLanguage === 'java'
-          ? await runJavaDockerSandbox({ source: currentSource, stdin: currentStdin })
-          : runWebCommandSandbox({
-              language: currentLanguage,
-              source: currentSource,
-            })
+        const nextResult = await runCurrentSource({
+          language: currentLanguage,
+          source: currentSource,
+          stdin: currentStdin,
+        })
 
         if (runSequenceRef.current !== runId) {
           return
@@ -371,7 +438,7 @@ export function WebCommandStage() {
       <header className="dd-web-command__head">
         <div>
           <span className="dd-web-command__eyebrow">
-            {language === 'java' ? 'Docker 沙箱' : '浏览器沙箱'}
+            {language === 'java' || language === 'plantuml' ? 'Docker 沙箱' : '浏览器沙箱'}
           </span>
           <h1>Web 命令行</h1>
         </div>
@@ -457,9 +524,36 @@ export function WebCommandStage() {
               {resultStatus}
             </span>
           </div>
-          <pre className="dd-web-command__result">{resultOutput}</pre>
+          <div className="dd-web-command__result-area">
+            {result?.image ? (
+              <div className="dd-web-command__image-result">
+                <img src={result.image.dataUrl} alt="PlantUML 渲染结果" />
+              </div>
+            ) : null}
+            <pre className="dd-web-command__result">{resultOutput}</pre>
+          </div>
         </section>
       </div>
     </section>
   )
+}
+
+function runCurrentSource({
+  language,
+  source,
+  stdin,
+}: {
+  language: WebCommandLanguage
+  source: string
+  stdin: string
+}) {
+  switch (language) {
+    case 'java':
+      return runJavaDockerSandbox({ source, stdin })
+    case 'plantuml':
+      return runPlantUmlDockerSandbox({ source })
+    case 'python':
+    case 'c':
+      return Promise.resolve(runWebCommandSandbox({ language, source }))
+  }
 }
