@@ -9,6 +9,7 @@ export type PlantUmlDockerRunnerConfig = {
   cpus: number;
   pidsLimit: number;
   fontPath?: string;
+  defaultFontName?: string;
   maxSourceBytes: number;
   maxOutputBytes: number;
 };
@@ -192,7 +193,19 @@ function runDockerContainer({
       stopContainer();
     }, config.timeoutMs);
 
-    child.stdin.end(source);
+    child.stdin.end(applyDefaultPlantUmlFont(source, config.defaultFontName));
+  });
+}
+
+export function applyDefaultPlantUmlFont(source: string, defaultFontName: string | undefined) {
+  const normalizedFontName = defaultFontName?.trim();
+  if (!normalizedFontName || hasDefaultFontName(source)) {
+    return source;
+  }
+
+  return source.replace(/^(\s*@startuml\b[^\r\n]*)(\r?\n)?/i, (match, startLine: string, lineBreak: string | undefined) => {
+    const newline = lineBreak ?? '\n';
+    return `${startLine}${newline}skinparam defaultFontName "${escapePlantUmlQuotedValue(normalizedFontName)}"${newline}`;
   });
 }
 
@@ -252,6 +265,14 @@ function buildFontMountArgs(fontPath: string | undefined) {
   return normalizedFontPath
     ? ['--volume', `${normalizedFontPath}:/usr/local/share/fonts/plantuml:ro`]
     : [];
+}
+
+function hasDefaultFontName(source: string) {
+  return /^\s*skinparam\s+defaultFontName\b/im.test(source);
+}
+
+function escapePlantUmlQuotedValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function forceRemoveContainer(containerName: string) {

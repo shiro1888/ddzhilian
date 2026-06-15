@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildDockerArgs, isPngBuffer } from '../server/src/code-runner/plantuml-docker-runner'
+import {
+  applyDefaultPlantUmlFont,
+  buildDockerArgs,
+  isPngBuffer,
+} from '../server/src/code-runner/plantuml-docker-runner'
 
 describe('plantuml docker runner helpers', () => {
   it('renders PNG from interactive stdin without pipe mode', () => {
@@ -13,6 +17,7 @@ describe('plantuml docker runner helpers', () => {
         cpus: 1,
         pidsLimit: 64,
         fontPath: '',
+        defaultFontName: 'Noto Sans CJK SC',
         maxSourceBytes: 64 * 1024,
         maxOutputBytes: 2 * 1024 * 1024,
       },
@@ -36,6 +41,7 @@ describe('plantuml docker runner helpers', () => {
         cpus: 1,
         pidsLimit: 64,
         fontPath: '/usr/share/fonts',
+        defaultFontName: 'Noto Sans CJK SC',
         maxSourceBytes: 64 * 1024,
         maxOutputBytes: 2 * 1024 * 1024,
       },
@@ -43,6 +49,42 @@ describe('plantuml docker runner helpers', () => {
 
     expect(args).toContain('--volume')
     expect(args).toContain('/usr/share/fonts:/usr/local/share/fonts/plantuml:ro')
+  })
+
+  it('injects the default font into uml diagrams', () => {
+    const source = [
+      '@startuml',
+      'actor 用户',
+      '@enduml',
+    ].join('\n')
+
+    expect(applyDefaultPlantUmlFont(source, 'Noto Sans CJK SC')).toBe([
+      '@startuml',
+      'skinparam defaultFontName "Noto Sans CJK SC"',
+      'actor 用户',
+      '@enduml',
+    ].join('\n'))
+  })
+
+  it('keeps an explicit PlantUML default font', () => {
+    const source = [
+      '@startuml',
+      'skinparam defaultFontName "Arial"',
+      'actor 用户',
+      '@enduml',
+    ].join('\n')
+
+    expect(applyDefaultPlantUmlFont(source, 'Noto Sans CJK SC')).toBe(source)
+  })
+
+  it('does not inject font settings into non-uml PlantUML formats', () => {
+    const source = [
+      '@startjson',
+      '{ "name": "用户" }',
+      '@endjson',
+    ].join('\n')
+
+    expect(applyDefaultPlantUmlFont(source, 'Noto Sans CJK SC')).toBe(source)
   })
 
   it('detects PNG output by signature', () => {

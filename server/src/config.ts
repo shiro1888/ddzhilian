@@ -152,6 +152,7 @@ export interface ServerConfig {
     cpus: number;
     pidsLimit: number;
     fontPath: string;
+    defaultFontName: string;
     maxSourceBytes: number;
     maxOutputBytes: number;
   };
@@ -508,6 +509,7 @@ export function loadConfig(): ServerConfig {
       cpus: Math.min(2, Math.max(0.25, readNumber('PLANTUML_DOCKER_SANDBOX_CPUS', 1))),
       pidsLimit: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_PIDS_LIMIT', 64, 16, 256),
       fontPath: process.env.PLANTUML_DOCKER_SANDBOX_FONT_PATH?.trim() || '',
+      defaultFontName: process.env.PLANTUML_DOCKER_SANDBOX_DEFAULT_FONT_NAME?.trim() || 'Noto Sans CJK SC',
       maxSourceBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_SOURCE_BYTES', 64 * 1024, 1, 256 * 1024),
       maxOutputBytes: readIntegerInRange('PLANTUML_DOCKER_SANDBOX_MAX_OUTPUT_BYTES', 2 * 1024 * 1024, 64 * 1024, 8 * 1024 * 1024),
     },
