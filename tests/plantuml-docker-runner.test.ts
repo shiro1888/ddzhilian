@@ -24,7 +24,7 @@ describe('plantuml docker runner helpers', () => {
     })
 
     expect(args).toContain('-i')
-    expect(args).toContain('JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8')
+    expect(args).toContain('JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.java2d.fontpath=/usr/share/fonts')
     expect(args.at(-2)).toBe('aplr/plantuml')
     expect(args.at(-1)).toBe('-tpng')
     expect(args).not.toContain('-pipe')
@@ -48,7 +48,7 @@ describe('plantuml docker runner helpers', () => {
     })
 
     expect(args).toContain('--volume')
-    expect(args).toContain('/usr/share/fonts:/usr/local/share/fonts/plantuml:ro')
+    expect(args).toContain('/usr/share/fonts:/usr/share/fonts:ro')
   })
 
   it('injects the default font into uml diagrams', () => {

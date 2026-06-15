@@ -246,7 +246,7 @@ export function buildDockerArgs({
     '--env',
     'LC_ALL=C.UTF-8',
     '--env',
-    'JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8',
+    'JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.java2d.fontpath=/usr/share/fonts',
     ...buildFontMountArgs(config.fontPath),
     '--cap-drop',
     'ALL',
@@ -263,7 +263,7 @@ export function buildDockerArgs({
 function buildFontMountArgs(fontPath: string | undefined) {
   const normalizedFontPath = fontPath?.trim();
   return normalizedFontPath
-    ? ['--volume', `${normalizedFontPath}:/usr/local/share/fonts/plantuml:ro`]
+    ? ['--volume', `${normalizedFontPath}:/usr/share/fonts:ro`]
     : [];
 }
 
