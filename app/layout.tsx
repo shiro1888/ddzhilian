@@ -3,15 +3,24 @@ import type { ReactNode } from 'react'
 
 export const metadata: Metadata = {
   title: 'ddzhilian | 文件与文本互传',
+  description: '局域网文件与文本互传工具',
+  manifest: '/manifest.json',
   icons: {
     icon: [{ url: '/favicon.png', type: 'image/png' }],
     shortcut: [{ url: '/favicon.png', type: 'image/png' }],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ddzhilian',
   },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#07c160',
 }
 
 export default function RootLayout({
@@ -21,6 +30,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js')})}`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   )
