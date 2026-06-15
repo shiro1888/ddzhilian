@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildDockerArgs, isPngBuffer } from '../server/src/code-runner/plantuml-docker-runner'
 
 describe('plantuml docker runner helpers', () => {
-  it('renders PNG from stdin without pipe mode', () => {
+  it('renders PNG from interactive stdin without pipe mode', () => {
     const args = buildDockerArgs({
       containerName: 'ddz-plantuml-test',
       config: {
@@ -17,6 +17,7 @@ describe('plantuml docker runner helpers', () => {
       },
     })
 
+    expect(args).toContain('-i')
     expect(args.at(-2)).toBe('aplr/plantuml')
     expect(args.at(-1)).toBe('-tpng')
     expect(args).not.toContain('-pipe')

@@ -205,6 +205,7 @@ export function buildDockerArgs({
   return [
     'run',
     '--rm',
+    '-i',
     '--pull=never',
     '--name',
     containerName,

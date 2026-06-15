@@ -240,6 +240,7 @@ export function WebCommandStage() {
   const sourceRef = useRef(source)
   const stdinRef = useRef(stdin)
   const runSequenceRef = useRef(0)
+  const isPlantUmlMode = language === 'plantuml'
 
   useEffect(() => {
     languageRef.current = language
@@ -292,6 +293,10 @@ export function WebCommandStage() {
   }, [])
 
   const writeRunResult = useCallback((nextResult: WebCommandRunResult) => {
+    if (nextResult.language === 'plantuml') {
+      return
+    }
+
     const terminal = terminalRef.current
     if (!terminal) {
       return
@@ -363,6 +368,10 @@ export function WebCommandStage() {
   }, [])
 
   useEffect(() => {
+    if (language === 'plantuml') {
+      return undefined
+    }
+
     const terminalHost = terminalHostRef.current
     if (!terminalHost) {
       return undefined
@@ -399,13 +408,18 @@ export function WebCommandStage() {
       terminalRef.current = null
       fitAddonRef.current = null
     }
-  }, [])
+  }, [language])
 
   const handleLanguageChange = (nextLanguage: WebCommandLanguage) => {
     switchLanguage(nextLanguage)
   }
 
-  const handleClearTerminal = () => {
+  const handleClearOutput = () => {
+    if (languageRef.current === 'plantuml') {
+      setResult(null)
+      return
+    }
+
     const terminal = terminalRef.current
     if (!terminal) {
       return
@@ -503,35 +517,67 @@ export function WebCommandStage() {
           ) : null}
         </section>
 
-        <section className="dd-web-command__output" aria-label="运行输出">
-          <div className="dd-web-command__terminal-head">
-            <strong>Terminal</strong>
-            <div>
-              <button type="button" onClick={handleClearTerminal}>
-                <Trash2 size={14} aria-hidden="true" />
-                清空
-              </button>
-              <button type="button" onClick={handleCopyResult}>
-                <Copy size={14} aria-hidden="true" />
-                {copyLabel}
-              </button>
-            </div>
-          </div>
-          <div ref={terminalHostRef} className="dd-web-command__terminal" />
-          <div className="dd-web-command__result-head">
-            <strong>输出结果</strong>
-            <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
-              {resultStatus}
-            </span>
-          </div>
-          <div className="dd-web-command__result-area">
-            {result?.image ? (
-              <div className="dd-web-command__image-result">
-                <img src={result.image.dataUrl} alt="PlantUML 渲染结果" />
+        <section className={`dd-web-command__output${isPlantUmlMode ? ' is-plantuml' : ''}`} aria-label="运行输出">
+          {isPlantUmlMode ? (
+            <>
+              <div className="dd-web-command__viewer-head">
+                <div className="dd-web-command__viewer-title">
+                  <strong>图片预览</strong>
+                  <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
+                    {resultStatus}
+                  </span>
+                </div>
+                <div>
+                  <button type="button" disabled={isRunning} onClick={handleClearOutput}>
+                    <Trash2 size={14} aria-hidden="true" />
+                    清空
+                  </button>
+                  <button type="button" onClick={handleCopyResult}>
+                    <Copy size={14} aria-hidden="true" />
+                    {copyLabel}
+                  </button>
+                </div>
               </div>
-            ) : null}
-            <pre className="dd-web-command__result">{resultOutput}</pre>
-          </div>
+              <div className="dd-web-command__plantuml-viewer" aria-live="polite">
+                {result?.image ? (
+                  <div className="dd-web-command__image-result">
+                    <img src={result.image.dataUrl} alt="PlantUML 渲染结果" />
+                  </div>
+                ) : (
+                  <div className={`dd-web-command__image-empty${result ? ' is-error' : ''}`}>
+                    <strong>{isRunning ? '正在渲染' : result ? '渲染失败' : '暂无图片'}</strong>
+                    {result ? <pre className="dd-web-command__result">{resultOutput}</pre> : null}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="dd-web-command__terminal-head">
+                <strong>Terminal</strong>
+                <div>
+                  <button type="button" onClick={handleClearOutput}>
+                    <Trash2 size={14} aria-hidden="true" />
+                    清空
+                  </button>
+                  <button type="button" onClick={handleCopyResult}>
+                    <Copy size={14} aria-hidden="true" />
+                    {copyLabel}
+                  </button>
+                </div>
+              </div>
+              <div ref={terminalHostRef} className="dd-web-command__terminal" />
+              <div className="dd-web-command__result-head">
+                <strong>输出结果</strong>
+                <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
+                  {resultStatus}
+                </span>
+              </div>
+              <div className="dd-web-command__result-area">
+                <pre className="dd-web-command__result">{resultOutput}</pre>
+              </div>
+            </>
+          )}
         </section>
       </div>
     </section>
