@@ -3,6 +3,7 @@ import {
   applyDefaultPlantUmlFont,
   buildDockerArgs,
   isPngBuffer,
+  normalizePlantUmlStderr,
 } from '../server/src/code-runner/plantuml-docker-runner'
 
 describe('plantuml docker runner helpers', () => {
@@ -85,6 +86,20 @@ describe('plantuml docker runner helpers', () => {
     ].join('\n')
 
     expect(applyDefaultPlantUmlFont(source, 'Noto Sans CJK SC')).toBe(source)
+  })
+
+  it('removes Java tool option notices from stderr', () => {
+    expect(normalizePlantUmlStderr([
+      'Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Dsun.java2d.fontpath=/usr/share/fonts',
+      '',
+    ].join('\n'))).toBe('')
+  })
+
+  it('keeps real PlantUML stderr after removing Java notices', () => {
+    expect(normalizePlantUmlStderr([
+      'Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8',
+      'Some PlantUML error',
+    ].join('\n'))).toBe('Some PlantUML error')
   })
 
   it('detects PNG output by signature', () => {

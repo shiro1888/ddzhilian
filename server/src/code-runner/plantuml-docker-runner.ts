@@ -47,6 +47,7 @@ export type PlantUmlDockerRunResult = {
 };
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const javaToolOptionsNoticePattern = /^Picked up JAVA_TOOL_OPTIONS:\s.*$/;
 
 export function isPngBuffer(buffer: Buffer) {
   return buffer.length >= pngSignature.length && pngSignature.every((byte, index) => buffer[index] === byte);
@@ -108,9 +109,10 @@ function runDockerContainer({
 
       const stdoutBuffer = Buffer.concat(stdoutChunks);
       const normalizedExitCode = timedOut ? 124 : exitCode ?? 1;
-      let nextStderr = timedOut
-        ? appendLine(stderr, `PlantUML 沙箱超时：执行超过 ${config.timeoutMs.toString()}ms，已终止。`)
-        : stderr;
+      let nextStderr = normalizePlantUmlStderr(stderr);
+      if (timedOut) {
+        nextStderr = appendLine(nextStderr, `PlantUML 沙箱超时：执行超过 ${config.timeoutMs.toString()}ms，已终止。`);
+      }
 
       if (normalizedExitCode === 0 && !timedOut && !outputTruncated && !isPngBuffer(stdoutBuffer)) {
         nextStderr = appendLine(nextStderr, 'PlantUML 没有返回有效 PNG 图片。');
@@ -207,6 +209,14 @@ export function applyDefaultPlantUmlFont(source: string, defaultFontName: string
     const newline = lineBreak ?? '\n';
     return `${startLine}${newline}skinparam defaultFontName "${escapePlantUmlQuotedValue(normalizedFontName)}"${newline}`;
   });
+}
+
+export function normalizePlantUmlStderr(value: string) {
+  return value
+    .split(/\r?\n/)
+    .filter((line) => !javaToolOptionsNoticePattern.test(line.trim()))
+    .join('\n')
+    .trimEnd();
 }
 
 export function buildDockerArgs({

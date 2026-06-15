@@ -6,6 +6,7 @@ import {
   runWebCommandSandbox,
   webCommandDefaultSources,
 } from '../web-command-sandbox'
+import { copyImageDataUrlToClipboard } from '../web-command-clipboard'
 import type {
   WebCommandLanguage,
   WebCommandRunResult,
@@ -19,6 +20,11 @@ const languageLabels: Record<WebCommandLanguage, string> = {
 }
 
 const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c', 'plantuml']
+const plantUmlAutoRenderDelayMs = 5000
+
+function getCopyDefaultLabel(language: WebCommandLanguage) {
+  return language === 'plantuml' ? '复制图片' : '复制结果'
+}
 
 async function copyText(value: string) {
   if (navigator.clipboard) {
@@ -232,7 +238,7 @@ export function WebCommandStage() {
   const [stdin, setStdin] = useState('')
   const [result, setResult] = useState<WebCommandRunResult | null>(null)
   const [isRunning, setIsRunning] = useState(false)
-  const [copyLabel, setCopyLabel] = useState('复制结果')
+  const [copyLabel, setCopyLabel] = useState(getCopyDefaultLabel('python'))
   const terminalHostRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -240,6 +246,8 @@ export function WebCommandStage() {
   const sourceRef = useRef(source)
   const stdinRef = useRef(stdin)
   const runSequenceRef = useRef(0)
+  const autoRenderTimerRef = useRef<number | null>(null)
+  const lastRenderedPlantUmlSourceRef = useRef('')
   const isPlantUmlMode = language === 'plantuml'
 
   useEffect(() => {
@@ -322,6 +330,9 @@ export function WebCommandStage() {
     const runId = runSequenceRef.current + 1
     const started = Date.now()
     runSequenceRef.current = runId
+    if (currentLanguage === 'plantuml') {
+      lastRenderedPlantUmlSourceRef.current = currentSource
+    }
     setIsRunning(true)
 
     void (async () => {
@@ -360,12 +371,49 @@ export function WebCommandStage() {
 
   const switchLanguage = useCallback((nextLanguage: WebCommandLanguage) => {
     runSequenceRef.current += 1
+    if (autoRenderTimerRef.current !== null) {
+      window.clearTimeout(autoRenderTimerRef.current)
+      autoRenderTimerRef.current = null
+    }
+    lastRenderedPlantUmlSourceRef.current = ''
     setLanguage(nextLanguage)
     setSource(webCommandDefaultSources[nextLanguage])
     setStdin('')
     setResult(null)
     setIsRunning(false)
+    setCopyLabel(getCopyDefaultLabel(nextLanguage))
   }, [])
+
+  const resetCopyLabelSoon = useCallback((targetLanguage: WebCommandLanguage) => {
+    window.setTimeout(() => setCopyLabel(getCopyDefaultLabel(targetLanguage)), 1200)
+  }, [])
+
+  useEffect(() => {
+    if (autoRenderTimerRef.current !== null) {
+      window.clearTimeout(autoRenderTimerRef.current)
+      autoRenderTimerRef.current = null
+    }
+
+    if (language !== 'plantuml' || isRunning || !source.trim()) {
+      return undefined
+    }
+
+    if (source === lastRenderedPlantUmlSourceRef.current) {
+      return undefined
+    }
+
+    autoRenderTimerRef.current = window.setTimeout(() => {
+      autoRenderTimerRef.current = null
+      executeCurrentSource()
+    }, plantUmlAutoRenderDelayMs)
+
+    return () => {
+      if (autoRenderTimerRef.current !== null) {
+        window.clearTimeout(autoRenderTimerRef.current)
+        autoRenderTimerRef.current = null
+      }
+    }
+  }, [executeCurrentSource, isRunning, language, source])
 
   useEffect(() => {
     if (language === 'plantuml') {
@@ -436,14 +484,35 @@ export function WebCommandStage() {
   }
 
   const handleCopyResult = () => {
+    const currentResult = result
+
+    if (currentResult?.language === 'plantuml') {
+      if (!currentResult.image) {
+        setCopyLabel('无图片')
+        resetCopyLabelSoon('plantuml')
+        return
+      }
+
+      void copyImageDataUrlToClipboard(currentResult.image)
+        .then(() => {
+          setCopyLabel('已复制图片')
+          resetCopyLabelSoon('plantuml')
+        })
+        .catch(() => {
+          setCopyLabel('复制失败')
+          resetCopyLabelSoon('plantuml')
+        })
+      return
+    }
+
     void copyText(resultOutput)
       .then(() => {
         setCopyLabel('已复制')
-        window.setTimeout(() => setCopyLabel('复制结果'), 1200)
+        resetCopyLabelSoon(languageRef.current)
       })
       .catch(() => {
         setCopyLabel('复制失败')
-        window.setTimeout(() => setCopyLabel('复制结果'), 1200)
+        resetCopyLabelSoon(languageRef.current)
       })
   }
 
