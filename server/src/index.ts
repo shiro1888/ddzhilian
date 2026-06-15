@@ -16,6 +16,10 @@ import {
   type OpenAiCompatibleWireApi,
 } from './config.js';
 import {
+  buildRefreshedOpenAiCompatibleModelConfig,
+  type OpenAiCompatibleModelOption,
+} from './openai-compatible-model-refresh.js';
+import {
   type ClientEvent,
   type PairReason,
   type ServerEvent,
@@ -36,7 +40,7 @@ import {
   type ConnectedDevice,
   DeviceRegistry,
 } from './registry/device-registry.js';
-import { AdminConfigRegistry, type AdminAiSettingsSnapshot, type AdminModelToggleItem } from './registry/admin-config-registry.js';
+import { AdminConfigRegistry, type AdminAiSettingsSnapshot } from './registry/admin-config-registry.js';
 import { AdminSessionRegistry } from './registry/admin-session-registry.js';
 import { AiChatConversationRegistry } from './registry/ai-chat-conversation-registry.js';
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
@@ -190,10 +194,6 @@ type OpenAiCompatibleClientOptions = {
   siteUrl?: string;
   siteName?: string;
   systemPrompt?: string;
-};
-type OpenAiCompatibleModelOption = {
-  id: string;
-  label: string;
 };
 type OpenAiCompatibleModelRefreshResult = {
   refreshed: boolean;
@@ -1998,42 +1998,6 @@ async function detectUsableOpenAiCompatibleModels(
   };
 }
 
-function toOpenAiCompatibleModelToggles(
-  models: OpenAiCompatibleModelOption[],
-  previousModels: AdminModelToggleItem[],
-  selectedModelId: string,
-) {
-  const previousById = new Map(previousModels.map((model) => [model.id, model]));
-  const hadPreviousModels = previousModels.length > 0;
-  const nextModels = models.map((model) => {
-    const previous = previousById.get(model.id);
-    return {
-      id: model.id,
-      label: model.label || previous?.label || model.id,
-      enabled: previous?.enabled ?? !hadPreviousModels,
-    };
-  });
-
-  if (selectedModelId) {
-    const selectedIndex = nextModels.findIndex((model) => model.id === selectedModelId);
-    if (selectedIndex >= 0) {
-      nextModels[selectedIndex] = {
-        ...nextModels[selectedIndex],
-        enabled: true,
-      };
-    }
-  }
-
-  if (nextModels.every((model) => !model.enabled) && nextModels[0]) {
-    nextModels[0] = {
-      ...nextModels[0],
-      enabled: true,
-    };
-  }
-
-  return nextModels;
-}
-
 let openAiCompatibleModelRefreshPromise: Promise<OpenAiCompatibleModelRefreshResult> | null = null;
 
 function refreshConfiguredOpenAiCompatibleModels() {
@@ -2087,21 +2051,17 @@ function refreshConfiguredOpenAiCompatibleModels() {
       throw new Error(`没有检测到可用模型，已保留原模型列表。已检测 ${String(detected.checkedModelCount)} 个模型，全部失败。${probeDetail}`);
     }
 
-    const usableModelIds = new Set(detected.models.map((model) => model.id));
-    const selectedModelId = usableModelIds.has(mainOpenAi!.model)
-      ? mainOpenAi!.model
-      : detected.models[0].id;
-    const nextModels = toOpenAiCompatibleModelToggles(
-      detected.models,
-      mainOpenAi?.models ?? [],
-      selectedModelId,
-    );
+    const refreshedConfig = buildRefreshedOpenAiCompatibleModelConfig({
+      currentModelId: mainOpenAi!.model,
+      detectedModels: detected.models,
+      previousModels: mainOpenAi?.models ?? [],
+    });
 
     adminConfig.updateAiSettings({
       ...snapshot,
       openai: [
         ...(mainOpenAi
-          ? [{ ...mainOpenAi, baseUrl, model: selectedModelId, models: nextModels }]
+          ? [{ ...mainOpenAi, baseUrl, model: refreshedConfig.model, models: refreshedConfig.models }]
           : []),
         ...snapshot.openai.slice(1),
       ],
@@ -2110,7 +2070,7 @@ function refreshConfiguredOpenAiCompatibleModels() {
     return {
       refreshed: true,
       baseUrl,
-      selectedModelId,
+      selectedModelId: refreshedConfig.model,
       models: detected.models,
       checkedModelCount: detected.checkedModelCount,
       failedModelCount: detected.failedModelCount,

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, CompositionEvent as ReactCompositionEvent, FormEvent, KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { BufferGeometry, Material, Texture, WebGLRenderer } from 'three'
@@ -46,7 +46,20 @@ type ImageThreadEntry =
     }
 
 type ImageAssistantEntry = Extract<ImageThreadEntry, { role: 'assistant' }>
+type ImageUserEntry = Extract<ImageThreadEntry, { role: 'user' }>
 type ImagePreviewMode = 'image' | 'panorama'
+
+type ImageTaskSummary = {
+  id: string
+  prompt: string
+  createdAt: string
+  status: ImageAssistantEntry['status']
+  assistantEntry: ImageAssistantEntry
+  attachments?: ImageAttachmentPreview[]
+  images?: AiImageResult[]
+  model?: string
+  durationMs?: number
+}
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
@@ -59,6 +72,12 @@ type ImageAspectRatioOption = {
 }
 
 type ImageResolutionOption = {
+  value: string
+  label: string
+  caption: string
+}
+
+type ImageQualityOption = {
   value: string
   label: string
   caption: string
@@ -110,7 +129,6 @@ const imageExamples: ImageExample[] = [
   },
 ]
 
-const imageHistorySkeletonRows = ['recent', 'middle', 'older'] as const
 const imageHistoryInitialLimit = 1
 const imageHistoryPageSize = 8
 const imageUploadMaxFiles = 8
@@ -148,9 +166,16 @@ const imageResolutionOptions = [
   { value: '1440', label: '2K', caption: '1440px' },
   { value: '2000', label: '4K', caption: '2000px' },
 ] as const satisfies readonly ImageResolutionOption[]
+const imageQualityOptions = [
+  { value: 'auto', label: '自动', caption: '跟随服务配置' },
+  { value: 'low', label: '低', caption: '快速草稿' },
+  { value: 'medium', label: '中', caption: '平衡细节' },
+  { value: 'high', label: '高', caption: '优先质量' },
+] as const satisfies readonly ImageQualityOption[]
 
 type ImageAspectRatio = (typeof imageAspectRatioOptions)[number]['value']
 type ImageResolution = (typeof imageResolutionOptions)[number]['value']
+type ImageQuality = (typeof imageQualityOptions)[number]['value']
 
 function createEntryId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -360,6 +385,55 @@ function showImageQuotaExhaustedDialog() {
   window.alert(imageQuotaExhaustedMessage)
 }
 
+function imageTaskStatusLabel(status: ImageAssistantEntry['status']) {
+  switch (status) {
+    case 'loading':
+      return '生成中'
+    case 'complete':
+      return '已完成'
+    case 'failed':
+      return '失败'
+  }
+}
+
+function buildImageTaskSummaries(entries: ImageThreadEntry[]) {
+  const summaries: ImageTaskSummary[] = []
+  let pendingUserEntry: ImageUserEntry | null = null
+
+  for (const entry of entries) {
+    if (entry.role === 'user') {
+      pendingUserEntry = entry
+      continue
+    }
+
+    summaries.push({
+      id: entry.id,
+      prompt: pendingUserEntry?.prompt ?? entry.prompt,
+      createdAt: entry.createdAt,
+      status: entry.status,
+      assistantEntry: entry,
+      attachments: pendingUserEntry?.attachments,
+      images: entry.images,
+      model: entry.model,
+      durationMs: entry.durationMs,
+    })
+    pendingUserEntry = null
+  }
+
+  return summaries
+}
+
+function resolveImageTaskThumbnail(task: ImageTaskSummary) {
+  for (const image of task.images ?? []) {
+    const src = resolveImageSource(image)
+    if (src) {
+      return src
+    }
+  }
+
+  return ''
+}
+
 function historyItemToEntries(item: AiImageHistoryItem): ImageThreadEntry[] {
   if (item.images.length === 0) {
     return []
@@ -402,24 +476,6 @@ function prependUniqueEntries(
     ...previousEntries.filter((entry) => !currentIds.has(entry.id)),
     ...currentEntries,
   ]
-}
-
-function ImageHistorySkeleton() {
-  return (
-    <div className="dd-image-history-skeleton" aria-label="正在加载生图历史" role="status">
-      {imageHistorySkeletonRows.map((rowId) => (
-        <article key={rowId} className="dd-image-history-skeleton__item">
-          <div className="dd-image-history-skeleton__image" />
-          <div className="dd-image-history-skeleton__info">
-            <span className="is-title" />
-            <span />
-            <span />
-            <span className="is-short" />
-          </div>
-        </article>
-      ))}
-    </div>
-  )
 }
 
 type PanoramaViewerProps = Pick<ImagePreviewState, 'src' | 'alt'>
@@ -660,8 +716,10 @@ export function ImageGenerationStage({
   const [selectedImages, setSelectedImages] = useState<ImageUploadDraft[]>([])
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<ImageAspectRatio>(imageAutoSizeValue)
   const [selectedResolution, setSelectedResolution] = useState<ImageResolution>(imageAutoSizeValue)
+  const [selectedQuality, setSelectedQuality] = useState<ImageQuality>('auto')
   const [openComposerMenu, setOpenComposerMenu] = useState<ImageComposerMenu | null>(null)
   const [entries, setEntries] = useState<ImageThreadEntry[]>([])
+  const [selectedImageTaskId, setSelectedImageTaskId] = useState<string | null>(null)
   const [activeGenerationCount, setActiveGenerationCount] = useState(0)
   const [isLoadingInitialHistory, setIsLoadingInitialHistory] = useState(true)
   const [isLoadingOlderHistory, setIsLoadingOlderHistory] = useState(false)
@@ -684,8 +742,10 @@ export function ImageGenerationStage({
   const olderHistoryLoadingRef = useRef(false)
   const pendingScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const quotaRefreshRequestIdRef = useRef(0)
+  const imageTasks = useMemo(() => buildImageTaskSummaries(entries), [entries])
+  const selectedImageTask = imageTasks.find((task) => task.id === selectedImageTaskId) ?? imageTasks.at(-1)
+  const completedImageTaskCount = imageTasks.filter((task) => task.status === 'complete').length
   const hasEntries = entries.length > 0
-  const isLoadingHistory = isLoadingInitialHistory || isLoadingOlderHistory
   const serverReservedImageQuota = imageQuota?.totalReserved ?? 0
   const localPendingImageQuota = Math.max(0, activeGenerationCount - serverReservedImageQuota)
   const reservedImageQuota = serverReservedImageQuota + localPendingImageQuota
@@ -703,6 +763,7 @@ export function ImageGenerationStage({
   const selectedResolutionOption = resolveImageResolutionOption(selectedResolution)
   const selectedResolutionLabel = selectedResolutionOption.label
   const selectedResolutionCaption = selectedResolutionOption.caption
+  const selectedImageSizeLabel = selectedImageSize === imageAutoSizeValue ? '自动尺寸' : `${selectedImageSize} px`
   const composerPlaceholder = !isReady
     ? '正在连接服务'
     : activeGenerationCount > 0
@@ -755,6 +816,7 @@ export function ImageGenerationStage({
     setHasOlderHistory(false)
     setHistoryError(null)
     setEntries([])
+    setSelectedImageTaskId(null)
     setPanoramaEligibleEntryIds({})
 
     void onListImageHistory({ limit: imageHistoryInitialLimit })
@@ -786,6 +848,19 @@ export function ImageGenerationStage({
       isCancelled = true
     }
   }, [onListImageHistory])
+
+  useEffect(() => {
+    if (imageTasks.length === 0) {
+      if (selectedImageTaskId !== null) {
+        setSelectedImageTaskId(null)
+      }
+      return
+    }
+
+    if (!selectedImageTaskId || !imageTasks.some((task) => task.id === selectedImageTaskId)) {
+      setSelectedImageTaskId(imageTasks[imageTasks.length - 1].id)
+    }
+  }, [imageTasks, selectedImageTaskId])
 
   useEffect(() => {
     if (!openComposerMenu) {
@@ -1025,6 +1100,17 @@ export function ImageGenerationStage({
     })
   }
 
+  const clearSelectedImages = () => {
+    setComposerError(null)
+    setSelectedImages((current) => {
+      for (const image of current) {
+        revokeSelectedPreview(image.previewUrl)
+      }
+
+      return []
+    })
+  }
+
   const loadOlderHistory = async () => {
     if (
       !historyCursor ||
@@ -1121,6 +1207,7 @@ export function ImageGenerationStage({
     setSelectedImages([])
     setComposerError(null)
     setOpenComposerMenu(null)
+    setSelectedImageTaskId(assistantEntryId)
     setActiveGenerationCount((count) => count + 1)
 
     const generationStartedAtMs = Date.now()
@@ -1129,6 +1216,7 @@ export function ImageGenerationStage({
         prompt,
         images: imageFiles.length > 0 ? imageFiles : undefined,
         size: selectedImageSize,
+        quality: selectedQuality,
       })
       const generationDurationMs = Math.max(0, Date.now() - generationStartedAtMs)
 
@@ -1240,9 +1328,12 @@ export function ImageGenerationStage({
     </div>
   )
 
-  const renderComposer = (placement: 'empty' | 'thread') => (
+  const renderComposer = (
+    placement: 'empty' | 'thread',
+    options: { showAttachments?: boolean } = {},
+  ) => (
     <form className={`dd-image-composer is-${placement}`} onSubmit={submitPrompt}>
-      {selectedImages.length > 0
+      {(options.showAttachments ?? true) && selectedImages.length > 0
         ? renderAttachmentStrip(selectedImages, { removable: !editingImageEntryId })
         : null}
       <div className="dd-image-composer__box">
@@ -1390,6 +1481,7 @@ export function ImageGenerationStage({
             <path d="M12 19V5" />
             <path d="M6.5 10.5 12 5l5.5 5.5" />
           </svg>
+          <span>开始生成</span>
         </button>
       </div>
       {composerError ? <p className="dd-image-composer__error">{composerError}</p> : null}
@@ -1535,123 +1627,317 @@ export function ImageGenerationStage({
     }
   }
 
+  const renderTaskSidebar = () => (
+    <aside className="dd-image-workbench__sidebar" aria-label="生图任务历史">
+      <div className="dd-image-brand">
+        <div className="dd-image-stage__mark" aria-hidden="true" />
+        <div>
+          <strong>ddzhilian</strong>
+          <span>Image Studio</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft('')
+            setComposerError(null)
+            setOpenComposerMenu(null)
+            window.requestAnimationFrame(() => composerTextAreaRef.current?.focus())
+          }}
+        >
+          新建
+        </button>
+      </div>
+
+      <div className="dd-image-sidebar__stats" aria-label="生图概览">
+        <span>{imageTasks.length.toString()} 个任务</span>
+        <span>{completedImageTaskCount.toString()} 个完成</span>
+      </div>
+
+      <div
+        ref={threadRef}
+        className="dd-image-history-scroll"
+        onScroll={handleThreadScroll}
+      >
+        {hasOlderHistory || isLoadingOlderHistory || historyError ? (
+          <div className="dd-image-history-more">
+            {hasOlderHistory ? (
+              <button
+                type="button"
+                disabled={isLoadingOlderHistory}
+                onClick={() => {
+                  void loadOlderHistory()
+                }}
+              >
+                {isLoadingOlderHistory ? '加载中' : '更早记录'}
+              </button>
+            ) : null}
+            {historyError ? <p className="dd-error-note">{historyError}</p> : null}
+          </div>
+        ) : null}
+
+        {isLoadingInitialHistory && imageTasks.length === 0 ? (
+          <div className="dd-image-sidebar-empty" role="status">
+            正在加载历史...
+          </div>
+        ) : imageTasks.length === 0 ? (
+          <div className="dd-image-sidebar-empty">
+            <strong>暂无生图记录</strong>
+            <span>提交第一条提示词后会出现在这里。</span>
+          </div>
+        ) : (
+          <div className="dd-image-task-list">
+            {imageTasks.map((task) => {
+              const thumbnailSrc = resolveImageTaskThumbnail(task) || task.attachments?.[0]?.previewUrl || ''
+              const isSelected = selectedImageTask?.id === task.id
+              const durationLabel = formatImageDuration(task.durationMs)
+
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  className={`dd-image-task-item is-${task.status}${isSelected ? ' is-selected' : ''}`}
+                  aria-current={isSelected ? 'true' : undefined}
+                  onClick={() => setSelectedImageTaskId(task.id)}
+                >
+                  <span className="dd-image-task-item__thumb" aria-hidden="true">
+                    {thumbnailSrc ? <img src={thumbnailSrc} alt="" /> : <span>文</span>}
+                  </span>
+                  <span className="dd-image-task-item__body">
+                    <strong>{task.prompt}</strong>
+                    <span>
+                      {imageTaskStatusLabel(task.status)}
+                      {' · '}
+                      {formatImageTime(task.createdAt)}
+                      {durationLabel ? ` · ${durationLabel}` : ''}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="dd-image-sidebar__footer">
+        <span>{activeGenerationCount > 0 ? '任务运行中' : '等待任务'}</span>
+        <span
+          className={`dd-image-stage__quota${isImageQuotaExhausted ? ' is-empty' : ''}`}
+          title={buildImageQuotaTitle(imageQuota, reservedImageQuota)}
+        >
+          {formatImageQuotaLabel(imageQuota, isImageQuotaLoading, localPendingImageQuota)}
+        </span>
+      </div>
+    </aside>
+  )
+
+  const renderImageInputPanel = () => (
+    <section className="dd-image-panel dd-image-input-panel" aria-label="图像输入">
+      <div className="dd-image-panel__heading">
+        <h2>图像输入</h2>
+        <span>{selectedImages.length.toString()} / {imageUploadMaxFiles.toString()}</span>
+      </div>
+      <div className={`dd-image-upload-zone${selectedImages.length > 0 ? ' has-images' : ''}`}>
+        <button
+          type="button"
+          className="dd-image-upload-tile"
+          disabled={!isReady || Boolean(editingImageEntryId) || selectedImages.length >= imageUploadMaxFiles}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <span aria-hidden="true">+</span>
+          <strong>点击添加参考图</strong>
+          <small>支持 PNG、JPEG、WebP，单张不超过 {formatImageSize(imageUploadMaxFileBytes)}</small>
+        </button>
+        {selectedImages.length > 0 ? renderAttachmentStrip(selectedImages, { removable: !editingImageEntryId }) : null}
+      </div>
+      <div className="dd-image-input-actions">
+        <button
+          type="button"
+          disabled={selectedImages.length === 0 || Boolean(editingImageEntryId)}
+          onClick={clearSelectedImages}
+        >
+          清空
+        </button>
+        <button
+          type="button"
+          disabled={!isReady || Boolean(editingImageEntryId) || selectedImages.length >= imageUploadMaxFiles}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          添加图片
+        </button>
+      </div>
+    </section>
+  )
+
+  const renderPromptPanel = () => (
+    <section className="dd-image-panel dd-image-prompt-panel" aria-label="提示词">
+      <div className="dd-image-panel__heading">
+        <h2>提示词</h2>
+        <span>{draft.length.toString()} 字</span>
+      </div>
+      {renderComposer('thread', { showAttachments: false })}
+      <div className="dd-image-example-chips" aria-label="提示词示例">
+        {imageExamples.map((example) => (
+          <button
+            key={example.label}
+            type="button"
+            onClick={() => {
+              setDraft(example.prompt)
+              window.requestAnimationFrame(() => composerTextAreaRef.current?.focus())
+            }}
+          >
+            {example.label}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+
+  const renderOutputSettingsPanel = () => (
+    <section className="dd-image-panel dd-image-settings-panel" aria-label="输出设置">
+      <div className="dd-image-panel__heading">
+        <h2>输出设置</h2>
+        <span>{selectedImageSizeLabel}</span>
+      </div>
+
+      <div className="dd-image-setting-row">
+        <span>主模型</span>
+        <strong>gpt-image-2</strong>
+      </div>
+
+      <div className="dd-image-setting-group">
+        <span>比例</span>
+        <div className="dd-image-setting-grid is-ratio">
+          {imageAspectRatioOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={selectedAspectRatio === option.value ? 'is-selected' : ''}
+              title={option.caption}
+              onClick={() => setSelectedAspectRatio(option.value)}
+            >
+              {option.value === imageAutoSizeValue ? '自动' : option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dd-image-setting-group">
+        <span>分辨率</span>
+        <div className="dd-image-setting-grid">
+          {imageResolutionOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={selectedResolution === option.value ? 'is-selected' : ''}
+              title={option.caption}
+              onClick={() => setSelectedResolution(option.value)}
+            >
+              {option.value === imageAutoSizeValue ? '自动' : option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dd-image-setting-group">
+        <span>质量</span>
+        <div className="dd-image-setting-grid">
+          {imageQualityOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={selectedQuality === option.value ? 'is-selected' : ''}
+              title={option.caption}
+              onClick={() => setSelectedQuality(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dd-image-output-note">
+        输出像素：{selectedImageSizeLabel}
+      </div>
+    </section>
+  )
+
+  const renderPreviewPanel = () => (
+    <section className="dd-image-panel dd-image-preview-panel" aria-label="预览结果">
+      <div className="dd-image-panel__heading">
+        <h2>预览结果</h2>
+        {selectedImageTask ? <span>{imageTaskStatusLabel(selectedImageTask.status)}</span> : null}
+      </div>
+
+      <div className="dd-image-preview-result">
+        {!selectedImageTask ? (
+          <div className="dd-image-preview-empty">
+            <div className="dd-image-stage__mark" aria-hidden="true" />
+            <strong>生成结果会显示在这里</strong>
+            <span>添加参考图、填写提示词并点击开始生成。</span>
+          </div>
+        ) : selectedImageTask.status === 'loading' ? (
+          <div className="dd-image-card is-loading" role="status" aria-live="polite">
+            <div className="dd-image-generation-loader" aria-hidden="true">
+              <span className="dd-image-generation-loader__frame" />
+              <span className="dd-image-generation-loader__beam" />
+              <span className="dd-image-generation-loader__spark is-one" />
+              <span className="dd-image-generation-loader__spark is-two" />
+              <span className="dd-image-generation-loader__spark is-three" />
+            </div>
+            <p>正在生成...</p>
+          </div>
+        ) : selectedImageTask.status === 'failed' ? (
+          <div className="dd-image-card is-error">
+            <strong>生成失败</strong>
+            <p>{selectedImageTask.assistantEntry.error}</p>
+          </div>
+        ) : selectedImageTask.images?.length ? (
+          <div className="dd-image-preview-gallery">
+            {renderGeneratedImageCards(selectedImageTask.assistantEntry)}
+          </div>
+        ) : (
+          <div className="dd-image-preview-empty">
+            <strong>没有可预览的图片</strong>
+            <span>该任务未返回图片资源。</span>
+          </div>
+        )}
+      </div>
+
+      {selectedImageTask ? (
+        <div className="dd-image-preview-prompt">
+          <span>提示词</span>
+          <p>{selectedImageTask.prompt}</p>
+        </div>
+      ) : null}
+    </section>
+  )
+
   return (
     <>
       <section className="dd-image-stage" aria-label="AI 图片生成">
-        <header className="dd-image-stage__topbar">
-          <strong>ddzhilian</strong>
-          <div className="dd-image-stage__account">
-            <span className="dd-image-stage__email">{userEmail}</span>
-            <span
-              className={`dd-image-stage__quota${isImageQuotaExhausted ? ' is-empty' : ''}`}
-              title={buildImageQuotaTitle(imageQuota, reservedImageQuota)}
-            >
-              {formatImageQuotaLabel(imageQuota, isImageQuotaLoading, localPendingImageQuota)}
-            </span>
-            <button type="button" onClick={() => { void onLogout() }}>
-              退出
-            </button>
-          </div>
-        </header>
-
-        <div
-          ref={threadRef}
-          className={`dd-image-stage__thread${hasEntries || isLoadingHistory ? '' : ' is-empty'}`}
-          onScroll={handleThreadScroll}
-        >
-          {isLoadingHistory && !hasEntries ? (
-            <ImageHistorySkeleton />
-          ) : !hasEntries ? (
-            <div className="dd-image-stage__empty">
-              <div className="dd-image-stage__mark" aria-hidden="true" />
-              <h2>想生成什么图片？</h2>
-              {historyError ? <p className="dd-error-note">{historyError}</p> : null}
-              {renderComposer('empty')}
-              <section className="dd-image-examples" aria-label="示例图">
-                <div className="dd-image-examples__head">
-                  <h3>浏览灵感</h3>
-                </div>
-                <div className="dd-image-examples__grid">
-                  {imageExamples.map((example) => (
-                    <button
-                      key={example.label}
-                      type="button"
-                      className="dd-image-example-card"
-                      onClick={() => setDraft(example.prompt)}
-                    >
-                      <span className={`dd-image-example-card__visual is-${example.variant}`} aria-hidden="true">
-                        <span className="dd-image-example-card__badge">示例</span>
-                        <span className="dd-image-example-card__shape" />
-                        <span className="dd-image-example-card__lines" />
-                      </span>
-                      <span className="dd-image-example-card__label">{example.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
+        {renderTaskSidebar()}
+        <div className="dd-image-workbench__main">
+          <header className="dd-image-stage__topbar">
+            <div>
+              <strong>AI 图片生成</strong>
+              <span>参考图、提示词和输出设置集中在一个工作台中。</span>
             </div>
-          ) : (
-            <div className="dd-image-stage__messages">
-              {hasOlderHistory || isLoadingOlderHistory || historyError ? (
-                <div className="dd-image-history-more">
-                  {hasOlderHistory ? (
-                    <button
-                      type="button"
-                      disabled={isLoadingOlderHistory}
-                      onClick={() => {
-                        void loadOlderHistory()
-                      }}
-                    >
-                      {isLoadingOlderHistory ? '加载中' : '更早记录'}
-                    </button>
-                  ) : null}
-                  {historyError ? <p className="dd-error-note">{historyError}</p> : null}
-                </div>
-              ) : null}
-              {entries.map((entry) =>
-                entry.role === 'user' ? (
-                  <article key={entry.id} className="dd-image-message is-user">
-                    <div className="dd-image-message__bubble">
-                      {entry.attachments ? renderAttachmentStrip(entry.attachments) : null}
-                      <p>{entry.prompt}</p>
-                    </div>
-                  </article>
-                ) : (
-                  <article key={entry.id} className="dd-image-message is-assistant">
-                    <div className="dd-image-message__avatar" aria-hidden="true">
-                      AI
-                    </div>
-                    <div className="dd-image-message__body">
-                      {entry.status === 'loading' ? (
-                        <div className="dd-image-card is-loading" role="status" aria-live="polite">
-                          <div className="dd-image-generation-loader" aria-hidden="true">
-                            <span className="dd-image-generation-loader__frame" />
-                            <span className="dd-image-generation-loader__beam" />
-                            <span className="dd-image-generation-loader__spark is-one" />
-                            <span className="dd-image-generation-loader__spark is-two" />
-                            <span className="dd-image-generation-loader__spark is-three" />
-                          </div>
-                          <p>正在生成...</p>
-                        </div>
-                      ) : null}
-
-                      {entry.status === 'failed' ? (
-                        <div className="dd-image-card is-error">
-                          <strong>生成失败</strong>
-                          <p>{entry.error}</p>
-                        </div>
-                      ) : null}
-
-                      {renderGeneratedImageCards(entry)}
-                    </div>
-                  </article>
-                ),
-              )}
+            <div className="dd-image-stage__account">
+              <span className="dd-image-stage__email">{userEmail}</span>
+              <button type="button" onClick={() => { void onLogout() }}>
+                退出
+              </button>
             </div>
-          )}
+          </header>
+          <main className="dd-image-workbench__dashboard">
+            <div className="dd-image-workbench__controls">
+              {renderImageInputPanel()}
+              {renderPromptPanel()}
+              {renderOutputSettingsPanel()}
+            </div>
+            {renderPreviewPanel()}
+          </main>
         </div>
-
-        {hasEntries ? renderComposer('thread') : null}
       </section>
 
       {imagePreview
