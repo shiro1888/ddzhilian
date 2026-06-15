@@ -48,6 +48,12 @@ function normalizeText(value: string | undefined, fallback: string) {
   return text && text.length > 0 ? text.slice(0, 80) : fallback;
 }
 
+function normalizeDeviceName(value: string | undefined, fallback: string) {
+  const deviceName = normalizeText(value, fallback);
+
+  return deviceName === '陈冠嵘' ? '黄石容' : deviceName;
+}
+
 function normalizeAccountId(value: string | undefined) {
   const trimmed = value?.trim();
 
@@ -123,7 +129,7 @@ export class DeviceRegistry {
     const device: ConnectedDevice = {
       socket,
       deviceId,
-      deviceName: normalizeText(
+      deviceName: normalizeDeviceName(
         payload.deviceName,
         `Device-${deviceId.slice(-4).toUpperCase()}`,
       ),
@@ -168,7 +174,7 @@ export class DeviceRegistry {
     }
 
     if (payload.deviceName !== undefined) {
-      device.deviceName = normalizeText(payload.deviceName, device.deviceName);
+      device.deviceName = normalizeDeviceName(payload.deviceName, device.deviceName);
     }
 
     if (payload.platform !== undefined) {
