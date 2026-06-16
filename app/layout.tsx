@@ -23,6 +23,10 @@ export const viewport: Viewport = {
   themeColor: '#07c160',
 }
 
+const serviceWorkerBootstrapScript = process.env.NODE_ENV === 'production'
+  ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js')})}`
+  : `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.getRegistrations().then((registrations)=>registrations.forEach((registration)=>registration.unregister()));if(window.caches){window.caches.keys().then((keys)=>keys.forEach((key)=>window.caches.delete(key)))}})}`
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -33,7 +37,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js')})}`,
+            __html: serviceWorkerBootstrapScript,
           }}
         />
       </head>

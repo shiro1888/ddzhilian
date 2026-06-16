@@ -8,9 +8,11 @@ import type {
   FormEvent,
   MouseEvent as ReactMouseEvent,
   KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
   ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import gsap from 'gsap'
 import type {
   ComposerImageDraft,
   FileConversationEntry,
@@ -31,6 +33,7 @@ import {
 import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
 
 type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }>['file']
+type SnapLinkTextEntry = Extract<UnifiedConversationEntry, { entryType: 'text' }>
 type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
 type SnapLinkSharedLinkEntry = {
   id: string
@@ -67,6 +70,27 @@ type SnapLinkQuoteDraftState = {
 type SnapLinkImagePreviewState = {
   src: string
   alt: string
+  originRect?: SnapLinkPreviewOriginRect
+}
+
+type SnapLinkPreviewOriginRect = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+type SnapLinkImagePreviewPan = {
+  x: number
+  y: number
+}
+
+type SnapLinkImagePreviewDragState = {
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  startX: number
+  startY: number
 }
 
 const snapLinkQuickEmojis = [
@@ -89,6 +113,22 @@ const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
 const snapLinkLobbyGreetingText = '你好，我是ddzhilian'
+const snapLinkImagePreviewOpenDuration = 0.56
+const snapLinkImagePreviewCloseDuration = 0.34
+const snapLinkImagePreviewZoomScale = 1.85
+const snapLinkRecallBurstAnimationMs = 720
+const snapLinkRecallBurstAnimationCleanupMs = snapLinkRecallBurstAnimationMs + 120
+const snapLinkRecallParticleColumnCount = 18
+const snapLinkRecallParticleRowCount = 10
+const snapLinkRecallParticleIndexes = Array.from(
+  { length: snapLinkRecallParticleColumnCount * snapLinkRecallParticleRowCount },
+  (_, index) => index,
+)
+
+type SnapLinkRecallingTextEntryState = {
+  entry: SnapLinkTextEntry
+  phase: 'animating'
+}
 
 type SnapLinkThemeColorTarget = 'self' | 'peer' | 'ai'
 type SnapLinkThemeColors = Record<SnapLinkThemeColorTarget, string>
@@ -174,6 +214,19 @@ function getSnapLinkThemeContrastColor(color: string) {
   const brightness = (red * 299 + green * 587 + blue * 114) / 1000
 
   return brightness >= 150 ? '#18181B' : '#FFFFFF'
+}
+
+function toSnapLinkPreviewOriginRect(rect: DOMRect): SnapLinkPreviewOriginRect | undefined {
+  if (rect.width <= 0 || rect.height <= 0) {
+    return undefined
+  }
+
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  }
 }
 
 function resolveSnapLinkApiBaseUrl() {
@@ -602,6 +655,43 @@ function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
   return Array.from(compactName)[0]?.toUpperCase() ?? 'TA'
 }
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function getSnapLinkRecallParticleStyle(index: number): CSSProperties {
+  const column = index % snapLinkRecallParticleColumnCount
+  const row = Math.floor(index / snapLinkRecallParticleColumnCount)
+  const columnProgress = column / Math.max(1, snapLinkRecallParticleColumnCount - 1)
+  const rowProgress = row / Math.max(1, snapLinkRecallParticleRowCount - 1)
+  const seedA = ((index * 37) % 101) / 100
+  const seedB = ((index * 53 + 17) % 97) / 96
+  const seedC = ((index * 29 + 41) % 89) / 88
+  const left = Math.min(95, Math.max(5, 4.5 + columnProgress * 91 + (seedA - 0.5) * 3.2))
+  const top = Math.min(92, Math.max(8, 8 + rowProgress * 84 + (seedB - 0.5) * 4.8))
+  const dx = 24 + columnProgress * 88 + seedA * 30
+  const dy = (rowProgress - 0.5) * 52 + (seedB - 0.5) * 22
+  const size = 1.8 + seedC * 3.6
+  const delay = columnProgress * 72 + seedB * 38
+
+  return {
+    '--recall-particle-left': `${left.toFixed(2)}%`,
+    '--recall-particle-top': `${top.toFixed(2)}%`,
+    '--recall-particle-dx': `${dx.toFixed(2)}px`,
+    '--recall-particle-dy': `${dy.toFixed(2)}px`,
+    '--recall-particle-size': `${size.toFixed(2)}px`,
+    '--recall-particle-delay': `${delay.toFixed(2)}ms`,
+  } as CSSProperties
+}
+
+function escapeSnapLinkEntryIdSelector(value: string) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value)
+  }
+
+  return value.replace(/["\\]/g, '\\$&')
+}
+
 const DEVICE_SYSTEM_PREFIXES = new Set(['windows', 'android', 'ios', 'ipad', 'mac', 'linux', 'web'])
 
 function resolveActorIdentity(
@@ -739,12 +829,25 @@ export function SnapLinkStage({
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
+  const [isImagePreviewReady, setIsImagePreviewReady] = useState(false)
+  const [isImagePreviewDragging, setIsImagePreviewDragging] = useState(false)
+  const [imagePreviewPan, setImagePreviewPan] = useState<SnapLinkImagePreviewPan>({ x: 0, y: 0 })
+  const [isImagePreviewClosing, setIsImagePreviewClosing] = useState(false)
   const [hiddenTextEntryIds, setHiddenTextEntryIds] = useState<Set<string>>(() => new Set())
   const [animatedOutgoingEntryIds, setAnimatedOutgoingEntryIds] = useState<Set<string>>(() => new Set())
+  const [recallingTextEntries, setRecallingTextEntries] = useState<Record<string, SnapLinkRecallingTextEntryState>>({})
   const [messageRenderState, setMessageRenderState] = useState<{ roomId: string | null; count: number }>(() => ({
     roomId: null,
     count: snapLinkInitialMessageRenderCount,
   }))
+  const imagePreviewDialogRef = useRef<HTMLDivElement | null>(null)
+  const imagePreviewBackdropRef = useRef<HTMLButtonElement | null>(null)
+  const imagePreviewPanelRef = useRef<HTMLDivElement | null>(null)
+  const imagePreviewImageButtonRef = useRef<HTMLButtonElement | null>(null)
+  const imagePreviewImageRef = useRef<HTMLImageElement | null>(null)
+  const imagePreviewDragStateRef = useRef<SnapLinkImagePreviewDragState | null>(null)
+  const imagePreviewDidDragRef = useRef(false)
+  const isImagePreviewZoomedRef = useRef(false)
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messageScrollRestoreRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null)
@@ -760,8 +863,10 @@ export function SnapLinkStage({
     initialized: false,
   })
   const outgoingEntryAnimationTimeoutsRef = useRef<Map<string, number>>(new Map())
+  const recallAnimationTimeoutsRef = useRef<Map<string, number>>(new Map())
   const shouldAnimateNextOutgoingEntryRef = useRef(false)
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
+  const hasResolvedInitialConversationViewRef = useRef(false)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const isComposerComposingRef = useRef(false)
   const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
@@ -784,6 +889,22 @@ export function SnapLinkStage({
   const isImageOpen = activeView === 'image'
   const isAdminOpen = activeView === 'admin'
   const isCommandOpen = activeView === 'command'
+
+  useEffect(() => {
+    if (activeView !== 'conversation' || hasResolvedInitialConversationViewRef.current || !selectedRoomId) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      hasResolvedInitialConversationViewRef.current = true
+      setIsLobbyOpen(false)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [activeView, selectedRoomId])
+
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
@@ -819,6 +940,7 @@ export function SnapLinkStage({
   }, [onlineDeviceItems, privateDeviceSearch])
   const hasActiveRoom =
     Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen
+
   if (messageRenderState.roomId !== selectedRoomId) {
     setMessageRenderState({
       roomId: selectedRoomId,
@@ -856,11 +978,28 @@ export function SnapLinkStage({
       ),
     [hiddenTextEntryIds, unifiedConversationEntries],
   )
+  const conversationEntriesWithRecallGhosts = useMemo(() => {
+    if (Object.keys(recallingTextEntries).length === 0) {
+      return filteredConversationEntries
+    }
+
+    const entryIds = new Set(filteredConversationEntries.map((entry) => entry.id))
+    const mergedEntries = [...filteredConversationEntries]
+
+    for (const recallState of Object.values(recallingTextEntries)) {
+      if (!entryIds.has(recallState.entry.id)) {
+        mergedEntries.push(recallState.entry)
+      }
+    }
+
+    mergedEntries.sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+    return mergedEntries
+  }, [filteredConversationEntries, recallingTextEntries])
   const visibleConversationEntries = useMemo(
-    () => filteredConversationEntries.slice(
-      Math.max(0, filteredConversationEntries.length - messageRenderCount),
+    () => conversationEntriesWithRecallGhosts.slice(
+      Math.max(0, conversationEntriesWithRecallGhosts.length - messageRenderCount),
     ),
-    [filteredConversationEntries, messageRenderCount],
+    [conversationEntriesWithRecallGhosts, messageRenderCount],
   )
 
   useEffect(() => {
@@ -953,9 +1092,13 @@ export function SnapLinkStage({
   useEffect(() => {
     const animationTimeouts = outgoingEntryAnimationTimeoutsRef.current
     const pendingAnimationTimeoutRef = pendingOutgoingEntryAnimationTimeoutRef
+    const recallAnimationTimeouts = recallAnimationTimeoutsRef.current
 
     return () => {
       for (const timeoutId of animationTimeouts.values()) {
+        window.clearTimeout(timeoutId)
+      }
+      for (const timeoutId of recallAnimationTimeouts.values()) {
         window.clearTimeout(timeoutId)
       }
       if (pendingAnimationTimeoutRef.current !== null) {
@@ -963,8 +1106,137 @@ export function SnapLinkStage({
         pendingAnimationTimeoutRef.current = null
       }
       animationTimeouts.clear()
+      recallAnimationTimeouts.clear()
     }
   }, [])
+
+  useEffect(() => {
+    const messagesRoot = messagesRef.current
+    const recallingEntries = Object.values(recallingTextEntries)
+    if (!messagesRoot || recallingEntries.length === 0) {
+      return undefined
+    }
+
+    const ctx = gsap.context(() => {
+      for (const recallState of recallingEntries) {
+        const selectorId = escapeSnapLinkEntryIdSelector(recallState.entry.id)
+        const row = messagesRoot.querySelector<HTMLElement>(`[data-snaplink-entry-id="${selectorId}"]`)
+        const bubble = row?.querySelector<HTMLElement>('.dd-snaplink__bubble')
+        const senderMeta = row?.querySelector<HTMLElement>('.dd-snaplink__sender-meta')
+        const messageTime = row?.querySelector<HTMLElement>('.dd-snaplink__message-time')
+        const avatar = row?.querySelector<HTMLElement>('.dd-snaplink__avatar')
+        const rowChromeTargets = [senderMeta, messageTime, avatar].filter(
+          (target): target is HTMLElement => Boolean(target),
+        )
+        const particles = Array.from(
+          row?.querySelectorAll<HTMLElement>('.dd-snaplink__recall-particles span') ?? [],
+        )
+
+        if (!bubble) {
+          continue
+        }
+
+        gsap.killTweensOf([row, bubble, ...rowChromeTargets, ...particles])
+
+        if (prefersReducedMotion()) {
+          gsap.set([bubble, ...rowChromeTargets], { opacity: 0, x: 24, filter: 'blur(4px)' })
+          if (row) {
+            gsap.set(row, { opacity: 0 })
+          }
+          gsap.set(particles, { opacity: 0 })
+          continue
+        }
+
+        gsap.set(bubble, {
+          x: 0,
+          opacity: 1,
+          scale: 1,
+          filter: 'blur(0px)',
+          clipPath: 'inset(0 0 0 0 round 18px)',
+          transformOrigin: 'center right',
+          willChange: 'transform, opacity, filter, clip-path',
+        })
+
+        gsap.set(rowChromeTargets, {
+          x: 0,
+          opacity: 1,
+          filter: 'blur(0px)',
+          willChange: 'transform, opacity, filter',
+        })
+
+        gsap.to(bubble, {
+          x: 24,
+          opacity: 0,
+          scale: 0.96,
+          filter: 'blur(5px)',
+          clipPath: 'inset(0 0 0 98% round 18px)',
+          duration: 0.18,
+          ease: 'power2.out',
+        })
+
+        gsap.to(rowChromeTargets, {
+          x: 26,
+          opacity: 0,
+          filter: 'blur(4px)',
+          duration: 0.24,
+          ease: 'power2.out',
+          stagger: 0.025,
+        })
+
+        if (row) {
+          gsap.to(row, {
+            opacity: 0,
+            duration: 0.14,
+            delay: snapLinkRecallBurstAnimationMs / 1000,
+            ease: 'power1.out',
+          })
+        }
+
+        particles.forEach((particle, index) => {
+          const particleStyle = window.getComputedStyle(particle)
+          const dx = Number.parseFloat(particleStyle.getPropertyValue('--recall-particle-dx')) || 72
+          const dy = Number.parseFloat(particleStyle.getPropertyValue('--recall-particle-dy')) || 0
+          const delay = (Number.parseFloat(particleStyle.getPropertyValue('--recall-particle-delay')) || index * 8) / 1000
+
+          gsap.fromTo(particle, {
+            x: 0,
+            y: 0,
+            opacity: 1,
+            rotate: 0,
+            scale: 1,
+            transformOrigin: 'center center',
+            willChange: 'transform, opacity',
+          }, {
+            keyframes: [
+              {
+                x: dx * 0.16,
+                y: dy * 0.16,
+                opacity: 1,
+                rotate: (index % 2 === 0 ? 12 : -12),
+                scale: 1.08,
+                duration: 0.08,
+                ease: 'power2.out',
+              },
+              {
+                x: dx,
+                y: dy,
+                opacity: 0,
+                rotate: (index % 2 === 0 ? 46 : -46),
+                scale: 0.12,
+                duration: 0.64,
+                ease: 'power3.out',
+              },
+            ],
+            delay,
+          })
+        })
+      }
+    }, messagesRoot)
+
+    return () => {
+      ctx.revert()
+    }
+  }, [recallingTextEntries])
 
   const handleMessagesScroll = useCallback(() => {
     const messages = messagesRef.current
@@ -1209,8 +1481,7 @@ export function SnapLinkStage({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setImagePreview(null)
-        setIsImagePreviewZoomed(false)
+        setIsImagePreviewClosing(true)
       }
     }
 
@@ -1219,6 +1490,155 @@ export function SnapLinkStage({
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [imagePreview])
+
+  useEffect(() => {
+    const backdrop = imagePreviewBackdropRef.current
+    const panel = imagePreviewPanelRef.current
+    const imageButton = imagePreviewImageButtonRef.current
+    const previewImage = imagePreviewImageRef.current
+    if (!imagePreview || !backdrop || !panel || !imageButton || !previewImage) {
+      return undefined
+    }
+
+    const ctx = gsap.context(() => {
+      if (isImagePreviewClosing) {
+        const finalizeClose = () => {
+          setImagePreview(null)
+          setIsImagePreviewZoomed(false)
+          isImagePreviewZoomedRef.current = false
+          setIsImagePreviewReady(false)
+          setIsImagePreviewDragging(false)
+          setImagePreviewPan({ x: 0, y: 0 })
+          setIsImagePreviewClosing(false)
+          imagePreviewDragStateRef.current = null
+          imagePreviewDidDragRef.current = false
+        }
+
+        const panelRect = panel.getBoundingClientRect()
+        const originRect = !isImagePreviewZoomedRef.current ? imagePreview.originRect : undefined
+        const closeAnimation =
+          originRect && panelRect.width > 0 && panelRect.height > 0
+            ? {
+                x: originRect.left + originRect.width - (panelRect.left + panelRect.width),
+                y: originRect.top + originRect.height / 2 - (panelRect.top + panelRect.height / 2),
+                scaleX: originRect.width / panelRect.width,
+                scaleY: originRect.height / panelRect.height,
+                opacity: 0.14,
+                filter: 'blur(12px)',
+              }
+            : {
+                x: 0,
+                y: 28,
+                scaleX: 0.84,
+                scaleY: 0.84,
+                opacity: 0.08,
+                filter: 'blur(10px)',
+              }
+
+        const closeTimeline = gsap.timeline({
+          defaults: {
+            duration: snapLinkImagePreviewCloseDuration,
+            ease: 'power3.inOut',
+          },
+          onComplete: finalizeClose,
+        })
+
+        closeTimeline.to(backdrop, {
+          opacity: 0,
+          duration: snapLinkImagePreviewCloseDuration * 0.82,
+          ease: 'power2.out',
+        }, 0)
+        gsap.set([imageButton, previewImage], {
+          clearProps: 'perspective,transformStyle,rotationY,skewY,transformOrigin,willChange',
+        })
+        closeTimeline.to(panel, {
+          ...closeAnimation,
+          rotationY: 10,
+          skewY: -2.2,
+          transformOrigin: 'right center',
+          transformPerspective: 1100,
+        }, 0)
+        return
+      }
+
+      const panelRect = panel.getBoundingClientRect()
+      const originRect = !isImagePreviewZoomedRef.current ? imagePreview.originRect : undefined
+      const openAnimation =
+        originRect && panelRect.width > 0 && panelRect.height > 0
+          ? {
+              x: originRect.left + originRect.width - (panelRect.left + panelRect.width),
+              y: originRect.top + originRect.height / 2 - (panelRect.top + panelRect.height / 2),
+              scaleX: originRect.width / panelRect.width,
+              scaleY: originRect.height / panelRect.height,
+              opacity: 0.12,
+              filter: 'blur(14px)',
+            }
+          : {
+              x: 0,
+              y: 34,
+              scaleX: 0.82,
+              scaleY: 0.82,
+              opacity: 0.04,
+              filter: 'blur(12px)',
+            }
+
+      gsap.set(backdrop, { opacity: 0 })
+      gsap.set(panel, {
+        ...openAnimation,
+        rotationY: 14,
+        skewY: -3,
+        transformOrigin: 'right center',
+        transformStyle: 'preserve-3d',
+        transformPerspective: 1100,
+        force3D: true,
+        willChange: 'transform, opacity, filter',
+      })
+      gsap.set([imageButton, previewImage], {
+        clearProps: 'perspective,transformStyle,rotationY,skewY,transformOrigin,willChange',
+      })
+
+      const openTimeline = gsap.timeline({
+        onComplete: () => {
+          setIsImagePreviewReady(true)
+        },
+      })
+
+      openTimeline.to(backdrop, {
+        opacity: 1,
+        duration: snapLinkImagePreviewOpenDuration * 0.64,
+        ease: 'power2.out',
+      }, 0)
+      openTimeline.to(panel, {
+        opacity: 1,
+        y: 0,
+        scaleY: 1,
+        filter: 'blur(0px)',
+        duration: snapLinkImagePreviewOpenDuration,
+        ease: 'expo.out',
+      }, 0)
+      openTimeline.to(panel, {
+        x: 0,
+        duration: snapLinkImagePreviewOpenDuration * 0.42,
+        ease: 'power3.out',
+      }, 0)
+      openTimeline.to(panel, {
+        scaleX: 1,
+        duration: snapLinkImagePreviewOpenDuration,
+        ease: 'expo.out',
+      }, snapLinkImagePreviewOpenDuration * 0.04)
+      openTimeline.to(panel, {
+        rotationY: 0,
+        skewY: 0,
+        duration: snapLinkImagePreviewOpenDuration * 0.72,
+        ease: 'expo.out',
+        clearProps: 'filter,willChange,transform,transformOrigin,transformStyle,transformPerspective',
+      }, snapLinkImagePreviewOpenDuration * 0.18)
+    }, imagePreviewDialogRef)
+
+    return () => {
+      ctx.revert()
+    }
+  }, [imagePreview, isImagePreviewClosing])
 
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
@@ -1316,7 +1736,6 @@ export function SnapLinkStage({
       return
     }
 
-    setIsLobbyOpen(false)
     setActiveSharedTab(null)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
@@ -1551,18 +1970,172 @@ export function SnapLinkStage({
     submitComposerDraft()
   }
 
-  const openImagePreview = (src: string, alt = '图片预览') => {
+  const openImagePreview = (
+    src: string,
+    alt = '图片预览',
+    originRect?: SnapLinkPreviewOriginRect,
+  ) => {
     if (!src) {
       return
     }
 
+    setIsImagePreviewClosing(false)
     setIsImagePreviewZoomed(false)
-    setImagePreview({ src, alt })
+    isImagePreviewZoomedRef.current = false
+    setIsImagePreviewReady(false)
+    setIsImagePreviewDragging(false)
+    setImagePreviewPan({ x: 0, y: 0 })
+    imagePreviewDragStateRef.current = null
+    imagePreviewDidDragRef.current = false
+    setImagePreview({ src, alt, originRect })
+  }
+
+  const animateImagePreviewOrigin = (target: HTMLElement, onComplete: () => void) => {
+    if (prefersReducedMotion()) {
+      onComplete()
+      return
+    }
+
+    gsap.killTweensOf(target)
+    gsap.fromTo(target, {
+      scale: 1,
+      filter: 'brightness(1)',
+      transformOrigin: 'center center',
+      willChange: 'transform, filter',
+    }, {
+      scale: 0.94,
+      filter: 'brightness(1.06)',
+      duration: 0.12,
+      ease: 'power2.out',
+      yoyo: true,
+      repeat: 1,
+      onComplete: () => {
+        gsap.set(target, { clearProps: 'transform,filter,transformOrigin,willChange' })
+        onComplete()
+      },
+    })
   }
 
   const closeImagePreview = () => {
-    setImagePreview(null)
+    if (!imagePreview || isImagePreviewClosing) {
+      return
+    }
+
+    setIsImagePreviewReady(false)
+    setIsImagePreviewDragging(false)
+    setIsImagePreviewClosing(true)
+  }
+
+  const resetImagePreviewZoom = () => {
     setIsImagePreviewZoomed(false)
+    isImagePreviewZoomedRef.current = false
+    setIsImagePreviewDragging(false)
+    setImagePreviewPan({ x: 0, y: 0 })
+    imagePreviewDragStateRef.current = null
+    imagePreviewDidDragRef.current = false
+  }
+
+  const handleImagePreviewBlankClick = () => {
+    if (isImagePreviewZoomed) {
+      resetImagePreviewZoom()
+      return
+    }
+
+    closeImagePreview()
+  }
+
+  const handleImagePreviewBodyClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    handleImagePreviewBlankClick()
+  }
+
+  const getBoundedImagePreviewPan = (pan: SnapLinkImagePreviewPan): SnapLinkImagePreviewPan => {
+    const panelRect = imagePreviewPanelRef.current?.getBoundingClientRect()
+    const imageButtonRect = imagePreviewImageButtonRef.current?.getBoundingClientRect()
+    if (!panelRect || !imageButtonRect || panelRect.width <= 0 || panelRect.height <= 0) {
+      return pan
+    }
+
+    const maxX = Math.max(0, (imageButtonRect.width * snapLinkImagePreviewZoomScale - panelRect.width) / 2)
+    const maxY = Math.max(0, (imageButtonRect.height * snapLinkImagePreviewZoomScale - panelRect.height) / 2)
+
+    return {
+      x: Math.min(maxX, Math.max(-maxX, pan.x)),
+      y: Math.min(maxY, Math.max(-maxY, pan.y)),
+    }
+  }
+
+  const handleImagePreviewImageClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+
+    if (imagePreviewDidDragRef.current) {
+      imagePreviewDidDragRef.current = false
+      return
+    }
+
+    if (isImagePreviewZoomed) {
+      resetImagePreviewZoom()
+      return
+    }
+
+    setImagePreviewPan({ x: 0, y: 0 })
+    isImagePreviewZoomedRef.current = true
+    setIsImagePreviewZoomed(true)
+  }
+
+  const handleImagePreviewPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+
+    if (!isImagePreviewZoomed || event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    setIsImagePreviewDragging(true)
+    imagePreviewDidDragRef.current = false
+    imagePreviewDragStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startX: imagePreviewPan.x,
+      startY: imagePreviewPan.y,
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handleImagePreviewPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const dragState = imagePreviewDragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return
+    }
+
+    event.preventDefault()
+    const deltaX = event.clientX - dragState.startClientX
+    const deltaY = event.clientY - dragState.startClientY
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+      imagePreviewDidDragRef.current = true
+    }
+
+    setImagePreviewPan(getBoundedImagePreviewPan({
+      x: dragState.startX + deltaX,
+      y: dragState.startY + deltaY,
+    }))
+  }
+
+  const endImagePreviewDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const dragState = imagePreviewDragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return
+    }
+
+    imagePreviewDragStateRef.current = null
+    setIsImagePreviewDragging(false)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   const openInlineImageFromTarget = (target: EventTarget | null) => {
@@ -1570,7 +2143,13 @@ export function SnapLinkStage({
       return false
     }
 
-    openImagePreview(target.currentSrc || target.src, target.alt || '图片预览')
+    const previewSource = target.currentSrc || target.src
+    const previewAlt = target.alt || '图片预览'
+    const originRect = toSnapLinkPreviewOriginRect(target.getBoundingClientRect())
+
+    animateImagePreviewOrigin(target, () => {
+      openImagePreview(previewSource, previewAlt, originRect)
+    })
     return true
   }
 
@@ -1694,10 +2273,58 @@ export function SnapLinkStage({
     }
 
     const recalledEntryId = messageContextMenu.entryId
+    const recalledEntry = unifiedConversationEntries.find(
+      (entry): entry is SnapLinkTextEntry => entry.id === recalledEntryId && entry.entryType === 'text',
+    )
     setMessageContextMenu(null)
-    void Promise.resolve(onRecallText(recalledEntryId)).catch(() => {
-      // The parent surface reports the recall failure.
-    })
+
+    if (!recalledEntry) {
+      void Promise.resolve(onRecallText(recalledEntryId)).catch(() => {
+        // The parent surface reports the recall failure.
+      })
+      return
+    }
+
+    const previousTimeoutId = recallAnimationTimeoutsRef.current.get(recalledEntryId)
+    if (previousTimeoutId !== undefined) {
+      window.clearTimeout(previousTimeoutId)
+    }
+
+    setRecallingTextEntries((current) => ({
+      ...current,
+      [recalledEntryId]: {
+        entry: recalledEntry,
+        phase: 'animating',
+      },
+    }))
+
+    const timeoutId = window.setTimeout(() => {
+      recallAnimationTimeoutsRef.current.delete(recalledEntryId)
+      void Promise.resolve(onRecallText(recalledEntryId)).then(() => {
+        setRecallingTextEntries((current) => {
+          if (!(recalledEntryId in current)) {
+            return current
+          }
+
+          const next = { ...current }
+          delete next[recalledEntryId]
+          return next
+        })
+      }).catch(() => {
+        setRecallingTextEntries((current) => {
+          if (!(recalledEntryId in current)) {
+            return current
+          }
+
+          const next = { ...current }
+          delete next[recalledEntryId]
+          return next
+        })
+        // The parent surface reports the recall failure.
+      })
+    }, snapLinkRecallBurstAnimationCleanupMs)
+
+    recallAnimationTimeoutsRef.current.set(recalledEntryId, timeoutId)
   }
 
   const recallFileEntry = (file: FileConversationEntry) => {
@@ -1783,7 +2410,23 @@ export function SnapLinkStage({
               <button
                 type="button"
                 aria-label={`预览图片 ${file.fileName}`}
-                onClick={() => openImagePreview(file.previewUrl ?? '', file.fileName)}
+                onClick={(event) => {
+                  const previewImage = event.currentTarget.querySelector('img')
+                  const previewSource = file.previewUrl ?? ''
+                  const previewAlt = file.fileName
+                  const originRect = previewImage
+                    ? toSnapLinkPreviewOriginRect(previewImage.getBoundingClientRect())
+                    : toSnapLinkPreviewOriginRect(event.currentTarget.getBoundingClientRect())
+
+                  if (previewImage instanceof HTMLImageElement) {
+                    animateImagePreviewOrigin(previewImage, () => {
+                      openImagePreview(previewSource, previewAlt, originRect)
+                    })
+                    return
+                  }
+
+                  openImagePreview(previewSource, previewAlt, originRect)
+                }}
               >
                 <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
               </button>
@@ -1897,6 +2540,12 @@ export function SnapLinkStage({
       </div>
     )
   }
+
+  const imagePreviewImageStyle: CSSProperties | undefined = isImagePreviewZoomed
+    ? {
+        transform: `translate3d(${imagePreviewPan.x.toFixed(1)}px, ${imagePreviewPan.y.toFixed(1)}px, 0) scale(${snapLinkImagePreviewZoomScale.toString()})`,
+      }
+    : undefined
 
   return (
     <>
@@ -2296,24 +2945,28 @@ export function SnapLinkStage({
 
                     const previousEntry = visibleConversationEntries[index - 1]
                     const nextEntry = visibleConversationEntries[index + 1]
+                    const recallState = entry.entryType === 'text' ? recallingTextEntries[entry.id] : undefined
+                    const renderedEntry = recallState?.entry ?? entry
+                    const isRecallingTextEntry = recallState?.phase === 'animating'
                     const isGroupedWithPrevious =
                       isConversationMessageEntry(previousEntry) &&
-                      resolveMessageActorKey(previousEntry) === resolveMessageActorKey(entry) &&
+                      resolveMessageActorKey(previousEntry) === resolveMessageActorKey(renderedEntry) &&
                       !showDivider
                     const isGroupedWithNext =
                       isConversationMessageEntry(nextEntry) &&
-                      resolveMessageActorKey(nextEntry) === resolveMessageActorKey(entry) &&
+                      resolveMessageActorKey(nextEntry) === resolveMessageActorKey(renderedEntry) &&
                       !shouldInsertDivider(entry.createdAt, nextEntry.createdAt)
-                    const isBotMessage = isBotConversationEntry(entry)
+                    const isBotMessage = isBotConversationEntry(renderedEntry)
                     const rowClassName = [
                       'dd-snaplink__row',
-                      entry.fromSelf ? 'is-self' : 'is-peer',
+                      renderedEntry.fromSelf ? 'is-self' : 'is-peer',
                       isBotMessage ? 'is-bot' : '',
                       isGroupedWithPrevious ? 'is-grouped-with-previous' : '',
                       isGroupedWithNext ? 'is-grouped-with-next' : '',
                       animatedOutgoingEntryIds.has(entry.id) ? 'is-new-outgoing' : '',
+                      isRecallingTextEntry ? 'is-recalling' : '',
                     ].filter(Boolean).join(' ')
-                    const actorIdentity = resolveActorIdentity(entry, isBotMessage)
+                    const actorIdentity = resolveActorIdentity(renderedEntry, isBotMessage)
                     const showSenderIdentity = !isGroupedWithPrevious
                     const showMessageTime = !isGroupedWithNext
                     const avatarClassName = [
@@ -2321,12 +2974,12 @@ export function SnapLinkStage({
                       showSenderIdentity ? '' : 'is-placeholder',
                     ].filter(Boolean).join(' ')
                     const isImageOnlyMessage =
-                      entry.entryType === 'text' && isImageOnlyRichText(entry.text)
+                      renderedEntry.entryType === 'text' && isImageOnlyRichText(renderedEntry.text)
 
                     return (
                       <div key={entry.id} className="dd-snaplink__entry">
                         <div className={rowClassName} data-snaplink-entry-id={entry.id}>
-                          {!entry.fromSelf ? (
+                          {!renderedEntry.fromSelf ? (
                             <span className={avatarClassName} aria-hidden="true">
                               {actorIdentity.avatarLabel}
                             </span>
@@ -2345,31 +2998,46 @@ export function SnapLinkStage({
                                     ].filter(Boolean).join(' ')}
                                   >
                                     {actorIdentity.badgeLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                            {renderedEntry.entryType === 'text' ? (
+                              <div
+                                className={`dd-snaplink__bubble-shell${isRecallingTextEntry ? ' is-recalling' : ''}`}
+                                data-recall-phase={isRecallingTextEntry ? 'animating' : recallState?.phase}
+                              >
+                                <div
+                                  className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnlyMessage ? ' is-image-only' : ''}`}
+                                  onClick={handleRichBubbleClick}
+                                  onContextMenu={(event) => openMessageContextMenu(event, renderedEntry, actorIdentity.displayName)}
+                                  dangerouslySetInnerHTML={{
+                                    __html: isBotMessage
+                                      ? sanitizeBotReplyHtml(renderedEntry.text)
+                                      : sanitizeRichTextHtml(renderedEntry.text),
+                                  }}
+                                />
+                                {isRecallingTextEntry ? (
+                                  <span className="dd-snaplink__recall-particles" aria-hidden="true">
+                                    {snapLinkRecallParticleIndexes.map((particleIndex) => (
+                                      <span
+                                        key={`${entry.id}-recall-particle-${particleIndex.toString()}`}
+                                        style={getSnapLinkRecallParticleStyle(particleIndex)}
+                                      />
+                                    ))}
                                   </span>
                                 ) : null}
                               </div>
-                            ) : null}
-                            {entry.entryType === 'text' ? (
-                              <div
-                                className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnlyMessage ? ' is-image-only' : ''}`}
-                                onClick={handleRichBubbleClick}
-                                onContextMenu={(event) => openMessageContextMenu(event, entry, actorIdentity.displayName)}
-                                dangerouslySetInnerHTML={{
-                                  __html: isBotMessage
-                                    ? sanitizeBotReplyHtml(entry.text)
-                                    : sanitizeRichTextHtml(entry.text),
-                                }}
-                              />
                             ) : (
-                              renderFileCard(entry.file)
+                              renderFileCard(renderedEntry.file)
                             )}
                             {showMessageTime ? (
                               <span className="dd-snaplink__message-time">
-                                {formatMessageClock(entry.createdAt)}
+                                {formatMessageClock(renderedEntry.createdAt)}
                               </span>
                             ) : null}
                           </div>
-                          {entry.fromSelf ? (
+                          {renderedEntry.fromSelf ? (
                             <span className={avatarClassName} aria-hidden="true">
                               {actorIdentity.avatarLabel}
                             </span>
@@ -2582,18 +3250,25 @@ export function SnapLinkStage({
       </section>
       {imagePreview && createPortal(
         <div
-          className={`dd-image-preview-dialog${isImagePreviewZoomed ? ' is-zoomed' : ''}`}
+          className={[
+            'dd-image-preview-dialog',
+            isImagePreviewZoomed ? 'is-zoomed' : '',
+            isImagePreviewReady ? 'is-ready' : '',
+            isImagePreviewDragging ? 'is-panning' : '',
+          ].filter(Boolean).join(' ')}
           role="dialog"
           aria-modal="true"
           aria-label="图片预览"
+          ref={imagePreviewDialogRef}
         >
           <button
             type="button"
             className="dd-image-preview-dialog__backdrop"
-            aria-label="关闭图片预览"
-            onClick={closeImagePreview}
+            aria-label={isImagePreviewZoomed ? '退出图片放大' : '关闭图片预览'}
+            onClick={handleImagePreviewBlankClick}
+            ref={imagePreviewBackdropRef}
           />
-          <div className="dd-image-preview-dialog__panel">
+          <div className="dd-image-preview-dialog__panel" ref={imagePreviewPanelRef}>
             <div className="dd-image-preview-dialog__titlebar">
               <span>{imagePreview.alt}</span>
               <button
@@ -2605,14 +3280,25 @@ export function SnapLinkStage({
                 ×
               </button>
             </div>
-            <div className="dd-image-preview-dialog__body">
+            <div className="dd-image-preview-dialog__body" onClick={handleImagePreviewBodyClick}>
               <button
                 type="button"
                 className="dd-image-preview-dialog__image-button"
                 aria-label={isImagePreviewZoomed ? '缩小图片' : '放大图片'}
-                onClick={() => setIsImagePreviewZoomed((current) => !current)}
+                onClick={handleImagePreviewImageClick}
+                onPointerDown={handleImagePreviewPointerDown}
+                onPointerMove={handleImagePreviewPointerMove}
+                onPointerUp={endImagePreviewDrag}
+                onPointerCancel={endImagePreviewDrag}
+                ref={imagePreviewImageButtonRef}
               >
-                <img src={imagePreview.src} alt={imagePreview.alt} />
+                <img
+                  ref={imagePreviewImageRef}
+                  src={imagePreview.src}
+                  alt={imagePreview.alt}
+                  draggable={false}
+                  style={imagePreviewImageStyle}
+                />
               </button>
             </div>
           </div>

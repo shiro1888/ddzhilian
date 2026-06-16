@@ -1943,7 +1943,7 @@ export function ImageGenerationStage({
       {imagePreview
         ? createPortal(
             <div
-              className={`dd-image-preview-dialog${isImagePreviewZoomed ? ' is-zoomed' : ''}${imagePreview.mode === 'panorama' ? ' is-panorama' : ''}`}
+              className={`dd-image-preview-dialog dd-image-preview-dialog--css-animated${isImagePreviewZoomed ? ' is-zoomed' : ''}${imagePreview.mode === 'panorama' ? ' is-panorama' : ''}`}
               role="dialog"
               aria-modal="true"
               aria-label={imagePreview.mode === 'panorama' ? '360 图片预览' : '图片预览'}

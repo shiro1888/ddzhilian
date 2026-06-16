@@ -993,6 +993,32 @@
   display: grid;
   place-items: center;
   padding: 20px;
+  perspective: 1100px;
+  perspective-origin: center center;
+}
+
+@keyframes dd-image-preview-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dd-image-preview-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+    filter: blur(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
 }
 
 .dd-image-preview-dialog__backdrop {
@@ -1009,6 +1035,19 @@
   display: block;
   max-width: calc(100vw - 40px);
   max-height: calc(100vh - 40px);
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+}
+
+/* Only the image-generation preview relies on CSS enter keyframes.
+   SnapLink uses GSAP for the same surface, so keeping animation opt-in avoids
+   the shared class names implying both paths use the CSS timeline. */
+.dd-image-preview-dialog--css-animated .dd-image-preview-dialog__backdrop {
+  animation: dd-image-preview-backdrop-enter 180ms ease-out;
+}
+
+.dd-image-preview-dialog--css-animated .dd-image-preview-dialog__panel {
+  animation: dd-image-preview-panel-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dd-image-preview-dialog.is-panorama .dd-image-preview-dialog__panel {
@@ -1056,7 +1095,8 @@
   place-items: center;
   max-width: calc(100vw - 40px);
   max-height: calc(100vh - 40px);
-  overflow: auto;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .dd-image-preview-dialog.is-panorama .dd-image-preview-dialog__body {
@@ -1073,6 +1113,8 @@
   border: 0;
   background: transparent;
   cursor: zoom-in;
+  overflow: visible;
+  touch-action: manipulation;
 }
 
 .dd-image-preview-dialog__image-button img {
@@ -1082,17 +1124,44 @@
   height: auto;
   max-height: calc(100vh - 40px);
   object-fit: contain;
+  transform-origin: center center;
+  user-select: none;
+}
+
+.dd-image-preview-dialog.is-ready .dd-image-preview-dialog__image-button img {
+  transition: transform 240ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+
+.dd-image-preview-dialog.is-panning .dd-image-preview-dialog__image-button img {
+  transition: none;
+}
+
+.dd-image-preview-dialog.is-zoomed .dd-image-preview-dialog__panel,
+.dd-image-preview-dialog.is-zoomed .dd-image-preview-dialog__body {
+  width: calc(100vw - 40px);
+  height: calc(100dvh - 40px);
+  max-width: calc(100vw - 40px);
+  max-height: calc(100dvh - 40px);
 }
 
 .dd-image-preview-dialog.is-zoomed .dd-image-preview-dialog__image-button {
-  max-width: none;
-  max-height: none;
-  cursor: zoom-out;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dd-image-preview-dialog.is-zoomed .dd-image-preview-dialog__image-button:active {
+  cursor: grabbing;
 }
 
 .dd-image-preview-dialog.is-zoomed .dd-image-preview-dialog__image-button img {
-  max-width: none;
-  max-height: none;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-image-preview-dialog--css-animated .dd-image-preview-dialog__backdrop,
+  .dd-image-preview-dialog--css-animated .dd-image-preview-dialog__panel {
+    animation: none;
+  }
 }
 
 .dd-panorama-viewer {
@@ -9191,6 +9260,10 @@
   will-change: transform;
 }
 
+.dd-snaplink__row.is-recalling {
+  will-change: opacity;
+}
+
 .dd-snaplink__message-main {
   display: flex;
   flex-direction: column;
@@ -9202,6 +9275,16 @@
 
 .dd-snaplink__row.is-self .dd-snaplink__message-main {
   align-items: flex-end;
+}
+
+.dd-snaplink__bubble-shell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.dd-snaplink__bubble-shell.is-recalling {
+  isolation: isolate;
 }
 
 .dd-snaplink__sender-meta {
@@ -9316,6 +9399,77 @@
   border: 1px solid color-mix(in srgb, var(--snap-theme-ai) 70%, #3b82f6);
   background: var(--snap-theme-ai);
   color: var(--snap-theme-ai-text);
+}
+
+.dd-snaplink__bubble-shell.is-recalling .dd-snaplink__bubble,
+.dd-snaplink__row.is-recalling > .dd-snaplink__message-main > .dd-snaplink__bubble {
+  will-change: transform, opacity, filter, clip-path;
+}
+
+.dd-snaplink__row.is-recalling .dd-snaplink__sender-meta,
+.dd-snaplink__row.is-recalling .dd-snaplink__message-time,
+.dd-snaplink__row.is-recalling .dd-snaplink__avatar {
+  will-change: transform, opacity, filter;
+}
+
+.dd-snaplink__recall-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+  border-radius: inherit;
+  color: var(--recall-ink-color, currentColor);
+}
+
+.dd-snaplink__row.is-self .dd-snaplink__recall-particles {
+  --recall-bubble-color: var(--snap-theme-self);
+  --recall-ink-color: var(--snap-theme-self-text);
+}
+
+.dd-snaplink__row.is-peer .dd-snaplink__recall-particles {
+  --recall-bubble-color: var(--snap-theme-peer);
+  --recall-ink-color: var(--snap-theme-peer-text);
+}
+
+.dd-snaplink__row.is-bot .dd-snaplink__recall-particles {
+  --recall-bubble-color: var(--snap-theme-ai);
+  --recall-ink-color: var(--snap-theme-ai-text);
+}
+
+.dd-snaplink__recall-particles span {
+  --recall-particle-size: 3px;
+  --recall-particle-left: 50%;
+  --recall-particle-top: 50%;
+  --recall-particle-dx: 34px;
+  --recall-particle-dy: 0px;
+  --recall-particle-fill: color-mix(in srgb, var(--recall-bubble-color, currentColor) 86%, white 14%);
+  position: absolute;
+  left: var(--recall-particle-left);
+  top: var(--recall-particle-top);
+  width: var(--recall-particle-size);
+  height: var(--recall-particle-size);
+  margin-left: calc(var(--recall-particle-size) * -0.5);
+  margin-top: calc(var(--recall-particle-size) * -0.5);
+  border-radius: 1.5px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 48%),
+    var(--recall-particle-fill);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--recall-particle-fill) 44%, transparent);
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.dd-snaplink__recall-particles span:nth-child(3n) {
+  --recall-particle-fill: color-mix(in srgb, var(--recall-ink-color, currentColor) 82%, var(--recall-bubble-color, transparent) 18%);
+}
+
+.dd-snaplink__recall-particles span:nth-child(5n) {
+  border-radius: 999px;
+}
+
+.dd-snaplink__recall-particles span:nth-child(7n) {
+  --recall-particle-fill: color-mix(in srgb, var(--recall-bubble-color, currentColor) 72%, var(--recall-ink-color, white) 28%);
 }
 
 .dd-snaplink__thinking {
@@ -10464,6 +10618,45 @@
   }
 }
 
+@keyframes dd-snaplink-recall-bubble {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+    clip-path: inset(0 0 0 0 round 18px);
+  }
+
+  42% {
+    opacity: 0.96;
+    transform: translate3d(10px, -1px, 0) scale(0.985);
+    filter: blur(0.4px);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(34px, 0, 0) scale(0.92);
+    filter: blur(7px);
+    clip-path: inset(0 0 0 94% round 18px);
+  }
+}
+
+@keyframes dd-snaplink-recall-particle {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.2);
+  }
+
+  16% {
+    opacity: 0.94;
+    transform: translate3d(calc(var(--recall-particle-dx) * 0.14), calc(var(--recall-particle-dy) * 0.14), 0) scale(0.92);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--recall-particle-dx), var(--recall-particle-dy), 0) scale(0.1);
+  }
+}
+
 @keyframes dd-snaplink-drag-overlay-in {
   from {
     opacity: 0;
@@ -10482,6 +10675,12 @@
   .dd-snaplink__drag-overlay,
   .dd-ai-chat__drag-overlay,
   .dd-snaplink__row.is-new-outgoing,
+  .dd-snaplink__bubble-shell.is-recalling .dd-snaplink__bubble,
+  .dd-snaplink__row.is-recalling > .dd-snaplink__message-main > .dd-snaplink__bubble,
+  .dd-snaplink__row.is-recalling .dd-snaplink__sender-meta,
+  .dd-snaplink__row.is-recalling .dd-snaplink__message-time,
+  .dd-snaplink__row.is-recalling .dd-snaplink__avatar,
+  .dd-snaplink__recall-particles span,
   .dd-ai-chat__message.is-new-message {
       animation: none;
       transition: none;

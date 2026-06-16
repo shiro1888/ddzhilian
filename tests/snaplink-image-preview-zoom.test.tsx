@@ -1,0 +1,226 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SnapLinkStage } from '@/app/components/SnapLinkStage'
+import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
+
+const gsapMock = vi.hoisted(() => {
+  const context = vi.fn((callback: () => void) => {
+    callback()
+    return { revert: vi.fn() }
+  })
+  const timelineTo = vi.fn()
+  const timeline = vi.fn((options?: { onComplete?: () => void }) => {
+    const timelineApi = {
+      to: vi.fn((...args: unknown[]) => {
+        timelineTo(...args)
+        return timelineApi
+      }),
+    }
+
+    queueMicrotask(() => {
+      options?.onComplete?.()
+    })
+
+    return timelineApi
+  })
+  const set = vi.fn()
+  const to = vi.fn()
+  const fromTo = vi.fn((_target: unknown, _fromVars: unknown, toVars?: { onComplete?: () => void }) => {
+    toVars?.onComplete?.()
+  })
+  const killTweensOf = vi.fn()
+
+  return {
+    context,
+    timeline,
+    timelineTo,
+    set,
+    to,
+    fromTo,
+    killTweensOf,
+  }
+})
+
+vi.mock('gsap', () => ({
+  default: gsapMock,
+}))
+
+const noop = vi.fn()
+
+function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkStageProps {
+  return {
+    isDragging: false,
+    activeView: 'conversation',
+    deviceId: 'device-self',
+    deviceName: 'windows-SELF',
+    selectedRoomId: null,
+    selectedConversationName: '设备对话',
+    activeTransferLabel: '',
+    roomListItems: [],
+    onlineDeviceItems: [],
+    chatDraft: '',
+    composerImageDrafts: [],
+    fileInputId: 'file-input',
+    isSendDisabled: true,
+    isAiGenerating: false,
+    aiGeneratingRoomId: null,
+    aiQuotaLabel: '',
+    aiModelOptions: [],
+    selectedAiModel: '',
+    selectedAiModelLabel: '默认模型',
+    unifiedConversationEntries: [],
+    fileConversationEmptyState: '暂无内容',
+    sharedMediaEntries: [],
+    sharedFileEntries: [],
+    sharedLinkEntries: [],
+    localError: null,
+    errorMessage: null,
+    aiChatElement: <div>AI</div>,
+    imageElement: <div>Image</div>,
+    adminElement: <div>Admin</div>,
+    commandElement: <div>Command</div>,
+    onOpenRoomConversation: noop,
+    onStartPrivateChat: noop,
+    onDeviceNameChange: noop,
+    onOpenRoomHome: noop,
+    onOpenAiChatView: noop,
+    onOpenCommandView: noop,
+    onChatDraftChange: noop,
+    onAiModelChange: noop,
+    onPastedImageSelection: noop,
+    onComposerImageRemove: noop,
+    onDirectFileSelection: noop,
+    onSendText: noop,
+    onRecallText: noop,
+    onRecallFile: noop,
+    onLoadOlderRoomHistory: noop,
+    canRecallAnyMessage: false,
+    onRetryTransfer: noop,
+    onCancelTransfer: noop,
+    onDragEnter: noop,
+    onDragOver: noop,
+    onDragLeave: noop,
+    onDrop: noop,
+    ...overrides,
+  }
+}
+
+describe('SnapLinkStage image preview zoom', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('deforms the whole preview card without clipping and keeps zoom as a scale transform', async () => {
+    render(
+      <SnapLinkStage
+        {...createBaseProps({
+          selectedRoomId: 'ROOM123',
+          selectedConversationName: '世界对话 1',
+          activeTransferLabel: '世界对话 1 · 已连接',
+          roomListItems: [
+            {
+              roomId: 'ROOM123',
+              title: '世界对话 1',
+              previewText: '[图片] sample.png',
+              updatedAt: '2026-06-16T10:00:00.000Z',
+              updatedAtLabel: '刚刚',
+              isPublic: true,
+              publicIndex: 1,
+              memberCount: 2,
+              onlineCount: 1,
+              status: 'connected',
+              pinned: false,
+              unreadCount: 0,
+            },
+          ],
+          unifiedConversationEntries: [
+            {
+              id: 'text-image-1',
+              entryType: 'text',
+              sessionId: 'session-1',
+              fromSelf: false,
+              senderName: 'windows-PEER',
+              createdAt: '2026-06-16T10:00:00.000Z',
+              text: '<img src="https://example.com/sample.png" alt="preview sample">',
+            },
+          ],
+        })}
+      />,
+    )
+
+    const inlineImage = await screen.findByAltText('preview sample')
+    fireEvent.click(inlineImage)
+
+    const previewZoomButton = await screen.findByRole('button', { name: '放大图片' })
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: '图片预览' })).toHaveClass('is-ready')
+    })
+
+    const timelineCallsAfterOpen = gsapMock.timeline.mock.calls.length
+    expect(timelineCallsAfterOpen).toBe(1)
+
+    const dialog = screen.getByRole('dialog', { name: '图片预览' })
+    const panel = dialog.querySelector('.dd-image-preview-dialog__panel')
+    const previewImage = previewZoomButton.querySelector('img')
+    if (!(panel instanceof HTMLElement) || !(previewImage instanceof HTMLImageElement)) {
+      throw new Error('Expected image preview panel and image to be mounted')
+    }
+
+    const cardPerspectiveTween = gsapMock.timelineTo.mock.calls.some(([target, vars]) => (
+      target === panel &&
+      typeof vars === 'object' &&
+      vars !== null &&
+      'rotationY' in vars &&
+      'skewY' in vars
+    ))
+    const cardInitialSet = gsapMock.set.mock.calls.find(([target, vars]) => (
+      target === panel &&
+      typeof vars === 'object' &&
+      vars !== null &&
+      'rotationY' in vars &&
+      'skewY' in vars
+    ))
+    const childPerspectiveTween = gsapMock.timelineTo.mock.calls.some(([target, vars]) => (
+      (target === previewZoomButton || target === previewImage) &&
+      typeof vars === 'object' &&
+      vars !== null &&
+      ('rotationY' in vars || 'skewY' in vars || 'clipPath' in vars)
+    ))
+    const previewClipPathTween = gsapMock.timelineTo.mock.calls.some(([, vars]) => (
+      typeof vars === 'object' &&
+      vars !== null &&
+      'clipPath' in vars
+    ))
+    const previewClipPathSet = gsapMock.set.mock.calls.some(([, vars]) => (
+      typeof vars === 'object' &&
+      vars !== null &&
+      (
+        'clipPath' in vars ||
+        (typeof Reflect.get(vars, 'clearProps') === 'string' && Reflect.get(vars, 'clearProps').includes('clipPath'))
+      )
+    ))
+
+    expect(cardPerspectiveTween).toBe(true)
+    expect(cardInitialSet?.[1]).toMatchObject({
+      rotationY: 14,
+      skewY: -3,
+      transformOrigin: 'right center',
+    })
+    expect(childPerspectiveTween).toBe(false)
+    expect(previewClipPathTween).toBe(false)
+    expect(previewClipPathSet).toBe(false)
+
+    fireEvent.click(previewZoomButton)
+
+    expect(gsapMock.timeline).toHaveBeenCalledTimes(timelineCallsAfterOpen)
+    expect(screen.getByRole('button', { name: '缩小图片' })).toBe(previewZoomButton)
+    expect(previewZoomButton.querySelector('img')).toHaveStyle({
+      transform: 'translate3d(0.0px, 0.0px, 0) scale(1.85)',
+    })
+  })
+})

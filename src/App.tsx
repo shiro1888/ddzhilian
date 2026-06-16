@@ -7,6 +7,7 @@ import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { WebCommandStage } from './app/components/WebCommandStage'
+import { selectComposerImagePasteFiles } from './app/composer-image-paste'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
   ComposerImageDraft,
@@ -237,14 +238,8 @@ function extractAiChatImagesFromRichText(value: string): AiChatImageInput[] {
   return images
 }
 
-function isSupportedChatInlineImage(file: File) {
-  const mimeType = normalizeAiChatImageMimeType(file.type)
-  return Boolean(mimeType && AI_CHAT_ALLOWED_IMAGE_TYPES.has(mimeType))
-}
-
 const AI_CHAT_IMAGE_MAX_COUNT = 4
 const AI_CHAT_ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-const CHAT_INLINE_IMAGE_MAX_BYTES = 4 * 1024 * 1024
 
 function isAiQuotaPrompt(value: string) {
   return /(余额|额度|quota|balance)/i.test(value.trim())
@@ -1327,27 +1322,19 @@ function App() {
       return
     }
 
-    const remainingSlots = Math.max(0, AI_CHAT_IMAGE_MAX_COUNT - composerImageDrafts.length)
+    const {
+      remainingSlots,
+      selectedFiles,
+      skippedCount,
+    } = selectComposerImagePasteFiles(files, composerImageDrafts.length, AI_CHAT_IMAGE_MAX_COUNT)
     if (remainingSlots === 0) {
       setLocalError(`一次最多暂存 ${AI_CHAT_IMAGE_MAX_COUNT.toString()} 张图片。`)
       return
     }
 
-    const selectedFiles = files.slice(0, remainingSlots)
-    const acceptedFiles = selectedFiles.filter((file) =>
-      file.size <= CHAT_INLINE_IMAGE_MAX_BYTES &&
-      isSupportedChatInlineImage(file),
-    )
-    const skippedCount = files.length - acceptedFiles.length
-
-    if (acceptedFiles.length === 0) {
-      setLocalError('粘贴图片需为 PNG、JPEG、WebP 或 GIF，且不能超过 4 MiB；其他图片请改用文件发送。')
-      return
-    }
-
     try {
       const drafts = await Promise.all(
-        acceptedFiles.map(async (file) => ({
+        selectedFiles.map(async (file) => ({
           id: crypto.randomUUID(),
           name: file.name || '粘贴图片',
           size: file.size,
@@ -1362,7 +1349,7 @@ function App() {
       ].slice(0, AI_CHAT_IMAGE_MAX_COUNT))
       setLocalError(
         skippedCount > 0
-          ? `已暂存 ${acceptedFiles.length.toString()} 张图片，另有 ${skippedCount.toString()} 张因数量或大小限制未加入。`
+          ? `已暂存 ${selectedFiles.length.toString()} 张图片，另有 ${skippedCount.toString()} 张因一次最多暂存 ${AI_CHAT_IMAGE_MAX_COUNT.toString()} 张未加入。`
           : null,
       )
     } catch (error) {
