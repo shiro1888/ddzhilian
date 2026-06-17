@@ -351,6 +351,9 @@ function App() {
     saveAiChatConversations,
     deleteAiChatConversation,
     generateImage,
+    startOcrJob,
+    listOcrHistory,
+    deleteOcrHistory,
     getImageQuota,
     listImageHistory,
     getAiQuota,
@@ -1679,6 +1682,9 @@ function App() {
       onDirectFileSelection={(files) => {
         void handleSendFilesToCurrentConversation(files)
       }}
+      onStartOcrJob={startOcrJob}
+      onListOcrHistory={listOcrHistory}
+      onDeleteOcrHistory={deleteOcrHistory}
       onSendText={(quoteHtml) => {
         void handleSendText(quoteHtml)
       }}

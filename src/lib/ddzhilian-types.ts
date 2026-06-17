@@ -488,6 +488,34 @@ export type AiImageJobResponse = {
   result?: AiImageResponse
 }
 
+export type OcrJobStatus = 'queued' | 'running' | 'complete' | 'failed'
+
+export type OcrLine = {
+  text: string
+  confidence?: number
+  box?: number[][]
+}
+
+export type OcrJobResponse = {
+  jobId: string
+  status: OcrJobStatus
+  fileName?: string
+  mimeType?: string
+  byteSize?: number
+  createdAt?: string
+  updatedAt?: string
+  expiresAt?: string
+  pollUrl?: string
+  text?: string
+  lines?: OcrLine[]
+  raw?: unknown
+  error?: string
+}
+
+export type OcrHistoryResponse = {
+  items: OcrJobResponse[]
+}
+
 export type AiImageHistoryItem = {
   generationId: string
   prompt: string

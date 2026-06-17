@@ -11,7 +11,8 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
+import { ScanText } from 'lucide-react'
 import gsap from 'gsap'
 import type {
   ComposerImageDraft,
@@ -21,8 +22,9 @@ import type {
   SharedContentTab,
   UnifiedConversationEntry,
 } from '../types'
-import type { AiModelOption } from '../../lib/ddzhilian-types'
+import type { AiModelOption, OcrHistoryResponse, OcrJobResponse, OcrLine } from '../../lib/ddzhilian-types'
 import {
+  collectDroppedFiles,
   extractPlainTextFromRichText,
   formatFileSize,
   openHtmlDocumentFullscreenPreview,
@@ -91,6 +93,38 @@ type SnapLinkImagePreviewDragState = {
   startClientY: number
   startX: number
   startY: number
+}
+
+type SnapLinkOcrStatus = 'idle' | 'running' | 'complete' | 'failed'
+
+type SnapLinkOcrImageState = {
+  file: File
+  name: string
+  previewUrl: string
+}
+
+type SnapLinkOcrPreviewMetrics = {
+  width: number
+  height: number
+  offsetX: number
+  offsetY: number
+  scale: number
+  naturalWidth: number
+  naturalHeight: number
+}
+
+type SnapLinkOcrLineBounds = {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+type SnapLinkOcrOverlayBox = {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 const snapLinkQuickEmojis = [
@@ -249,6 +283,113 @@ function resolveSnapLinkApiBaseUrl() {
   return `${protocol}//${host}`
 }
 
+function formatSnapLinkOcrTime(value: string | undefined) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function getSnapLinkOcrStatusLabel(status: SnapLinkOcrStatus) {
+  switch (status) {
+    case 'running':
+      return '识别中'
+    case 'complete':
+      return '识别完成'
+    case 'failed':
+      return '识别失败'
+    case 'idle':
+      return '待识别'
+  }
+}
+
+function getSnapLinkOcrText(job: OcrJobResponse | null) {
+  return job?.text?.trim() ?? ''
+}
+
+function isSupportedSnapLinkOcrFile(file: Pick<File, 'name' | 'type'>) {
+  const normalizedType = file.type.toLowerCase()
+  return (
+    ['image/png', 'image/jpeg', 'image/webp'].includes(normalizedType) ||
+    /\.(png|jpe?g|webp)$/i.test(file.name)
+  )
+}
+
+function hasSnapLinkDraggedFiles(event: DragEvent<HTMLElement>) {
+  return event.dataTransfer.files.length > 0 || Array.from(event.dataTransfer.types).includes('Files')
+}
+
+function getSnapLinkOcrHistorySummary(job: OcrJobResponse) {
+  const text = getSnapLinkOcrText(job) || job.error || '无文字结果'
+  return text.replace(/\s+/g, ' ').slice(0, 80)
+}
+
+function getSnapLinkOcrLineBounds(line: OcrLine): SnapLinkOcrLineBounds | null {
+  if (!line.box || line.box.length === 0) {
+    return null
+  }
+
+  const points = line.box
+    .map((point) => {
+      const [x, y] = point
+      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
+    })
+    .filter((point): point is { x: number; y: number } => Boolean(point))
+
+  if (points.length < 2) {
+    return null
+  }
+
+  const left = Math.min(...points.map((point) => point.x))
+  const right = Math.max(...points.map((point) => point.x))
+  const top = Math.min(...points.map((point) => point.y))
+  const bottom = Math.max(...points.map((point) => point.y))
+
+  if (right <= left || bottom <= top) {
+    return null
+  }
+
+  return { left, top, right, bottom }
+}
+
+function mapSnapLinkOcrBoundsToPreview(
+  bounds: SnapLinkOcrLineBounds,
+  metrics: SnapLinkOcrPreviewMetrics,
+): SnapLinkOcrOverlayBox | null {
+  const isNormalized = bounds.right <= 1 && bounds.bottom <= 1
+  const left = isNormalized ? bounds.left * metrics.naturalWidth : bounds.left
+  const right = isNormalized ? bounds.right * metrics.naturalWidth : bounds.right
+  const top = isNormalized ? bounds.top * metrics.naturalHeight : bounds.top
+  const bottom = isNormalized ? bounds.bottom * metrics.naturalHeight : bounds.bottom
+
+  const clampedLeft = Math.max(0, Math.min(metrics.naturalWidth, left))
+  const clampedRight = Math.max(0, Math.min(metrics.naturalWidth, right))
+  const clampedTop = Math.max(0, Math.min(metrics.naturalHeight, top))
+  const clampedBottom = Math.max(0, Math.min(metrics.naturalHeight, bottom))
+
+  if (clampedRight <= clampedLeft || clampedBottom <= clampedTop) {
+    return null
+  }
+
+  return {
+    left: metrics.offsetX + clampedLeft * metrics.scale,
+    top: metrics.offsetY + clampedTop * metrics.scale,
+    width: (clampedRight - clampedLeft) * metrics.scale,
+    height: (clampedBottom - clampedTop) * metrics.scale,
+  }
+}
+
 export type SnapLinkStageProps = {
   isDragging: boolean
   activeView: SnapLinkActiveView
@@ -293,6 +434,9 @@ export type SnapLinkStageProps = {
   onPastedImageSelection: (files: File[]) => void
   onComposerImageRemove: (id: string) => void
   onDirectFileSelection: (files: File[]) => void
+  onStartOcrJob: (file: File) => Promise<OcrJobResponse>
+  onListOcrHistory: () => Promise<OcrHistoryResponse>
+  onDeleteOcrHistory: (jobId: string) => Promise<void>
   onSendText: (quoteHtml?: string) => void
   onRecallText: (entryId: string) => Promise<void> | void
   onRecallFile: (historyId: string) => Promise<void> | void
@@ -804,6 +948,9 @@ export function SnapLinkStage({
   onPastedImageSelection,
   onComposerImageRemove,
   onDirectFileSelection,
+  onStartOcrJob,
+  onListOcrHistory,
+  onDeleteOcrHistory,
   onSendText,
   onRecallText,
   onRecallFile,
@@ -825,6 +972,17 @@ export function SnapLinkStage({
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false)
   const [isPrivateDevicePanelOpen, setIsPrivateDevicePanelOpen] = useState(false)
+  const [isOcrPanelOpen, setIsOcrPanelOpen] = useState(false)
+  const [ocrStatus, setOcrStatus] = useState<SnapLinkOcrStatus>('idle')
+  const [ocrImage, setOcrImage] = useState<SnapLinkOcrImageState | null>(null)
+  const [ocrJob, setOcrJob] = useState<OcrJobResponse | null>(null)
+  const [ocrError, setOcrError] = useState<string | null>(null)
+  const [ocrHistory, setOcrHistory] = useState<OcrJobResponse[]>([])
+  const [ocrHistoryError, setOcrHistoryError] = useState<string | null>(null)
+  const [isOcrHistoryLoading, setIsOcrHistoryLoading] = useState(false)
+  const [deletingOcrJobId, setDeletingOcrJobId] = useState<string | null>(null)
+  const [ocrPreviewMetrics, setOcrPreviewMetrics] = useState<SnapLinkOcrPreviewMetrics | null>(null)
+  const [isOcrDropTarget, setIsOcrDropTarget] = useState(false)
   const [privateDeviceSearch, setPrivateDeviceSearch] = useState('')
   const [themeColors, setThemeColors] = useState<SnapLinkThemeColors>(() => readStoredSnapLinkThemeColors())
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
@@ -875,6 +1033,14 @@ export function SnapLinkStage({
   const botTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botPanelRef = useRef<HTMLDivElement | null>(null)
   const botMentionTriggerRangeRef = useRef<BotMentionTriggerRange | null>(null)
+  const ocrTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const ocrPanelRef = useRef<HTMLDivElement | null>(null)
+  const ocrFileInputRef = useRef<HTMLInputElement | null>(null)
+  const ocrImageStageRef = useRef<HTMLDivElement | null>(null)
+  const ocrPreviewImageRef = useRef<HTMLImageElement | null>(null)
+  const ocrImagePreviewUrlRef = useRef<string | null>(null)
+  const ocrRequestSeqRef = useRef(0)
+  const ocrDropDepthRef = useRef(0)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const themeTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -1009,6 +1175,42 @@ export function SnapLinkStage({
     ),
     [conversationEntriesWithRecallGhosts, messageRenderCount],
   )
+  const ocrPanelId = `${fileInputId}-ocr-panel`
+  const ocrResultText = getSnapLinkOcrText(ocrJob)
+  const hasOcrResultText = ocrResultText.length > 0
+  const canRetryOcr = Boolean(ocrImage) && ocrStatus !== 'running'
+  const ocrVisualLines = useMemo(
+    () =>
+      (ocrJob?.lines ?? [])
+        .map((line, index) => {
+          const text = line.text.trim()
+          const bounds = getSnapLinkOcrLineBounds(line)
+          return {
+            index,
+            text,
+            confidence: line.confidence,
+            overlayBox: bounds && ocrPreviewMetrics
+              ? mapSnapLinkOcrBoundsToPreview(bounds, ocrPreviewMetrics)
+              : null,
+          }
+        })
+        .filter((line) => line.text.length > 0),
+    [ocrJob?.lines, ocrPreviewMetrics],
+  )
+  const hasOcrVisualLines = ocrVisualLines.length > 0
+  const refreshOcrHistory = useCallback(async () => {
+    setIsOcrHistoryLoading(true)
+    setOcrHistoryError(null)
+
+    try {
+      const payload = await onListOcrHistory()
+      setOcrHistory(payload.items)
+    } catch (error) {
+      setOcrHistoryError(error instanceof Error ? error.message : 'OCR 历史加载失败。')
+    } finally {
+      setIsOcrHistoryLoading(false)
+    }
+  }, [onListOcrHistory])
 
   useEffect(() => {
     messageScrollRestoreRef.current = null
@@ -1332,6 +1534,115 @@ export function SnapLinkStage({
 
     syncSnapLinkComposerTextAreaHeight(input)
   }, [chatDraft])
+
+  useEffect(() => {
+    if (isOcrPanelOpen) {
+      void refreshOcrHistory()
+    }
+  }, [isOcrPanelOpen, refreshOcrHistory])
+
+  useEffect(() => {
+    if (!isOcrPanelOpen) {
+      ocrDropDepthRef.current = 0
+      setIsOcrDropTarget(false)
+    }
+  }, [isOcrPanelOpen])
+
+  const updateOcrPreviewMetrics = useCallback(() => {
+    const stage = ocrImageStageRef.current
+    const image = ocrPreviewImageRef.current
+    if (!stage || !image || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      setOcrPreviewMetrics(null)
+      return
+    }
+
+    const rect = stage.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      setOcrPreviewMetrics(null)
+      return
+    }
+
+    const scale = Math.min(rect.width / image.naturalWidth, rect.height / image.naturalHeight)
+    const displayWidth = image.naturalWidth * scale
+    const displayHeight = image.naturalHeight * scale
+    setOcrPreviewMetrics({
+      width: rect.width,
+      height: rect.height,
+      offsetX: (rect.width - displayWidth) / 2,
+      offsetY: (rect.height - displayHeight) / 2,
+      scale,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isOcrPanelOpen || !ocrImage) {
+      setOcrPreviewMetrics(null)
+      return undefined
+    }
+
+    updateOcrPreviewMetrics()
+
+    const stage = ocrImageStageRef.current
+    let observer: ResizeObserver | null = null
+    if (stage && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => updateOcrPreviewMetrics())
+      observer.observe(stage)
+    }
+    window.addEventListener('resize', updateOcrPreviewMetrics)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', updateOcrPreviewMetrics)
+    }
+  }, [isOcrPanelOpen, ocrImage, updateOcrPreviewMetrics])
+
+  useEffect(() => {
+    return () => {
+      if (ocrImagePreviewUrlRef.current) {
+        URL.revokeObjectURL(ocrImagePreviewUrlRef.current)
+        ocrImagePreviewUrlRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isOcrPanelOpen) {
+      return undefined
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (
+        ocrPanelRef.current?.contains(target) ||
+        ocrTriggerRef.current?.contains(target) ||
+        ocrFileInputRef.current?.contains(target)
+      ) {
+        return
+      }
+
+      setIsOcrPanelOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOcrPanelOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOcrPanelOpen])
 
   useEffect(() => {
     if (!isEmojiPickerOpen) {
@@ -1848,6 +2159,11 @@ export function SnapLinkStage({
 
   const commitComposerDraft = (nextDraft: string, caretPosition: number) => {
     draftValueRef.current = nextDraft
+    const input = inputRef.current
+    if (input && input.value !== nextDraft) {
+      input.value = nextDraft
+      syncSnapLinkComposerTextAreaHeight(input)
+    }
     onChatDraftChange(nextDraft)
 
     const triggerStart = findBotMentionTriggerStart(nextDraft, caretPosition)
@@ -1976,6 +2292,236 @@ export function SnapLinkStage({
 
     event.preventDefault()
     submitComposerDraft()
+  }
+
+  const clearOcrImagePreview = () => {
+    if (ocrImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(ocrImagePreviewUrlRef.current)
+      ocrImagePreviewUrlRef.current = null
+    }
+
+    setOcrImage(null)
+    setOcrPreviewMetrics(null)
+  }
+
+  const prepareOcrImagePreview = (file: File) => {
+    clearOcrImagePreview()
+    const previewUrl = URL.createObjectURL(file)
+    ocrImagePreviewUrlRef.current = previewUrl
+    setOcrImage({
+      file,
+      name: file.name || '待识别图片',
+      previewUrl,
+    })
+  }
+
+  const runOcrRecognition = async (file: File) => {
+    const requestSeq = ocrRequestSeqRef.current + 1
+    ocrRequestSeqRef.current = requestSeq
+    setOcrStatus('running')
+    setOcrJob(null)
+    setOcrError(null)
+
+    try {
+      const job = await onStartOcrJob(file)
+      if (ocrRequestSeqRef.current !== requestSeq) {
+        return
+      }
+
+      setOcrJob(job)
+      setOcrStatus(job.status === 'failed' ? 'failed' : job.status === 'complete' ? 'complete' : 'running')
+      setOcrError(job.status === 'failed' ? job.error ?? 'OCR 识别失败。' : null)
+      void refreshOcrHistory()
+    } catch (error) {
+      if (ocrRequestSeqRef.current !== requestSeq) {
+        return
+      }
+
+      setOcrStatus('failed')
+      setOcrError(error instanceof Error ? error.message : 'OCR 识别失败。')
+      void refreshOcrHistory()
+    }
+  }
+
+  const handleOcrTriggerClick = () => {
+    setIsOcrPanelOpen(true)
+    setIsEmojiPickerOpen(false)
+    setIsBotPanelOpen(false)
+    setIsThemePanelOpen(false)
+    botMentionTriggerRangeRef.current = null
+    if (!ocrJob && !ocrImage) {
+      setOcrStatus('idle')
+    }
+  }
+
+  const openOcrFilePicker = () => {
+    ocrFileInputRef.current?.click()
+  }
+
+  const handleOcrFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    setIsOcrPanelOpen(true)
+
+    if (!file) {
+      return
+    }
+
+    if (!isSupportedSnapLinkOcrFile(file)) {
+      setOcrStatus('failed')
+      setOcrError('只支持 PNG、JPEG 或 WebP 图片。')
+      return
+    }
+
+    setIsOcrDropTarget(false)
+    prepareOcrImagePreview(file)
+    void runOcrRecognition(file)
+  }
+
+  const handleOcrDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!hasSnapLinkDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    ocrDropDepthRef.current += 1
+    setIsOcrPanelOpen(true)
+    setIsOcrDropTarget(true)
+  }
+
+  const handleOcrDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!hasSnapLinkDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+    if (!isOcrDropTarget) {
+      setIsOcrDropTarget(true)
+    }
+  }
+
+  const handleOcrDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (!hasSnapLinkDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    ocrDropDepthRef.current = Math.max(0, ocrDropDepthRef.current - 1)
+    if (ocrDropDepthRef.current === 0) {
+      setIsOcrDropTarget(false)
+    }
+  }
+
+  const handleOcrDrop = async (event: DragEvent<HTMLElement>) => {
+    if (!hasSnapLinkDraggedFiles(event)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    ocrDropDepthRef.current = 0
+    setIsOcrDropTarget(false)
+    setIsOcrPanelOpen(true)
+
+    const files = await collectDroppedFiles(event.dataTransfer)
+    if (files.length === 0) {
+      return
+    }
+
+    const imageFile = files.find((file) => isSupportedSnapLinkOcrFile(file))
+    if (!imageFile) {
+      setOcrStatus('failed')
+      setOcrError('只支持 PNG、JPEG 或 WebP 图片。')
+      return
+    }
+
+    prepareOcrImagePreview(imageFile)
+    void runOcrRecognition(imageFile)
+  }
+
+  const insertOcrTextIntoComposer = (text: string) => {
+    const currentDraft = getComposerDraft()
+    const separator = currentDraft.trim() && !currentDraft.endsWith('\n') ? '\n' : ''
+    const nextDraft = `${currentDraft}${separator}${text}`
+
+    commitComposerDraft(nextDraft, nextDraft.length)
+    focusComposerInput(nextDraft.length)
+  }
+
+  const handleCopyOcrText = () => {
+    if (hasOcrResultText) {
+      void copyTextToClipboard(ocrResultText)
+    }
+  }
+
+  const handleInsertOcrText = () => {
+    if (hasOcrResultText) {
+      insertOcrTextIntoComposer(ocrResultText)
+    }
+  }
+
+  const handleSendOcrText = () => {
+    if (!hasOcrResultText) {
+      return
+    }
+
+    flushSync(() => {
+      commitComposerDraft(ocrResultText, ocrResultText.length)
+      setQuoteDraft(null)
+    })
+    setIsOcrPanelOpen(false)
+    window.requestAnimationFrame(() => {
+      armOutgoingEntryAnimation()
+      onSendText()
+    })
+  }
+
+  const handleRetryOcr = () => {
+    if (ocrImage?.file) {
+      void runOcrRecognition(ocrImage.file)
+    }
+  }
+
+  const handleClearOcr = () => {
+    ocrRequestSeqRef.current += 1
+    clearOcrImagePreview()
+    setOcrJob(null)
+    setOcrError(null)
+    setOcrStatus('idle')
+  }
+
+  const handleRestoreOcrHistoryItem = (job: OcrJobResponse) => {
+    ocrRequestSeqRef.current += 1
+    clearOcrImagePreview()
+    setOcrJob(job)
+    setOcrStatus(job.status === 'failed' ? 'failed' : job.status === 'complete' ? 'complete' : 'idle')
+    setOcrError(job.status === 'failed' ? job.error ?? 'OCR 识别失败。' : null)
+    setIsOcrPanelOpen(true)
+  }
+
+  const handleDeleteOcrHistoryItem = async (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    jobId: string,
+  ) => {
+    event.stopPropagation()
+    setDeletingOcrJobId(jobId)
+    setOcrHistoryError(null)
+
+    try {
+      await onDeleteOcrHistory(jobId)
+      setOcrHistory((previous) => previous.filter((item) => item.jobId !== jobId))
+      if (ocrJob?.jobId === jobId) {
+        handleClearOcr()
+      }
+    } catch (error) {
+      setOcrHistoryError(error instanceof Error ? error.message : 'OCR 历史删除失败。')
+    } finally {
+      setDeletingOcrJobId(null)
+    }
   }
 
   const openImagePreview = (
@@ -3139,6 +3685,25 @@ export function SnapLinkStage({
                   />
                 </label>
                 <button
+                  ref={ocrTriggerRef}
+                  type="button"
+                  className={`dd-snaplink__ocr${isOcrPanelOpen ? ' is-active' : ''}`}
+                  aria-label="识别图片文字"
+                  aria-expanded={isOcrPanelOpen}
+                  aria-controls={ocrPanelId}
+                  title="识别图片文字"
+                  onClick={handleOcrTriggerClick}
+                >
+                  <ScanText size={16} strokeWidth={2.1} aria-hidden="true" />
+                </button>
+                <input
+                  ref={ocrFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  hidden
+                  onChange={handleOcrFileSelection}
+                />
+                <button
                   ref={botTriggerRef}
                   type="button"
                   className={`dd-snaplink__bot${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
@@ -3256,6 +3821,178 @@ export function SnapLinkStage({
         </div>
       </main>
       </section>
+      {isOcrPanelOpen && createPortal(
+        <div
+          id={ocrPanelId}
+          ref={ocrPanelRef}
+          className="dd-ocr-panel"
+          role="dialog"
+          aria-label="图片文字识别"
+        >
+          <div className="dd-ocr-panel__titlebar">
+            <div>
+              <strong>图片文字识别</strong>
+              <span className={`dd-ocr-panel__status is-${ocrStatus}`} aria-live="polite">
+                {getSnapLinkOcrStatusLabel(ocrStatus)}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="dd-ocr-panel__close"
+              aria-label="关闭图片文字识别"
+              onClick={() => setIsOcrPanelOpen(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="dd-ocr-panel__body">
+            <div
+              className={`dd-ocr-panel__preview${isOcrDropTarget ? ' is-drop-target' : ''}`}
+              onDragEnter={handleOcrDragEnter}
+              onDragOver={handleOcrDragOver}
+              onDragLeave={handleOcrDragLeave}
+              onDrop={(event) => {
+                void handleOcrDrop(event)
+              }}
+            >
+              {ocrImage ? (
+                <div className="dd-ocr-panel__image-stage" ref={ocrImageStageRef}>
+                  <img
+                    ref={ocrPreviewImageRef}
+                    src={ocrImage.previewUrl}
+                    alt={ocrImage.name}
+                    onLoad={updateOcrPreviewMetrics}
+                  />
+                  {ocrVisualLines.map((line) => (
+                    line.overlayBox ? (
+                      <div
+                        key={`ocr-overlay-${line.index.toString()}`}
+                        className="dd-ocr-panel__overlay-box"
+                        style={{
+                          left: `${line.overlayBox.left.toString()}px`,
+                          top: `${line.overlayBox.top.toString()}px`,
+                          width: `${line.overlayBox.width.toString()}px`,
+                          height: `${line.overlayBox.height.toString()}px`,
+                        }}
+                      >
+                        <span>文本</span>
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="dd-ocr-panel__empty-preview"
+                  onClick={openOcrFilePicker}
+                >
+                  待选择图片
+                </button>
+              )}
+              {isOcrDropTarget ? (
+                <div className="dd-ocr-panel__drop-hint" role="status" aria-live="polite">
+                  <strong>拖动图片到这里</strong>
+                  <span>松开后开始识别 PNG、JPEG、WebP</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="dd-ocr-panel__result">
+              <div className="dd-ocr-panel__meta">
+                <span>{ocrImage?.name ?? ocrJob?.fileName ?? '未选择图片'}</span>
+                {ocrJob?.updatedAt ? <time>{formatSnapLinkOcrTime(ocrJob.updatedAt)}</time> : null}
+              </div>
+              {ocrStatus === 'running' ? (
+                <div className="dd-ocr-panel__running">
+                  <span />
+                  <span>识别中</span>
+                </div>
+              ) : null}
+              {ocrError ? <p className="dd-ocr-panel__error">{ocrError}</p> : null}
+              {hasOcrVisualLines ? (
+                <div className="dd-ocr-panel__line-list" aria-label="OCR 识别文本">
+                  {ocrVisualLines.map((line) => (
+                    <div key={`ocr-line-${line.index.toString()}`} className="dd-ocr-panel__line-box">
+                      <span>文本</span>
+                      <p>{line.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  readOnly
+                  value={ocrResultText}
+                  placeholder={ocrStatus === 'failed' ? '识别失败' : '识别完成后显示文本'}
+                  aria-label="OCR 识别文本"
+                />
+              )}
+              <div className="dd-ocr-panel__actions">
+                <button type="button" disabled={!hasOcrResultText} onClick={handleCopyOcrText}>
+                  复制文本
+                </button>
+                <button type="button" disabled={!hasOcrResultText} onClick={handleInsertOcrText}>
+                  插入输入框
+                </button>
+                <button type="button" disabled={!hasOcrResultText} onClick={handleSendOcrText}>
+                  发送到当前对话
+                </button>
+                <button type="button" disabled={!canRetryOcr} onClick={handleRetryOcr}>
+                  重新识别
+                </button>
+                <button type="button" onClick={handleClearOcr}>
+                  清除
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="dd-ocr-panel__history">
+            <div className="dd-ocr-panel__history-head">
+              <span>最近识别</span>
+              <button type="button" disabled={isOcrHistoryLoading} onClick={() => void refreshOcrHistory()}>
+                刷新
+              </button>
+            </div>
+            {ocrHistoryError ? <p className="dd-ocr-panel__history-error">{ocrHistoryError}</p> : null}
+            {isOcrHistoryLoading ? (
+              <div className="dd-ocr-panel__history-empty">加载中</div>
+            ) : ocrHistory.length > 0 ? (
+              <div className="dd-ocr-panel__history-list">
+                {ocrHistory.map((job) => (
+                  <div
+                    key={job.jobId}
+                    className="dd-ocr-panel__history-item"
+                  >
+                    <button
+                      type="button"
+                      className="dd-ocr-panel__history-main"
+                      onClick={() => handleRestoreOcrHistoryItem(job)}
+                    >
+                      <span>
+                        <strong>{job.fileName ?? 'OCR 记录'}</strong>
+                        <small>{formatSnapLinkOcrTime(job.createdAt)}</small>
+                      </span>
+                      <em>{getSnapLinkOcrHistorySummary(job)}</em>
+                    </button>
+                    <button
+                      type="button"
+                      className="dd-ocr-panel__history-delete"
+                      aria-label={`删除 ${job.fileName ?? 'OCR 记录'}`}
+                      disabled={deletingOcrJobId === job.jobId}
+                      onClick={(event) => {
+                        void handleDeleteOcrHistoryItem(event, job.jobId)
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dd-ocr-panel__history-empty">暂无记录</div>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
       {imagePreview && createPortal(
         <div
           className={[

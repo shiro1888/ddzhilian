@@ -22,6 +22,7 @@ The actual chat text and file bytes should move through WebRTC data channels bet
 - Supabase Auth account sessions for the image-generation route
 - Per-account image-generation history plus daily free and paid image quota counters stored in `user_profiles`
 - Account-based admin login and admin role management backed by Supabase Auth plus `admin_roles`
+- Public OCR job proxy backed by a local PaddleOCR service and short-lived JSON history
 
 ## LAN Discovery In This MVP
 
@@ -127,6 +128,12 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `CODEX_IMAGE_DAILY_FREE_QUOTA`: per-account free generated-image quota per refresh period, default `3`
 - `CODEX_IMAGE_QUOTA_RESET_HOUR`: quota refresh hour in the configured quota timezone, default `4`
 - `CODEX_IMAGE_QUOTA_TIMEZONE_OFFSET_MINUTES`: quota timezone offset from UTC in minutes, default `480` for UTC+8
+- `OCR_ENABLED`: set to `true` to expose the public `/api/ocr` job endpoints, default `false`
+- `OCR_BASE_URL`: backend-only PaddleOCR service base URL, default `http://127.0.0.1:8088`; the server calls `${OCR_BASE_URL}/ocr`
+- `OCR_REQUEST_TIMEOUT_MS`: OCR model request timeout, default `60000`
+- `OCR_MAX_UPLOAD_BYTES`: single OCR image upload cap, default `8388608`
+- `OCR_HISTORY_RETENTION_MS`: local OCR job-history retention, default 24 hours and capped at 24 hours
+- `OCR_MAX_JOBS`: maximum local OCR job records kept in `server/data/ocr/jobs.json`, default `200`
 
 ## History Cleanup
 
@@ -174,6 +181,10 @@ Public rooms do not have a separate cleanup policy. They use the same file-histo
 - `GET /api/ai/image/jobs/:jobId` (requires the account session cookie; polls the job until it returns the generated image or an error)
 - `GET /api/ai/image/history` (requires the account session cookie; returns the account's generated-image history)
 - `GET /api/ai/image/assets/:generationId/:index.png` (requires the account session cookie; streams the generated image file owned by the current account)
+- `POST /api/ocr` (public multipart endpoint accepting one `image` file and creating an OCR job when `OCR_ENABLED=true`)
+- `GET /api/ocr/jobs/:jobId` (public OCR job polling endpoint)
+- `GET /api/ocr/history` (public short-lived local OCR history)
+- `DELETE /api/ocr/history/:jobId` (public deletion for one local OCR history record)
 - `WS /ws`
 
 ## Resend API Smoke Test

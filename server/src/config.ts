@@ -190,6 +190,14 @@ export interface ServerConfig {
     quotaResetHour: number;
     quotaTimezoneOffsetMinutes: number;
   };
+  ocr: {
+    enabled: boolean;
+    baseUrl: string;
+    requestTimeoutMs: number;
+    maxUploadBytes: number;
+    historyRetentionMs: number;
+    maxJobs: number;
+  };
 }
 
 function readNumber(name: string, fallback: number) {
@@ -587,6 +595,17 @@ export function loadConfig(): ServerConfig {
         -12 * 60,
         14 * 60
       ),
+    },
+    ocr: {
+      enabled: readBoolean('OCR_ENABLED', false),
+      baseUrl: normalizeHttpBaseUrl(
+        process.env.OCR_BASE_URL || 'http://127.0.0.1:8088',
+        'http://127.0.0.1:8088'
+      ),
+      requestTimeoutMs: readIntegerInRange('OCR_REQUEST_TIMEOUT_MS', 60_000, 1000, 120_000),
+      maxUploadBytes: readIntegerInRange('OCR_MAX_UPLOAD_BYTES', 8 * 1024 * 1024, 1, 32 * 1024 * 1024),
+      historyRetentionMs: readIntegerInRange('OCR_HISTORY_RETENTION_MS', 24 * 60 * 60 * 1000, 60_000, maxHistoryRetentionMs),
+      maxJobs: readIntegerInRange('OCR_MAX_JOBS', 200, 10, 1000),
     },
   };
 }

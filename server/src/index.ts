@@ -53,6 +53,12 @@ import {
   type ImageGenerationRecord,
 } from './registry/image-generation-history-registry.js';
 import {
+  type OcrJobRecord,
+  type OcrJobResult,
+  type OcrLine,
+  OcrJobRegistry,
+} from './registry/ocr-job-registry.js';
+import {
   type ThemeSubmissionColors,
   type ThemeSubmissionInput,
   ThemeSubmissionRegistry,
@@ -255,6 +261,7 @@ type AiImageUpload = {
   mimeType: string;
   buffer: Buffer;
 };
+type OcrImageUpload = AiImageUpload;
 type AiImagePreparedRequest = {
   payload: AiImageRequestPayload;
   uploadedImages: AiImageUpload[];
@@ -350,6 +357,11 @@ const imageGenerationHistory = config.supabase
       imageGenerationsTable: config.supabase.imageGenerationsTable,
     })
   : undefined;
+const ocrJobs = await OcrJobRegistry.create({
+  filePath: fileURLToPath(new URL('../data/ocr/jobs.json', import.meta.url)),
+  retentionMs: config.ocr.historyRetentionMs,
+  maxJobs: config.ocr.maxJobs,
+});
 const themeSubmissions = await ThemeSubmissionRegistry.create({
   localFilePath: fileURLToPath(new URL('../data/admin/theme-submissions.json', import.meta.url)),
   supabase: config.supabase
@@ -395,6 +407,14 @@ const imageAssetRoutePrefix = '/api/ai/image/assets/';
 const imageGenerationJobRetentionMs = 30 * 60 * 1000;
 const imageGenerationJobMaxCount = 200;
 const codexImageRetryStatusCodes = new Set([502, 504, 524]);
+const ocrAllowedUploadTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const ocrMaxActiveJobs = 4;
+const ocrHistoryListLimit = 20;
+const ocrUnavailableMessage = 'OCR 模型服务暂不可用';
+const ocrReachabilityTimeoutMs = 2_000;
+const ocrRawStringMaxChars = 12_000;
+const ocrRawArrayMaxItems = 200;
+const ocrImagePayloadReplacement = '[omitted image payload]';
 const aiRoomContextWindowMs = 24 * 60 * 60 * 1000;
 const aiRoomContextMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
@@ -430,6 +450,12 @@ const openAiCompatibleNonChatModelPattern =
 class RequestBodyTooLargeError extends Error {
   constructor() {
     super('Request body is too large.');
+  }
+}
+
+class OcrProxyError extends Error {
+  constructor(message: string, readonly statusCode = 503) {
+    super(message);
   }
 }
 
@@ -897,6 +923,619 @@ function validateUploadedImages(images: AiImageUpload[]) {
       throw new AccountAuthError('单张图片不能超过 8 MiB。', 413);
     }
   }
+}
+
+function validateOcrUpload(image: OcrImageUpload | undefined) {
+  if (!image) {
+    throw new AccountAuthError('请选择要识别的图片。', 400);
+  }
+
+  if (!ocrAllowedUploadTypes.has(image.mimeType)) {
+    throw new AccountAuthError('只支持 PNG、JPEG 或 WebP 图片。', 400);
+  }
+
+  if (image.buffer.byteLength <= 0) {
+    throw new AccountAuthError('上传的图片不能为空。', 400);
+  }
+
+  if (image.buffer.byteLength > config.ocr.maxUploadBytes) {
+    throw new AccountAuthError('图片不能超过 OCR 上传大小限制。', 413);
+  }
+}
+
+function parseOcrMultipartRequest(buffer: Buffer, boundary: string): OcrImageUpload {
+  const delimiter = Buffer.from(`--${boundary}`);
+  const headerSeparator = Buffer.from('\r\n\r\n');
+  const uploads: OcrImageUpload[] = [];
+
+  let cursor = buffer.indexOf(delimiter);
+  while (cursor >= 0) {
+    cursor += delimiter.length;
+
+    if (buffer[cursor] === 45 && buffer[cursor + 1] === 45) {
+      break;
+    }
+
+    if (buffer[cursor] === 13 && buffer[cursor + 1] === 10) {
+      cursor += 2;
+    }
+
+    const headerEnd = buffer.indexOf(headerSeparator, cursor);
+    if (headerEnd < 0) {
+      break;
+    }
+
+    const headers = parseMultipartHeaders(buffer.subarray(cursor, headerEnd).toString('utf8'));
+    const bodyStart = headerEnd + headerSeparator.length;
+    const nextDelimiter = buffer.indexOf(delimiter, bodyStart);
+    if (nextDelimiter < 0) {
+      break;
+    }
+
+    let bodyEnd = nextDelimiter;
+    if (bodyEnd >= 2 && buffer[bodyEnd - 2] === 13 && buffer[bodyEnd - 1] === 10) {
+      bodyEnd -= 2;
+    }
+
+    const contentDisposition = parseContentDisposition(headers.get('content-disposition'));
+    if (contentDisposition.name === 'image' && contentDisposition.filename !== undefined) {
+      uploads.push({
+        filename: sanitizeUploadedImageFilename(contentDisposition.filename, uploads.length + 1),
+        mimeType: headers.get('content-type')?.toLowerCase() || 'application/octet-stream',
+        buffer: buffer.subarray(bodyStart, bodyEnd),
+      });
+    }
+
+    cursor = nextDelimiter;
+  }
+
+  if (uploads.length > 1) {
+    throw new AccountAuthError('OCR 一次只支持识别一张图片。', 400);
+  }
+
+  const image = uploads[0];
+  validateOcrUpload(image);
+  return image;
+}
+
+async function readOcrImageUpload(request: IncomingMessage) {
+  const contentType = readHeaderString(request.headers['content-type']);
+  if (!contentType?.toLowerCase().startsWith('multipart/form-data')) {
+    throw new AccountAuthError('OCR 请求必须使用 multipart/form-data。', 400);
+  }
+
+  const boundary = readMultipartBoundary(contentType);
+  if (!boundary) {
+    throw new AccountAuthError('OCR 上传请求缺少 multipart boundary。', 400);
+  }
+
+  const buffer = await readRequestBuffer(request, { maxBytes: config.ocr.maxUploadBytes + 16 * 1024 });
+  return parseOcrMultipartRequest(buffer, boundary);
+}
+
+function isOcrImagePayloadKey(key: string) {
+  const normalizedKey = key.toLowerCase();
+  return (
+    normalizedKey === 'ocrimage' ||
+    normalizedKey === 'ocr_image' ||
+    normalizedKey === 'outputimages' ||
+    normalizedKey === 'output_images' ||
+    normalizedKey === 'inputimage' ||
+    normalizedKey === 'input_image' ||
+    normalizedKey === 'imagebase64' ||
+    normalizedKey === 'image_base64' ||
+    normalizedKey === 'b64json' ||
+    normalizedKey === 'b64_json'
+  );
+}
+
+function isLikelyBase64ImagePayload(value: string) {
+  const normalizedValue = value.trim();
+  if (/^data:image\//i.test(normalizedValue)) {
+    return true;
+  }
+
+  if (normalizedValue.length < 1024) {
+    return false;
+  }
+
+  return /^[A-Za-z0-9+/=\s]+$/.test(normalizedValue) && normalizedValue.length % 4 === 0;
+}
+
+function sanitizeOcrRawPayload(value: unknown, depth = 0): unknown {
+  if (depth > 8) {
+    return '[omitted nested payload]';
+  }
+
+  if (typeof value === 'string') {
+    if (isLikelyBase64ImagePayload(value)) {
+      return ocrImagePayloadReplacement;
+    }
+
+    return value.length > ocrRawStringMaxChars
+      ? `${value.slice(0, ocrRawStringMaxChars)}...[truncated]`
+      : value;
+  }
+
+  if (
+    value === null ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const sanitizedItems = value
+      .slice(0, ocrRawArrayMaxItems)
+      .map((item) => sanitizeOcrRawPayload(item, depth + 1));
+    if (value.length > ocrRawArrayMaxItems) {
+      sanitizedItems.push({
+        omittedItems: value.length - ocrRawArrayMaxItems,
+      });
+    }
+
+    return sanitizedItems;
+  }
+
+  if (!isObjectRecord(value)) {
+    return undefined;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, entryValue] of Object.entries(value)) {
+    if (isOcrImagePayloadKey(key)) {
+      sanitized[key] = ocrImagePayloadReplacement;
+      continue;
+    }
+
+    sanitized[key] = sanitizeOcrRawPayload(entryValue, depth + 1);
+  }
+
+  return sanitized;
+}
+
+function readFiniteNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function readOcrBox(value: unknown): number[][] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  if (value.every((item) => readFiniteNumber(item) !== undefined) && value.length >= 4) {
+    const points: number[][] = [];
+    for (let index = 0; index < value.length - 1; index += 2) {
+      const x = readFiniteNumber(value[index]);
+      const y = readFiniteNumber(value[index + 1]);
+      if (x === undefined || y === undefined) {
+        return undefined;
+      }
+
+      points.push([x, y]);
+    }
+
+    return points;
+  }
+
+  const points = value.map((point) => {
+    if (!Array.isArray(point) || point.length < 2) {
+      return undefined;
+    }
+
+    const x = readFiniteNumber(point[0]);
+    const y = readFiniteNumber(point[1]);
+    return x !== undefined && y !== undefined ? [x, y] : undefined;
+  });
+
+  return points.every((point): point is number[] => Boolean(point)) ? points : undefined;
+}
+
+function readStringArrayField(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      const strings = value
+        .map((item) => typeof item === 'string' ? item.trim() : '')
+        .filter(Boolean);
+      if (strings.length > 0) {
+        return strings;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function readArrayField(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function readDirectOcrLines(record: Record<string, unknown>) {
+  const texts = readStringArrayField(record, [
+    'rec_texts',
+    'recTexts',
+    'texts',
+    'textLines',
+    'transcriptions',
+    'words',
+  ]);
+
+  if (!texts) {
+    return [];
+  }
+
+  const scores = readArrayField(record, [
+    'rec_scores',
+    'recScores',
+    'scores',
+    'confidences',
+  ]);
+  const boxes = readArrayField(record, [
+    'rec_polys',
+    'recPolys',
+    'dt_polys',
+    'dtPolys',
+    'boxes',
+    'polygons',
+  ]);
+
+  return texts.map((text, index): OcrLine => {
+    const confidence = scores ? readFiniteNumber(scores[index]) : undefined;
+    const box = boxes ? readOcrBox(boxes[index]) : undefined;
+    return {
+      text,
+      ...(confidence !== undefined ? { confidence } : {}),
+      ...(box ? { box } : {}),
+    };
+  });
+}
+
+function appendOcrLine(
+  lines: OcrLine[],
+  seenTexts: Set<string>,
+  line: OcrLine,
+) {
+  const normalizedText = line.text.trim();
+  if (!normalizedText || seenTexts.has(normalizedText)) {
+    return;
+  }
+
+  seenTexts.add(normalizedText);
+  lines.push({
+    ...line,
+    text: normalizedText,
+  });
+}
+
+function collectOcrLinesFromValue(
+  value: unknown,
+  lines: OcrLine[],
+  seenTexts: Set<string>,
+  depth = 0,
+) {
+  if (depth > 8 || value === null || value === undefined) {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    if (!isLikelyBase64ImagePayload(value)) {
+      appendOcrLine(lines, seenTexts, { text: value });
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectOcrLinesFromValue(item, lines, seenTexts, depth + 1);
+    }
+    return;
+  }
+
+  if (!isObjectRecord(value)) {
+    return;
+  }
+
+  const directLines = readDirectOcrLines(value);
+  if (directLines.length > 0) {
+    for (const line of directLines) {
+      appendOcrLine(lines, seenTexts, line);
+    }
+    return;
+  }
+
+  for (const [key, entryValue] of Object.entries(value)) {
+    if (isOcrImagePayloadKey(key)) {
+      continue;
+    }
+
+    const normalizedKey = key.toLowerCase();
+    if (
+      typeof entryValue === 'string' &&
+      ['text', 'transcription', 'label', 'content', 'recognizedtext', 'recognized_text'].includes(normalizedKey)
+    ) {
+      appendOcrLine(lines, seenTexts, { text: entryValue });
+      continue;
+    }
+
+    collectOcrLinesFromValue(entryValue, lines, seenTexts, depth + 1);
+  }
+}
+
+function collectPaddleOcrCandidateValues(value: unknown) {
+  const candidates: unknown[] = [];
+
+  if (isObjectRecord(value)) {
+    const result = value.result;
+    if (isObjectRecord(result)) {
+      const ocrResults = result.ocrResults;
+      if (Array.isArray(ocrResults)) {
+        for (const item of ocrResults) {
+          candidates.push(isObjectRecord(item) && 'prunedResult' in item ? item.prunedResult : item);
+        }
+      }
+
+      if ('prunedResult' in result) {
+        candidates.push(result.prunedResult);
+      }
+    }
+
+    if ('prunedResult' in value) {
+      candidates.push(value.prunedResult);
+    }
+  }
+
+  candidates.push(value);
+  return candidates;
+}
+
+function extractOcrLines(rawPayload: unknown) {
+  const lines: OcrLine[] = [];
+  const seenTexts = new Set<string>();
+
+  for (const candidate of collectPaddleOcrCandidateValues(rawPayload)) {
+    collectOcrLinesFromValue(candidate, lines, seenTexts);
+  }
+
+  return lines;
+}
+
+async function ensureOcrServiceReachable() {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.min(config.ocr.requestTimeoutMs, ocrReachabilityTimeoutMs),
+  );
+
+  try {
+    const response = await fetch(`${config.ocr.baseUrl}/ocr`, {
+      method: 'HEAD',
+      signal: controller.signal,
+    });
+    if (response.status >= 500) {
+      throw new OcrProxyError(ocrUnavailableMessage, 503);
+    }
+  } catch (error) {
+    console.warn('OCR service reachability check failed', {
+      baseUrl: config.ocr.baseUrl,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw new OcrProxyError(ocrUnavailableMessage, 503);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callOcrService(image: OcrImageUpload): Promise<OcrJobResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.ocr.requestTimeoutMs);
+  let response: Response;
+
+  try {
+    response = await fetch(`${config.ocr.baseUrl}/ocr`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        file: image.buffer.toString('base64'),
+        fileType: 1,
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    console.warn('OCR model request failed', {
+      baseUrl: config.ocr.baseUrl,
+      fileName: image.filename,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw new OcrProxyError(ocrUnavailableMessage, 503);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    console.warn('OCR model returned non-OK response', {
+      status: response.status,
+      statusText: response.statusText,
+    });
+    throw new OcrProxyError(ocrUnavailableMessage, 503);
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json() as unknown;
+  } catch {
+    throw new OcrProxyError('OCR 模型返回结果不可解析。', 502);
+  }
+
+  if (isObjectRecord(payload) && payload.success === false) {
+    throw new OcrProxyError('OCR 识别失败，请确认图片可读取。', 502);
+  }
+
+  const raw = sanitizeOcrRawPayload(payload);
+  const lines = extractOcrLines(raw);
+
+  return {
+    text: lines.map((line) => line.text).join('\n'),
+    lines,
+    raw,
+  };
+}
+
+function runOcrJob(jobId: string, image: OcrImageUpload) {
+  setTimeout(() => {
+    void (async () => {
+      ocrJobs.updateStatus(jobId, 'running');
+
+      try {
+        const result = await callOcrService(image);
+        ocrJobs.complete(jobId, result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'OCR 识别失败。';
+        console.error('OCR job failed', {
+          jobId,
+          fileName: image.filename,
+          message,
+        });
+        ocrJobs.fail(jobId, message);
+      }
+    })();
+  }, 0);
+}
+
+function toOcrJobPayload(job: OcrJobRecord) {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    fileName: job.fileName,
+    mimeType: job.mimeType,
+    byteSize: job.byteSize,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    expiresAt: job.expiresAt,
+    ...(job.result
+      ? {
+          text: job.result.text,
+          lines: job.result.lines,
+          raw: job.result.raw,
+        }
+      : {}),
+    ...(job.error ? { error: job.error } : {}),
+  };
+}
+
+async function handleOcrCreateRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!config.ocr.enabled) {
+    writeJson(response, 503, { error: 'OCR 服务未启用。' });
+    return;
+  }
+
+  if (ocrJobs.countActive() >= ocrMaxActiveJobs) {
+    writeJson(response, 429, { error: 'OCR 任务较多，请稍后重试。' });
+    return;
+  }
+
+  let image: OcrImageUpload;
+  try {
+    image = await readOcrImageUpload(request);
+  } catch (error) {
+    if (error instanceof AccountAuthError) {
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+
+    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+      error:
+        error instanceof RequestBodyTooLargeError
+          ? 'OCR 图片上传请求体过大。'
+          : 'OCR 上传请求格式无效。',
+    });
+    return;
+  }
+
+  try {
+    await ensureOcrServiceReachable();
+  } catch (error) {
+    const statusCode = error instanceof OcrProxyError ? error.statusCode : 503;
+    const message = error instanceof Error ? error.message : ocrUnavailableMessage;
+    writeJson(response, statusCode, { error: message });
+    return;
+  }
+
+  const createdAt = new Date().toISOString();
+  const job = ocrJobs.create({
+    jobId: randomUUID(),
+    fileName: image.filename,
+    mimeType: image.mimeType,
+    byteSize: image.buffer.byteLength,
+    createdAt,
+  });
+
+  runOcrJob(job.jobId, image);
+  writeJson(response, 202, {
+    jobId: job.jobId,
+    status: job.status,
+    pollUrl: `/api/ocr/jobs/${encodeURIComponent(job.jobId)}`,
+  });
+}
+
+function handleOcrJobRequest(
+  response: ServerResponse,
+  jobId: string,
+) {
+  const normalizedJobId = jobId.trim();
+  if (!normalizedJobId) {
+    writeJson(response, 400, { error: 'Missing OCR job id.' });
+    return;
+  }
+
+  const job = ocrJobs.get(normalizedJobId);
+  if (!job) {
+    writeJson(response, 404, { error: 'OCR 任务不存在或已过期。' });
+    return;
+  }
+
+  writeJson(response, 200, toOcrJobPayload(job));
+}
+
+function handleOcrHistoryRequest(response: ServerResponse) {
+  writeJson(response, 200, {
+    items: ocrJobs.list(ocrHistoryListLimit).map(toOcrJobPayload),
+  });
+}
+
+function handleOcrHistoryDeleteRequest(
+  response: ServerResponse,
+  jobId: string,
+) {
+  const deleted = ocrJobs.delete(jobId.trim());
+  if (!deleted) {
+    writeJson(response, 404, { error: 'OCR 记录不存在或已过期。' });
+    return;
+  }
+
+  writeJson(response, 200, { ok: true });
 }
 
 function parseMultipartImageRequest(buffer: Buffer, boundary: string): AiImagePreparedRequest {
@@ -6437,6 +7076,28 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/ai/chat/conversations') {
     void handleAiChatConversationsRequest(request, response, url);
+    return;
+  }
+
+  if (url.pathname === '/api/ocr' && request.method === 'POST') {
+    void handleOcrCreateRequest(request, response);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/ocr/jobs/') && request.method === 'GET') {
+    const jobId = decodeURIComponent(url.pathname.slice('/api/ocr/jobs/'.length));
+    handleOcrJobRequest(response, jobId);
+    return;
+  }
+
+  if (url.pathname === '/api/ocr/history' && request.method === 'GET') {
+    handleOcrHistoryRequest(response);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/ocr/history/') && request.method === 'DELETE') {
+    const jobId = decodeURIComponent(url.pathname.slice('/api/ocr/history/'.length));
+    handleOcrHistoryDeleteRequest(response, jobId);
     return;
   }
 

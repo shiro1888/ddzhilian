@@ -22,6 +22,7 @@ This repository contains:
 - Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
 - Public rooms: support public room entry links and room-scoped history.
 - History management: keep text history for 24 hours by default and clean temporary file history by retention and size limits.
+- OCR helper: proxy image text recognition through a locally hosted PaddleOCR service and keep only short-lived local job history.
 - Account-gated image generation: require Supabase-backed login for text-to-image or image-edit generation, support multi-image uploads, enforce per-account daily free image quota plus paid image quota balances stored on the Supabase user profile row, store generated image files on the backend, return authenticated image URLs instead of base64 JSON payloads, and keep lazy-loaded generated-image history per account.
 - Account-based admin: use Supabase account email/password for admin login, read super admins from `ADMIN_SUPER_EMAILS`, store normal admins in `admin_roles`, and restrict API key configuration to super admins.
 - Realtime signaling: coordinate presence, pairing, and WebRTC setup through WebSocket signaling.
@@ -134,6 +135,7 @@ The backend coordinates connections instead of acting as permanent file storage.
 - Supabase Auth-backed admin verification, super-admin configuration, and normal-admin role management
 - AI chat proxy requests through Cloudflare AI or OpenRouter
 - GPT image generation and image editing through the configured Codex reverse-proxy base URL
+- PaddleOCR proxy requests through the configured local OCR model service
 
 See [server/README.md](server/README.md) for backend protocol details.
 
@@ -218,6 +220,12 @@ The backend environment template lives in [server/.env.example](server/.env.exam
 - `OPENROUTER_SITE_NAME`
 - `CODEX_IMAGE_BASE_URL`
 - `CODEX_IMAGE_API_KEY`
+- `OCR_ENABLED`
+- `OCR_BASE_URL`
+- `OCR_REQUEST_TIMEOUT_MS`
+- `OCR_MAX_UPLOAD_BYTES`
+- `OCR_HISTORY_RETENTION_MS`
+- `OCR_MAX_JOBS`
 - `CODEX_IMAGE_MODEL`
 - `CODEX_IMAGE_FALLBACK_MODELS`
 - `CODEX_IMAGE_SIZE`
