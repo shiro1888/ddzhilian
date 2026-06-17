@@ -836,7 +836,6 @@ export function SnapLinkStage({
   selectedConversationName,
   activeTransferLabel,
   roomListItems,
-  onlineDeviceItems,
   chatDraft,
   composerImageDrafts,
   fileInputId,
@@ -859,7 +858,6 @@ export function SnapLinkStage({
   adminElement,
   commandElement,
   onOpenRoomConversation,
-  onStartPrivateChat,
   onDeviceNameChange,
   onOpenRoomHome,
   onOpenAiChatView,
@@ -892,7 +890,6 @@ export function SnapLinkStage({
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false)
-  const [isPrivateDevicePanelOpen, setIsPrivateDevicePanelOpen] = useState(false)
   const [isOcrPanelOpen, setIsOcrPanelOpen] = useState(false)
   const [ocrStatus, setOcrStatus] = useState<SnapLinkOcrStatus>('idle')
   const [ocrImage, setOcrImage] = useState<SnapLinkOcrImageState | null>(null)
@@ -903,7 +900,6 @@ export function SnapLinkStage({
   const [isOcrHistoryLoading, setIsOcrHistoryLoading] = useState(false)
   const [deletingOcrJobId, setDeletingOcrJobId] = useState<string | null>(null)
   const [isOcrDropTarget, setIsOcrDropTarget] = useState(false)
-  const [privateDeviceSearch, setPrivateDeviceSearch] = useState('')
   const [themeColors, setThemeColors] = useState<SnapLinkThemeColors>(() => readStoredSnapLinkThemeColors())
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
@@ -1016,20 +1012,6 @@ export function SnapLinkStage({
       }),
     [roomListItems],
   )
-  const filteredOnlineDeviceItems = useMemo(() => {
-    const searchText = privateDeviceSearch.trim().toLowerCase()
-    if (!searchText) {
-      return onlineDeviceItems
-    }
-
-    return onlineDeviceItems.filter((device) =>
-      [
-        device.deviceName,
-        device.platform,
-        device.scopeLabel,
-      ].some((value) => value.toLowerCase().includes(searchText)),
-    )
-  }, [onlineDeviceItems, privateDeviceSearch])
   const hasActiveRoom =
     Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen
 
@@ -1879,14 +1861,11 @@ export function SnapLinkStage({
   const toggleThemePanel = () => {
     setIsEmojiPickerOpen(false)
     setIsBotPanelOpen(false)
-    setIsPrivateDevicePanelOpen(false)
     botMentionTriggerRangeRef.current = null
     setIsThemePanelOpen((current) => !current)
   }
 
   const handleRoomSelection = (roomId: string) => {
-    setIsPrivateDevicePanelOpen(false)
-
     if (roomId === snapLinkAiChatSelectionValue) {
       handleOpenAiChat()
       return
@@ -1908,13 +1887,6 @@ export function SnapLinkStage({
     setIsLobbyOpen(false)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
-  }
-
-  const handleStartPrivateChat = (deviceId: string) => {
-    setActiveSharedTab(null)
-    setIsPrivateDevicePanelOpen(false)
-    setPrivateDeviceSearch('')
-    onStartPrivateChat(deviceId)
   }
 
   const startDeviceRename = () => {
@@ -3126,7 +3098,7 @@ export function SnapLinkStage({
 
       <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}>
         <div
-          className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}${!hasActiveRoom && isPrivateDevicePanelOpen ? ' has-private-device-panel' : ''}`}
+          className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}
           style={isAdminOpen ? { border: 0, borderRadius: 0, background: 'transparent' } : undefined}
         >
           {isAdminOpen ? (
@@ -3152,22 +3124,12 @@ export function SnapLinkStage({
               {(localError || errorMessage) && (
                 <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
               )}
-              <div className={`dd-snaplink__lobby-main${isPrivateDevicePanelOpen ? ' has-private-device-panel' : ''}`}>
+              <div className="dd-snaplink__lobby-main">
                 <div className="dd-snaplink__room-list" aria-label="会话列表">
                   <div className="dd-snaplink__room-list-head">
                     <span>会话列表</span>
                     <span className="dd-snaplink__room-list-actions">
                       <small>{lobbyRoomListItems.length} 个</small>
-                      <button
-                        type="button"
-                        className="dd-snaplink__private-device-trigger"
-                        disabled={onlineDeviceItems.length === 0}
-                        aria-expanded={isPrivateDevicePanelOpen}
-                        aria-haspopup="dialog"
-                        onClick={() => setIsPrivateDevicePanelOpen((current) => !current)}
-                      >
-                        发起私聊 · {onlineDeviceItems.length.toString()}
-                      </button>
                     </span>
                   </div>
                   {lobbyRoomListItems.length > 0 ? (
@@ -3199,57 +3161,6 @@ export function SnapLinkStage({
                     <div className="dd-snaplink__room-empty">暂无会话</div>
                   )}
                 </div>
-                {isPrivateDevicePanelOpen ? (
-                  <div className="dd-snaplink__private-device-panel" role="dialog" aria-label="选择在线设备">
-                    <div className="dd-snaplink__private-device-head">
-                      <strong>发起点对点对话</strong>
-                      <button
-                        type="button"
-                        aria-label="关闭在线设备选择"
-                        onClick={() => {
-                          setIsPrivateDevicePanelOpen(false)
-                          setPrivateDeviceSearch('')
-                        }}
-                      >
-                        关闭
-                      </button>
-                    </div>
-                    <input
-                      value={privateDeviceSearch}
-                      aria-label="搜索在线设备"
-                      placeholder="搜索设备名、平台或关系"
-                      onChange={(event) => setPrivateDeviceSearch(event.target.value)}
-                    />
-                    {filteredOnlineDeviceItems.length > 0 ? (
-                      <div className="dd-snaplink__private-device-list">
-                        {filteredOnlineDeviceItems.map((device) => (
-                          <button
-                            key={device.deviceId}
-                            type="button"
-                            className="dd-snaplink__room-item dd-snaplink__device-item"
-                            onClick={() => handleStartPrivateChat(device.deviceId)}
-                          >
-                            <span className="dd-snaplink__room-item-main">
-                              <span className="dd-snaplink__room-item-title">
-                                {device.deviceName}
-                                <em>私聊</em>
-                              </span>
-                              <span className="dd-snaplink__room-item-preview">
-                                {device.platform} · {device.scopeLabel}
-                              </span>
-                            </span>
-                            <span className="dd-snaplink__room-item-side">
-                              <span>{device.lastSeenLabel}</span>
-                              <strong>点对点</strong>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="dd-snaplink__room-empty">没有匹配的在线设备</div>
-                    )}
-                  </div>
-                ) : null}
               </div>
             </section>
           ) : (

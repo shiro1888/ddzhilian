@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ddzhilian-v1';
+const CACHE_NAME = 'ddzhilian-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -26,6 +26,22 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+function isDynamicBackendRequest(url) {
+  return (
+    url.pathname === '/health' ||
+    url.pathname === '/ws' ||
+    url.pathname.startsWith('/api/')
+  );
+}
+
+function isCacheableStaticRequest(request, url) {
+  return (
+    url.pathname.startsWith('/_next/static/') ||
+    STATIC_ASSETS.includes(url.pathname) ||
+    ['font', 'image', 'manifest', 'script', 'style'].includes(request.destination)
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -35,17 +51,32 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests
   if (url.origin !== self.location.origin) return;
 
+  // Dynamic backend responses must stay fresh. Let the browser/network handle
+  // them directly so history, auth, quota, admin, and websocket health state
+  // cannot be replayed from an old service-worker cache.
+  if (isDynamicBackendRequest(url) || request.cache === 'reload' || request.cache === 'no-store') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // Network-first for navigation requests (HTML pages)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(request).then((r) => r || caches.match('/')))
     );
+    return;
+  }
+
+  if (!isCacheableStaticRequest(request, url)) {
+    event.respondWith(fetch(request));
     return;
   }
 

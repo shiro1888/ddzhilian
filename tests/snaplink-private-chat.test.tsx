@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
@@ -73,14 +73,12 @@ describe('SnapLinkStage private chat entry', () => {
     cleanup()
   })
 
-  it('starts a private chat from an online device', () => {
+  it('does not render the private chat starter while the entry is disabled', () => {
     const onStartPrivateChat = vi.fn()
-    const onOpenRoomConversation = vi.fn()
 
-    const { rerender } = render(
+    render(
       <SnapLinkStage
         {...createBaseProps({
-          onOpenRoomConversation,
           onStartPrivateChat,
           onlineDeviceItems: [
             {
@@ -95,14 +93,17 @@ describe('SnapLinkStage private chat entry', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '发起私聊 · 1' }))
-    fireEvent.click(screen.getByRole('button', { name: /android-PEER/ }))
-
-    expect(onStartPrivateChat).toHaveBeenCalledWith('device-peer')
     expect(screen.getByText('会话列表')).toBeInTheDocument()
-    expect(screen.queryByText('历史内容')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /发起私聊/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '选择在线设备' })).not.toBeInTheDocument()
+    expect(onStartPrivateChat).not.toHaveBeenCalled()
+  })
 
-    rerender(
+  it('still opens an existing private room when selected by state', () => {
+    const onStartPrivateChat = vi.fn()
+    const onOpenRoomConversation = vi.fn()
+
+    render(
       <SnapLinkStage
         {...createBaseProps({
           onOpenRoomConversation,
@@ -155,44 +156,7 @@ describe('SnapLinkStage private chat entry', () => {
       expect(screen.getByText('历史内容')).toBeInTheDocument()
       expect(screen.getByText('私聊已建立')).toBeInTheDocument()
       expect(onOpenRoomConversation).not.toHaveBeenCalled()
+      expect(onStartPrivateChat).not.toHaveBeenCalled()
     })
-  })
-
-  it('filters online devices before starting a private chat', () => {
-    const onStartPrivateChat = vi.fn()
-
-    render(
-      <SnapLinkStage
-        {...createBaseProps({
-          onStartPrivateChat,
-          onlineDeviceItems: [
-            {
-              deviceId: 'device-android',
-              deviceName: 'android-PEER',
-              platform: 'android',
-              scopeLabel: '局域网',
-              lastSeenLabel: '刚刚',
-            },
-            {
-              deviceId: 'device-windows',
-              deviceName: 'windows-DESK',
-              platform: 'windows',
-              scopeLabel: '同账号',
-              lastSeenLabel: '刚刚',
-            },
-          ],
-        })}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: '发起私聊 · 2' }))
-    fireEvent.change(screen.getByLabelText('搜索在线设备'), {
-      target: { value: 'desk' },
-    })
-
-    expect(screen.queryByRole('button', { name: /android-PEER/ })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /windows-DESK/ }))
-
-    expect(onStartPrivateChat).toHaveBeenCalledWith('device-windows')
   })
 })
