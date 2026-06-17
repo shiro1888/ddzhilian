@@ -22,7 +22,7 @@ import type {
   SharedContentTab,
   UnifiedConversationEntry,
 } from '../types'
-import type { AiModelOption, OcrHistoryResponse, OcrJobResponse, OcrLine } from '../../lib/ddzhilian-types'
+import type { AiModelOption, OcrHistoryResponse, OcrJobResponse } from '../../lib/ddzhilian-types'
 import {
   collectDroppedFiles,
   extractPlainTextFromRichText,
@@ -101,30 +101,6 @@ type SnapLinkOcrImageState = {
   file: File
   name: string
   previewUrl: string
-}
-
-type SnapLinkOcrPreviewMetrics = {
-  width: number
-  height: number
-  offsetX: number
-  offsetY: number
-  scale: number
-  naturalWidth: number
-  naturalHeight: number
-}
-
-type SnapLinkOcrLineBounds = {
-  left: number
-  top: number
-  right: number
-  bottom: number
-}
-
-type SnapLinkOcrOverlayBox = {
-  left: number
-  top: number
-  width: number
-  height: number
 }
 
 const snapLinkQuickEmojis = [
@@ -333,61 +309,6 @@ function hasSnapLinkDraggedFiles(event: DragEvent<HTMLElement>) {
 function getSnapLinkOcrHistorySummary(job: OcrJobResponse) {
   const text = getSnapLinkOcrText(job) || job.error || '无文字结果'
   return text.replace(/\s+/g, ' ').slice(0, 80)
-}
-
-function getSnapLinkOcrLineBounds(line: OcrLine): SnapLinkOcrLineBounds | null {
-  if (!line.box || line.box.length === 0) {
-    return null
-  }
-
-  const points = line.box
-    .map((point) => {
-      const [x, y] = point
-      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
-    })
-    .filter((point): point is { x: number; y: number } => Boolean(point))
-
-  if (points.length < 2) {
-    return null
-  }
-
-  const left = Math.min(...points.map((point) => point.x))
-  const right = Math.max(...points.map((point) => point.x))
-  const top = Math.min(...points.map((point) => point.y))
-  const bottom = Math.max(...points.map((point) => point.y))
-
-  if (right <= left || bottom <= top) {
-    return null
-  }
-
-  return { left, top, right, bottom }
-}
-
-function mapSnapLinkOcrBoundsToPreview(
-  bounds: SnapLinkOcrLineBounds,
-  metrics: SnapLinkOcrPreviewMetrics,
-): SnapLinkOcrOverlayBox | null {
-  const isNormalized = bounds.right <= 1 && bounds.bottom <= 1
-  const left = isNormalized ? bounds.left * metrics.naturalWidth : bounds.left
-  const right = isNormalized ? bounds.right * metrics.naturalWidth : bounds.right
-  const top = isNormalized ? bounds.top * metrics.naturalHeight : bounds.top
-  const bottom = isNormalized ? bounds.bottom * metrics.naturalHeight : bounds.bottom
-
-  const clampedLeft = Math.max(0, Math.min(metrics.naturalWidth, left))
-  const clampedRight = Math.max(0, Math.min(metrics.naturalWidth, right))
-  const clampedTop = Math.max(0, Math.min(metrics.naturalHeight, top))
-  const clampedBottom = Math.max(0, Math.min(metrics.naturalHeight, bottom))
-
-  if (clampedRight <= clampedLeft || clampedBottom <= clampedTop) {
-    return null
-  }
-
-  return {
-    left: metrics.offsetX + clampedLeft * metrics.scale,
-    top: metrics.offsetY + clampedTop * metrics.scale,
-    width: (clampedRight - clampedLeft) * metrics.scale,
-    height: (clampedBottom - clampedTop) * metrics.scale,
-  }
 }
 
 export type SnapLinkStageProps = {
@@ -981,7 +902,6 @@ export function SnapLinkStage({
   const [ocrHistoryError, setOcrHistoryError] = useState<string | null>(null)
   const [isOcrHistoryLoading, setIsOcrHistoryLoading] = useState(false)
   const [deletingOcrJobId, setDeletingOcrJobId] = useState<string | null>(null)
-  const [ocrPreviewMetrics, setOcrPreviewMetrics] = useState<SnapLinkOcrPreviewMetrics | null>(null)
   const [isOcrDropTarget, setIsOcrDropTarget] = useState(false)
   const [privateDeviceSearch, setPrivateDeviceSearch] = useState('')
   const [themeColors, setThemeColors] = useState<SnapLinkThemeColors>(() => readStoredSnapLinkThemeColors())
@@ -1036,8 +956,6 @@ export function SnapLinkStage({
   const ocrTriggerRef = useRef<HTMLButtonElement | null>(null)
   const ocrPanelRef = useRef<HTMLDivElement | null>(null)
   const ocrFileInputRef = useRef<HTMLInputElement | null>(null)
-  const ocrImageStageRef = useRef<HTMLDivElement | null>(null)
-  const ocrPreviewImageRef = useRef<HTMLImageElement | null>(null)
   const ocrImagePreviewUrlRef = useRef<string | null>(null)
   const ocrRequestSeqRef = useRef(0)
   const ocrDropDepthRef = useRef(0)
@@ -1179,25 +1097,6 @@ export function SnapLinkStage({
   const ocrResultText = getSnapLinkOcrText(ocrJob)
   const hasOcrResultText = ocrResultText.length > 0
   const canRetryOcr = Boolean(ocrImage) && ocrStatus !== 'running'
-  const ocrVisualLines = useMemo(
-    () =>
-      (ocrJob?.lines ?? [])
-        .map((line, index) => {
-          const text = line.text.trim()
-          const bounds = getSnapLinkOcrLineBounds(line)
-          return {
-            index,
-            text,
-            confidence: line.confidence,
-            overlayBox: bounds && ocrPreviewMetrics
-              ? mapSnapLinkOcrBoundsToPreview(bounds, ocrPreviewMetrics)
-              : null,
-          }
-        })
-        .filter((line) => line.text.length > 0),
-    [ocrJob?.lines, ocrPreviewMetrics],
-  )
-  const hasOcrVisualLines = ocrVisualLines.length > 0
   const refreshOcrHistory = useCallback(async () => {
     setIsOcrHistoryLoading(true)
     setOcrHistoryError(null)
@@ -1547,56 +1446,6 @@ export function SnapLinkStage({
       setIsOcrDropTarget(false)
     }
   }, [isOcrPanelOpen])
-
-  const updateOcrPreviewMetrics = useCallback(() => {
-    const stage = ocrImageStageRef.current
-    const image = ocrPreviewImageRef.current
-    if (!stage || !image || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
-      setOcrPreviewMetrics(null)
-      return
-    }
-
-    const rect = stage.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) {
-      setOcrPreviewMetrics(null)
-      return
-    }
-
-    const scale = Math.min(rect.width / image.naturalWidth, rect.height / image.naturalHeight)
-    const displayWidth = image.naturalWidth * scale
-    const displayHeight = image.naturalHeight * scale
-    setOcrPreviewMetrics({
-      width: rect.width,
-      height: rect.height,
-      offsetX: (rect.width - displayWidth) / 2,
-      offsetY: (rect.height - displayHeight) / 2,
-      scale,
-      naturalWidth: image.naturalWidth,
-      naturalHeight: image.naturalHeight,
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!isOcrPanelOpen || !ocrImage) {
-      setOcrPreviewMetrics(null)
-      return undefined
-    }
-
-    updateOcrPreviewMetrics()
-
-    const stage = ocrImageStageRef.current
-    let observer: ResizeObserver | null = null
-    if (stage && typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => updateOcrPreviewMetrics())
-      observer.observe(stage)
-    }
-    window.addEventListener('resize', updateOcrPreviewMetrics)
-
-    return () => {
-      observer?.disconnect()
-      window.removeEventListener('resize', updateOcrPreviewMetrics)
-    }
-  }, [isOcrPanelOpen, ocrImage, updateOcrPreviewMetrics])
 
   useEffect(() => {
     return () => {
@@ -2301,7 +2150,6 @@ export function SnapLinkStage({
     }
 
     setOcrImage(null)
-    setOcrPreviewMetrics(null)
   }
 
   const prepareOcrImagePreview = (file: File) => {
@@ -3856,29 +3704,8 @@ export function SnapLinkStage({
               }}
             >
               {ocrImage ? (
-                <div className="dd-ocr-panel__image-stage" ref={ocrImageStageRef}>
-                  <img
-                    ref={ocrPreviewImageRef}
-                    src={ocrImage.previewUrl}
-                    alt={ocrImage.name}
-                    onLoad={updateOcrPreviewMetrics}
-                  />
-                  {ocrVisualLines.map((line) => (
-                    line.overlayBox ? (
-                      <div
-                        key={`ocr-overlay-${line.index.toString()}`}
-                        className="dd-ocr-panel__overlay-box"
-                        style={{
-                          left: `${line.overlayBox.left.toString()}px`,
-                          top: `${line.overlayBox.top.toString()}px`,
-                          width: `${line.overlayBox.width.toString()}px`,
-                          height: `${line.overlayBox.height.toString()}px`,
-                        }}
-                      >
-                        <span>文本</span>
-                      </div>
-                    ) : null
-                  ))}
+                <div className="dd-ocr-panel__image-stage">
+                  <img src={ocrImage.previewUrl} alt={ocrImage.name} />
                 </div>
               ) : (
                 <button
@@ -3908,23 +3735,12 @@ export function SnapLinkStage({
                 </div>
               ) : null}
               {ocrError ? <p className="dd-ocr-panel__error">{ocrError}</p> : null}
-              {hasOcrVisualLines ? (
-                <div className="dd-ocr-panel__line-list" aria-label="OCR 识别文本">
-                  {ocrVisualLines.map((line) => (
-                    <div key={`ocr-line-${line.index.toString()}`} className="dd-ocr-panel__line-box">
-                      <span>文本</span>
-                      <p>{line.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <textarea
-                  readOnly
-                  value={ocrResultText}
-                  placeholder={ocrStatus === 'failed' ? '识别失败' : '识别完成后显示文本'}
-                  aria-label="OCR 识别文本"
-                />
-              )}
+              <textarea
+                readOnly
+                value={ocrResultText}
+                placeholder={ocrStatus === 'failed' ? '识别失败' : '识别完成后显示文本'}
+                aria-label="OCR 识别文本"
+              />
               <div className="dd-ocr-panel__actions">
                 <button type="button" disabled={!hasOcrResultText} onClick={handleCopyOcrText}>
                   复制文本
