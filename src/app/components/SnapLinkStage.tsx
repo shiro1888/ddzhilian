@@ -825,6 +825,60 @@ function getLatestSnapLinkEntryCreatedAtMs(entries: UnifiedConversationEntry[]) 
   )
 }
 
+const SNAPLINK_IMAGE_COMET_ROTATE_DEGREES = 7
+const SNAPLINK_IMAGE_COMET_TRANSLATE_PX = 5
+
+function clampSnapLinkImageCometOffset(value: number) {
+  return Math.min(0.5, Math.max(-0.5, value))
+}
+
+function setSnapLinkImageCometCssValue(
+  element: HTMLElement,
+  propertyName: string,
+  value: number,
+  unit: 'deg' | 'px' | '%',
+) {
+  element.style.setProperty(propertyName, `${value.toFixed(2)}${unit}`)
+}
+
+function setSnapLinkImageCometPointerState(element: HTMLElement, xOffset: number, yOffset: number) {
+  setSnapLinkImageCometCssValue(
+    element,
+    '--snaplink-image-comet-rotate-x',
+    yOffset * SNAPLINK_IMAGE_COMET_ROTATE_DEGREES * 2,
+    'deg',
+  )
+  setSnapLinkImageCometCssValue(
+    element,
+    '--snaplink-image-comet-rotate-y',
+    xOffset * SNAPLINK_IMAGE_COMET_ROTATE_DEGREES * -2,
+    'deg',
+  )
+  setSnapLinkImageCometCssValue(
+    element,
+    '--snaplink-image-comet-translate-x',
+    xOffset * SNAPLINK_IMAGE_COMET_TRANSLATE_PX * 2,
+    'px',
+  )
+  setSnapLinkImageCometCssValue(
+    element,
+    '--snaplink-image-comet-translate-y',
+    yOffset * SNAPLINK_IMAGE_COMET_TRANSLATE_PX * -2,
+    'px',
+  )
+  setSnapLinkImageCometCssValue(element, '--snaplink-image-comet-glare-x', (xOffset + 0.5) * 100, '%')
+  setSnapLinkImageCometCssValue(element, '--snaplink-image-comet-glare-y', (yOffset + 0.5) * 100, '%')
+}
+
+function resetSnapLinkImageCometPointerState(element: HTMLElement) {
+  element.style.setProperty('--snaplink-image-comet-rotate-x', '0deg')
+  element.style.setProperty('--snaplink-image-comet-rotate-y', '0deg')
+  element.style.setProperty('--snaplink-image-comet-translate-x', '0px')
+  element.style.setProperty('--snaplink-image-comet-translate-y', '0px')
+  element.style.setProperty('--snaplink-image-comet-glare-x', '50%')
+  element.style.setProperty('--snaplink-image-comet-glare-y', '50%')
+}
+
 export function SnapLinkStage({
   isDragging,
   activeView,
@@ -2572,6 +2626,26 @@ export function SnapLinkStage({
     event.stopPropagation()
   }
 
+  const handleImageBubbleCometPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') {
+      resetSnapLinkImageCometPointerState(event.currentTarget)
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      return
+    }
+
+    const xOffset = clampSnapLinkImageCometOffset((event.clientX - rect.left) / rect.width - 0.5)
+    const yOffset = clampSnapLinkImageCometOffset((event.clientY - rect.top) / rect.height - 0.5)
+    setSnapLinkImageCometPointerState(event.currentTarget, xOffset, yOffset)
+  }, [])
+
+  const handleImageBubbleCometPointerReset = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    resetSnapLinkImageCometPointerState(event.currentTarget)
+  }, [])
+
   const openMessageContextMenu = (
     event: ReactMouseEvent<HTMLDivElement>,
     entry: Extract<UnifiedConversationEntry, { entryType: 'text' }>,
@@ -3317,8 +3391,15 @@ export function SnapLinkStage({
                           ) : null}
                             {renderedEntry.entryType === 'text' ? (
                               <div
-                                className={`dd-snaplink__bubble-shell${isRecallingTextEntry ? ' is-recalling' : ''}`}
+                                className={[
+                                  'dd-snaplink__bubble-shell',
+                                  isRecallingTextEntry ? 'is-recalling' : '',
+                                  isImageOnlyMessage ? 'is-image-comet' : '',
+                                ].filter(Boolean).join(' ')}
                                 data-recall-phase={isRecallingTextEntry ? 'animating' : recallState?.phase}
+                                onPointerMove={isImageOnlyMessage ? handleImageBubbleCometPointerMove : undefined}
+                                onPointerLeave={isImageOnlyMessage ? handleImageBubbleCometPointerReset : undefined}
+                                onPointerCancel={isImageOnlyMessage ? handleImageBubbleCometPointerReset : undefined}
                               >
                                 <div
                                   className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnlyMessage ? ' is-image-only' : ''}`}

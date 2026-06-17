@@ -12134,6 +12134,78 @@
   max-height: 220px;
 }
 
+.dd-snaplink__bubble-shell.is-image-comet {
+  --snaplink-image-comet-rotate-x: 0deg;
+  --snaplink-image-comet-rotate-y: 0deg;
+  --snaplink-image-comet-translate-x: 0px;
+  --snaplink-image-comet-translate-y: 0px;
+  --snaplink-image-comet-glare-x: 50%;
+  --snaplink-image-comet-glare-y: 50%;
+  perspective: 720px;
+  transform-style: preserve-3d;
+  isolation: isolate;
+}
+
+.dd-snaplink__bubble-shell.is-image-comet .dd-snaplink__bubble.is-image-only {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: zoom-in;
+  transform:
+    translate3d(
+      var(--snaplink-image-comet-translate-x),
+      var(--snaplink-image-comet-translate-y),
+      0
+    )
+    rotateX(var(--snaplink-image-comet-rotate-x))
+    rotateY(var(--snaplink-image-comet-rotate-y));
+  transform-style: preserve-3d;
+  transform-origin: center;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease;
+  will-change: transform;
+}
+
+.dd-snaplink__bubble-shell.is-image-comet:hover .dd-snaplink__bubble.is-image-only {
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.18));
+}
+
+.dd-snaplink__bubble-shell.is-image-comet .dd-snaplink__bubble.is-image-only::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      circle at var(--snaplink-image-comet-glare-x) var(--snaplink-image-comet-glare-y),
+      rgba(255, 255, 255, 0.62) 0%,
+      rgba(255, 255, 255, 0.28) 24%,
+      rgba(255, 255, 255, 0) 68%
+    );
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.dd-snaplink__bubble-shell.is-image-comet:hover .dd-snaplink__bubble.is-image-only::after {
+  opacity: 0.42;
+}
+
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .dd-snaplink__bubble-shell.is-image-comet .dd-snaplink__bubble.is-image-only {
+    filter: none;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+
+  .dd-snaplink__bubble-shell.is-image-comet .dd-snaplink__bubble.is-image-only::after {
+    display: none;
+  }
+}
+
 /* Image studio workbench inspired by iLab GPT Conjure, rebuilt on ddzhilian's existing API. */
 .dd-snaplink__app.is-image {
   width: min(100%, 1500px);

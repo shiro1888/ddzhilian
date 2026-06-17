@@ -156,6 +156,41 @@ describe('SnapLinkStage image preview zoom', () => {
     fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
 
     const inlineImage = await screen.findByAltText('preview sample')
+    const imageBubble = inlineImage.closest('.dd-snaplink__bubble')
+    const cometShell = inlineImage.closest('.dd-snaplink__bubble-shell')
+    if (!(imageBubble instanceof HTMLElement) || !(cometShell instanceof HTMLElement)) {
+      throw new Error('Expected inline image to be inside a SnapLink image bubble')
+    }
+
+    expect(imageBubble).toHaveClass('is-image-only')
+    expect(cometShell).toHaveClass('is-image-comet')
+
+    vi.spyOn(cometShell, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 200,
+      left: 100,
+      top: 200,
+      right: 300,
+      bottom: 300,
+      width: 200,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    fireEvent.pointerMove(cometShell, {
+      clientX: 300,
+      clientY: 200,
+      pointerType: 'mouse',
+    })
+
+    expect(cometShell.style.getPropertyValue('--snaplink-image-comet-rotate-x')).toBe('-7.00deg')
+    expect(cometShell.style.getPropertyValue('--snaplink-image-comet-rotate-y')).toBe('-7.00deg')
+    expect(cometShell.style.getPropertyValue('--snaplink-image-comet-translate-x')).toBe('5.00px')
+    expect(cometShell.style.getPropertyValue('--snaplink-image-comet-glare-x')).toBe('100.00%')
+
+    fireEvent.pointerLeave(cometShell)
+    expect(cometShell.style.getPropertyValue('--snaplink-image-comet-rotate-x')).toBe('0deg')
+
     fireEvent.click(inlineImage)
 
     const previewZoomButton = await screen.findByRole('button', { name: '放大图片' })
