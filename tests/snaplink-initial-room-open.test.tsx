@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
@@ -73,7 +73,8 @@ describe('SnapLinkStage initial room opening', () => {
     cleanup()
   })
 
-  it('leaves the lobby once a default room becomes available on /text', async () => {
+  it('keeps the lobby open when a default room becomes available until the user selects it', async () => {
+    const onOpenRoomConversation = vi.fn()
     const { rerender } = render(<SnapLinkStage {...createBaseProps()} />)
 
     expect(screen.getByText('会话列表')).toBeInTheDocument()
@@ -81,6 +82,7 @@ describe('SnapLinkStage initial room opening', () => {
     rerender(
       <SnapLinkStage
         {...createBaseProps({
+          onOpenRoomConversation,
           selectedRoomId: 'ROOM123',
           selectedConversationName: '世界对话 1',
           activeTransferLabel: '世界对话 1 · 等待连接',
@@ -116,9 +118,18 @@ describe('SnapLinkStage initial room opening', () => {
     )
 
     await waitFor(() => {
-      expect(screen.queryByText('会话列表')).not.toBeInTheDocument()
-      expect(screen.getByText('历史内容')).toBeInTheDocument()
-      expect(screen.getByText('你好，房间已经打开了')).toBeInTheDocument()
+      expect(screen.getByText('会话列表')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /世界对话 1/ })).toBeInTheDocument()
     })
+
+    expect(screen.queryByText('历史内容')).not.toBeInTheDocument()
+    expect(onOpenRoomConversation).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+
+    expect(onOpenRoomConversation).toHaveBeenCalledWith('ROOM123')
+    expect(screen.queryByText('会话列表')).not.toBeInTheDocument()
+    expect(screen.getByText('历史内容')).toBeInTheDocument()
+    expect(screen.getByText('你好，房间已经打开了')).toBeInTheDocument()
   })
 })

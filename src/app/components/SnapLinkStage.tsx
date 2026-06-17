@@ -256,6 +256,7 @@ export type SnapLinkStageProps = {
   deviceName: string
   accountId?: string
   selectedRoomId: string | null
+  autoOpenRoomId?: string | null
   selectedConversationName: string
   activeTransferLabel: string
   roomListItems: RoomListItem[]
@@ -766,6 +767,7 @@ export function SnapLinkStage({
   deviceName,
   accountId,
   selectedRoomId,
+  autoOpenRoomId,
   selectedConversationName,
   activeTransferLabel,
   roomListItems,
@@ -866,7 +868,7 @@ export function SnapLinkStage({
   const recallAnimationTimeoutsRef = useRef<Map<string, number>>(new Map())
   const shouldAnimateNextOutgoingEntryRef = useRef(false)
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
-  const hasResolvedInitialConversationViewRef = useRef(false)
+  const handledAutoOpenRoomIdRef = useRef<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const isComposerComposingRef = useRef(false)
   const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
@@ -891,19 +893,25 @@ export function SnapLinkStage({
   const isCommandOpen = activeView === 'command'
 
   useEffect(() => {
-    if (activeView !== 'conversation' || hasResolvedInitialConversationViewRef.current || !selectedRoomId) {
+    if (
+      activeView !== 'conversation' ||
+      !autoOpenRoomId ||
+      autoOpenRoomId !== selectedRoomId ||
+      handledAutoOpenRoomIdRef.current === autoOpenRoomId
+    ) {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
-      hasResolvedInitialConversationViewRef.current = true
+    const frameId = window.requestAnimationFrame(() => {
+      handledAutoOpenRoomIdRef.current = autoOpenRoomId
+      setActiveSharedTab(null)
       setIsLobbyOpen(false)
-    }, 0)
+    })
 
     return () => {
-      window.clearTimeout(timeoutId)
+      window.cancelAnimationFrame(frameId)
     }
-  }, [activeView, selectedRoomId])
+  }, [activeView, autoOpenRoomId, selectedRoomId])
 
   const lobbyRoomListItems = useMemo(
     () =>
@@ -1737,12 +1745,12 @@ export function SnapLinkStage({
     }
 
     setActiveSharedTab(null)
+    setIsLobbyOpen(false)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
   }
 
   const handleStartPrivateChat = (deviceId: string) => {
-    setIsLobbyOpen(false)
     setActiveSharedTab(null)
     setIsPrivateDevicePanelOpen(false)
     setPrivateDeviceSearch('')

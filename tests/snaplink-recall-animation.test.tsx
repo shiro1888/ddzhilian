@@ -121,6 +121,8 @@ describe('SnapLinkStage recall animation', () => {
       await Promise.resolve()
     })
 
+    fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+
     expect(screen.getByText('这条消息将被撤回')).toBeInTheDocument()
 
     const bubble = screen.getByText('这条消息将被撤回').closest('.dd-snaplink__bubble')

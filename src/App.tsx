@@ -1633,6 +1633,7 @@ function App() {
       deviceName={selfName}
       accountId={self?.accountId ?? localIdentity.accountId}
       selectedRoomId={effectiveSelectedRoomId}
+      autoOpenRoomId={lastCreatedPrivateRoomId}
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
       roomListItems={roomListItems}

@@ -153,6 +153,8 @@ describe('SnapLinkStage image preview zoom', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+
     const inlineImage = await screen.findByAltText('preview sample')
     fireEvent.click(inlineImage)
 

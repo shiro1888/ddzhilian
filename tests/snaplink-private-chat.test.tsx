@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
@@ -75,10 +75,12 @@ describe('SnapLinkStage private chat entry', () => {
 
   it('starts a private chat from an online device', () => {
     const onStartPrivateChat = vi.fn()
+    const onOpenRoomConversation = vi.fn()
 
-    render(
+    const { rerender } = render(
       <SnapLinkStage
         {...createBaseProps({
+          onOpenRoomConversation,
           onStartPrivateChat,
           onlineDeviceItems: [
             {
@@ -97,6 +99,63 @@ describe('SnapLinkStage private chat entry', () => {
     fireEvent.click(screen.getByRole('button', { name: /android-PEER/ }))
 
     expect(onStartPrivateChat).toHaveBeenCalledWith('device-peer')
+    expect(screen.getByText('会话列表')).toBeInTheDocument()
+    expect(screen.queryByText('历史内容')).not.toBeInTheDocument()
+
+    rerender(
+      <SnapLinkStage
+        {...createBaseProps({
+          onOpenRoomConversation,
+          onStartPrivateChat,
+          selectedRoomId: 'PRIVATE123',
+          autoOpenRoomId: 'PRIVATE123',
+          selectedConversationName: 'android-PEER',
+          activeTransferLabel: 'android-PEER · 正在连接',
+          roomListItems: [
+            {
+              roomId: 'PRIVATE123',
+              title: 'android-PEER',
+              previewText: '[文本] 私聊已建立',
+              updatedAt: '2026-06-16T10:00:00.000Z',
+              updatedAtLabel: '刚刚',
+              isPublic: false,
+              memberCount: 2,
+              onlineCount: 1,
+              status: 'connecting',
+              pinned: false,
+              unreadCount: 0,
+            },
+          ],
+          unifiedConversationEntries: [
+            {
+              id: 'entry-private',
+              entryType: 'text',
+              sessionId: 'session-private',
+              fromSelf: false,
+              senderName: 'android-PEER',
+              createdAt: '2026-06-16T10:00:00.000Z',
+              text: '私聊已建立',
+            },
+          ],
+          onlineDeviceItems: [
+            {
+              deviceId: 'device-peer',
+              deviceName: 'android-PEER',
+              platform: 'android',
+              scopeLabel: '局域网',
+              lastSeenLabel: '刚刚',
+            },
+          ],
+        })}
+      />,
+    )
+
+    return waitFor(() => {
+      expect(screen.queryByText('会话列表')).not.toBeInTheDocument()
+      expect(screen.getByText('历史内容')).toBeInTheDocument()
+      expect(screen.getByText('私聊已建立')).toBeInTheDocument()
+      expect(onOpenRoomConversation).not.toHaveBeenCalled()
+    })
   })
 
   it('filters online devices before starting a private chat', () => {
