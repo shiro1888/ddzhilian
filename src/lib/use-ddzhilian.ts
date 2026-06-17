@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { deleteBrowserOcrHistory, listBrowserOcrHistory, startBrowserOcrJob } from './browser-ocr'
 import type {
   AiChatImageInput,
   AiChatConversationRecord,
@@ -47,8 +48,6 @@ const HISTORY_PAGE_SIZE = 50
 const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
 const IMAGE_JOB_POLL_INTERVAL_MS = 2_000
 const IMAGE_JOB_POLL_TIMEOUT_MS = 15 * 60 * 1000
-const OCR_JOB_POLL_INTERVAL_MS = 1_000
-const OCR_JOB_POLL_TIMEOUT_MS = 60_000
 const binaryChunkEncoder = new TextEncoder()
 const binaryChunkDecoder = new TextDecoder()
 
@@ -3366,75 +3365,16 @@ export function useDdzhilian() {
     throw new Error('图片生成仍在后台处理中，请稍后刷新历史记录查看结果。')
   }
 
-  const getOcrJob = useCallback(async (jobId: string): Promise<OcrJobResponse> => {
-    const response = await fetch(`${API_BASE_URL}/api/ocr/jobs/${encodeURIComponent(jobId)}`)
-
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'OCR 任务加载失败。'))
-    }
-
-    return response.json() as Promise<OcrJobResponse>
+  const startOcrJob = useCallback(async (file: File): Promise<OcrJobResponse> => {
+    return startBrowserOcrJob(file)
   }, [])
 
-  const startOcrJob = useCallback(async (file: File): Promise<OcrJobResponse> => {
-    const body = new FormData()
-    body.append('image', file, file.name)
-
-    const response = await fetch(`${API_BASE_URL}/api/ocr`, {
-      method: 'POST',
-      body,
-    })
-
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'OCR 识别任务创建失败。'))
-    }
-
-    const startedJob = await response.json() as Partial<OcrJobResponse>
-    const jobId = typeof startedJob.jobId === 'string' ? startedJob.jobId.trim() : ''
-    if (!jobId) {
-      throw new Error('OCR 识别任务创建失败。')
-    }
-
-    const startedAt = Date.now()
-    let latestJob: OcrJobResponse = {
-      jobId,
-      status: startedJob.status ?? 'queued',
-      pollUrl: startedJob.pollUrl,
-    }
-
-    while (Date.now() - startedAt <= OCR_JOB_POLL_TIMEOUT_MS) {
-      if (latestJob.status === 'complete' || latestJob.status === 'failed') {
-        return latestJob
-      }
-
-      await delay(OCR_JOB_POLL_INTERVAL_MS)
-      latestJob = await getOcrJob(jobId)
-    }
-
-    throw new Error('OCR 识别仍在处理中，请稍后从历史记录查看结果。')
-  }, [getOcrJob])
-
   const listOcrHistory = useCallback(async (): Promise<OcrHistoryResponse> => {
-    const response = await fetch(`${API_BASE_URL}/api/ocr/history`)
-
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'OCR 历史加载失败。'))
-    }
-
-    const payload = await response.json() as Partial<OcrHistoryResponse>
-    return {
-      items: Array.isArray(payload.items) ? payload.items : [],
-    }
+    return listBrowserOcrHistory()
   }, [])
 
   const deleteOcrHistory = useCallback(async (jobId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/ocr/history/${encodeURIComponent(jobId)}`, {
-      method: 'DELETE',
-    })
-
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'OCR 历史删除失败。'))
-    }
+    await deleteBrowserOcrHistory(jobId)
   }, [])
 
   const listImageHistory = useCallback(async (
@@ -3847,7 +3787,6 @@ export function useDdzhilian() {
     deleteAiChatConversation,
     generateImage,
     startOcrJob,
-    getOcrJob,
     listOcrHistory,
     deleteOcrHistory,
     getImageQuota,

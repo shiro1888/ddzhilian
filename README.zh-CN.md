@@ -20,6 +20,7 @@ ddzhilian 是一个面向跨设备协作的轻量传输与聊天工作台。它�
 - 长文本交换：支持普通文本、富文本粘贴和 Markdown 显示。
 - 公共对话：支持公共 room 入口和 room 内历史内容。
 - 历史内容：文本历史默认保留 24 小时，历史文件按保留时间和容量自动清理。
+- OCR 辅助：在用户浏览器内运行 PaddleOCR.js tiny 模型识别图片文字，并只保留短期本地历史。
 - 账号生图：登录后使用图片生成，每个账号默认每天 3 张免费额度，免费次数和付费余额都保存在 Supabase 用户表；免费额度每日 04:00 刷新且不累加，生图时优先消耗免费额度，不足部分再消耗付费额度。
 - 账号后台：后台入口使用 Supabase 账号邮箱和密码登录，超级管理员来自 `ADMIN_SUPER_EMAILS`，普通管理员写入 Supabase `admin_roles` 表；API 密钥配置仅超级管理员可管理。
 - 实时信令：通过 WebSocket 协调设备在线状态、配对和 WebRTC 连接。
@@ -133,6 +134,7 @@ npm run dev
 - 生成图会保存为服务端图片文件，并以账号鉴权的图片链接返回给前端，而不是把 base64 直接塞进 JSON
 - Cloudflare AI 或 OpenRouter 的文本 AI 代理接口
 - 通过 Codex 反代地址接入上游图片生成与图片编辑接口
+- 浏览器端 PaddleOCR.js tiny 模型图片文字识别，不把 OCR 图片上传到后端
 
 更详细的后端协议说明见 [server/README.md](server/README.md)。生图功能的账号鉴权、API 接入、图片上传、异步返回、图片落盘、历史记录和额度扣减流程见 [docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md](docs/IMAGE_GENERATION_IMPLEMENTATION.zh-CN.md)。
 
