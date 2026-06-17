@@ -788,6 +788,28 @@ export function useDdzhilian() {
     )
   }
 
+  const buildLoadedHistoryTextStatsByRoomId = () => {
+    const statsByRoomId = new Map<string, { count: number; latestAt?: string }>()
+
+    for (const record of historyTextsRef.current) {
+      const current = statsByRoomId.get(record.roomId)
+      if (!current) {
+        statsByRoomId.set(record.roomId, {
+          count: 1,
+          latestAt: record.createdAt,
+        })
+        continue
+      }
+
+      current.count += 1
+      if (!current.latestAt || Date.parse(record.createdAt) > Date.parse(current.latestAt)) {
+        current.latestAt = record.createdAt
+      }
+    }
+
+    return statsByRoomId
+  }
+
   const fetchRoomHistoryTexts = async (
     roomId: string,
     mode: 'initial' | 'older',
@@ -795,10 +817,9 @@ export function useDdzhilian() {
       roomSummary?: RoomSummary
     },
   ) => {
-    const requestSelf = selfRef.current
-    const room = options?.roomSummary ?? roomsById[roomId]
+    const room = options?.roomSummary ?? roomsByIdRef.current[roomId]
 
-    if (!requestSelf?.historyAuthToken || !room) {
+    if (!selfRef.current?.historyAuthToken || !room) {
       return
     }
 
@@ -849,9 +870,16 @@ export function useDdzhilian() {
         url.searchParams.set('beforeHistoryId', currentState.oldestHistoryId)
       }
 
-      const response = await fetch(url, {
-        headers: buildHistoryAuthHeaders(requestSelf),
-      })
+      const { response } = await fetchWithHistoryAuthRetry(
+        (requestSelf) => fetch(url, {
+          headers: buildHistoryAuthHeaders(requestSelf),
+        }),
+        { roomId },
+      )
+
+      if (!response) {
+        throw new Error('当前设备尚未完成历史记录授权。')
+      }
 
       if (!response.ok) {
         throw new Error(`历史文本拉取失败：${response.status.toString()} ${await readResponseError(response)}`)
@@ -926,11 +954,36 @@ export function useDdzhilian() {
     peerNameById.set(snapshot.self.deviceId, snapshot.self.deviceName)
     const snapshotHistoryFileIds = new Set(snapshot.historyFiles.map((file) => file.historyId))
     const snapshotIds = new Set(snapshot.sessions.map((session) => session.sessionId))
+    const previousRoomsById = roomsByIdRef.current
+    const nextRoomsById = Object.fromEntries(snapshot.rooms.map((room) => [room.roomId, room] as const))
+    const loadedHistoryTextStatsByRoomId = buildLoadedHistoryTextStatsByRoomId()
     const roomsNeedingRefresh = snapshot.rooms.filter((room) => {
-      const previousRoom = roomsById[room.roomId]
+      const previousRoom = previousRoomsById[room.roomId]
       const pagination = historyTextPaginationRef.current[room.roomId]
 
-      if (!previousRoom || !pagination?.initialized || pagination.isLoading) {
+      if (room.historyTextCount === 0 || pagination?.isLoading) {
+        return false
+      }
+
+      const loadedStats = loadedHistoryTextStatsByRoomId.get(room.roomId)
+      const hasLoadedRoomTexts = pagination?.initialized === true || (loadedStats?.count ?? 0) > 0
+      if (!hasLoadedRoomTexts) {
+        return false
+      }
+
+      if (loadedStats && loadedStats.count < room.historyTextCount) {
+        return true
+      }
+
+      if (
+        loadedStats?.latestAt &&
+        room.historyTextLatestAt &&
+        loadedStats.latestAt !== room.historyTextLatestAt
+      ) {
+        return true
+      }
+
+      if (!previousRoom) {
         return false
       }
 
@@ -940,12 +993,12 @@ export function useDdzhilian() {
       )
     })
 
+    roomsByIdRef.current = nextRoomsById
+
     startTransition(() => {
       setSelf(snapshot.self)
       setOnlinePeers(normalizedPeers)
-      setRoomsById(
-        Object.fromEntries(snapshot.rooms.map((room) => [room.roomId, room] as const)),
-      )
+      setRoomsById(nextRoomsById)
       setRoomStates(snapshot.roomStates ?? [])
       setPreferences(snapshot.self.preferences ?? { enterToSend: true })
       setHistoryFiles(snapshot.historyFiles)
