@@ -1169,6 +1169,33 @@ function readArrayField(record: Record<string, unknown>, keys: string[]) {
 }
 
 function readDirectOcrLines(record: Record<string, unknown>) {
+  const directText = typeof record.text === 'string'
+    ? record.text
+    : typeof record.transcription === 'string'
+      ? record.transcription
+      : typeof record.recognizedText === 'string'
+        ? record.recognizedText
+        : typeof record.recognized_text === 'string'
+          ? record.recognized_text
+          : undefined;
+
+  if (directText) {
+    const confidence = readFiniteNumber(record.confidence)
+      ?? readFiniteNumber(record.score)
+      ?? readFiniteNumber(record.rec_score)
+      ?? readFiniteNumber(record.recScore);
+    const box = readOcrBox(record.box)
+      ?? readOcrBox(record.poly)
+      ?? readOcrBox(record.polygon)
+      ?? readOcrBox(record.points);
+
+    return [{
+      text: directText,
+      ...(confidence !== undefined ? { confidence } : {}),
+      ...(box ? { box } : {}),
+    }];
+  }
+
   const texts = readStringArrayField(record, [
     'rec_texts',
     'recTexts',

@@ -109,6 +109,12 @@ describe('AdminV2ProvidersWorkspace', () => {
     expect(screen.getByText('供应商配置')).toBeInTheDocument()
     expect(screen.queryByText('Cloudflare AI')).not.toBeInTheDocument()
     expect(screen.getAllByText('OpenAI Compatible 1').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /OpenAI Compatible 1/ })).toHaveClass('h-[65px]')
+    expect(screen.getByText('已保存')).toHaveClass('h-[32px]')
+    expect(screen.getAllByText('已配置').some((element) =>
+      element.classList.contains('h-[28px]'),
+    )).toBe(true)
+    expect(screen.getByText('模型 2')).toHaveClass('h-[28px]')
     expect(screen.getByLabelText('显示名称')).toHaveValue('OpenAI Compatible 1')
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.provider.example.com/v1')
     expect(screen.getByLabelText('API Key')).toHaveValue('sk-test-openai')

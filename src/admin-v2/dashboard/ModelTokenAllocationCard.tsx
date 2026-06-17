@@ -113,7 +113,7 @@ export function ModelTokenAllocationCard({
     <Card className={cn("h-full", className)}>
       <CardHeader>
         <CardTitle className="font-normal">模型 Token 量</CardTitle>
-        <CardDescription>按 `promptTokens + completionTokens` 总量统计当前供应商的前四名模型</CardDescription>
+        <CardDescription>总量统计当前供应商的前四名模型</CardDescription>
         <CardAction className="flex items-center gap-2">
           <Badge variant="outline">{providerLabel}</Badge>
           <Select onValueChange={(value) => setMetric(value as TokenMetric)} value={metric}>
@@ -201,7 +201,7 @@ export function ModelTokenAllocationCard({
               </EmptyMedia>
               <EmptyTitle>当前供应商暂无 Token 记录</EmptyTitle>
               <EmptyDescription>
-                这里展示当前主运行供应商按 `promptTokens + completionTokens` 聚合后的前四名模型占比。
+                当前主运行供应商按聚合后的前四名模型占比。
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminV2ProtectedLayout } from '@/admin-v2/shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -61,6 +61,12 @@ function getDesktopSidebarHoverNode() {
   return sidebar as HTMLElement
 }
 
+function getSidebarWrapperNode() {
+  const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]')
+  expect(wrapper).toBeInstanceOf(HTMLElement)
+  return wrapper as HTMLElement
+}
+
 afterEach(() => {
   cleanup()
   mocks.logout.mockReset()
@@ -71,6 +77,7 @@ describe('AdminV2ProtectedLayout sidebar', () => {
   it('expands the desktop admin sidebar on hover and collapses after leave', () => {
     renderAdminShell()
 
+    expect(getSidebarWrapperNode().style.getPropertyValue('--sidebar-width-icon')).toBe('33px')
     expect(getDesktopSidebarStateNode()).toHaveAttribute('data-state', 'collapsed')
 
     fireEvent.mouseEnter(getDesktopSidebarHoverNode())
@@ -78,5 +85,13 @@ describe('AdminV2ProtectedLayout sidebar', () => {
 
     fireEvent.mouseLeave(getDesktopSidebarHoverNode())
     expect(getDesktopSidebarStateNode()).toHaveAttribute('data-state', 'collapsed')
+  })
+
+  it('renders the topbar super admin badge at the annotated height', () => {
+    renderAdminShell()
+
+    expect(screen.getAllByText('super_admin').some((element) =>
+      element.classList.contains('h-[28px]'),
+    )).toBe(true)
   })
 })

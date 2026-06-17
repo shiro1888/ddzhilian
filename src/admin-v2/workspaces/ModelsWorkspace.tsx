@@ -38,6 +38,10 @@ type AdminV2ModelsWorkspaceProps = {
   onChange: (updater: (current: AdminAiSettings) => AdminAiSettings) => void
 }
 
+const MODEL_SUMMARY_BADGE_CLASS_NAME = 'h-[30px] px-3'
+const MODEL_STATE_BADGE_CLASS_NAME = 'h-[28px] px-3'
+const MODEL_DEFAULT_BADGE_CLASS_NAME = 'h-[28px] w-[50px] justify-center'
+
 function summarizeEnabledModels(models: AdminModelToggleItem[]) {
   return models.filter((model) => model.enabled).length
 }
@@ -65,7 +69,7 @@ function ModelGroupCard({
               {group.providerTypeLabel} · 默认模型 {group.defaultModel || '未设置'}
             </CardDescription>
           </div>
-          <Badge variant="outline">
+          <Badge variant="outline" className={MODEL_SUMMARY_BADGE_CLASS_NAME}>
             已启用 {formatInteger(summarizeEnabledModels(group.models))} / {formatInteger(group.models.length)}
           </Badge>
         </div>
@@ -89,12 +93,16 @@ function ModelGroupCard({
                   <TableCell className="font-medium">{model.label}</TableCell>
                   <TableCell className="max-w-[22rem] truncate text-muted-foreground">{model.id}</TableCell>
                   <TableCell>
-                    <Badge variant={model.enabled ? 'secondary' : 'outline'}>
+                    <Badge variant={model.enabled ? 'secondary' : 'outline'} className={MODEL_STATE_BADGE_CLASS_NAME}>
                       {model.enabled ? '启用' : '关闭'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {isDefault ? <Badge>默认</Badge> : <span className="text-muted-foreground">未设为默认</span>}
+                    {isDefault ? (
+                      <Badge className={MODEL_DEFAULT_BADGE_CLASS_NAME}>默认</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">未设为默认</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">

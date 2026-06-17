@@ -195,7 +195,10 @@ function AdminV2ShellChrome({
   return (
     <SidebarProvider
       defaultOpen={false}
-      style={{ '--sidebar-width': '17rem' } as CSSProperties}
+      style={{
+        '--sidebar-width': '17rem',
+        '--sidebar-width-icon': '33px',
+      } as CSSProperties}
     >
       <AdminV2Sidebar />
       <SidebarInset className="peer-data-[variant=inset]:border [html[data-content-layout=centered]_&>*]:mx-auto [html[data-content-layout=centered]_&>*]:w-full [html[data-content-layout=centered]_&>*]:max-w-screen-2xl">
@@ -210,7 +213,9 @@ function AdminV2ShellChrome({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {adminSession?.isSuperAdmin ? <Badge variant="secondary">super_admin</Badge> : null}
+              {adminSession?.isSuperAdmin ? (
+                <Badge variant="secondary" className="h-[28px] px-3">super_admin</Badge>
+              ) : null}
               <AdminV2ThemeToggle />
               <Button
                 type="button"
@@ -249,7 +254,7 @@ function AdminV2LoadingState() {
       <Card className="w-full max-w-xl">
         <CardHeader>
           <CardTitle>正在初始化管理台</CardTitle>
-          <CardDescription>后台首帧依赖真实 session 快照，正在检查当前登录态。</CardDescription>
+          <CardDescription>正在检查当前登录态。</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           <Skeleton className="h-8 w-48" />

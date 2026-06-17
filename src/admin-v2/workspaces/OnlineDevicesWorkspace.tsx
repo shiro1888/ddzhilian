@@ -122,7 +122,6 @@ function OnlineDeviceRow({
 
 export function AdminV2OnlineDevicesWorkspace({
   onlineDevices,
-  isRefreshing,
   isSaving,
   onRefresh,
   onRename,
@@ -159,13 +158,7 @@ export function AdminV2OnlineDevicesWorkspace({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>在线设备</CardTitle>
-              <CardDescription>
-                当前页面按 2 秒轮询 `GET /api/admin/online-devices`，改名后只回写在线设备快照。
-              </CardDescription>
             </div>
-            <Button type="button" variant="outline" disabled={isRefreshing} onClick={() => void onRefresh()}>
-              {isRefreshing ? '刷新中...' : '立即刷新'}
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
@@ -191,8 +184,8 @@ export function AdminV2OnlineDevicesWorkspace({
             <option value={50}>50 / 页</option>
           </select>
           <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline">在线 {formatInteger(devices.length)}</Badge>
-            <Badge variant="outline">已关联 {formatInteger(linkedAccountCount)}</Badge>
+            <Badge variant="outline" className="h-[30px] px-3">在线 {formatInteger(devices.length)}</Badge>
+            <Badge variant="outline" className="h-[30px] px-3">已关联 {formatInteger(linkedAccountCount)}</Badge>
           </div>
         </CardContent>
       </Card>

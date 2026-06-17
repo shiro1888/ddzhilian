@@ -165,7 +165,7 @@ export function UserVisitVolumeCard({
               </EmptyMedia>
               <EmptyTitle>最近时段暂无消息记录</EmptyTitle>
               <EmptyDescription>
-                这里展示 ddzhilian 用户发送文本消息聚合后的活跃度。
+                用户发送文本消息聚合后的活跃度。
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

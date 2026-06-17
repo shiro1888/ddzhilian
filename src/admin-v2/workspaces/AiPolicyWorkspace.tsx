@@ -47,9 +47,9 @@ export function AdminV2AiPolicyWorkspace({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>AI 策略</CardTitle>
+              <CardTitle>System Prompt</CardTitle>
               <CardDescription>
-                `systemPrompt` 已从供应商配置页剥离。这里管理全局 AI 策略，不归属于任何具体 provider。
+                输入你的System Prompt
               </CardDescription>
             </div>
             <Badge variant={status.variant}>{status.label}</Badge>
@@ -57,8 +57,8 @@ export function AdminV2AiPolicyWorkspace({
         </CardHeader>
         <CardContent className="grid gap-4">
           <label className="grid gap-2 text-sm">
-            <span className="font-medium text-foreground">System Prompt</span>
             <Textarea
+              aria-label="System Prompt"
               className="min-h-56"
               value={systemPromptDraft}
               disabled={!canEdit}
@@ -73,7 +73,7 @@ export function AdminV2AiPolicyWorkspace({
               }}
             />
             <span className="text-xs text-muted-foreground">
-              自动保存规则：离开输入框后，如果内容有变化且通过基础校验，就会提交完整 `AdminAiSettings` payload。
+              自动保存规则：离开输入框后，如果内容有变化且通过基础校验，就会提交完整
             </span>
           </label>
         </CardContent>

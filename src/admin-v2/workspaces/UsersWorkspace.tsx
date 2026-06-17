@@ -203,7 +203,7 @@ export function AdminV2UsersWorkspace({
         <CardHeader>
           <CardTitle>用户额度</CardTitle>
           <CardDescription>
-            当前页面继续沿用前端本地搜索、排序、分页；保存时只回写 `/api/admin/users/quota`。
+            当前页面继续沿用前端本地搜索、排序、分页；。
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_16rem]">

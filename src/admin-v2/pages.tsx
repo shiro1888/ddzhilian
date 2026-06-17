@@ -352,7 +352,6 @@ export function AdminV2IndexPage() {
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle>正在进入管理台</CardTitle>
-          <CardDescription>根据当前 Cookie 会话决定跳转到登录页还是仪表盘。</CardDescription>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-9 w-full" />
@@ -394,9 +393,6 @@ export function AdminV2LoginPage() {
             <Badge variant="outline">{ADMIN_V2_BASE_PATH}</Badge>
           </div>
           <CardTitle className="mt-3 text-2xl">全新独立管理台</CardTitle>
-          <CardDescription>
-            当前已接通模板骨架、登录态、session 首帧，以及 4 个优先工作区的真实交互。
-          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
@@ -437,7 +433,7 @@ export function AdminV2LoginPage() {
             <p className="text-sm text-destructive">{error}</p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              登录成功后直接使用返回的聚合快照进入后台，不额外补拉一次 session。
+              登录成功后进入后台。
             </p>
           )}
           <div className="flex flex-wrap gap-3">
@@ -493,7 +489,7 @@ export function AdminV2DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>模型调用概览</CardTitle>
-          <CardDescription>按所有已配置供应商聚合的调用结果</CardDescription>
+          <CardDescription>所有已配置供应商聚合的模型列表</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {usageOverview ? (
@@ -506,7 +502,7 @@ export function AdminV2DashboardPage() {
                 </EmptyMedia>
                 <EmptyTitle>当前供应商暂无调用记录</EmptyTitle>
                 <EmptyDescription>
-                  这里展示所有已配置供应商的模型调用概览。
+                  所有已配置供应商的模型调用概览。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -538,7 +534,7 @@ function SuperAdminPermissionGuard({
       <CardHeader>
         <CardTitle className="text-base text-destructive">权限受限</CardTitle>
         <CardDescription className="text-destructive/80">
-          当前账号不是超级管理员。{title} 已保留正式入口，但只有超级管理员能{description}。
+          当前账号不是超级管理员。{title} 只有超级管理员能{description}。
         </CardDescription>
       </CardHeader>
     </Card>
@@ -566,7 +562,7 @@ export function AdminV2AiPolicyPage() {
     return (
       <SuperAdminPermissionGuard
         title="AI 策略页"
-        description="修改全局 system prompt 和非 provider 级策略项"
+        description="修改全局 system prompt"
       />
     )
   }
@@ -644,7 +640,7 @@ export function AdminV2WorkspacePage({
       return (
         <SuperAdminPermissionGuard
           title="供应商配置页"
-          description="修改连接配置和模型探测设置"
+          description="修改连接配置和模型探测"
         />
       )
     }

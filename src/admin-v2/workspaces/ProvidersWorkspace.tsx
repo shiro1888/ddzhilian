@@ -102,18 +102,18 @@ function AutoSaveStatus({
   error: string | null
 }>) {
   if (error) {
-    return <Badge variant="destructive">{error}</Badge>
+    return <Badge variant="destructive" className="h-[32px] px-3">{error}</Badge>
   }
 
   if (isSaving) {
-    return <Badge variant="outline">自动保存中</Badge>
+    return <Badge variant="outline" className="h-[32px] px-3">自动保存中</Badge>
   }
 
   if (hasUnsavedChanges) {
-    return <Badge variant="outline">存在未保存更改</Badge>
+    return <Badge variant="outline" className="h-[32px] px-3">存在未保存更改</Badge>
   }
 
-  return <Badge variant="secondary">已保存</Badge>
+  return <Badge variant="secondary" className="h-[32px] px-3">已保存</Badge>
 }
 
 function NavItemButton({
@@ -138,7 +138,7 @@ function NavItemButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors',
+        'flex h-[65px] w-full shrink-0 items-center justify-between gap-3 overflow-hidden rounded-xl border px-3 text-left transition-colors',
         active
           ? 'border-primary bg-primary/5 text-foreground'
           : 'border-border bg-background text-foreground hover:bg-muted/50',
@@ -334,11 +334,13 @@ function OpenAiCompatiblePanel({
   return (
     <DetailSection
       title={config.displayName || 'OpenAI Compatible'}
-      description="高频区只保留连接与鉴权，模型启用和默认值只读展示。"
+      description="连接与鉴权，模型启用和默认值展示。"
       status={(
         <div className="flex gap-2">
-          <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
-          <Badge variant="outline">模型 {formatInteger(savedConfig.models.length)}</Badge>
+          <Badge variant={configured ? 'secondary' : 'outline'} className="h-[28px] px-3">
+            {buildConfiguredLabel(configured)}
+          </Badge>
+          <Badge variant="outline" className="h-[28px] px-3">模型 {formatInteger(savedConfig.models.length)}</Badge>
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAutoSave()}>
             保存配置
           </Button>
@@ -564,8 +566,10 @@ function AnthropicPanel({
       description="Anthropic Messages 协议配置。"
       status={(
         <div className="flex gap-2">
-          <Badge variant={configured ? 'secondary' : 'outline'}>{buildConfiguredLabel(configured)}</Badge>
-          <Badge variant="outline">模型 {formatInteger(savedConfig.models.length)}</Badge>
+          <Badge variant={configured ? 'secondary' : 'outline'} className="h-[28px] px-3">
+            {buildConfiguredLabel(configured)}
+          </Badge>
+          <Badge variant="outline" className="h-[28px] px-3">模型 {formatInteger(savedConfig.models.length)}</Badge>
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAutoSave()}>
             保存配置
           </Button>
@@ -838,7 +842,7 @@ export function AdminV2ProvidersWorkspace({
           </div>
         </CardHeader>
         <CardContent className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="grid gap-3">
+          <div className="grid items-start gap-3">
             {detailList.map((item) => (
               <NavItemButton
                 key={item.key}
