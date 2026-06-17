@@ -1,7 +1,7 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
-import { useEffect } from 'react'
+import type { CSSProperties, FocusEvent, ReactNode } from 'react'
+import { useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -40,6 +40,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { applyThemeMode } from '@/lib/preferences/theme-utils'
@@ -80,13 +81,42 @@ function AdminV2Sidebar() {
   const pathname = usePathname()
   const adminSession = useAdminV2Session().adminSession
   const sidebarVariant = usePreferencesStore((state) => state.sidebarVariant)
-  const sidebarCollapsible = usePreferencesStore((state) => state.sidebarCollapsible)
   const isSynced = usePreferencesStore((state) => state.isSynced)
+  const { isMobile, setOpen } = useSidebar()
+
+  const openSidebarOnIntent = useCallback(() => {
+    if (!isMobile) {
+      setOpen(true)
+    }
+  }, [isMobile, setOpen])
+
+  const closeSidebarOnLeave = useCallback(() => {
+    if (!isMobile) {
+      setOpen(false)
+    }
+  }, [isMobile, setOpen])
+
+  const closeSidebarOnBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (isMobile) {
+      return
+    }
+
+    const nextFocusedElement = event.relatedTarget
+    if (nextFocusedElement && event.currentTarget.contains(nextFocusedElement as Node)) {
+      return
+    }
+
+    setOpen(false)
+  }, [isMobile, setOpen])
 
   return (
     <Sidebar
       variant={isSynced ? sidebarVariant : 'inset'}
-      collapsible={isSynced ? sidebarCollapsible : 'icon'}
+      collapsible="icon"
+      onMouseEnter={openSidebarOnIntent}
+      onMouseLeave={closeSidebarOnLeave}
+      onFocusCapture={openSidebarOnIntent}
+      onBlurCapture={closeSidebarOnBlur}
     >
       <SidebarHeader>
         <SidebarMenu>
@@ -123,21 +153,29 @@ function AdminV2Sidebar() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-        <Card size="sm" className="bg-sidebar-accent/40 ring-sidebar-border">
-          <CardHeader className="gap-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <ShieldCheck className="size-4" />
-              当前管理员
-            </CardTitle>
-            <CardDescription>{adminSession?.email ?? '未登录'}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <Badge>{adminSession?.role === 'super_admin' ? 'super_admin' : 'admin'}</Badge>
-            {adminSession?.isSuperAdmin ? (
-              <Badge variant="secondary">已启用高级权限</Badge>
-            ) : null}
-          </CardContent>
-        </Card>
+        <div className="group-data-[collapsible=icon]:hidden">
+          <Card size="sm" className="bg-sidebar-accent/40 ring-sidebar-border">
+            <CardHeader className="gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ShieldCheck className="size-4" />
+                当前管理员
+              </CardTitle>
+              <CardDescription>{adminSession?.email ?? '未登录'}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center gap-2">
+              <Badge>{adminSession?.role === 'super_admin' ? 'super_admin' : 'admin'}</Badge>
+              {adminSession?.isSuperAdmin ? (
+                <Badge variant="secondary">已启用高级权限</Badge>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="hidden justify-center group-data-[collapsible=icon]:flex">
+          <ShieldCheck
+            aria-label={`当前管理员：${adminSession?.email ?? '未登录'}`}
+            className="size-4 text-sidebar-foreground/70"
+          />
+        </div>
       </SidebarFooter>
     </Sidebar>
   )
@@ -156,7 +194,7 @@ function AdminV2ShellChrome({
 
   return (
     <SidebarProvider
-      defaultOpen
+      defaultOpen={false}
       style={{ '--sidebar-width': '17rem' } as CSSProperties}
     >
       <AdminV2Sidebar />
