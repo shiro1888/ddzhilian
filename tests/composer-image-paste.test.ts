@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectComposerImagePasteFiles } from '@/app/composer-image-paste'
+import { selectComposerAttachmentFiles, selectComposerImagePasteFiles } from '@/app/composer-image-paste'
 
 function createImageFile(name: string, mimeType: string, size: number) {
   return new File([new Uint8Array(size)], name, { type: mimeType })
@@ -27,5 +27,28 @@ describe('selectComposerImagePasteFiles', () => {
 
     expect(result.selectedFiles).toEqual(images.slice(0, 2))
     expect(result.skippedCount).toBe(1)
+  })
+})
+
+describe('selectComposerAttachmentFiles', () => {
+  it('routes image attachments to inline image drafts instead of transferable files', () => {
+    const png = createImageFile('photo.png', 'image/png', 1024)
+    const jpgWithoutMimeType = createImageFile('camera.JPG', '', 1024)
+    const pdf = new File(['pdf'], 'document.pdf', { type: 'application/pdf' })
+
+    const result = selectComposerAttachmentFiles([png, jpgWithoutMimeType, pdf])
+
+    expect(result.inlineImageFiles).toEqual([png, jpgWithoutMimeType])
+    expect(result.transferableFiles).toEqual([pdf])
+  })
+
+  it('keeps non-image attachments on the normal file transfer path', () => {
+    const video = new File(['video'], 'clip.mp4', { type: 'video/mp4' })
+    const archive = new File(['zip'], 'archive.zip', { type: 'application/zip' })
+
+    const result = selectComposerAttachmentFiles([video, archive])
+
+    expect(result.inlineImageFiles).toEqual([])
+    expect(result.transferableFiles).toEqual([video, archive])
   })
 })

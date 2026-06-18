@@ -608,6 +608,13 @@ function getImageExtensionFromMimeType(mimeType: string) {
   }
 }
 
+function isClipboardImageFile(file: File) {
+  const normalizedMimeType = file.type.toLowerCase()
+  const normalizedName = file.name.toLowerCase()
+
+  return normalizedMimeType.startsWith('image/') || /\.(avif|bmp|gif|heic|jpe?g|png|svg|tiff?|webp)$/i.test(normalizedName)
+}
+
 function normalizePastedImageFile(file: File, index: number) {
   if (file.name.trim()) {
     return file
@@ -620,17 +627,21 @@ function normalizePastedImageFile(file: File, index: number) {
   })
 }
 
-function getClipboardImageFiles(dataTransfer: DataTransfer) {
-  const imageFiles = Array.from(dataTransfer.items)
-    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+function normalizePastedClipboardFile(file: File, index: number) {
+  return isClipboardImageFile(file) ? normalizePastedImageFile(file, index) : file
+}
+
+function getClipboardFiles(dataTransfer: DataTransfer) {
+  const itemFiles = Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file')
     .map((item) => item.getAsFile())
     .filter((file): file is File => Boolean(file))
 
-  const files = imageFiles.length > 0
-    ? imageFiles
-    : Array.from(dataTransfer.files).filter((file) => file.type.startsWith('image/'))
+  const files = itemFiles.length > 0
+    ? itemFiles
+    : Array.from(dataTransfer.files)
 
-  return files.map(normalizePastedImageFile)
+  return files.map(normalizePastedClipboardFile)
 }
 
 function isImageOnlyRichText(value: string) {
@@ -2128,8 +2139,8 @@ export function SnapLinkStage({
   }
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const pastedImageFiles = getClipboardImageFiles(event.clipboardData)
-    if (pastedImageFiles.length === 0) {
+    const pastedFiles = getClipboardFiles(event.clipboardData)
+    if (pastedFiles.length === 0) {
       return
     }
 
@@ -2138,7 +2149,14 @@ export function SnapLinkStage({
     setIsBotPanelOpen(false)
     setIsThemePanelOpen(false)
     botMentionTriggerRangeRef.current = null
-    onPastedImageSelection(pastedImageFiles)
+    armOutgoingEntryAnimation()
+
+    if (pastedFiles.every(isClipboardImageFile)) {
+      onPastedImageSelection(pastedFiles)
+      return
+    }
+
+    onDirectFileSelection(pastedFiles)
   }
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {

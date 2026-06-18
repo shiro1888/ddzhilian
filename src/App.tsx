@@ -7,7 +7,7 @@ import { ImageAccountGate } from './app/components/ImageAccountGate'
 import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
 import { WebCommandStage } from './app/components/WebCommandStage'
-import { selectComposerImagePasteFiles } from './app/composer-image-paste'
+import { selectComposerAttachmentFiles, selectComposerImagePasteFiles } from './app/composer-image-paste'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
   ComposerImageDraft,
@@ -1272,7 +1272,10 @@ function App() {
     })
   }
 
-  const handleSendFilesToCurrentConversation = async (files: File[]) => {
+  const handleSendFilesToCurrentConversation = async (
+    files: File[],
+    options: { preserveLocalError?: boolean } = {},
+  ) => {
     if (files.length === 0) {
       return
     }
@@ -1314,7 +1317,9 @@ function App() {
           null,
         )
       }
-      setLocalError(null)
+      if (!options.preserveLocalError) {
+        setLocalError(null)
+      }
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文件发送失败。')
     }
@@ -1357,6 +1362,27 @@ function App() {
       )
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '图片读取失败。')
+    }
+  }
+
+  const handleAttachFilesToCurrentConversation = async (files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    const {
+      inlineImageFiles,
+      transferableFiles,
+    } = selectComposerAttachmentFiles(files)
+
+    if (inlineImageFiles.length > 0) {
+      await handleComposerImagePaste(inlineImageFiles)
+    }
+
+    if (transferableFiles.length > 0) {
+      await handleSendFilesToCurrentConversation(transferableFiles, {
+        preserveLocalError: inlineImageFiles.length > 0,
+      })
     }
   }
 
@@ -1520,7 +1546,7 @@ function App() {
       return
     }
 
-    await handleSendFilesToCurrentConversation(nextFiles)
+    await handleAttachFilesToCurrentConversation(nextFiles)
   }
 
   const handleDragEnter = (event: DragEvent<HTMLElement>) => {
@@ -1680,7 +1706,7 @@ function App() {
         setComposerImageDrafts((previous) => previous.filter((image) => image.id !== imageId))
       }}
       onDirectFileSelection={(files) => {
-        void handleSendFilesToCurrentConversation(files)
+        void handleAttachFilesToCurrentConversation(files)
       }}
       onStartOcrJob={startOcrJob}
       onListOcrHistory={listOcrHistory}
