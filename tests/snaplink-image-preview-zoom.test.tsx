@@ -198,6 +198,13 @@ describe('SnapLinkStage image preview zoom', () => {
       expect(screen.getByRole('dialog', { name: '图片预览' })).toHaveClass('is-ready')
     })
 
+    const originFeedbackCall = gsapMock.fromTo.mock.calls.find(([target]) => target === inlineImage)
+    expect(originFeedbackCall?.[2]).toMatchObject({
+      duration: 0.18,
+      repeat: 1,
+      yoyo: true,
+    })
+
     const timelineCallsAfterOpen = gsapMock.timeline.mock.calls.length
     expect(timelineCallsAfterOpen).toBe(1)
 
@@ -248,6 +255,16 @@ describe('SnapLinkStage image preview zoom', () => {
       skewY: -3,
       transformOrigin: 'right center',
     })
+    expect(gsapMock.timelineTo.mock.calls).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          panel,
+          expect.objectContaining({
+            duration: 1,
+          }),
+        ]),
+      ]),
+    )
     expect(childPerspectiveTween).toBe(false)
     expect(previewClipPathTween).toBe(false)
     expect(previewClipPathSet).toBe(false)

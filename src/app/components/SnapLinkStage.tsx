@@ -123,7 +123,8 @@ const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
 const snapLinkLobbyGreetingText = '你好，我是ddzhilian'
-const snapLinkImagePreviewOpenDuration = 0.56
+const snapLinkImagePreviewOpenDuration = 1
+const snapLinkImagePreviewOriginFeedbackDuration = 0.18
 const snapLinkImagePreviewCloseDuration = 0.34
 const snapLinkImagePreviewZoomScale = 1.85
 const snapLinkRecallBurstAnimationMs = 720
@@ -2433,7 +2434,7 @@ export function SnapLinkStage({
     }, {
       scale: 0.94,
       filter: 'brightness(1.06)',
-      duration: 0.12,
+      duration: snapLinkImagePreviewOriginFeedbackDuration,
       ease: 'power2.out',
       yoyo: true,
       repeat: 1,
