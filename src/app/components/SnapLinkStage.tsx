@@ -14,6 +14,7 @@ import type {
 import { createPortal, flushSync } from 'react-dom'
 import { ScanText } from 'lucide-react'
 import gsap from 'gsap'
+import { EncryptedText } from '@/components/ui/encrypted-text'
 import type {
   ComposerImageDraft,
   FileConversationEntry,
@@ -126,6 +127,7 @@ const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
 const snapLinkLobbyGreetingText = '你好，我是ddzhilian'
+const snapLinkLobbyGreetingScrambleCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
 const snapLinkImagePreviewOpenDuration = 1
 const snapLinkImagePreviewOriginFeedbackDuration = 0.18
 const snapLinkImagePreviewCloseDuration = 0.34
@@ -3342,8 +3344,17 @@ export function SnapLinkStage({
             aiChatElement
           ) : !hasActiveRoom ? (
             <section className="dd-snaplink__lobby" aria-label="ddzhilian 大厅">
-              <h1 className="dd-snaplink__lobby-title" aria-label={snapLinkLobbyGreetingText}>
-                <span className="dd-snaplink__lobby-type" aria-hidden="true">{snapLinkLobbyGreetingText}<span className="dd-snaplink__lobby-cursor">_</span></span>
+              <h1 className="dd-snaplink__lobby-title">
+                <EncryptedText
+                  text={snapLinkLobbyGreetingText}
+                  className="dd-snaplink__lobby-type"
+                  encryptedClassName="dd-snaplink__lobby-encrypted"
+                  revealedClassName="dd-snaplink__lobby-revealed"
+                  charset={snapLinkLobbyGreetingScrambleCharset}
+                  revealDelayMs={68}
+                  flipDelayMs={34}
+                />
+                <span className="dd-snaplink__lobby-cursor" aria-hidden="true">_</span>
               </h1>
               <button
                 type="button"

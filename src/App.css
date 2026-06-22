@@ -8769,23 +8769,20 @@
 .dd-snaplink__lobby-type {
   display: inline-flex;
   align-items: baseline;
-  width: 0;
-  overflow: hidden;
   white-space: nowrap;
-  animation: dd-snaplink-lobby-type 1.9s steps(15, end) forwards;
+}
+
+.dd-snaplink__lobby-encrypted,
+.dd-snaplink__lobby-revealed {
+  display: inline-block;
 }
 
 .dd-snaplink__lobby-cursor {
   flex: none;
-  margin-left: 0;
+  margin-left: 1px;
   animation: dd-landing-cursor-blink 1s step-end infinite;
 }
 
-@keyframes dd-snaplink-lobby-type {
-  to {
-    width: 10.8em;
-  }
-}
 
 .dd-snaplink__create,
 .dd-snaplink__send {
