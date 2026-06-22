@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { deleteBrowserOcrHistory, listBrowserOcrHistory, startBrowserOcrJob } from './browser-ocr'
+import { resolveDocumentPreviewKind } from './document-preview'
 import type {
   AiChatImageInput,
   AiChatConversationRecord,
@@ -46,6 +47,7 @@ const DATA_CHANNEL_HEARTBEAT_INTERVAL_MS = 1_000
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
 const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
+const HISTORY_FILE_MISSING_MESSAGE = '历史文件实体不存在或已被清理，无法预览/下载。'
 const IMAGE_JOB_POLL_INTERVAL_MS = 2_000
 const IMAGE_JOB_POLL_TIMEOUT_MS = 15 * 60 * 1000
 const binaryChunkEncoder = new TextEncoder()
@@ -125,9 +127,23 @@ async function readApiError(response: Response, fallback: string) {
 }
 
 function normalizeApiErrorMessage(message: string) {
-  return message === 'Missing bearer token.' || message === 'Invalid bearer token.'
-    ? HISTORY_AUTH_EXPIRED_MESSAGE
-    : message
+  if (message === 'Missing bearer token.' || message === 'Invalid bearer token.') {
+    return HISTORY_AUTH_EXPIRED_MESSAGE
+  }
+
+  if (message === 'History file not found.') {
+    return HISTORY_FILE_MISSING_MESSAGE
+  }
+
+  return message
+}
+
+function getHistoryDownloadErrorFallback(status: number) {
+  if (status === 404) {
+    return HISTORY_FILE_MISSING_MESSAGE
+  }
+
+  return `历史文件下载失败，状态码 ${status.toString()}。`
 }
 
 function isHistoryAuthExpiredError(status: number, message: string) {
@@ -2104,9 +2120,15 @@ export function useDdzhilian() {
       const previewUrl = isPreviewableMediaType(fileMimeType)
         ? URL.createObjectURL(file)
         : undefined
+      const documentPreviewUrl = resolveDocumentPreviewKind(fileMimeType, file.name)
+        ? URL.createObjectURL(file)
+        : undefined
 
       if (previewUrl) {
         objectUrlsRef.current.push(previewUrl)
+      }
+      if (documentPreviewUrl) {
+        objectUrlsRef.current.push(documentPreviewUrl)
       }
 
       for (const target of targetSet) {
@@ -2131,6 +2153,7 @@ export function useDdzhilian() {
           fileSize: file.size,
           fileMimeType,
           previewUrl,
+          documentPreviewUrl,
           targetDeviceId: target?.peerId,
           targetDeviceName: target?.peerName,
           sessionId: target?.sessionId,
@@ -2319,7 +2342,7 @@ export function useDdzhilian() {
     }
   }
 
-  const downloadHistoryFile = async (
+  const loadHistoryFileBlob = async (
     file: HistoryFileSummary,
     onProgress?: (progress: HistoryDownloadProgress) => void,
   ) => {
@@ -2334,7 +2357,12 @@ export function useDdzhilian() {
     })
 
     if (!response.ok) {
-      throw new Error(`History download failed with status ${response.status.toString()}`)
+      const message = await readApiError(response, getHistoryDownloadErrorFallback(response.status))
+      if (isHistoryAuthExpiredError(response.status, message)) {
+        reconnectSocket()
+      }
+
+      throw new Error(message)
     }
 
     const contentLength = Number(response.headers.get('content-length'))
@@ -2348,8 +2376,7 @@ export function useDdzhilian() {
         totalBytes: totalBytes > 0 ? totalBytes : blob.size,
         progress: 1,
       })
-      saveBlobAsDownload(blob, file.fileName)
-      return
+      return blob
     }
 
     const reader = response.body.getReader()
@@ -2397,8 +2424,19 @@ export function useDdzhilian() {
       totalBytes: totalBytes > 0 ? totalBytes : blob.size,
       progress: 1,
     })
+    return blob
+  }
+
+  const downloadHistoryFile = async (
+    file: HistoryFileSummary,
+    onProgress?: (progress: HistoryDownloadProgress) => void,
+  ) => {
+    const blob = await loadHistoryFileBlob(file, onProgress)
     saveBlobAsDownload(blob, file.fileName)
   }
+
+  const resolveHistoryFileDownloadUrl = (file: HistoryFileSummary) =>
+    new URL(file.downloadPath, API_BASE_URL).toString()
 
   const startTransfer = async (transferId: string, preferredSessionId?: string | null) => {
     const transfer = transferItemsRef.current.find((item) => item.id === transferId)
@@ -3591,9 +3629,17 @@ export function useDdzhilian() {
           ? URL.createObjectURL(file)
           : undefined
       )
+      const documentPreviewUrl = existingTransfer?.documentPreviewUrl ?? (
+        resolveDocumentPreviewKind(file.type || undefined, file.name)
+          ? URL.createObjectURL(file)
+          : undefined
+      )
 
       if (previewUrl && !existingTransfer?.previewUrl) {
         objectUrlsRef.current.push(previewUrl)
+      }
+      if (documentPreviewUrl && !existingTransfer?.documentPreviewUrl) {
+        objectUrlsRef.current.push(documentPreviewUrl)
       }
 
       const transferItem: TransferItem = {
@@ -3604,6 +3650,7 @@ export function useDdzhilian() {
           fileSize: file.size,
           fileMimeType: file.type || undefined,
           previewUrl,
+          documentPreviewUrl,
           progress: 0,
           sentBytes: 0,
           acknowledgedBytes: 0,
@@ -3819,6 +3866,8 @@ export function useDdzhilian() {
     retryTransfer,
     cancelTransfer,
     downloadHistoryFile,
+    loadHistoryFileBlob,
+    resolveHistoryFileDownloadUrl,
     startPendingTransfers,
     sendText,
     recallText,

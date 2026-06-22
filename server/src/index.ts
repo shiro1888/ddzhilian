@@ -558,6 +558,47 @@ function writeJson(
   response.end(JSON.stringify(payload));
 }
 
+function pipeStorageFileResponse(
+  response: ServerResponse,
+  storagePath: string,
+  options?: {
+    start?: number;
+    end?: number;
+    context?: Record<string, unknown>;
+  },
+) {
+  const hasRange = options?.start !== undefined || options?.end !== undefined;
+  const stream = hasRange
+    ? createReadStream(storagePath, {
+        start: options?.start,
+        end: options?.end,
+      })
+    : createReadStream(storagePath);
+
+  stream.on('error', (error) => {
+    console.warn('Storage file stream failed', {
+      ...options?.context,
+      storagePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    if (!response.headersSent) {
+      writeJson(response, 404, { error: 'File not found.' });
+      return;
+    }
+
+    if (!response.destroyed) {
+      response.destroy(error instanceof Error ? error : undefined);
+    }
+  });
+
+  stream.pipe(response);
+}
+
+function shouldServeHistoryFileInline(record: { mimeType?: string; fileName: string }) {
+  return record.mimeType?.toLowerCase() === 'application/pdf' || record.fileName.toLowerCase().endsWith('.pdf');
+}
+
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -5223,7 +5264,14 @@ async function handleAiImageAssetRequest(
       'cache-control': 'private, max-age=86400',
       'x-content-type-options': 'nosniff',
     });
-    createReadStream(storagePath).pipe(response);
+    pipeStorageFileResponse(response, storagePath, {
+      context: {
+        route: 'ai-image-asset',
+        generationId: assetRoute.generationId,
+        index: assetRoute.index,
+        userId: authResult.user.id,
+      },
+    });
   } catch (error) {
     console.error('Image asset request failed', {
       generationId: assetRoute.generationId,
@@ -7433,41 +7481,64 @@ const httpServer = createServer((request, response) => {
       }
     }
 
-    const range = parseRangeHeader(request.headers.range, record.size);
-    const baseHeaders = {
-      'content-type': record.mimeType || 'application/octet-stream',
-      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
-      'accept-ranges': 'bytes',
-      'cache-control': isPublicRecord ? 'public, max-age=3600' : 'private, max-age=3600',
-    };
+    void fs.stat(record.storagePath).then((fileStat) => {
+      const fileSize = fileStat.size;
+      const range = parseRangeHeader(request.headers.range, fileSize);
+      const contentDispositionType = shouldServeHistoryFileInline(record) ? 'inline' : 'attachment';
+      const baseHeaders = {
+        'content-type': record.mimeType || 'application/octet-stream',
+        'content-disposition': `${contentDispositionType}; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
+        'accept-ranges': 'bytes',
+        'cache-control': isPublicRecord ? 'public, max-age=3600' : 'private, max-age=3600',
+      };
 
-    if (range === null) {
-      response.writeHead(416, {
+      if (range === null) {
+        response.writeHead(416, {
+          ...baseHeaders,
+          'content-range': `bytes */${fileSize.toString()}`,
+        });
+        response.end();
+        return;
+      }
+
+      if (range) {
+        response.writeHead(206, {
+          ...baseHeaders,
+          'content-length': (range.end - range.start + 1).toString(),
+          'content-range': `bytes ${range.start.toString()}-${range.end.toString()}/${fileSize.toString()}`,
+        });
+        pipeStorageFileResponse(response, record.storagePath, {
+          start: range.start,
+          end: range.end,
+          context: {
+            route: 'history-download',
+            historyId,
+            roomId: record.roomId,
+          },
+        });
+        return;
+      }
+
+      response.writeHead(200, {
         ...baseHeaders,
-        'content-range': `bytes */${record.size.toString()}`,
+        'content-length': fileSize.toString(),
       });
-      response.end();
-      return;
-    }
-
-    if (range) {
-      response.writeHead(206, {
-        ...baseHeaders,
-        'content-length': (range.end - range.start + 1).toString(),
-        'content-range': `bytes ${range.start.toString()}-${range.end.toString()}/${record.size.toString()}`,
+      pipeStorageFileResponse(response, record.storagePath, {
+        context: {
+          route: 'history-download',
+          historyId,
+          roomId: record.roomId,
+        },
       });
-      createReadStream(record.storagePath, {
-        start: range.start,
-        end: range.end,
-      }).pipe(response);
-      return;
-    }
-
-    response.writeHead(200, {
-      ...baseHeaders,
-      'content-length': record.size.toString(),
+    }).catch((error) => {
+      console.warn('History file storage missing', {
+        historyId,
+        roomId: record.roomId,
+        storagePath: record.storagePath,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      writeJson(response, 404, { error: 'History file not found.' });
     });
-    createReadStream(record.storagePath).pipe(response);
     return;
   }
 

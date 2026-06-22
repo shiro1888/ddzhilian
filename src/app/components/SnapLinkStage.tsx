@@ -23,6 +23,9 @@ import type {
   UnifiedConversationEntry,
 } from '../types'
 import type { AiModelOption, OcrHistoryResponse, OcrJobResponse } from '../../lib/ddzhilian-types'
+import { DocumentPreviewDialog } from './DocumentPreviewDialog'
+import type { DocumentPreviewDialogState } from './DocumentPreviewDialog'
+import type { DocumentPreviewPayload } from '../../lib/document-preview'
 import {
   collectDroppedFiles,
   extractPlainTextFromRichText,
@@ -518,6 +521,17 @@ function renderQuoteDraftHtml(quoteDraft: SnapLinkQuoteDraftState) {
   ].join('')
 }
 
+function createNativePdfPreviewUrl(payload: DocumentPreviewPayload) {
+  if (typeof payload.source === 'string') {
+    return payload.source
+  }
+
+  const blob = payload.source instanceof Blob
+    ? payload.source
+    : new Blob([payload.source], { type: payload.mimeType || 'application/pdf' })
+  return URL.createObjectURL(blob)
+}
+
 function normalizePlainComposerDraft(value: string) {
   if (!/[<>]/.test(value)) {
     return value.replace(/\r\n?/g, '\n')
@@ -970,6 +984,8 @@ export function SnapLinkStage({
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
+  const [documentPreview, setDocumentPreview] = useState<DocumentPreviewDialogState | null>(null)
+  const [loadingDocumentPreviewFileId, setLoadingDocumentPreviewFileId] = useState<string | null>(null)
   const [isImagePreviewZoomed, setIsImagePreviewZoomed] = useState(false)
   const [isImagePreviewReady, setIsImagePreviewReady] = useState(false)
   const [isImagePreviewDragging, setIsImagePreviewDragging] = useState(false)
@@ -990,6 +1006,7 @@ export function SnapLinkStage({
   const imagePreviewDragStateRef = useRef<SnapLinkImagePreviewDragState | null>(null)
   const imagePreviewDidDragRef = useRef(false)
   const isImagePreviewZoomedRef = useRef(false)
+  const documentPreviewRequestSeqRef = useRef(0)
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messageScrollRestoreRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null)
@@ -2804,13 +2821,116 @@ export function SnapLinkStage({
     })
   }
 
+  const openDocumentPreview = (file: FileConversationEntry) => {
+    const documentPreviewKind = file.documentPreviewKind
+    if (!documentPreviewKind || !file.onOpenDocumentPreview) {
+      return
+    }
+
+    const requestSeq = documentPreviewRequestSeqRef.current + 1
+    documentPreviewRequestSeqRef.current = requestSeq
+    setLoadingDocumentPreviewFileId(file.id)
+
+    if (documentPreviewKind === 'pdf') {
+      setDocumentPreview(null)
+
+      void Promise.resolve(file.onOpenDocumentPreview()).then(
+        (payload) => {
+          if (documentPreviewRequestSeqRef.current !== requestSeq) {
+            return
+          }
+
+          const previewUrl = createNativePdfPreviewUrl(payload)
+          window.location.href = previewUrl
+        },
+        (error) => {
+          if (documentPreviewRequestSeqRef.current !== requestSeq) {
+            return
+          }
+
+          setDocumentPreview({
+            status: 'failed',
+            kind: documentPreviewKind,
+            fileName: file.fileName,
+            errorMessage: error instanceof Error ? error.message : 'PDF 预览载入失败。',
+          })
+        },
+      ).finally(() => {
+        if (documentPreviewRequestSeqRef.current === requestSeq) {
+          setLoadingDocumentPreviewFileId(null)
+        }
+      })
+      return
+    }
+
+    setDocumentPreview({
+      status: 'loading',
+      kind: documentPreviewKind,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+    })
+
+    void Promise.resolve(file.onOpenDocumentPreview()).then(
+      (payload) => {
+        if (documentPreviewRequestSeqRef.current !== requestSeq) {
+          return
+        }
+
+        setDocumentPreview({
+          status: 'ready',
+          payload,
+        })
+      },
+      (error) => {
+        if (documentPreviewRequestSeqRef.current !== requestSeq) {
+          return
+        }
+
+        setDocumentPreview({
+          status: 'failed',
+          kind: documentPreviewKind,
+          fileName: file.fileName,
+          errorMessage: error instanceof Error ? error.message : '文档预览载入失败。',
+        })
+      },
+    ).finally(() => {
+      if (documentPreviewRequestSeqRef.current === requestSeq) {
+        setLoadingDocumentPreviewFileId(null)
+      }
+    })
+  }
+
+  const closeDocumentPreview = () => {
+    documentPreviewRequestSeqRef.current += 1
+    setLoadingDocumentPreviewFileId(null)
+    setDocumentPreview(null)
+  }
+
   const renderFileActions = (file: SnapLinkFileEntry) => {
-    if (!file.downloadUrl && !file.onDownload && !file.action && !file.canRecall) {
+    const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
+    const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
+    const isDocumentPreviewLoading = loadingDocumentPreviewFileId === file.id
+
+    if (!canPreviewDocument && !file.downloadUrl && !file.onDownload && !file.action && !file.canRecall) {
       return null
     }
 
     return (
       <div className="dd-snaplink__file-actions">
+        {documentPreviewHref ? (
+          <a href={documentPreviewHref} aria-label={`预览 ${file.fileName}`}>
+            预览
+          </a>
+        ) : canPreviewDocument ? (
+          <button
+            type="button"
+            aria-label={`预览 ${file.fileName}`}
+            onClick={() => openDocumentPreview(file)}
+            disabled={file.isDocumentPreviewDisabled || isDocumentPreviewLoading}
+          >
+            {isDocumentPreviewLoading ? '载入中' : '预览'}
+          </button>
+        ) : null}
         {file.onDownload ? (
           <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
             {file.isDownloadDisabled ? '下载中' : '下载'}
@@ -2841,12 +2961,30 @@ export function SnapLinkStage({
   }
 
   const renderSharedFileActions = (file: FileConversationEntry) => {
-    if (!file.downloadUrl && !file.onDownload && !file.canRecall) {
+    const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
+    const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
+    const isDocumentPreviewLoading = loadingDocumentPreviewFileId === file.id
+
+    if (!canPreviewDocument && !file.downloadUrl && !file.onDownload && !file.canRecall) {
       return null
     }
 
     return (
       <div className="dd-snaplink__shared-actions">
+        {documentPreviewHref ? (
+          <a href={documentPreviewHref} aria-label={`预览 ${file.fileName}`}>
+            预览
+          </a>
+        ) : canPreviewDocument ? (
+          <button
+            type="button"
+            aria-label={`预览 ${file.fileName}`}
+            onClick={() => openDocumentPreview(file)}
+            disabled={file.isDocumentPreviewDisabled || isDocumentPreviewLoading}
+          >
+            {isDocumentPreviewLoading ? '载入中' : '预览'}
+          </button>
+        ) : null}
         {file.onDownload ? (
           <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
             {file.isDownloadDisabled ? '下载中' : '下载'}
@@ -3818,6 +3956,13 @@ export function SnapLinkStage({
             )}
           </div>
         </div>,
+        document.body,
+      )}
+      {documentPreview && createPortal(
+        <DocumentPreviewDialog
+          preview={documentPreview}
+          onClose={closeDocumentPreview}
+        />,
         document.body,
       )}
       {imagePreview && createPortal(

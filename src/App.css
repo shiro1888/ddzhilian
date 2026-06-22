@@ -1164,6 +1164,245 @@
   }
 }
 
+.dd-document-preview-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 145;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.dd-document-preview-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(17, 24, 39, 0.62);
+  cursor: default;
+}
+
+.dd-document-preview-dialog__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+  width: min(1180px, calc(100vw - 36px));
+  height: min(820px, calc(100dvh - 36px));
+  overflow: hidden;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #f5f5f5;
+  box-shadow: 0 22px 64px rgba(15, 23, 42, 0.28);
+}
+
+.dd-document-preview-dialog__titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid #d9d9d9;
+  background: #f7f7f7;
+}
+
+.dd-document-preview-dialog__titlebar > span {
+  overflow: hidden;
+  color: #111111;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-document-preview-dialog__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.dd-document-preview-dialog__actions a,
+.dd-document-preview-dialog__actions button {
+  display: grid;
+  place-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #cfcfcf;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #333333;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dd-document-preview-dialog__actions a:hover,
+.dd-document-preview-dialog__actions button:hover {
+  background: #e8e8e8;
+}
+
+.dd-document-preview-dialog__close {
+  width: 30px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dd-document-preview-dialog__body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #ededed;
+}
+
+.dd-document-preview__loading,
+.dd-document-preview__error,
+.dd-document-preview__empty,
+.dd-document-preview__notice {
+  margin: 16px;
+  color: #666666;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dd-document-preview__error {
+  color: #fa5151;
+}
+
+.dd-document-preview__pdf {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: 0;
+  background: #ffffff;
+}
+
+.dd-document-preview__docx {
+  min-height: 100%;
+  padding: 18px;
+}
+
+.dd-document-preview__style-host {
+  display: none;
+}
+
+.dd-document-preview__docx-body {
+  display: grid;
+  justify-content: center;
+  gap: 16px;
+}
+
+.dd-document-preview__docx-body .dd-document-preview__docx-page {
+  overflow: visible;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.16);
+}
+
+.dd-document-preview__excel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.dd-document-preview__sheet-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid #d9d9d9;
+  background: #f7f7f7;
+}
+
+.dd-document-preview__sheet-tabs button {
+  flex: none;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #666666;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dd-document-preview__sheet-tabs button.is-active {
+  border-color: #07c160;
+  color: #057a3d;
+}
+
+.dd-document-preview__excel-grid {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.dd-document-preview__excel-grid table {
+  border-spacing: 0;
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+  color: #111111;
+  font-size: 12px;
+}
+
+.dd-document-preview__excel-grid td {
+  min-width: 42px;
+  max-width: 280px;
+  min-height: 22px;
+  padding: 4px 6px;
+  overflow: hidden;
+  border-right: 1px solid #e5e5e5;
+  border-bottom: 1px solid #e5e5e5;
+  background: #ffffff;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.dd-document-preview__pptx {
+  position: relative;
+  min-height: 100%;
+  background: #ededed;
+}
+
+.dd-document-preview__pptx-stage {
+  min-width: 0;
+  min-height: 100%;
+  padding: 18px;
+  overflow: auto;
+}
+
+.dd-document-preview__pptx-stage.is-ready {
+  display: block;
+}
+
+@media (max-width: 720px) {
+  .dd-document-preview-dialog {
+    padding: 8px;
+  }
+
+  .dd-document-preview-dialog__panel {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .dd-document-preview-dialog__titlebar {
+    padding-left: 10px;
+  }
+
+  .dd-document-preview__docx,
+  .dd-document-preview__pptx-stage {
+    padding: 10px;
+  }
+}
+
 .dd-panorama-viewer {
   position: relative;
   width: 100%;

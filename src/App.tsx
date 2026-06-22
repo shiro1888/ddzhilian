@@ -35,6 +35,8 @@ import type {
   AiQuotaStatus,
   RoomSummary,
 } from './lib/ddzhilian-types'
+import { resolveDocumentPreviewKind } from './lib/document-preview'
+import type { DocumentPreviewSource } from './lib/document-preview'
 import { useAccountAuth } from './lib/use-account-auth'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
@@ -80,6 +82,33 @@ function resolveMediaPreviewKind(mimeType: string | undefined, fileName: string)
   }
 
   return null
+}
+
+function buildDocumentPreviewPayload(input: {
+  fileName: string
+  mimeType?: string
+  source: DocumentPreviewSource
+  downloadUrl?: string
+  downloadName?: string
+}) {
+  const kind = resolveDocumentPreviewKind(input.mimeType, input.fileName)
+
+  return kind
+    ? {
+        kind,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        source: input.source,
+        downloadUrl: input.downloadUrl,
+        downloadName: input.downloadName,
+      }
+    : null
+}
+
+function resolvePdfPreviewHref(payload: ReturnType<typeof buildDocumentPreviewPayload>) {
+  return payload?.kind === 'pdf' && typeof payload.source === 'string'
+    ? payload.source
+    : undefined
 }
 
 type HistoryDownloadProgressState = {
@@ -339,6 +368,8 @@ function App() {
     retryTransfer,
     cancelTransfer,
     downloadHistoryFile,
+    loadHistoryFileBlob,
+    resolveHistoryFileDownloadUrl,
     startPendingTransfers,
     sendText,
     recallText,
@@ -838,54 +869,85 @@ function App() {
   }
 
   const fileConversationEntries = [
-    ...groupedTransferItemsForConversation.map((item) => ({
-      id: item.id,
-      historyId: item.historyId,
-      sessionId: item.sessionId,
-      kind: 'outgoing' as const,
-      fromSelf: true,
-      createdAt: item.createdAt,
-      fileName: item.fileName,
-      fileSize: item.fileSize,
-      mimeType: item.fileMimeType,
-      previewUrl: item.previewUrl,
-      subtitle: item.targetDeviceName ?? activeTransferLabel,
-      detail: `${formatFileSize(item.sentBytes)} / ${formatFileSize(item.fileSize)}`,
-      statusLabel: transferStatusLabel(item.status),
-      tone: transferStatusTone(item.status),
-      progress: item.progress,
-      action:
-        item.status === 'failed'
-          ? ('retry' as const)
-          : item.status !== 'completed'
-            ? ('cancel' as const)
-            : undefined,
-      canRecall: item.status === 'completed',
-    })),
-    ...receivedFilesForConversation.map((file) => ({
-      id: `incoming-${file.id}`,
-      historyId: file.historyId,
-      sessionId: file.sessionId,
-      kind: 'incoming' as const,
-      fromSelf: false,
-      createdAt: file.createdAt,
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.mimeType,
-      previewUrl: file.completed && isPreviewableMediaType(file.mimeType) ? file.objectUrl : undefined,
-      subtitle: sessionPeerNameById.get(file.sessionId) ?? '对方设备',
-      detail: file.completed
-        ? `${formatFileSize(file.size)} · 已可下载`
-        : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
-      statusLabel: file.completed ? '已接收' : '接收中',
-      tone: file.completed ? ('completed' as const) : ('active' as const),
-      progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
-      downloadUrl: file.objectUrl,
-      downloadName: file.name,
-      canRecall: Boolean(file.historyId && canRecallAnyMessage),
-    })),
+    ...groupedTransferItemsForConversation.map((item) => {
+      const documentPreviewPayload = item.documentPreviewUrl
+        ? buildDocumentPreviewPayload({
+            fileName: item.fileName,
+            mimeType: item.fileMimeType,
+            source: item.documentPreviewUrl,
+            downloadUrl: item.documentPreviewUrl,
+            downloadName: item.fileName,
+          })
+        : null
+
+      return {
+        id: item.id,
+        historyId: item.historyId,
+        sessionId: item.sessionId,
+        kind: 'outgoing' as const,
+        fromSelf: true,
+        createdAt: item.createdAt,
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        mimeType: item.fileMimeType,
+        previewUrl: item.previewUrl,
+        subtitle: item.targetDeviceName ?? activeTransferLabel,
+        detail: `${formatFileSize(item.sentBytes)} / ${formatFileSize(item.fileSize)}`,
+        statusLabel: transferStatusLabel(item.status),
+        tone: transferStatusTone(item.status),
+        progress: item.progress,
+        documentPreviewKind: documentPreviewPayload?.kind,
+        documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
+        onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
+        action:
+          item.status === 'failed'
+            ? ('retry' as const)
+            : item.status !== 'completed'
+              ? ('cancel' as const)
+              : undefined,
+        canRecall: item.status === 'completed',
+      }
+    }),
+    ...receivedFilesForConversation.map((file) => {
+      const documentPreviewPayload = file.completed && file.objectUrl
+        ? buildDocumentPreviewPayload({
+            fileName: file.name,
+            mimeType: file.mimeType,
+            source: file.objectUrl,
+            downloadUrl: file.objectUrl,
+            downloadName: file.name,
+          })
+        : null
+
+      return {
+        id: `incoming-${file.id}`,
+        historyId: file.historyId,
+        sessionId: file.sessionId,
+        kind: 'incoming' as const,
+        fromSelf: false,
+        createdAt: file.createdAt,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.mimeType,
+        previewUrl: file.completed && isPreviewableMediaType(file.mimeType) ? file.objectUrl : undefined,
+        subtitle: sessionPeerNameById.get(file.sessionId) ?? '对方设备',
+        detail: file.completed
+          ? `${formatFileSize(file.size)} · 已可下载`
+          : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
+        statusLabel: file.completed ? '已接收' : '接收中',
+        tone: file.completed ? ('completed' as const) : ('active' as const),
+        progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
+        downloadUrl: file.objectUrl,
+        downloadName: file.name,
+        documentPreviewKind: documentPreviewPayload?.kind,
+        documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
+        onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
+        canRecall: Boolean(file.historyId && canRecallAnyMessage),
+      }
+    }),
     ...historyFilesForConversation.map((file) => {
       const downloadProgress = historyDownloadProgressById[file.historyId]
+      const documentPreviewKind = resolveDocumentPreviewKind(file.mimeType, file.fileName)
 
       return {
         id: `history-${file.historyId}`,
@@ -910,6 +972,20 @@ function App() {
         downloadName: file.fileName,
         onDownload: () => handleHistoryFileDownload(file),
         isDownloadDisabled: Boolean(downloadProgress),
+        documentPreviewKind: documentPreviewKind ?? undefined,
+        documentPreviewHref:
+          documentPreviewKind === 'pdf' && file.isPublic
+            ? resolveHistoryFileDownloadUrl(file)
+            : undefined,
+        onOpenDocumentPreview: documentPreviewKind
+          ? async () => ({
+              kind: documentPreviewKind,
+              fileName: file.fileName,
+              mimeType: file.mimeType,
+              source: await loadHistoryFileBlob(file),
+              downloadName: file.fileName,
+            })
+          : undefined,
         canRecall: file.sourceDeviceId === self?.deviceId || canRecallAnyMessage,
       }
     }),

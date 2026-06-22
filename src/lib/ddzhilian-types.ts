@@ -337,6 +337,7 @@ export type TransferItem = {
   fileSize: number
   fileMimeType?: string
   previewUrl?: string
+  documentPreviewUrl?: string
   targetDeviceId?: string
   targetDeviceName?: string
   sessionId?: string

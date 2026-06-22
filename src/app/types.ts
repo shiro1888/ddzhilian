@@ -1,3 +1,5 @@
+import type { DocumentPreviewKind, DocumentPreviewPayload } from '../lib/document-preview'
+
 export type NavView = 'text' | 'chat' | 'image' | 'admin' | 'command'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
 export type RoomListStatus = 'connected' | 'online' | 'history'
@@ -23,6 +25,10 @@ export type FileConversationEntry = {
   downloadName?: string
   onDownload?: () => void
   isDownloadDisabled?: boolean
+  documentPreviewKind?: DocumentPreviewKind
+  documentPreviewHref?: string
+  onOpenDocumentPreview?: () => DocumentPreviewPayload | Promise<DocumentPreviewPayload>
+  isDocumentPreviewDisabled?: boolean
   action?: 'retry' | 'cancel'
   canRecall?: boolean
 }
