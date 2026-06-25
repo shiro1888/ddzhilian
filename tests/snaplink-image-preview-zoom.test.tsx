@@ -90,6 +90,9 @@ function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkS
     onPastedImageSelection: noop,
     onComposerImageRemove: noop,
     onDirectFileSelection: noop,
+    onStartOcrJob: vi.fn(async () => ({ jobId: 'ocr-job', status: 'complete' })),
+    onListOcrHistory: vi.fn(async () => ({ items: [] })),
+    onDeleteOcrHistory: vi.fn(async () => undefined),
     onSendText: noop,
     onRecallText: noop,
     onRecallFile: noop,
@@ -276,5 +279,101 @@ describe('SnapLinkStage image preview zoom', () => {
     expect(previewZoomButton.querySelector('img')).toHaveStyle({
       transform: 'translate3d(0.0px, 0.0px, 0) scale(1.85)',
     })
+  })
+
+  it('starts OCR from the image context menu', async () => {
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const receiptDataUrl = 'data:image/png;base64,aW1hZ2UtYnl0ZXM='
+    const createObjectURLMock = vi.fn(() => 'blob:ocr-preview')
+    const revokeObjectURLMock = vi.fn()
+    const onStartOcrJob = vi.fn(async (file: File) => ({
+      jobId: 'ocr-context',
+      status: 'complete' as const,
+      fileName: file.name,
+      mimeType: file.type,
+      byteSize: file.size,
+      text: '票据文字',
+    }))
+
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURLMock,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURLMock,
+    })
+
+    try {
+      render(
+        <SnapLinkStage
+          {...createBaseProps({
+            selectedRoomId: 'ROOM123',
+            selectedConversationName: '世界对话 1',
+            activeTransferLabel: '世界对话 1 · 已连接',
+            roomListItems: [
+              {
+                roomId: 'ROOM123',
+                title: '世界对话 1',
+                previewText: '[图片] receipt.png',
+                updatedAt: '2026-06-16T10:00:00.000Z',
+                updatedAtLabel: '刚刚',
+                isPublic: true,
+                publicIndex: 1,
+                memberCount: 2,
+                onlineCount: 1,
+                status: 'connected',
+                pinned: false,
+                unreadCount: 0,
+              },
+            ],
+            unifiedConversationEntries: [
+              {
+                id: 'text-image-ocr',
+                entryType: 'text',
+                sessionId: 'session-1',
+                fromSelf: false,
+                senderName: 'windows-PEER',
+                createdAt: '2026-06-16T10:00:00.000Z',
+                text: `<img src="${receiptDataUrl}" alt="receipt.png">`,
+              },
+            ],
+            onStartOcrJob,
+          })}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+
+      const inlineImage = await screen.findByAltText('receipt.png')
+      fireEvent.contextMenu(inlineImage, { clientX: 160, clientY: 180 })
+      fireEvent.click(screen.getByRole('menuitem', { name: 'OCR 识别' }))
+
+      await waitFor(() => {
+        expect(onStartOcrJob).toHaveBeenCalledTimes(1)
+      })
+
+      const [ocrFile] = onStartOcrJob.mock.calls[0] ?? []
+      expect(ocrFile).toBeInstanceOf(File)
+      expect(ocrFile.name).toBe('receipt.png')
+      expect(ocrFile.type).toBe('image/png')
+      expect(createObjectURLMock).toHaveBeenCalledWith(ocrFile)
+      expect(screen.getByRole('dialog', { name: '图片文字识别' })).toBeInTheDocument()
+      expect(screen.getByLabelText('OCR 识别文本')).toHaveValue('票据文字')
+    } finally {
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        writable: true,
+        value: originalCreateObjectURL,
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        writable: true,
+        value: originalRevokeObjectURL,
+      })
+    }
   })
 })
