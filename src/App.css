@@ -1383,6 +1383,115 @@
   display: block;
 }
 
+.dd-document-preview__markdown {
+  box-sizing: border-box;
+  width: min(100% - 36px, 880px);
+  min-height: calc(100% - 36px);
+  margin: 18px auto;
+  padding: 32px 40px;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 15px;
+  line-height: 1.65;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.16);
+  overflow-wrap: anywhere;
+}
+
+.dd-document-preview__markdown h1,
+.dd-document-preview__markdown h2,
+.dd-document-preview__markdown h3 {
+  margin: 0 0 14px;
+  color: #111111;
+  line-height: 1.35;
+}
+
+.dd-document-preview__markdown h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.dd-document-preview__markdown h2 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.dd-document-preview__markdown h3 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dd-document-preview__markdown p,
+.dd-document-preview__markdown blockquote,
+.dd-document-preview__markdown ul,
+.dd-document-preview__markdown ol,
+.dd-document-preview__markdown .dd-code-block {
+  margin: 0 0 16px;
+}
+
+.dd-document-preview__markdown ul,
+.dd-document-preview__markdown ol {
+  padding-left: 24px;
+}
+
+.dd-document-preview__markdown li + li {
+  margin-top: 6px;
+}
+
+.dd-document-preview__markdown blockquote {
+  padding: 8px 12px;
+  border-left: 3px solid #d9d9d9;
+  background: #f7f7f7;
+  color: #666666;
+}
+
+.dd-document-preview__markdown a {
+  color: #576b95;
+  text-decoration: none;
+}
+
+.dd-document-preview__markdown a:hover {
+  text-decoration: underline;
+}
+
+.dd-document-preview__markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border-radius: 6px;
+}
+
+.dd-document-preview__markdown :not(pre) > code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #f0f0f0;
+  color: #111111;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.dd-document-preview__markdown .dd-code-block {
+  overflow: hidden;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #101820;
+  color: #e5edf5;
+}
+
+.dd-document-preview__markdown .dd-code-block code {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px 14px 14px;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 @media (max-width: 720px) {
   .dd-document-preview-dialog {
     padding: 8px;
@@ -1400,6 +1509,13 @@
   .dd-document-preview__docx,
   .dd-document-preview__pptx-stage {
     padding: 10px;
+  }
+
+  .dd-document-preview__markdown {
+    width: calc(100% - 20px);
+    min-height: calc(100% - 20px);
+    margin: 10px auto;
+    padding: 22px 18px;
   }
 }
 

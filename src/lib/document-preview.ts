@@ -1,4 +1,4 @@
-export type DocumentPreviewKind = 'pdf' | 'docx' | 'excel' | 'pptx'
+export type DocumentPreviewKind = 'pdf' | 'docx' | 'excel' | 'pptx' | 'markdown'
 
 export type DocumentPreviewSource = string | Blob | ArrayBuffer
 
@@ -28,6 +28,11 @@ const documentPreviewMimeTypes: Record<DocumentPreviewKind, readonly string[]> =
     'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
     'application/vnd.openxmlformats-officedocument.presentationml.template',
   ],
+  markdown: [
+    'text/markdown',
+    'text/x-markdown',
+    'application/markdown',
+  ],
 }
 
 const documentPreviewExtensions: Record<DocumentPreviewKind, readonly string[]> = {
@@ -35,10 +40,11 @@ const documentPreviewExtensions: Record<DocumentPreviewKind, readonly string[]> 
   docx: ['.docx', '.dotx'],
   excel: ['.xlsx', '.xlsm', '.xltx', '.xltm'],
   pptx: ['.pptx', '.ppsx', '.potx'],
+  markdown: ['.md', '.markdown'],
 }
 
 export function resolveDocumentPreviewKind(mimeType: string | undefined, fileName: string) {
-  const normalizedMimeType = mimeType?.trim().toLowerCase() ?? ''
+  const normalizedMimeType = mimeType?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
   const normalizedFileName = fileName.trim().toLowerCase()
 
   for (const kind of Object.keys(documentPreviewMimeTypes) as DocumentPreviewKind[]) {
@@ -69,5 +75,9 @@ export function getDocumentPreviewKindLabel(kind: DocumentPreviewKind) {
     return 'Excel'
   }
 
-  return 'PPT'
+  if (kind === 'pptx') {
+    return 'PPT'
+  }
+
+  return 'Markdown'
 }

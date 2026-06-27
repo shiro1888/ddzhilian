@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import type { Cell, Worksheet } from 'exceljs'
 import type {
   DocumentPreviewKind,
@@ -7,6 +7,7 @@ import type {
   DocumentPreviewSource,
 } from '../../lib/document-preview'
 import { getDocumentPreviewKindLabel } from '../../lib/document-preview'
+import { openHtmlDocumentFullscreenPreview, renderMarkdownDocumentHtml } from '../utils'
 
 export type DocumentPreviewDialogState =
   | {
@@ -89,6 +90,23 @@ async function readDocumentSourceAsArrayBuffer(source: DocumentPreviewSource) {
   }
 
   return response.arrayBuffer()
+}
+
+async function readDocumentSourceAsText(source: DocumentPreviewSource) {
+  if (typeof source === 'string') {
+    const response = await fetch(source)
+    if (!response.ok) {
+      throw new Error(`Markdown 文档读取失败，状态码 ${response.status.toString()}。`)
+    }
+
+    return response.text()
+  }
+
+  if (source instanceof Blob) {
+    return source.text()
+  }
+
+  return new TextDecoder().decode(source)
 }
 
 function createBlobFromPreviewSource(source: DocumentPreviewSource, mimeType?: string) {
@@ -410,6 +428,137 @@ function PptxPreview({ source }: { source: DocumentPreviewSource }) {
   )
 }
 
+async function copyDocumentTextToClipboard(value: string) {
+  if (!navigator.clipboard) {
+    throw new Error('当前浏览器不支持剪贴板写入。')
+  }
+
+  await navigator.clipboard.writeText(value)
+}
+
+function markDocumentCodeCopyButton(button: HTMLButtonElement, label: string, className?: string) {
+  button.textContent = label
+  if (className) {
+    button.classList.add(className)
+  }
+
+  window.setTimeout(() => {
+    button.classList.remove('is-copied')
+    button.textContent = '复制'
+  }, 1600)
+}
+
+function handleRenderedMarkdownClick(event: ReactMouseEvent<HTMLDivElement>) {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const fullscreenButton = target.closest<HTMLElement>('.dd-html-document__fullscreen')
+  if (fullscreenButton && event.currentTarget.contains(fullscreenButton)) {
+    event.preventDefault()
+    event.stopPropagation()
+    openHtmlDocumentFullscreenPreview(fullscreenButton)
+    return
+  }
+
+  const copyButton = target.closest<HTMLButtonElement>('.dd-code-copy')
+  if (!copyButton || !event.currentTarget.contains(copyButton)) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
+  if (!codeText) {
+    return
+  }
+
+  void copyDocumentTextToClipboard(codeText).then(
+    () => markDocumentCodeCopyButton(copyButton, '已复制', 'is-copied'),
+    () => markDocumentCodeCopyButton(copyButton, '复制失败'),
+  )
+}
+
+type MarkdownPreviewState = {
+  source: DocumentPreviewSource
+  status: 'loading' | 'ready' | 'failed'
+  html: string
+  errorMessage: string | null
+}
+
+function MarkdownPreview({ source }: { source: DocumentPreviewSource }) {
+  const [previewState, setPreviewState] = useState<MarkdownPreviewState>(() => ({
+    source,
+    status: 'loading',
+    html: '',
+    errorMessage: null,
+  }))
+
+  useEffect(() => {
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const text = await readDocumentSourceAsText(source)
+        if (cancelled) {
+          return
+        }
+
+        setPreviewState({
+          source,
+          status: 'ready',
+          html: renderMarkdownDocumentHtml(text),
+          errorMessage: null,
+        })
+      } catch (error) {
+        if (!cancelled) {
+          setPreviewState({
+            source,
+            status: 'failed',
+            html: '',
+            errorMessage: error instanceof Error ? error.message : 'Markdown 文档渲染失败。',
+          })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [source])
+
+  const currentState = previewState.source === source
+    ? previewState
+    : {
+        source,
+        status: 'loading' as const,
+        html: '',
+        errorMessage: null,
+      }
+
+  if (currentState.status === 'loading') {
+    return <div className="dd-document-preview__loading">正在解析 Markdown 文档</div>
+  }
+
+  if (currentState.status === 'failed') {
+    return <div className="dd-document-preview__error" role="alert">{currentState.errorMessage}</div>
+  }
+
+  if (!currentState.html) {
+    return <div className="dd-document-preview__empty">Markdown 文档没有可预览的内容</div>
+  }
+
+  return (
+    <div
+      className="dd-document-preview__markdown"
+      onClick={handleRenderedMarkdownClick}
+      dangerouslySetInnerHTML={{ __html: currentState.html }}
+    />
+  )
+}
+
 function DocumentPreviewBody({ payload }: { payload: DocumentPreviewPayload }) {
   if (payload.kind === 'pdf') {
     return (
@@ -427,6 +576,10 @@ function DocumentPreviewBody({ payload }: { payload: DocumentPreviewPayload }) {
 
   if (payload.kind === 'excel') {
     return <ExcelPreview source={payload.source} />
+  }
+
+  if (payload.kind === 'markdown') {
+    return <MarkdownPreview source={payload.source} />
   }
 
   return <PptxPreview source={payload.source} />

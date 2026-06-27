@@ -535,6 +535,11 @@ function renderMarkdownBlocks(value: string) {
   return blocks.join('')
 }
 
+export function renderMarkdownDocumentHtml(value: string) {
+  const normalizedValue = normalizeCodeText(value)
+  return normalizedValue ? renderMarkdownBlocks(normalizedValue) : ''
+}
+
 type MixedBlockSegment = {
   type: 'text' | 'code'
   lines: string[]

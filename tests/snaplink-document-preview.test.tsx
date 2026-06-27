@@ -101,6 +101,9 @@ describe('SnapLinkStage document preview', () => {
     expect(resolveDocumentPreviewKind(undefined, 'report.docx')).toBe('docx')
     expect(resolveDocumentPreviewKind(undefined, 'budget.xlsx')).toBe('excel')
     expect(resolveDocumentPreviewKind(undefined, 'deck.pptx')).toBe('pptx')
+    expect(resolveDocumentPreviewKind('text/markdown; charset=utf-8', 'notes')).toBe('markdown')
+    expect(resolveDocumentPreviewKind(undefined, 'readme.md')).toBe('markdown')
+    expect(resolveDocumentPreviewKind('text/plain', 'notes.txt')).toBeNull()
     expect(resolveDocumentPreviewKind('application/msword', 'legacy.doc')).toBeNull()
   })
 
@@ -197,5 +200,67 @@ describe('SnapLinkStage document preview', () => {
     expect(previewLink).toHaveAttribute('href', 'http://127.0.0.1:8787/api/history/download/report')
     expect(onOpenDocumentPreview).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog', { name: 'PDF 预览' })).not.toBeInTheDocument()
+  })
+
+  it('renders Markdown document previews from a file bubble', async () => {
+    const onOpenDocumentPreview = vi.fn().mockReturnValue({
+      kind: 'markdown',
+      fileName: 'readme.md',
+      mimeType: 'text/markdown',
+      source: new Blob(
+        [
+          '# 变更记录\n\n',
+          '- 支持 **Markdown** 文件预览\n',
+          '- 转义 <script>alert("xss")</script>\n\n',
+          '```ts\nconst enabled = true\n```',
+        ],
+        { type: 'text/markdown' },
+      ),
+      downloadUrl: 'blob:readme-download',
+    })
+
+    render(
+      <SnapLinkStage
+        {...createBaseProps({
+          unifiedConversationEntries: [
+            {
+              id: 'file-entry-md',
+              entryType: 'file',
+              sessionId: 'session-1',
+              fromSelf: false,
+              senderName: 'Alice',
+              createdAt: '2026-06-22T08:00:00.000Z',
+              file: {
+                id: 'file-md',
+                kind: 'incoming',
+                fromSelf: false,
+                createdAt: '2026-06-22T08:00:00.000Z',
+                fileName: 'readme.md',
+                fileSize: 512,
+                mimeType: 'text/markdown',
+                subtitle: 'Alice',
+                detail: '512 B · 已接收',
+                statusLabel: '已接收',
+                tone: 'completed',
+                progress: 1,
+                documentPreviewKind: 'markdown',
+                onOpenDocumentPreview,
+              },
+            },
+          ],
+        })}
+      />,
+    )
+
+    openSelectedConversation()
+    fireEvent.click(screen.getByRole('button', { name: '预览 readme.md' }))
+
+    expect(onOpenDocumentPreview).toHaveBeenCalledTimes(1)
+    const dialog = await screen.findByRole('dialog', { name: 'Markdown 预览' })
+    expect(dialog).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '变更记录' })).toBeInTheDocument()
+    expect(screen.getByText('Markdown').tagName.toLowerCase()).toBe('strong')
+    expect(dialog.querySelector('code')?.textContent).toContain('const enabled = true')
+    expect(dialog.querySelector('script')).toBeNull()
   })
 })
