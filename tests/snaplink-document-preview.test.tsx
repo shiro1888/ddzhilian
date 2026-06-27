@@ -162,6 +162,7 @@ describe('SnapLinkStage document preview', () => {
       contentHeight: 1000,
     })).toEqual({
       scale: 0.5,
+      width: 360,
       height: 500,
     })
 
@@ -172,6 +173,7 @@ describe('SnapLinkStage document preview', () => {
       contentHeight: 1000,
     })).toEqual({
       scale: 1,
+      width: null,
       height: null,
     })
   })

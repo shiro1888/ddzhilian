@@ -1297,11 +1297,29 @@
   justify-items: center;
 }
 
+.dd-document-preview__docx-scale-frame {
+  display: grid;
+  width: max-content;
+  max-width: 100%;
+  justify-items: start;
+}
+
+.dd-document-preview__docx-scale-frame.is-scaled {
+  position: relative;
+  overflow: hidden;
+}
+
 .dd-document-preview__docx-body {
   display: grid;
+  width: max-content;
   justify-content: center;
   gap: 16px;
-  transform-origin: top center;
+  transform-origin: top left;
+}
+
+.dd-document-preview__docx-scale-frame.is-scaled .dd-document-preview__docx-body {
+  position: absolute;
+  inset: 0 auto auto 0;
 }
 
 .dd-document-preview__docx-body .dd-document-preview__docx-page {

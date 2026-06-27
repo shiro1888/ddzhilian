@@ -65,6 +65,12 @@ type ExcelCellPreview = {
   style: CSSProperties
 }
 
+type DocxPreviewLayout = {
+  scale: number
+  width: number | null
+  height: number | null
+}
+
 type ExcelMergeRange = {
   startRow: number
   startColumn: number
@@ -86,10 +92,11 @@ export function resolveDocxPreviewLayout({
   availableWidth: number
   pageWidth: number
   contentHeight: number
-}) {
+}): DocxPreviewLayout {
   if (!isMobileViewport || availableWidth <= 0 || pageWidth <= 0 || pageWidth <= availableWidth) {
     return {
       scale: 1,
+      width: null,
       height: null,
     }
   }
@@ -97,6 +104,7 @@ export function resolveDocxPreviewLayout({
   const scale = availableWidth / pageWidth
   return {
     scale,
+    width: Math.max(1, Math.floor(availableWidth)),
     height: contentHeight > 0 ? Math.ceil(contentHeight * scale) : null,
   }
 }
@@ -220,8 +228,9 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
   const styleRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [layout, setLayout] = useState<{ scale: number; height: number | null }>({
+  const [layout, setLayout] = useState<DocxPreviewLayout>({
     scale: 1,
+    width: null,
     height: null,
   })
 
@@ -289,16 +298,19 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
     let animationFrame = 0
     const updateLayout = () => {
       const firstPage = body.querySelector<HTMLElement>('.dd-document-preview__docx-page')
-      const pageWidth = firstPage?.offsetWidth ?? body.scrollWidth
+      const pageWidth = Math.max(firstPage?.offsetWidth ?? 0, body.scrollWidth)
+      const contentHeight = Math.max(firstPage?.offsetHeight ?? 0, body.scrollHeight)
       const nextLayout = resolveDocxPreviewLayout({
         isMobileViewport: window.innerWidth <= mobileDocumentPreviewBreakpointPx,
         availableWidth: shell.clientWidth,
         pageWidth,
-        contentHeight: body.scrollHeight,
+        contentHeight,
       })
 
       setLayout((currentLayout) => (
-        currentLayout.scale === nextLayout.scale && currentLayout.height === nextLayout.height
+        currentLayout.scale === nextLayout.scale &&
+          currentLayout.width === nextLayout.width &&
+          currentLayout.height === nextLayout.height
           ? currentLayout
           : nextLayout
       ))
@@ -326,11 +338,13 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
         transform: `scale(${layout.scale.toString()})`,
       }
     : undefined
-  const shellStyle = layout.height
+  const frameStyle = layout.scale < 1 && layout.width !== null && layout.height !== null
     ? {
-        minHeight: `${layout.height.toString()}px`,
+        width: `${layout.width.toString()}px`,
+        height: `${layout.height.toString()}px`,
       }
     : undefined
+  const shouldUseScaledFrame = Boolean(frameStyle)
 
   return (
     <div className="dd-document-preview__docx">
@@ -339,8 +353,13 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
       {status === 'failed' ? (
         <div className="dd-document-preview__error" role="alert">{errorMessage}</div>
       ) : null}
-      <div ref={shellRef} className="dd-document-preview__docx-shell" style={shellStyle}>
-        <div ref={bodyRef} className="dd-document-preview__docx-body" style={bodyStyle} />
+      <div ref={shellRef} className="dd-document-preview__docx-shell">
+        <div
+          className={`dd-document-preview__docx-scale-frame${shouldUseScaledFrame ? ' is-scaled' : ''}`}
+          style={frameStyle}
+        >
+          <div ref={bodyRef} className="dd-document-preview__docx-body" style={bodyStyle} />
+        </div>
       </div>
     </div>
   )
