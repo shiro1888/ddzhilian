@@ -267,7 +267,7 @@ function extractAiChatImagesFromRichText(value: string): AiChatImageInput[] {
   return images
 }
 
-const AI_CHAT_IMAGE_MAX_COUNT = 4
+const AI_CHAT_IMAGE_MAX_COUNT = 99
 const AI_CHAT_ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 
 function isAiQuotaPrompt(value: string) {

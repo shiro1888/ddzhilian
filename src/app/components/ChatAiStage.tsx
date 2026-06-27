@@ -21,8 +21,8 @@ import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
 
 const AI_CHAT_STORAGE_KEY = 'ddzhilian-ai-chat-conversations'
 const MAX_STORED_CONVERSATIONS = 50
-const MAX_IMAGE_ATTACHMENTS = 4
-const MAX_TEXT_ATTACHMENTS = 4
+const MAX_IMAGE_ATTACHMENTS = 99
+const MAX_TEXT_ATTACHMENTS = 99
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 const MAX_TEXT_BYTES = 96 * 1024
 const MAX_TEXT_CONTEXT_CHARS = 18_000

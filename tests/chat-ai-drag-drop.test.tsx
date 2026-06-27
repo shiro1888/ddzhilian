@@ -55,4 +55,20 @@ describe('ChatAiStage file drag and drop', () => {
     })
     expect(screen.queryByText('松开添加附件')).not.toBeInTheDocument()
   })
+
+  it('keeps up to 99 uploaded text attachments', async () => {
+    renderChatAiStage()
+
+    const chat = screen.getByLabelText('AI 聊天')
+    const files = Array.from({ length: 100 }, (_, index) => (
+      new File([`note ${index.toString()}`], `notes-${index.toString()}.md`, { type: 'text/markdown' })
+    ))
+
+    fireEvent.drop(chat, createFileDragEvent(files))
+
+    await waitFor(() => {
+      expect(screen.getByText('notes-98.md')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('notes-99.md')).not.toBeInTheDocument()
+  })
 })
