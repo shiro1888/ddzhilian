@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
+import { resolveDocxPreviewLayout } from '@/app/components/DocumentPreviewDialog'
 import { resolveDocumentPreviewKind } from '@/lib/document-preview'
 
 const noop = vi.fn()
@@ -151,6 +152,28 @@ describe('SnapLinkStage document preview', () => {
     expect(onOpenDocumentPreview).toHaveBeenCalledTimes(1)
     expect(await screen.findByRole('dialog', { name: 'Word 预览' })).toBeInTheDocument()
     expect(await screen.findByRole('alert')).toHaveTextContent('历史文件实体不存在或已被清理，无法预览/下载。')
+  })
+
+  it('scales Word document pages down only on mobile viewports', () => {
+    expect(resolveDocxPreviewLayout({
+      isMobileViewport: true,
+      availableWidth: 360,
+      pageWidth: 720,
+      contentHeight: 1000,
+    })).toEqual({
+      scale: 0.5,
+      height: 500,
+    })
+
+    expect(resolveDocxPreviewLayout({
+      isMobileViewport: false,
+      availableWidth: 360,
+      pageWidth: 720,
+      contentHeight: 1000,
+    })).toEqual({
+      scale: 1,
+      height: null,
+    })
   })
 
   it('opens PDF previews with the browser viewer instead of the document dialog', async () => {

@@ -74,6 +74,32 @@ type ExcelMergeRange = {
 
 const excelPreviewMaxRows = 200
 const excelPreviewMaxColumns = 60
+const mobileDocumentPreviewBreakpointPx = 720
+
+export function resolveDocxPreviewLayout({
+  isMobileViewport,
+  availableWidth,
+  pageWidth,
+  contentHeight,
+}: {
+  isMobileViewport: boolean
+  availableWidth: number
+  pageWidth: number
+  contentHeight: number
+}) {
+  if (!isMobileViewport || availableWidth <= 0 || pageWidth <= 0 || pageWidth <= availableWidth) {
+    return {
+      scale: 1,
+      height: null,
+    }
+  }
+
+  const scale = availableWidth / pageWidth
+  return {
+    scale,
+    height: contentHeight > 0 ? Math.ceil(contentHeight * scale) : null,
+  }
+}
 
 async function readDocumentSourceAsArrayBuffer(source: DocumentPreviewSource) {
   if (source instanceof ArrayBuffer) {
@@ -189,10 +215,15 @@ function PdfPreview({
 }
 
 function DocxPreview({ source }: { source: DocumentPreviewSource }) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const styleRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [layout, setLayout] = useState<{ scale: number; height: number | null }>({
+    scale: 1,
+    height: null,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -244,6 +275,63 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
     }
   }, [source])
 
+  useEffect(() => {
+    if (status !== 'ready') {
+      return
+    }
+
+    const shell = shellRef.current
+    const body = bodyRef.current
+    if (!shell || !body) {
+      return
+    }
+
+    let animationFrame = 0
+    const updateLayout = () => {
+      const firstPage = body.querySelector<HTMLElement>('.dd-document-preview__docx-page')
+      const pageWidth = firstPage?.offsetWidth ?? body.scrollWidth
+      const nextLayout = resolveDocxPreviewLayout({
+        isMobileViewport: window.innerWidth <= mobileDocumentPreviewBreakpointPx,
+        availableWidth: shell.clientWidth,
+        pageWidth,
+        contentHeight: body.scrollHeight,
+      })
+
+      setLayout((currentLayout) => (
+        currentLayout.scale === nextLayout.scale && currentLayout.height === nextLayout.height
+          ? currentLayout
+          : nextLayout
+      ))
+    }
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(updateLayout)
+    }
+
+    scheduleUpdate()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleUpdate)
+    observer?.observe(shell)
+    observer?.observe(body)
+    window.addEventListener('resize', scheduleUpdate)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      observer?.disconnect()
+      window.removeEventListener('resize', scheduleUpdate)
+    }
+  }, [status, source])
+
+  const bodyStyle = layout.scale < 1
+    ? {
+        transform: `scale(${layout.scale.toString()})`,
+      }
+    : undefined
+  const shellStyle = layout.height
+    ? {
+        minHeight: `${layout.height.toString()}px`,
+      }
+    : undefined
+
   return (
     <div className="dd-document-preview__docx">
       <div ref={styleRef} className="dd-document-preview__style-host" />
@@ -251,7 +339,9 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
       {status === 'failed' ? (
         <div className="dd-document-preview__error" role="alert">{errorMessage}</div>
       ) : null}
-      <div ref={bodyRef} className="dd-document-preview__docx-body" />
+      <div ref={shellRef} className="dd-document-preview__docx-shell" style={shellStyle}>
+        <div ref={bodyRef} className="dd-document-preview__docx-body" style={bodyStyle} />
+      </div>
     </div>
   )
 }

@@ -1290,10 +1290,18 @@
   display: none;
 }
 
+.dd-document-preview__docx-shell {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  justify-items: center;
+}
+
 .dd-document-preview__docx-body {
   display: grid;
   justify-content: center;
   gap: 16px;
+  transform-origin: top center;
 }
 
 .dd-document-preview__docx-body .dd-document-preview__docx-page {
@@ -1509,6 +1517,10 @@
   .dd-document-preview__docx,
   .dd-document-preview__pptx-stage {
     padding: 10px;
+  }
+
+  .dd-document-preview__docx {
+    overflow-x: hidden;
   }
 
   .dd-document-preview__markdown {
