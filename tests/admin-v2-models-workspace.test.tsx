@@ -43,11 +43,15 @@ describe('AdminV2ModelsWorkspace', () => {
   it('renders annotated model status badges with stable dimensions', () => {
     renderWorkspace()
 
+    expect(screen.getAllByText('Cloudflare AI').length).toBeGreaterThan(0)
+    expect(screen.getByText('已启用 1 / 2')).toHaveClass('h-[30px]')
     expect(screen.getByText('已启用 3 / 4')).toHaveClass('h-[30px]')
     expect(screen.getAllByText('启用').filter((element) =>
       element.classList.contains('h-[28px]'),
-    )).toHaveLength(3)
-    expect(screen.getByText('关闭')).toHaveClass('h-[28px]')
+    )).toHaveLength(4)
+    expect(screen.getAllByText('关闭').filter((element) =>
+      element.classList.contains('h-[28px]'),
+    )).toHaveLength(2)
     expect(screen.getAllByText('默认').some((element) =>
       element.classList.contains('h-[28px]') && element.classList.contains('w-[50px]'),
     )).toBe(true)

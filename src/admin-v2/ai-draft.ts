@@ -19,6 +19,13 @@ export type AdminAiModelGroup = {
 
 export function buildAdminAiModelGroups(settings: AdminAiSettings): AdminAiModelGroup[] {
   const groups: AdminAiModelGroup[] = [
+    {
+      providerKey: 'cloudflare',
+      providerLabel: 'Cloudflare AI',
+      providerTypeLabel: 'Workers AI',
+      defaultModel: settings.cloudflare.model,
+      models: settings.cloudflare.models,
+    },
     ...settings.openai.map((config, index) => ({
       providerKey: `openai:${index.toString()}`,
       providerLabel: config.displayName.trim() || 'OpenAI Compatible',
@@ -130,6 +137,17 @@ export function setAdminProviderDefaultModel(
   providerKey: string,
   modelId: string,
 ) {
+  if (providerKey === 'cloudflare') {
+    return {
+      ...settings,
+      cloudflare: {
+        ...settings.cloudflare,
+        model: modelId,
+        models: setDefaultModelOnModels(settings.cloudflare.models, modelId),
+      },
+    }
+  }
+
   if (providerKey.startsWith('openai:')) {
     const index = Number.parseInt(providerKey.slice(7), 10)
     return {
@@ -176,6 +194,16 @@ export function toggleAdminProviderModel(
 ) {
   const updateModels = (models: AdminModelToggleItem[]) =>
     models.map((model) => model.id === modelId ? { ...model, enabled } : model)
+
+  if (providerKey === 'cloudflare') {
+    return {
+      ...settings,
+      cloudflare: {
+        ...settings.cloudflare,
+        models: updateModels(settings.cloudflare.models),
+      },
+    }
+  }
 
   if (providerKey.startsWith('openai:')) {
     const index = Number.parseInt(providerKey.slice(7), 10)

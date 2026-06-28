@@ -8,6 +8,7 @@ import {
   removeAdminAnthropicConfig,
   removeAdminOpenAiConfig,
   updateAdminAnthropicField,
+  updateAdminCloudflareField,
   updateAdminOpenAiField,
 } from '@/admin-v2/ai-draft'
 import {
@@ -17,16 +18,20 @@ import {
 } from './fixtures/admin-ai-settings'
 
 describe('Admin V2 provider AI draft helpers', () => {
-  it('builds model groups for configured non-Cloudflare providers only', () => {
+  it('builds model groups for Cloudflare and configured external providers', () => {
     const settings = createAdminAiSettingsFixture()
     const groups = buildAdminAiModelGroups(settings)
 
-    expect(groups.map((group) => group.providerKey)).toEqual(['openai:0', 'anthropic:0'])
-    expect(groups.map((group) => group.providerLabel)).toEqual(['OpenAI Compatible 1', 'Anthropic 1'])
+    expect(groups.map((group) => group.providerKey)).toEqual(['cloudflare', 'openai:0', 'anthropic:0'])
+    expect(groups.map((group) => group.providerLabel)).toEqual(['Cloudflare AI', 'OpenAI Compatible 1', 'Anthropic 1'])
   })
 
-  it('updates OpenAI compatible and Anthropic provider fields by index', () => {
+  it('updates Cloudflare, OpenAI compatible and Anthropic provider fields', () => {
     const settings = createAdminAiSettingsFixture()
+
+    const cloudflareUpdated = updateAdminCloudflareField(settings, 'model', '@cf/zai-org/glm-5.2')
+    expect(cloudflareUpdated.cloudflare.model).toBe('@cf/zai-org/glm-5.2')
+    expect(settings.cloudflare.model).toBe('@cf/meta/llama-3.1-8b-instruct')
 
     const openAiUpdated = updateAdminOpenAiField(settings, 0, 'baseUrl', 'https://next-openai.example.com/v1')
     expect(openAiUpdated.openai[0].baseUrl).toBe('https://next-openai.example.com/v1')

@@ -3,6 +3,7 @@
 import { useState, type ChangeEvent, type ComponentType, type ReactNode } from 'react'
 import {
   Bot,
+  Cloud,
   KeyRound,
   Plus,
   SearchCheck,
@@ -11,6 +12,7 @@ import {
 import type {
   AdminAiSettings,
   AdminAnthropicConfig,
+  AdminCloudflareConfig,
   AdminModelToggleItem,
   AdminOpenRouterConfig,
 } from '@/lib/ddzhilian-types'
@@ -27,6 +29,7 @@ import {
   removeAdminAnthropicConfig,
   removeAdminOpenAiConfig,
   updateAdminAnthropicField,
+  updateAdminCloudflareField,
   updateAdminOpenAiField,
 } from '@/admin-v2/ai-draft'
 import {
@@ -84,8 +87,27 @@ function upsertModelInList(models: AdminModelToggleItem[], modelId: string): Adm
   return [...models, { id: modelId, label: labelFromOpenAiModelId(modelId), alias: '', enabled: true }]
 }
 
+function updateModelEnabledInList(
+  models: AdminModelToggleItem[],
+  modelId: string,
+  enabled: boolean,
+) {
+  return models.map((model) => (model.id === modelId ? { ...model, enabled } : model))
+}
+
+function removeModelFromList(
+  models: AdminModelToggleItem[],
+  modelId: string,
+) {
+  return models.filter((model) => model.id !== modelId)
+}
+
 function buildConfiguredLabel(isConfigured: boolean) {
   return isConfigured ? '已配置' : '待配置'
+}
+
+function cloudflareConfigured(settings: Pick<AdminCloudflareConfig, 'accountId' | 'apiToken'>) {
+  return Boolean(settings.accountId.trim() && settings.apiToken.trim())
 }
 
 function providerConfigured(settings: Pick<AdminOpenRouterConfig, 'baseUrl' | 'apiKey'>) {
@@ -297,6 +319,267 @@ function AutoSaveNumberField({
       />
       {localError ? <span className="text-xs text-destructive">{localError}</span> : null}
     </Field>
+  )
+}
+
+function CloudflarePanel({
+  aiDraft,
+  savedSettings,
+  disabled,
+  onClearError,
+  onChangeField,
+  onAutoSave,
+}: Readonly<{
+  aiDraft: AdminAiSettings
+  savedSettings: AdminAiSettings
+  disabled: boolean
+  onClearError: () => void
+  onChangeField: <Field extends keyof AdminCloudflareConfig>(field: Field, value: AdminCloudflareConfig[Field]) => void
+  onAutoSave: () => void
+}>) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [newModelId, setNewModelId] = useState('')
+  const config = aiDraft.cloudflare
+  const savedConfig = savedSettings.cloudflare
+  const configured = cloudflareConfigured(config)
+  const modelOptions = config.models.some((model) => model.id === config.model) || !config.model
+    ? config.models
+    : [
+        {
+          id: config.model,
+          label: labelFromOpenAiModelId(config.model),
+          alias: '',
+          enabled: true,
+        },
+        ...config.models,
+      ]
+
+  const addModel = () => {
+    const modelId = newModelId.trim()
+    if (!modelId) {
+      return
+    }
+
+    onClearError()
+    onChangeField('models', upsertModelInList(config.models, modelId))
+    if (!config.model) {
+      onChangeField('model', modelId)
+    }
+    setNewModelId('')
+  }
+
+  return (
+    <DetailSection
+      title="Cloudflare AI"
+      description="Cloudflare Workers AI 文本模型配置。"
+      status={(
+        <div className="flex gap-2">
+          <Badge variant={configured ? 'secondary' : 'outline'} className="h-[28px] px-3">
+            {buildConfiguredLabel(configured)}
+          </Badge>
+          <Badge variant="outline" className="h-[28px] px-3">模型 {formatInteger(savedConfig.models.length)}</Badge>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAutoSave()}>
+            保存配置
+          </Button>
+        </div>
+      )}
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AutoSaveTextField
+          label="Account ID"
+          value={config.accountId}
+          disabled={disabled}
+          onChange={(value) => onChangeField('accountId', value)}
+          onClearError={onClearError}
+        />
+        <AutoSaveTextField
+          label="API Token"
+          type="password"
+          value={config.apiToken}
+          disabled={disabled}
+          onChange={(value) => onChangeField('apiToken', value)}
+          onClearError={onClearError}
+        />
+        <div className="lg:col-span-2">
+          <Field label="默认模型">
+            <select
+              className={adminSelectClassName}
+              value={config.model}
+              disabled={disabled || modelOptions.length === 0}
+              onChange={(event) => {
+                onClearError()
+                const modelId = event.target.value
+                onChangeField('model', modelId)
+                onChangeField('models', upsertModelInList(config.models, modelId))
+              }}
+            >
+              {modelOptions.length > 0 ? (
+                modelOptions.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label === model.id ? model.id : `${model.label} (${model.id})`}
+                  </option>
+                ))
+              ) : (
+                <option value="">未配置模型</option>
+              )}
+            </select>
+          </Field>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-border bg-background p-4">
+        <div className="grid gap-2">
+          <span className="text-sm font-medium text-foreground">添加模型</span>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="min-w-[16rem] flex-1"
+              type="text"
+              value={newModelId}
+              disabled={disabled}
+              placeholder="@cf/zai-org/glm-5.2"
+              aria-label="Cloudflare 模型 ID"
+              onChange={(event) => {
+                onClearError()
+                setNewModelId(event.target.value)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addModel()
+                }
+              }}
+            />
+            <Button type="button" variant="outline" disabled={disabled || !newModelId.trim()} onClick={addModel}>
+              <Plus className="size-4" />
+              添加模型
+            </Button>
+          </div>
+        </div>
+
+        {config.models.length > 0 ? (
+          <div className="grid gap-2">
+            {config.models.map((model) => {
+              const isDefault = model.id === config.model
+              return (
+                <div
+                  key={model.id}
+                  className="grid gap-3 rounded-lg border border-border px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                >
+                  <label className="flex min-w-0 items-start gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={model.enabled}
+                      disabled={disabled || isDefault}
+                      aria-label={`启用 ${model.id}`}
+                      onChange={(event) => {
+                        onClearError()
+                        onChangeField('models', updateModelEnabledInList(config.models, model.id, event.currentTarget.checked))
+                      }}
+                    />
+                    <span className="grid min-w-0 gap-1">
+                      <span className="font-medium text-foreground">{model.label}</span>
+                      <span className="truncate text-xs text-muted-foreground">{model.id}</span>
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    <Badge variant={isDefault ? 'default' : 'outline'} className="h-[28px] px-3">
+                      {isDefault ? '默认' : model.enabled ? '启用' : '关闭'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={disabled || isDefault}
+                      onClick={() => {
+                        onClearError()
+                        onChangeField('model', model.id)
+                        onChangeField('models', upsertModelInList(config.models, model.id))
+                      }}
+                    >
+                      设为默认
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={disabled || isDefault}
+                      onClick={() => {
+                        onClearError()
+                        onChangeField('models', removeModelFromList(config.models, model.id))
+                      }}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+            暂无 Cloudflare 模型，请先添加模型 ID。
+          </div>
+        )}
+      </div>
+
+      <details
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen((event.currentTarget as HTMLDetailsElement).open)}
+        className="rounded-xl border border-border bg-background"
+      >
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-foreground">
+          高级设置
+        </summary>
+        <div className="grid gap-4 border-t border-border px-4 py-4 lg:grid-cols-2">
+          <label className="flex items-center gap-3 text-sm font-medium text-foreground">
+            <input
+              type="checkbox"
+              checked={config.freeOnly}
+              disabled={disabled}
+              onChange={(event) => {
+                onClearError()
+                onChangeField('freeOnly', event.currentTarget.checked)
+              }}
+            />
+            仅使用免费额度
+          </label>
+          <AutoSaveNumberField
+            label="每日 Neuron 预算"
+            value={config.dailyNeuronBudget}
+            savedValue={savedConfig.dailyNeuronBudget}
+            min={0}
+            disabled={disabled}
+            onCommit={(value) => {
+              onChangeField('dailyNeuronBudget', value)
+            }}
+            onClearError={onClearError}
+          />
+          <AutoSaveNumberField
+            label="最大 Prompt 字符"
+            value={config.maxPromptChars}
+            savedValue={savedConfig.maxPromptChars}
+            min={1}
+            disabled={disabled}
+            onCommit={(value) => {
+              onChangeField('maxPromptChars', value)
+            }}
+            onClearError={onClearError}
+          />
+          <AutoSaveNumberField
+            label="最大输出 Token"
+            value={config.maxOutputTokens}
+            savedValue={savedConfig.maxOutputTokens}
+            min={1}
+            disabled={disabled}
+            onCommit={(value) => {
+              onChangeField('maxOutputTokens', value)
+            }}
+            onClearError={onClearError}
+          />
+        </div>
+      </details>
+    </DetailSection>
   )
 }
 
@@ -709,16 +992,8 @@ function AnthropicPanel({
   )
 }
 
-function getFirstProviderDetailKey(settings: AdminAiSettings): ProviderDetailKey {
-  if (settings.openai.length > 0) {
-    return 'openai:0'
-  }
-
-  if (settings.anthropic.length > 0) {
-    return 'anthropic:0'
-  }
-
-  return ''
+function getFirstProviderDetailKey(): ProviderDetailKey {
+  return 'cloudflare'
 }
 
 export function AdminV2ProvidersWorkspace({
@@ -734,7 +1009,7 @@ export function AdminV2ProvidersWorkspace({
   onDetectAnthropicModels,
   onDetectOpenAiCompatibleModels,
 }: ProviderWorkspaceProps) {
-  const [selectedDetail, setSelectedDetail] = useState<ProviderDetailKey>(() => getFirstProviderDetailKey(aiDraft))
+  const [selectedDetail, setSelectedDetail] = useState<ProviderDetailKey>(() => getFirstProviderDetailKey())
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>({})
 
   const commitDraftChange = (updater: (current: AdminAiSettings) => AdminAiSettings) => {
@@ -786,6 +1061,17 @@ export function AdminV2ProvidersWorkspace({
     icon: React.ComponentType<{ className?: string }>
     badge: ReactNode
   }> = [
+    {
+      key: 'cloudflare',
+      title: 'Cloudflare AI',
+      description: 'Workers AI 配置',
+      icon: Cloud,
+      badge: (
+        <Badge variant={cloudflareConfigured(aiDraft.cloudflare) ? 'secondary' : 'outline'}>
+          {buildConfiguredLabel(cloudflareConfigured(aiDraft.cloudflare))}
+        </Badge>
+      ),
+    },
     ...aiDraft.openai.map((config, index) => ({
       key: `openai:${index.toString()}` as ProviderDetailKey,
       title: config.displayName || 'OpenAI Compatible',
@@ -861,9 +1147,24 @@ export function AdminV2ProvidersWorkspace({
             {!activeDetail ? (
               <Card>
                 <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                  暂无供应商配置，请先添加 OpenAI Compatible 或 Anthropic。
+                  暂无供应商配置。
                 </CardContent>
               </Card>
+            ) : null}
+
+            {activeDetail === 'cloudflare' ? (
+              <CloudflarePanel
+                aiDraft={aiDraft}
+                savedSettings={savedSettings}
+                disabled={!canEdit || isSaving}
+                onClearError={onClearError}
+                onChangeField={(field, value) => {
+                  onChange((current) => updateAdminCloudflareField(current, field, value))
+                }}
+                onAutoSave={() => {
+                  autoSaveDraft()
+                }}
+              />
             ) : null}
 
             {activeDetail.startsWith('openai:') ? (() => {
@@ -920,7 +1221,7 @@ export function AdminV2ProvidersWorkspace({
                     autoSaveDraft()
                   }}
                   onDelete={() => {
-                    const nextDraft = commitDraftChange((current) =>
+                    commitDraftChange((current) =>
                       removeAdminOpenAiConfig(current, index),
                     )
                     setDetectionStates((prev) => {
@@ -928,7 +1229,7 @@ export function AdminV2ProvidersWorkspace({
                       delete next[activeDetail]
                       return next
                     })
-                    setSelectedDetail(getFirstProviderDetailKey(nextDraft ?? aiDraft))
+                    setSelectedDetail(getFirstProviderDetailKey())
                   }}
                 />
               )
@@ -947,7 +1248,7 @@ export function AdminV2ProvidersWorkspace({
                     onChange((current) => updateAdminAnthropicField(current, index, field, value))
                   }}
                   onDelete={() => {
-                    const nextDraft = commitDraftChange((current) =>
+                    commitDraftChange((current) =>
                       removeAdminAnthropicConfig(current, index),
                     )
                     setDetectionStates((prev) => {
@@ -955,7 +1256,7 @@ export function AdminV2ProvidersWorkspace({
                       delete next[activeDetail]
                       return next
                     })
-                    setSelectedDetail(getFirstProviderDetailKey(nextDraft ?? aiDraft))
+                    setSelectedDetail(getFirstProviderDetailKey())
                   }}
                   onAutoSave={() => {
                     autoSaveDraft()

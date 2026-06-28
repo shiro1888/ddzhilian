@@ -103,28 +103,60 @@ afterEach(() => {
 })
 
 describe('AdminV2ProvidersWorkspace', () => {
-  it('renders OpenAI compatible provider as the default detail without Cloudflare configuration', () => {
+  it('renders Cloudflare provider as the default detail with OpenAI compatible providers still available', () => {
     renderWorkspace()
 
     expect(screen.getByText('供应商配置')).toBeInTheDocument()
-    expect(screen.queryByText('Cloudflare AI')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Cloudflare AI').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('Account ID')).toHaveValue('cf-account-id')
+    expect(screen.getByLabelText('API Token')).toHaveValue('cf-api-token')
+    expect(screen.getByLabelText('默认模型')).toHaveValue('@cf/meta/llama-3.1-8b-instruct')
+    expect(screen.getByText('模型 2')).toHaveClass('h-[28px]')
     expect(screen.getAllByText('OpenAI Compatible 1').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /OpenAI Compatible 1/ })).toHaveClass('h-[65px]')
     expect(screen.getByText('已保存')).toHaveClass('h-[32px]')
     expect(screen.getAllByText('已配置').some((element) =>
       element.classList.contains('h-[28px]'),
     )).toBe(true)
-    expect(screen.getByText('模型 2')).toHaveClass('h-[28px]')
-    expect(screen.getByLabelText('显示名称')).toHaveValue('OpenAI Compatible 1')
-    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.provider.example.com/v1')
-    expect(screen.getByLabelText('API Key')).toHaveValue('sk-test-openai')
-    expect(screen.getByLabelText('模型名称')).toHaveValue('gpt-4.1-mini')
-    expect(screen.getAllByText('已配置').length).toBeGreaterThan(0)
+  })
+
+  it('edits Cloudflare credentials and model list', async () => {
+    const { user, onAutosave, getDraft } = renderWorkspace()
+
+    await user.clear(screen.getByLabelText('Account ID'))
+    await user.type(screen.getByLabelText('Account ID'), 'next-cf-account')
+    await user.clear(screen.getByLabelText('API Token'))
+    await user.type(screen.getByLabelText('API Token'), 'next-cf-token')
+    await user.type(screen.getByLabelText('Cloudflare 模型 ID'), '@cf/zai-org/glm-5.2')
+    await user.click(screen.getByRole('button', { name: /添加模型/ }))
+    await user.selectOptions(screen.getByLabelText('默认模型'), '@cf/zai-org/glm-5.2')
+
+    expect(getDraft().cloudflare).toMatchObject({
+      accountId: 'next-cf-account',
+      apiToken: 'next-cf-token',
+      model: '@cf/zai-org/glm-5.2',
+    })
+    expect(getDraft().cloudflare.models).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: '@cf/zai-org/glm-5.2',
+        label: 'glm-5.2',
+        enabled: true,
+      }),
+    ]))
+
+    await user.click(screen.getByRole('button', { name: /保存配置/ }))
+    expect(onAutosave).toHaveBeenCalledWith(undefined, { showSuccessToast: false })
   })
 
   it('edits OpenAI compatible provider fields and saves the configuration', async () => {
     const { user, onAutosave, getDraft } = renderWorkspace()
     await selectOpenAiProvider(user)
+
+    expect(screen.getByLabelText('显示名称')).toHaveValue('OpenAI Compatible 1')
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.provider.example.com/v1')
+    expect(screen.getByLabelText('API Key')).toHaveValue('sk-test-openai')
+    expect(screen.getByLabelText('模型名称')).toHaveValue('gpt-4.1-mini')
+    expect(screen.getAllByText('已配置').length).toBeGreaterThan(0)
 
     await user.clear(screen.getByLabelText('显示名称'))
     await user.type(screen.getByLabelText('显示名称'), 'Primary OpenAI')
@@ -281,18 +313,26 @@ describe('AdminV2ProvidersWorkspace', () => {
     await selectOpenAiProvider(user)
     await user.click(screen.getByRole('button', { name: /删除/ }))
     expect(getDraft().openai).toHaveLength(0)
-    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.anthropic.example.com')
+    expect(screen.getByLabelText('Account ID')).toHaveValue('cf-account-id')
 
     await selectAnthropicProvider(user)
     await user.click(screen.getByRole('button', { name: /删除/ }))
     expect(getDraft().anthropic).toHaveLength(0)
-    expect(screen.getByText('暂无供应商配置，请先添加 OpenAI Compatible 或 Anthropic。')).toBeInTheDocument()
+    expect(screen.getByLabelText('Account ID')).toHaveValue('cf-account-id')
   })
 
   it('disables editable controls when editing is not allowed', async () => {
     const { user } = renderWorkspace({ canEdit: false })
 
     expect(screen.getByRole('button', { name: /添加配置/ })).toBeDisabled()
+    expect(screen.getByLabelText('Account ID')).toBeDisabled()
+    expect(screen.getByLabelText('API Token')).toBeDisabled()
+    expect(screen.getByLabelText('默认模型')).toBeDisabled()
+    expect(screen.getByLabelText('Cloudflare 模型 ID')).toBeDisabled()
+    expect(screen.getByRole('button', { name: /保存配置/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /添加模型/ })).toBeDisabled()
+
+    await selectOpenAiProvider(user)
     expect(screen.getByLabelText('显示名称')).toBeDisabled()
     expect(screen.getByLabelText('Base URL')).toBeDisabled()
     expect(screen.getByLabelText('API Key')).toBeDisabled()
