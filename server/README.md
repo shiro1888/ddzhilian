@@ -97,14 +97,14 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `SEARXNG_CATEGORIES`: optional SearXNG category list, default `general`
 - `CLOUDFLARE_AI_ACCOUNT_ID`: Cloudflare account ID for Workers AI REST API
 - `CLOUDFLARE_AI_API_TOKEN`: Cloudflare API token with Workers AI execution access
-- `CLOUDFLARE_AI_MODEL`: default Workers AI model name, default `@cf/google/gemma-4-26b-a4b-it`
-- `CLOUDFLARE_AI_MODELS`: comma-separated model allowlist for the UI and API, each item can be `modelId|Label`; default includes `@cf/google/gemma-4-26b-a4b-it` and `@cf/openai/gpt-oss-120b`
+- `CLOUDFLARE_AI_MODEL`: default Workers AI model name, default `@cf/zai-org/glm-5.2`
+- `CLOUDFLARE_AI_MODELS`: comma-separated model allowlist for the UI and API, each item can be `modelId|Label`; default includes `@cf/zai-org/glm-5.2`, `@cf/google/gemma-4-26b-a4b-it`, and `@cf/openai/gpt-oss-120b`
 - `CLOUDFLARE_AI_MAX_PROMPT_CHARS`: maximum prompt size accepted by `/api/ai/chat`, default `8000`
 - `CLOUDFLARE_AI_MAX_OUTPUT_TOKENS`: maximum model output tokens per request, default `1000`
 - `CLOUDFLARE_AI_FREE_ONLY`: when not set to `false`, the server stops AI requests at the local free-tier budget
 - `CLOUDFLARE_AI_DAILY_NEURON_BUDGET`: local daily Workers AI budget, default `10000`
-- `CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS`: input pricing estimate for local budget checks, default `4625`
-- `CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS`: output pricing estimate for local budget checks, default `30475`
+- `CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS`: input pricing estimate for local budget checks, default `127273`
+- `CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS`: output pricing estimate for local budget checks, default `400000`
 - `OPENROUTER_API_KEY`: OpenRouter API key used only by the backend
 - `OPENROUTER_API_KEY_FILE`: optional file path used by the model sync script when the key is not in the environment
 - `OPENROUTER_MODEL`: default OpenRouter model ID

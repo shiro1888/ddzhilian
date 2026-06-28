@@ -10,6 +10,10 @@ const defaultAllowedOrigins = [
 const maxHistoryRetentionMs = 24 * 60 * 60 * 1000;
 const defaultCloudflareAiModels = [
   {
+    id: '@cf/zai-org/glm-5.2',
+    label: 'GLM 5.2',
+  },
+  {
     id: '@cf/google/gemma-4-26b-a4b-it',
     label: 'Gemma 4 26B A4B',
   },
@@ -18,6 +22,8 @@ const defaultCloudflareAiModels = [
     label: 'GPT-OSS 120B',
   },
 ];
+const defaultCloudflareAiInputNeuronsPerMillionTokens = 127_273;
+const defaultCloudflareAiOutputNeuronsPerMillionTokens = 400_000;
 const defaultCodexImageModel = 'gpt-image-2';
 const defaultAiSystemPrompt = [
   'You are an isolated chat assistant inside ddzhilian.',
@@ -549,11 +555,17 @@ export function loadConfig(): ServerConfig {
       dailyNeuronBudget: Math.max(0, readNumber('CLOUDFLARE_AI_DAILY_NEURON_BUDGET', 10_000)),
       estimatedInputNeuronsPerMillionTokens: Math.max(
         1,
-        readNumber('CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS', 4625)
+        readNumber(
+          'CLOUDFLARE_AI_INPUT_NEURONS_PER_M_TOKENS',
+          defaultCloudflareAiInputNeuronsPerMillionTokens
+        )
       ),
       estimatedOutputNeuronsPerMillionTokens: Math.max(
         1,
-        readNumber('CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS', 30475)
+        readNumber(
+          'CLOUDFLARE_AI_OUTPUT_NEURONS_PER_M_TOKENS',
+          defaultCloudflareAiOutputNeuronsPerMillionTokens
+        )
       ),
     },
     openrouterAi: {
