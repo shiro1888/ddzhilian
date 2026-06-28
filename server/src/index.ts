@@ -3673,12 +3673,13 @@ function getConfiguredTextAiSettings() {
 
 function getAvailableAiSettings() {
   const configuredProviders = getConfiguredTextAiSettings();
-  if (configuredProviders.length > 0) {
-    return configuredProviders;
+  const cloudflare = createCloudflareSettings();
+
+  if (isConfiguredAiSettings(cloudflare)) {
+    configuredProviders.push(cloudflare);
   }
 
-  const cloudflare = createCloudflareSettings();
-  return isConfiguredAiSettings(cloudflare) ? [cloudflare] : [];
+  return configuredProviders;
 }
 
 function getAiSettingsByProvider(providerId: string) {
