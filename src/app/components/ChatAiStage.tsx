@@ -16,6 +16,7 @@ import type {
   AiModelOption,
   AiQuotaStatus,
 } from '../../lib/ddzhilian-types'
+import type { AiDraftContextPayload, AiDraftRequest } from '../types'
 import { extractPlainTextFromRichText, openHtmlDocumentFullscreenPreview, sanitizeRichTextHtml } from '../utils'
 import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
 
@@ -33,15 +34,28 @@ const SHOW_SAMPLE_OUTPUT = process.env.NODE_ENV === 'development'
 const quickPromptSuggestions = [
   {
     label: '总结文字',
+    description: '粘贴长文或选择文件，提炼关键结论与行动项',
     prompt: '请帮我总结下面这段内容，保留关键结论和行动项：\n\n',
   },
   {
     label: '写代码',
+    description: '描述需求，生成清晰、可维护的代码',
     prompt: '请帮我写一段清晰、可维护的代码，实现：',
   },
   {
     label: '分析图片',
+    description: '上传截图或照片，识别重点与潜在问题',
     prompt: '请分析我上传的图片，指出重点信息和可能需要注意的问题。',
+  },
+  {
+    label: '解释文件',
+    description: '读取文本、日志或配置文件，解释结构和异常',
+    prompt: '请解释我上传的文件内容，指出它的用途、关键字段和需要注意的问题。',
+  },
+  {
+    label: '辅助生成传输说明',
+    description: '为即将发送的文件生成简短清楚的说明',
+    prompt: '请帮我为即将通过 DD直连发送的文件生成一段简短说明，包含文件内容、接收方需要做什么、注意事项：\n\n',
   },
 ]
 
@@ -83,6 +97,7 @@ type ChatAiStageProps = {
   onSaveConversations: (conversations: AiChatConversationRecord[]) => Promise<AiChatConversationRecord[]>
   onDeleteConversationRemote: (conversationId?: string) => Promise<AiChatConversationRecord[]>
   onQuotaStatusChange: (quota: AiQuotaStatus) => void
+  draftRequest?: AiDraftRequest | null
 }
 
 type ActiveGeneration = {
@@ -430,7 +445,7 @@ function buildConversationMarkdown(conversation: ChatAiConversation) {
   ]
 
   for (const message of conversation.messages) {
-    lines.push(`## ${message.role === 'user' ? '你' : 'DD直连 AI'}`)
+    lines.push(`## ${message.role === 'user' ? '你' : 'DD助手'}`)
     lines.push('')
     lines.push(message.content || '正在生成...')
 
@@ -491,6 +506,7 @@ export function ChatAiStage({
   onSaveConversations,
   onDeleteConversationRemote,
   onQuotaStatusChange,
+  draftRequest,
 }: ChatAiStageProps) {
   const [conversations, setConversations] = useState<ChatAiConversation[]>(readStoredConversations)
   const [activeConversationId, setActiveConversationId] = useState(() => conversations[0]?.id ?? '')
@@ -499,6 +515,7 @@ export function ChatAiStage({
   const [showArchived, setShowArchived] = useState(false)
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false)
   const [attachments, setAttachments] = useState<ChatAiAttachment[]>([])
+  const [draftContext, setDraftContext] = useState<AiDraftContextPayload | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
@@ -514,6 +531,7 @@ export function ChatAiStage({
   const isApplyingRemoteRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const isDraftComposingRef = useRef(false)
+  const handledDraftRequestIdRef = useRef<number | null>(null)
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
@@ -551,6 +569,24 @@ export function ChatAiStage({
   useEffect(() => {
     activeGenerationRef.current = activeGeneration
   }, [activeGeneration])
+
+  useEffect(() => {
+    if (!draftRequest || handledDraftRequestIdRef.current === draftRequest.id) {
+      return
+    }
+
+    handledDraftRequestIdRef.current = draftRequest.id
+    setDraft(draftRequest.text)
+    setDraftContext(
+      draftRequest.contextLabel || draftRequest.contextItems?.length
+        ? {
+            contextLabel: draftRequest.contextLabel,
+            contextItems: draftRequest.contextItems,
+          }
+        : null,
+    )
+    setLocalError(null)
+  }, [draftRequest])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -626,6 +662,11 @@ export function ChatAiStage({
       return
     }
 
+    if (!activeConversation?.messages.length) {
+      thread.scrollTop = 0
+      return
+    }
+
     const distanceFromBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight
     if (distanceFromBottom < 220) {
       thread.scrollTop = thread.scrollHeight
@@ -697,6 +738,7 @@ export function ChatAiStage({
     setActiveConversationId(conversation.id)
     setDraft('')
     setAttachments([])
+    setDraftContext(null)
     setPendingDeleteConversationId(null)
     setConversationContextMenu(null)
     setLocalError(null)
@@ -1107,6 +1149,7 @@ export function ChatAiStage({
 
     setDraft('')
     setAttachments([])
+    setDraftContext(null)
     void requestAssistantResponse(activeConversation.id, promptWithFiles, assistantMessageId, images, shouldUseWebSearch)
   }
 
@@ -1194,6 +1237,24 @@ export function ChatAiStage({
     }))
     setLocalError(null)
   }
+
+  const activeConversationMessages = activeConversation?.messages ?? []
+  const activeConversationAttachmentCount = activeConversationMessages.reduce(
+    (count, message) => count + (message.attachments?.length ?? 0),
+    0,
+  )
+  const latestAssistantMessage = [...activeConversationMessages]
+    .reverse()
+    .find((message) => message.role === 'assistant')
+  const latestWebSearchSourceCount = latestAssistantMessage?.webSearch?.sources.length ?? 0
+  const draftContextItems = draftContext?.contextItems ?? []
+  const currentContextLabel = attachments.length > 0
+    ? `${attachments.length.toString()} 个待发送附件`
+    : draftContext?.contextLabel
+      ? draftContext.contextLabel
+      : activeConversationAttachmentCount > 0
+        ? `${activeConversationAttachmentCount.toString()} 个会话附件`
+        : '本地输入与当前会话'
 
   return (
     <section
@@ -1361,6 +1422,39 @@ export function ChatAiStage({
             )}
           </div>
           <div className="dd-ai-chat__topbar-actions">
+            <div className="dd-ai-chat__control-strip" aria-label="AI 模型与上下文">
+              <label className="dd-ai-chat__model-pill">
+                <span>模型</span>
+                <select
+                  value={selectedAiModel}
+                  disabled={aiModelOptions.length === 0 || isGenerating}
+                  aria-label="选择 AI 模型"
+                  onChange={(event) => onAiModelChange(event.target.value)}
+                >
+                  {aiModelOptions.length > 0 ? (
+                    aiModelOptions.map((model) => (
+                      <option key={getAiModelOptionValue(model)} value={getAiModelOptionValue(model)}>
+                        {model.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">默认模型</option>
+                  )}
+                </select>
+              </label>
+              <button
+                type="button"
+                className={`dd-ai-chat__search-pill${isWebSearchEnabled ? ' is-on' : ''}`}
+                disabled={isGenerating}
+                aria-pressed={isWebSearchEnabled}
+                onClick={() => setIsWebSearchEnabled((current) => !current)}
+              >
+                联网搜索 · {isWebSearchEnabled ? '开启' : '关闭'}
+              </button>
+              <span className="dd-ai-chat__context-pill" title={currentContextLabel}>
+                上下文：{currentContextLabel}
+              </span>
+            </div>
             {renamingConversationId === activeConversation?.id ? (
               <>
                 <button type="button" onClick={commitRename}>
@@ -1425,6 +1519,24 @@ export function ChatAiStage({
               </div>
             </details>
           </div>
+          <div className="dd-ai-chat__mobile-context" aria-label="AI 当前状态">
+            <span>
+              <em>模型</em>
+              <strong title={selectedAiModelLabel || '默认模型'}>{selectedAiModelLabel || '默认模型'}</strong>
+            </span>
+            <span>
+              <em>同步</em>
+              <strong>{isConversationSyncReady ? '已开启' : '仅本机'}</strong>
+            </span>
+            <span>
+              <em>搜索</em>
+              <strong>{isWebSearchEnabled ? '开启' : '关闭'}</strong>
+            </span>
+            <span>
+              <em>附件</em>
+              <strong>{attachments.length.toString()} 项</strong>
+            </span>
+          </div>
         </header>
 
         {pendingDeleteConversation ? (
@@ -1442,17 +1554,22 @@ export function ChatAiStage({
         <div className="dd-ai-chat__thread" ref={threadRef}>
           {!activeConversation || activeConversation.messages.length === 0 ? (
             <div className="dd-ai-chat__empty">
-              <strong>开始一段 AI 对话</strong>
-              <span>可以直接问问题，也可以要求它输出 Markdown、代码块或结构化说明。</span>
+              <span className="dd-ai-chat__empty-badge" aria-hidden="true">DD</span>
+              <strong>你好，我是 DD助手</strong>
+              <span>把文件拖进来，或选择一个常用任务开始。内容仅在本机处理，联网时只发送你选中的上下文。</span>
               <div className="dd-ai-chat__quick-prompts" aria-label="常用提示">
                 {quickPromptSuggestions.map((suggestion) => (
                   <button
                     key={suggestion.label}
                     type="button"
-                    onClick={() => setDraft(suggestion.prompt)}
+                    onClick={() => {
+                      setDraft(suggestion.prompt)
+                      setDraftContext(null)
+                    }}
                     disabled={isGenerating}
                   >
-                    {suggestion.label}
+                    <strong>{suggestion.label}</strong>
+                    <span>{suggestion.description}</span>
                   </button>
                 ))}
               </div>
@@ -1479,7 +1596,7 @@ export function ChatAiStage({
                 </div>
                 <div className="dd-ai-chat__message-body">
                   <div className="dd-ai-chat__message-meta">
-                    <strong>{message.role === 'user' ? '你' : 'DD直连 AI'}</strong>
+                    <strong>{message.role === 'user' ? '你' : 'DD助手'}</strong>
                     <span>{formatConversationTime(message.createdAt)}</span>
                   </div>
                   {message.status === 'streaming' && !message.content ? (
@@ -1590,7 +1707,7 @@ export function ChatAiStage({
             ) : null}
             <textarea
               value={draft}
-              placeholder="给 DD直连 AI 发送消息"
+              placeholder="给 DD助手发消息，或把文件拖到这里…"
               rows={attachments.length > 0 ? 2 : 3}
               onChange={handleDraftChange}
               onCompositionStart={handleDraftCompositionStart}
@@ -1599,7 +1716,7 @@ export function ChatAiStage({
             />
           </div>
           <div className="dd-ai-chat__composer-footer">
-            <span>Enter 发送，Shift + Enter 换行</span>
+            <span>Enter 发送 · Shift + Enter 换行 · 内容不经过服务器保存</span>
             <div>
               {isGenerating ? (
                 <button type="button" className="is-secondary" onClick={handleStopGeneration}>
@@ -1613,6 +1730,86 @@ export function ChatAiStage({
           </div>
         </form>
       </div>
+
+      <aside className="dd-ai-chat__context" aria-label="AI 上下文">
+        <section className="dd-ai-chat__context-section">
+          <div className="dd-ai-chat__context-head">
+            <strong>当前上下文</strong>
+            <span>{currentContextLabel}</span>
+          </div>
+          <div className="dd-ai-chat__context-list">
+            <div className="dd-ai-chat__context-row">
+              <span>模型</span>
+              <strong>{selectedAiModelLabel || '默认模型'}</strong>
+            </div>
+            <div className="dd-ai-chat__context-row">
+              <span>会话同步</span>
+              <strong>{isConversationSyncReady ? '已开启' : '仅本机'}</strong>
+            </div>
+            <div className="dd-ai-chat__context-row">
+              <span>联网搜索</span>
+              <strong>{isWebSearchEnabled ? '开启' : '关闭'}</strong>
+            </div>
+            <div className="dd-ai-chat__context-row">
+              <span>生成状态</span>
+              <strong>{isGenerating ? '生成中' : '空闲'}</strong>
+            </div>
+          </div>
+          {draftContextItems.length > 0 ? (
+            <div className="dd-ai-chat__context-files is-transfer-context" aria-label="传输文件上下文">
+              {draftContextItems.map((item) => (
+                <div key={item.id} className="dd-ai-chat__context-file">
+                  <span>DD</span>
+                  <div>
+                    <strong title={item.label}>{item.label}</strong>
+                    {item.meta ? <small>{item.meta}</small> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="dd-ai-chat__context-section">
+          <div className="dd-ai-chat__context-head">
+            <strong>待发送附件</strong>
+            <span>{attachments.length.toString()} 项</span>
+          </div>
+          {attachments.length > 0 ? (
+            <div className="dd-ai-chat__context-files">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="dd-ai-chat__context-file">
+                  <span>{attachment.kind === 'image' ? 'IMG' : 'TXT'}</span>
+                  <div>
+                    <strong>{attachment.name}</strong>
+                    <small>{formatFileSize(attachment.size)}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="dd-ai-chat__context-empty">还没有附件。可拖拽图片、文本或代码文件到页面。</p>
+          )}
+        </section>
+
+        <section className="dd-ai-chat__context-section">
+          <div className="dd-ai-chat__context-head">
+            <strong>会话状态</strong>
+            <span>{activeConversationMessages.length.toString()} 条消息</span>
+          </div>
+          <div className="dd-ai-chat__context-list">
+            <div className="dd-ai-chat__context-row">
+              <span>历史附件</span>
+              <strong>{activeConversationAttachmentCount.toString()}</strong>
+            </div>
+            <div className="dd-ai-chat__context-row">
+              <span>搜索来源</span>
+              <strong>{latestWebSearchSourceCount.toString()}</strong>
+            </div>
+          </div>
+          <p className="dd-ai-chat__context-note">DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。</p>
+        </section>
+      </aside>
     </section>
   )
 }

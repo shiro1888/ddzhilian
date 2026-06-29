@@ -12,10 +12,23 @@ import type {
   ReactNode,
 } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ScanText } from 'lucide-react'
+import {
+  Bot,
+  Command,
+  ImageIcon,
+  Laptop,
+  Monitor,
+  Send,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  Upload,
+  Users,
+  Wifi,
+} from 'lucide-react'
 import gsap from 'gsap'
-import { EncryptedText } from '@/components/ui/encrypted-text'
 import type {
+  AiDraftContextPayload,
   ComposerImageDraft,
   FileConversationEntry,
   OnlineDeviceListItem,
@@ -23,9 +36,40 @@ import type {
   SharedContentTab,
   UnifiedConversationEntry,
 } from '../types'
-import type { AiModelOption, OcrHistoryResponse, OcrJobResponse } from '../../lib/ddzhilian-types'
+import type {
+  AiModelOption,
+  DevicePreferencesPayload,
+  DeviceSettingsPayload,
+  HistoryFileSummary,
+  HistoryTextSummary,
+  IncomingFileOffer,
+  OcrHistoryResponse,
+  OcrJobResponse,
+} from '../../lib/ddzhilian-types'
+import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
+import { applyThemeMode, subscribeToSystemTheme } from '../../lib/preferences/theme-utils'
+import { ConfirmReceiveDialog } from './ConfirmReceiveDialog'
+import { DeviceCard } from './DeviceCard'
 import { DocumentPreviewDialog } from './DocumentPreviewDialog'
 import type { DocumentPreviewDialogState } from './DocumentPreviewDialog'
+import { DropZone } from './DropZone'
+import { FileSendPage } from './FileSendPage'
+import { FileMessageCard } from './FileMessageCard'
+import { HistoryPage } from './HistoryPage'
+import { MessageBubble } from './MessageBubble'
+import { MobileActionBar } from './MobileActionBar'
+import { MobileWorkbenchNav } from './MobileWorkbenchNav'
+import { NearbyDevicesPanel } from './NearbyDevicesPanel'
+import { RoomComposer } from './RoomComposer'
+import { RoomConversationStream } from './RoomConversationStream'
+import { RoomDragOverlay } from './RoomDragOverlay'
+import { RoomHeader } from './RoomHeader'
+import { RoomsPage } from './RoomsPage'
+import { SettingsPanel } from './SettingsPanel'
+import { SharedContentPanel } from './SharedContentPanel'
+import { SidebarNav } from './SidebarNav'
+import { TopStatusBar } from './TopStatusBar'
+import { TrustDeviceDialog } from './TrustDeviceDialog'
 import type { DocumentPreviewPayload } from '../../lib/document-preview'
 import {
   collectDroppedFiles,
@@ -37,10 +81,30 @@ import {
   shouldInsertDivider,
 } from '../utils'
 import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
+import { TextSendPage } from './TextSendPage'
+import { ToolContextPanel } from './ToolContextPanel'
+import type { ToolContextPanelAction } from './ToolContextPanel'
+import { TransferQueuePage } from './TransferQueuePage'
+import { TransferQueuePanel } from './TransferQueuePanel'
+import { TransferTaskCard } from './TransferTaskCard'
 
 type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }>['file']
 type SnapLinkTextEntry = Extract<UnifiedConversationEntry, { entryType: 'text' }>
 type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
+type SnapLinkWorkbenchMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'settings'
+type SnapLinkTrustActionKind = 'connect' | 'file' | 'text' | 'pick-file' | 'pick-camera'
+
+type SnapLinkPendingTrustAction =
+  | {
+      deviceId: string
+      kind: SnapLinkTrustActionKind
+    }
+  | {
+      deviceId: string
+      kind: 'send-files'
+      files: File[]
+    }
+
 type SnapLinkSharedLinkEntry = {
   id: string
   url: string
@@ -114,14 +178,8 @@ type SnapLinkOcrImageState = {
   previewUrl: string
 }
 
-const snapLinkQuickEmojis = [
-  '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
-  '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
-  '👍', '👎', '🙏', '💪', '👋', '🤝', '🎉', '🎊', '✨', '🔥', '⭐', '🌈',
-  '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
-]
-
 const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
+const snapLinkImageSelectionValue = '__snaplink_image__'
 const snapLinkCommandSelectionValue = '__snaplink_command__'
 const snapLinkComposerMaxHeight = 120
 const snapLinkInitialMessageRenderCount = 80
@@ -131,28 +189,22 @@ const snapLinkNewOutgoingEntryAnimationMs = 500
 const snapLinkNewOutgoingEntryAnimationCleanupMs = snapLinkNewOutgoingEntryAnimationMs + 150
 const snapLinkPendingOutgoingEntryAnimationMs = 12_000
 const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
+const snapLinkThemeModePreferenceKey = 'theme_mode'
+const snapLinkPreferenceCookieMaxAgeSeconds = 60 * 60 * 24 * 365
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
-const snapLinkLobbyGreetingText = '你好，我是ddzhilian'
-const snapLinkLobbyGreetingScrambleCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
 const snapLinkImagePreviewOpenDuration = 1
 const snapLinkImagePreviewOriginFeedbackDuration = 0.18
 const snapLinkImagePreviewCloseDuration = 0.34
 const snapLinkImagePreviewZoomScale = 1.85
 const snapLinkRecallBurstAnimationMs = 720
 const snapLinkRecallBurstAnimationCleanupMs = snapLinkRecallBurstAnimationMs + 120
-const snapLinkRecallParticleColumnCount = 18
-const snapLinkRecallParticleRowCount = 10
 const snapLinkOcrSupportedMimeTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const snapLinkOcrFileExtensionByMimeType: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
 }
-const snapLinkRecallParticleIndexes = Array.from(
-  { length: snapLinkRecallParticleColumnCount * snapLinkRecallParticleRowCount },
-  (_, index) => index,
-)
 
 type SnapLinkRecallingTextEntryState = {
   entry: SnapLinkTextEntry
@@ -233,6 +285,69 @@ function readStoredSnapLinkThemeColors() {
   }
 
   return snapLinkDefaultThemeColors
+}
+
+function isSnapLinkThemeMode(value: string | null | undefined): value is ThemeMode {
+  return value === 'light' || value === 'dark' || value === 'system'
+}
+
+function readSnapLinkCookie(name: string) {
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  const prefix = `${name}=`
+  const cookie = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith(prefix))
+
+  if (!cookie) {
+    return null
+  }
+
+  try {
+    return decodeURIComponent(cookie.slice(prefix.length))
+  } catch {
+    return cookie.slice(prefix.length)
+  }
+}
+
+function writeSnapLinkClientPreference(name: string, value: string) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${snapLinkPreferenceCookieMaxAgeSeconds}; SameSite=Lax`
+}
+
+function readStoredSnapLinkThemeMode(): ThemeMode {
+  if (typeof document === 'undefined') {
+    return 'light'
+  }
+
+  const domThemeMode = document.documentElement.getAttribute('data-theme-mode')
+  if (isSnapLinkThemeMode(domThemeMode)) {
+    return domThemeMode
+  }
+
+  const cookieThemeMode = readSnapLinkCookie(snapLinkThemeModePreferenceKey)
+  if (isSnapLinkThemeMode(cookieThemeMode)) {
+    return cookieThemeMode
+  }
+
+  return 'light'
+}
+
+function resolveInitialSnapLinkThemeMode(mode: ThemeMode): ResolvedThemeMode {
+  if (mode !== 'system') {
+    return mode
+  }
+
+  if (typeof window === 'undefined') {
+    return 'light'
+  }
+
+  return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
 }
 
 function getSnapLinkThemeContrastColor(color: string) {
@@ -529,11 +644,161 @@ function getSnapLinkOcrHistorySummary(job: OcrJobResponse) {
   return text.replace(/\s+/g, ' ').slice(0, 80)
 }
 
+const snapLinkTrustedDevicesStorageKey = 'ddzhilian:trusted-devices:v1'
+
+function readStoredSnapLinkTrustedDeviceIds() {
+  if (typeof window === 'undefined') {
+    return new Set<string>()
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(snapLinkTrustedDevicesStorageKey)
+    const parsedValue = rawValue ? JSON.parse(rawValue) : []
+
+    if (!Array.isArray(parsedValue)) {
+      return new Set<string>()
+    }
+
+    return new Set(
+      parsedValue.filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+    )
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function writeStoredSnapLinkTrustedDeviceIds(deviceIds: Set<string>) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(
+      snapLinkTrustedDevicesStorageKey,
+      JSON.stringify(Array.from(deviceIds).sort()),
+    )
+  } catch {
+    // localStorage may be unavailable in private contexts; trust state then remains in memory for this tab.
+  }
+}
+
+function resolveSnapLinkDeviceKind(platform: string) {
+  const normalizedPlatform = platform.toLowerCase()
+
+  if (/(iphone|android|phone|mobile|pixel|huawei|xiaomi|oppo|vivo)/i.test(normalizedPlatform)) {
+    return 'phone'
+  }
+
+  if (/(ipad|tablet|pad)/i.test(normalizedPlatform)) {
+    return 'tablet'
+  }
+
+  return 'desktop'
+}
+
+function resolveSnapLinkTransportMode(device: OnlineDeviceListItem) {
+  if (device.scopeLabel.includes('局域网')) {
+    return {
+      label: '局域网直传',
+      tone: 'lan',
+    } as const
+  }
+
+  if (device.scopeLabel.includes('同账号')) {
+    return {
+      label: '远程直连',
+      tone: 'remote',
+    } as const
+  }
+
+  return {
+    label: '可发现',
+    tone: 'discoverable',
+  } as const
+}
+
+function resolveSnapLinkTrustLabel(device: OnlineDeviceListItem, isLocallyTrusted: boolean) {
+  if (isLocallyTrusted || device.scopeLabel.includes('同账号')) {
+    return '已信任'
+  }
+
+  if (device.scopeLabel.includes('局域网')) {
+    return '同网设备'
+  }
+
+  return '未验证'
+}
+
+function isSnapLinkDeviceTrusted(device: OnlineDeviceListItem, trustedDeviceIds: Set<string>) {
+  return trustedDeviceIds.has(device.deviceId) || device.scopeLabel.includes('同账号')
+}
+
+function formatSnapLinkDeviceFingerprint(device: OnlineDeviceListItem) {
+  const source = device.pairToken || device.shortCode || device.deviceId
+  const compact = source.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+
+  if (!compact) {
+    return '未知'
+  }
+
+  return compact.slice(0, 12).replace(/(.{4})(?=.)/g, '$1 ')
+}
+
+function resolveSnapLinkTransferStatus(file: FileConversationEntry) {
+  const status = file.transferStatus
+
+  if (status) {
+    return status
+  }
+
+  if (file.tone === 'completed') {
+    return 'completed'
+  }
+
+  if (file.tone === 'failed') {
+    return 'failed'
+  }
+
+  if (file.tone === 'active') {
+    return 'transferring'
+  }
+
+  return 'queued'
+}
+
+function getSnapLinkTransferProgress(file: FileConversationEntry) {
+  const status = resolveSnapLinkTransferStatus(file)
+
+  if (status === 'completed') {
+    return 1
+  }
+
+  if (status === 'transferring' || status === 'failed') {
+    return clampProgress(file.progress)
+  }
+
+  return 0
+}
+
+function isSnapLinkTransferActive(status: ReturnType<typeof resolveSnapLinkTransferStatus>) {
+  return (
+    status === 'queued' ||
+    status === 'waiting_for_target' ||
+    status === 'connecting' ||
+    status === 'ready' ||
+    status === 'transferring'
+  )
+}
+
 export type SnapLinkStageProps = {
   isDragging: boolean
   activeView: SnapLinkActiveView
   deviceId?: string
   deviceName: string
+  devicePlatform: string
+  deviceShortCode?: string
+  deviceSettings: Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>
+  devicePreferences: DevicePreferencesPayload
   accountId?: string
   selectedRoomId: string | null
   autoOpenRoomId?: string | null
@@ -553,26 +818,43 @@ export type SnapLinkStageProps = {
   selectedAiModelLabel: string
   unifiedConversationEntries: UnifiedConversationEntry[]
   fileConversationEmptyState: string
+  globalTransferEntries: FileConversationEntry[]
   sharedMediaEntries: FileConversationEntry[]
   sharedFileEntries: FileConversationEntry[]
   sharedLinkEntries: SnapLinkSharedLinkEntry[]
+  historyFiles: HistoryFileSummary[]
+  historyTexts: HistoryTextSummary[]
+  pendingIncomingFileOffers: IncomingFileOffer[]
   localError: string | null
   errorMessage: string | null
   aiChatElement: ReactNode
   imageElement: ReactNode
   adminElement: ReactNode
   commandElement: ReactNode
+  commandResultText?: string
+  workbenchTextRequestId?: number
+  onCreatePublicRoom: () => void
+  onJoinRoom: (roomId: string) => void
   onOpenRoomConversation: (roomId: string) => void
+  onUpdateRoomState: (payload: { roomId: string; pinned?: boolean; lastReadAt?: string }) => void
   onStartPrivateChat: (deviceId: string) => void
   onDeviceNameChange: (deviceName: string) => void
+  onDeviceSettingsChange: (patch: Partial<Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>>) => void
+  onDevicePreferencesChange: (patch: Partial<DevicePreferencesPayload>) => void
+  onRequestSnapshot: () => void
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
+  onOpenImageView: () => void
   onOpenCommandView: () => void
+  onShareCommandResult?: () => void
+  onPrepareAiDraft?: (text: string, context?: AiDraftContextPayload) => void
   onChatDraftChange: (value: string) => void
   onAiModelChange: (modelId: string) => void
   onPastedImageSelection: (files: File[]) => void
   onComposerImageRemove: (id: string) => void
   onDirectFileSelection: (files: File[]) => void
+  onDirectFileSelectionForDevice: (deviceId: string, files: File[]) => void
+  onDownloadHistoryFile: (file: HistoryFileSummary) => void
   onStartOcrJob: (file: File) => Promise<OcrJobResponse>
   onListOcrHistory: () => Promise<OcrHistoryResponse>
   onDeleteOcrHistory: (jobId: string) => Promise<void>
@@ -583,6 +865,8 @@ export type SnapLinkStageProps = {
   canRecallAnyMessage: boolean
   onRetryTransfer: (id: string) => void
   onCancelTransfer: (id: string) => void
+  onAcceptIncomingFileOffer: (id: string) => void
+  onRejectIncomingFileOffer: (id: string) => void
   onDragEnter: (event: DragEvent<HTMLElement>) => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
@@ -795,13 +1079,6 @@ function getFileExtension(fileName: string) {
   return extension.slice(0, 4).toUpperCase()
 }
 
-function isImageFileEntry(file: SnapLinkFileEntry) {
-  return Boolean(
-    file.mimeType?.toLowerCase().startsWith('image/') ||
-    /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(file.fileName),
-  )
-}
-
 function resolveMediaFileEntryKind(file: FileConversationEntry) {
   const normalizedMimeType = file.mimeType?.toLowerCase() ?? ''
   const normalizedFileName = file.fileName.toLowerCase()
@@ -965,31 +1242,6 @@ function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-function getSnapLinkRecallParticleStyle(index: number): CSSProperties {
-  const column = index % snapLinkRecallParticleColumnCount
-  const row = Math.floor(index / snapLinkRecallParticleColumnCount)
-  const columnProgress = column / Math.max(1, snapLinkRecallParticleColumnCount - 1)
-  const rowProgress = row / Math.max(1, snapLinkRecallParticleRowCount - 1)
-  const seedA = ((index * 37) % 101) / 100
-  const seedB = ((index * 53 + 17) % 97) / 96
-  const seedC = ((index * 29 + 41) % 89) / 88
-  const left = Math.min(95, Math.max(5, 4.5 + columnProgress * 91 + (seedA - 0.5) * 3.2))
-  const top = Math.min(92, Math.max(8, 8 + rowProgress * 84 + (seedB - 0.5) * 4.8))
-  const dx = 24 + columnProgress * 88 + seedA * 30
-  const dy = (rowProgress - 0.5) * 52 + (seedB - 0.5) * 22
-  const size = 1.8 + seedC * 3.6
-  const delay = columnProgress * 72 + seedB * 38
-
-  return {
-    '--recall-particle-left': `${left.toFixed(2)}%`,
-    '--recall-particle-top': `${top.toFixed(2)}%`,
-    '--recall-particle-dx': `${dx.toFixed(2)}px`,
-    '--recall-particle-dy': `${dy.toFixed(2)}px`,
-    '--recall-particle-size': `${size.toFixed(2)}px`,
-    '--recall-particle-delay': `${delay.toFixed(2)}ms`,
-  } as CSSProperties
-}
-
 function escapeSnapLinkEntryIdSelector(value: string) {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
     return CSS.escape(value)
@@ -1124,12 +1376,17 @@ export function SnapLinkStage({
   activeView,
   deviceId,
   deviceName,
+  devicePlatform,
+  deviceShortCode,
+  deviceSettings,
+  devicePreferences,
   accountId,
   selectedRoomId,
   autoOpenRoomId,
   selectedConversationName,
   activeTransferLabel,
   roomListItems,
+  onlineDeviceItems,
   chatDraft,
   composerImageDrafts,
   fileInputId,
@@ -1142,25 +1399,43 @@ export function SnapLinkStage({
   selectedAiModelLabel,
   unifiedConversationEntries,
   fileConversationEmptyState,
+  globalTransferEntries,
   sharedMediaEntries,
   sharedFileEntries,
   sharedLinkEntries,
+  historyFiles,
+  historyTexts,
+  pendingIncomingFileOffers,
   localError,
   errorMessage,
   aiChatElement,
   imageElement,
   adminElement,
   commandElement,
+  commandResultText = '',
+  workbenchTextRequestId = 0,
+  onCreatePublicRoom,
+  onJoinRoom,
   onOpenRoomConversation,
+  onUpdateRoomState,
+  onStartPrivateChat,
   onDeviceNameChange,
+  onDeviceSettingsChange,
+  onDevicePreferencesChange,
+  onRequestSnapshot,
   onOpenRoomHome,
   onOpenAiChatView,
+  onOpenImageView,
   onOpenCommandView,
+  onShareCommandResult,
+  onPrepareAiDraft,
   onChatDraftChange,
   onAiModelChange,
   onPastedImageSelection,
   onComposerImageRemove,
   onDirectFileSelection,
+  onDirectFileSelectionForDevice,
+  onDownloadHistoryFile,
   onStartOcrJob,
   onListOcrHistory,
   onDeleteOcrHistory,
@@ -1171,6 +1446,8 @@ export function SnapLinkStage({
   canRecallAnyMessage,
   onRetryTransfer,
   onCancelTransfer,
+  onAcceptIncomingFileOffer,
+  onRejectIncomingFileOffer,
   onDragEnter,
   onDragOver,
   onDragLeave,
@@ -1178,6 +1455,8 @@ export function SnapLinkStage({
 }: SnapLinkStageProps) {
   const [isLobbyOpen, setIsLobbyOpen] = useState(activeView === 'conversation')
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
+  const [copiedHistoryActionId, setCopiedHistoryActionId] = useState<string | null>(null)
+  const [settingsFeedbackMessage, setSettingsFeedbackMessage] = useState<string | null>(null)
   const [isRenamingDevice, setIsRenamingDevice] = useState(false)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null)
@@ -1195,6 +1474,26 @@ export function SnapLinkStage({
   const [deletingOcrJobId, setDeletingOcrJobId] = useState<string | null>(null)
   const [isOcrDropTarget, setIsOcrDropTarget] = useState(false)
   const [themeColors, setThemeColors] = useState<SnapLinkThemeColors>(() => readStoredSnapLinkThemeColors())
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredSnapLinkThemeMode())
+  const [resolvedThemeMode, setResolvedThemeMode] = useState<ResolvedThemeMode>(() =>
+    resolveInitialSnapLinkThemeMode(readStoredSnapLinkThemeMode()),
+  )
+  const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
+  const [workbenchDeviceDropTargetId, setWorkbenchDeviceDropTargetId] = useState<string | null>(null)
+  const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('nearby')
+  const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
+  const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
+  const [isMobileRoomMembersOpen, setIsMobileRoomMembersOpen] = useState(false)
+  const [dismissedErrorText, setDismissedErrorText] = useState<string | null>(null)
+  const [trustedDeviceIds, setTrustedDeviceIds] = useState<Set<string>>(() => readStoredSnapLinkTrustedDeviceIds())
+  const [trustedIncomingOfferIds, setTrustedIncomingOfferIds] = useState<Set<string>>(() => new Set())
+  const [pendingTrustAction, setPendingTrustAction] = useState<SnapLinkPendingTrustAction | null>(null)
+  const [trustPinDraft, setTrustPinDraft] = useState('')
+  const [trustPinError, setTrustPinError] = useState<string | null>(null)
+  const [trustRememberDevice, setTrustRememberDevice] = useState(true)
+  const [historySearchQuery, setHistorySearchQuery] = useState('')
+  const [roomJoinDraft, setRoomJoinDraft] = useState('')
+  const [roomJoinError, setRoomJoinError] = useState<string | null>(null)
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
@@ -1241,7 +1540,57 @@ export function SnapLinkStage({
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
   const handledAutoOpenRoomIdRef = useRef<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const workbenchFileInputRef = useRef<HTMLInputElement | null>(null)
+  const workbenchCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const workbenchScanResetTimeoutRef = useRef<number | null>(null)
+  const settingsFeedbackTimeoutRef = useRef<number | null>(null)
+  const previousWorkbenchTextRequestIdRef = useRef(workbenchTextRequestId)
   const isComposerComposingRef = useRef(false)
+  const activeErrorText = localError ?? errorMessage
+  const visibleErrorText = activeErrorText && dismissedErrorText !== activeErrorText ? activeErrorText : null
+
+  useEffect(() => {
+    setDismissedErrorText(null)
+  }, [activeErrorText])
+
+  useEffect(() => {
+    setTrustedIncomingOfferIds((current) => {
+      if (current.size === 0) {
+        return current
+      }
+
+      const pendingOfferIds = new Set(pendingIncomingFileOffers.map((offer) => offer.id))
+      let changed = false
+      const next = new Set<string>()
+
+      for (const offerId of current) {
+        if (pendingOfferIds.has(offerId)) {
+          next.add(offerId)
+        } else {
+          changed = true
+        }
+      }
+
+      return changed ? next : current
+    })
+  }, [pendingIncomingFileOffers])
+
+  const trustDeviceLocally = useCallback((deviceId: string) => {
+    if (!deviceId.trim()) {
+      return
+    }
+
+    setTrustedDeviceIds((current) => {
+      if (current.has(deviceId)) {
+        return current
+      }
+
+      const next = new Set(current)
+      next.add(deviceId)
+      writeStoredSnapLinkTrustedDeviceIds(next)
+      return next
+    })
+  }, [])
   const draftValueRef = useRef(normalizePlainComposerDraft(chatDraft))
   const botTriggerRef = useRef<HTMLButtonElement | null>(null)
   const botPanelRef = useRef<HTMLDivElement | null>(null)
@@ -1270,6 +1619,50 @@ export function SnapLinkStage({
   const isCommandOpen = activeView === 'command'
 
   useEffect(() => {
+    setIsMobileRoomMembersOpen(false)
+  }, [selectedRoomId])
+
+  useEffect(() => () => {
+    if (workbenchScanResetTimeoutRef.current !== null) {
+      window.clearTimeout(workbenchScanResetTimeoutRef.current)
+      workbenchScanResetTimeoutRef.current = null
+    }
+    if (settingsFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(settingsFeedbackTimeoutRef.current)
+      settingsFeedbackTimeoutRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const nextResolvedThemeMode = applyThemeMode(themeMode)
+    setResolvedThemeMode(nextResolvedThemeMode)
+
+    if (themeMode !== 'system') {
+      return undefined
+    }
+
+    return subscribeToSystemTheme((nextResolvedMode) => {
+      applyThemeMode('system')
+      setResolvedThemeMode(nextResolvedMode)
+    })
+  }, [themeMode])
+
+  const showSettingsFeedback = (message: string) => {
+    setSettingsFeedbackMessage(message)
+    if (settingsFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(settingsFeedbackTimeoutRef.current)
+    }
+    settingsFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setSettingsFeedbackMessage(null)
+      settingsFeedbackTimeoutRef.current = null
+    }, 1600)
+  }
+
+  useEffect(() => {
     if (
       activeView !== 'conversation' ||
       !autoOpenRoomId ||
@@ -1293,6 +1686,10 @@ export function SnapLinkStage({
   const lobbyRoomListItems = useMemo(
     () =>
       [...roomListItems].sort((left, right) => {
+        if (left.pinned !== right.pinned) {
+          return left.pinned ? -1 : 1
+        }
+
         if (left.isPublic && right.isPublic) {
           return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
         }
@@ -1301,14 +1698,282 @@ export function SnapLinkStage({
           return left.isPublic ? -1 : 1
         }
 
-        if (left.pinned !== right.pinned) {
-          return left.pinned ? -1 : 1
-        }
-
         return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
       }),
     [roomListItems],
   )
+  const workbenchRoomListItems = useMemo(() => lobbyRoomListItems.slice(0, 6), [lobbyRoomListItems])
+  const workbenchPublicRoomCount = lobbyRoomListItems.filter((room) => room.isPublic).length
+  const pendingIncomingOfferEntries = useMemo<FileConversationEntry[]>(
+    () =>
+      pendingIncomingFileOffers.map((offer) => ({
+        id: `pending-offer-${offer.id}`,
+        historyId: offer.historyId,
+        sessionId: offer.sessionId,
+        kind: 'incoming' as const,
+        fromSelf: false,
+        createdAt: offer.createdAt,
+        fileName: offer.name,
+        fileSize: offer.size,
+        mimeType: offer.mimeType,
+        subtitle: offer.fromDeviceName || '附近设备',
+        detail: `${formatFileSize(offer.size)} · 等待确认后开始接收`,
+        statusLabel: '等待接收确认',
+        transferStatus: 'ready' as const,
+        tone: 'pending' as const,
+        progress: 0,
+      })),
+    [pendingIncomingFileOffers],
+  )
+  const workbenchTransferEntries = useMemo(
+    () =>
+      [...pendingIncomingOfferEntries, ...globalTransferEntries]
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+        .slice(0, 8),
+    [globalTransferEntries, pendingIncomingOfferEntries],
+  )
+  const workbenchHistoryFileEntries = useMemo(
+    () =>
+      [...sharedMediaEntries, ...sharedFileEntries]
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [sharedFileEntries, sharedMediaEntries],
+  )
+  const workbenchGlobalHistoryFiles = useMemo(
+    () => [...historyFiles].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [historyFiles],
+  )
+  const workbenchGlobalHistoryTexts = useMemo(
+    () => [...historyTexts].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [historyTexts],
+  )
+  const workbenchTextEntries = useMemo(
+    () =>
+      unifiedConversationEntries
+        .filter((entry): entry is SnapLinkTextEntry => entry.entryType === 'text')
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+        .slice(0, 12),
+    [unifiedConversationEntries],
+  )
+  const normalizedHistorySearchQuery = historySearchQuery.trim().toLowerCase()
+  const workbenchFilteredGlobalHistoryFiles = useMemo(
+    () => {
+      if (!normalizedHistorySearchQuery) {
+        return workbenchGlobalHistoryFiles
+      }
+
+      return workbenchGlobalHistoryFiles.filter((file) =>
+        [
+          file.fileName,
+          file.sourceDeviceName,
+          file.mimeType ?? '',
+          file.isPublic ? '公共房间' : '私密会话',
+        ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
+      )
+    },
+    [normalizedHistorySearchQuery, workbenchGlobalHistoryFiles],
+  )
+  const workbenchFilteredHistoryFileEntries = useMemo(
+    () => {
+      if (!normalizedHistorySearchQuery) {
+        return workbenchHistoryFileEntries
+      }
+
+      return workbenchHistoryFileEntries.filter((file) =>
+        [
+          file.fileName,
+          file.subtitle,
+          file.detail,
+          file.statusLabel,
+          file.mimeType ?? '',
+        ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
+      )
+    },
+    [normalizedHistorySearchQuery, workbenchHistoryFileEntries],
+  )
+  const workbenchFilteredGlobalHistoryTexts = useMemo(
+    () => {
+      if (!normalizedHistorySearchQuery) {
+        return workbenchGlobalHistoryTexts
+      }
+
+      return workbenchGlobalHistoryTexts.filter((entry) =>
+        [
+          entry.sourceDeviceName,
+          getRichTextPreviewText(entry.text),
+        ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
+      )
+    },
+    [normalizedHistorySearchQuery, workbenchGlobalHistoryTexts],
+  )
+  const workbenchFilteredTextEntries = useMemo(
+    () => {
+      if (!normalizedHistorySearchQuery) {
+        return workbenchTextEntries
+      }
+
+      return workbenchTextEntries.filter((entry) =>
+        [
+          entry.senderName,
+          getRichTextPreviewText(entry.text),
+          entry.status ?? '',
+        ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
+      )
+    },
+    [normalizedHistorySearchQuery, workbenchTextEntries],
+  )
+  const workbenchFilteredLinkEntries = useMemo(
+    () => {
+      if (!normalizedHistorySearchQuery) {
+        return sharedLinkEntries
+      }
+
+      return sharedLinkEntries.filter((entry) =>
+        [
+          entry.label,
+          entry.url,
+          entry.sourceName,
+        ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
+      )
+    },
+    [normalizedHistorySearchQuery, sharedLinkEntries],
+  )
+  const workbenchActiveTransferCount = workbenchTransferEntries.filter((file) =>
+    isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
+  ).length
+  const workbenchCompletedTransferCount = workbenchTransferEntries.filter(
+    (file) => resolveSnapLinkTransferStatus(file) === 'completed',
+  ).length
+  const workbenchFailedTransferCount = workbenchTransferEntries.filter(
+    (file) => resolveSnapLinkTransferStatus(file) === 'failed',
+  ).length
+  const activeIncomingReceiveEntries = workbenchTransferEntries.filter((file) =>
+    !file.fromSelf && isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
+  )
+  const latestIncomingReceiveEntry = activeIncomingReceiveEntries[0] ?? null
+  const latestIncomingFileOffer = pendingIncomingFileOffers[0] ?? null
+  const selectedWorkbenchDevice =
+    onlineDeviceItems.find((device) => device.deviceId === selectedWorkbenchDeviceId) ??
+    onlineDeviceItems[0] ??
+    null
+  const pendingTrustDevice = pendingTrustAction
+    ? onlineDeviceItems.find((device) => device.deviceId === pendingTrustAction.deviceId) ?? null
+    : null
+  const workbenchOnlineDeviceCount = onlineDeviceItems.length
+  const workbenchDiscoveryHint = workbenchOnlineDeviceCount > 0
+    ? `在同一局域网/账号下发现 ${workbenchOnlineDeviceCount.toString()} 台设备`
+    : '等待同一 Wi-Fi / 局域网内的设备出现'
+  const workbenchDropSubtitle = selectedWorkbenchDevice
+    ? `已预选 ${selectedWorkbenchDevice.deviceName}，选择文件后会建立直连并发送`
+    : activeTransferLabel || '选择附近设备后开始传输'
+  const workbenchRawHistoryFileCount = Math.max(workbenchGlobalHistoryFiles.length, workbenchHistoryFileEntries.length)
+  const workbenchRawHistoryTextCount = Math.max(workbenchGlobalHistoryTexts.length, workbenchTextEntries.length)
+  const workbenchRawHistoryCount = workbenchRawHistoryFileCount + workbenchRawHistoryTextCount + sharedLinkEntries.length
+  const workbenchHistoryFileCount = Math.max(
+    workbenchFilteredGlobalHistoryFiles.length,
+    workbenchFilteredHistoryFileEntries.length,
+  )
+  const workbenchHistoryTextCount = Math.max(
+    workbenchFilteredGlobalHistoryTexts.length,
+    workbenchFilteredTextEntries.length,
+  )
+  const workbenchHistoryCount =
+    workbenchHistoryFileCount + workbenchHistoryTextCount + workbenchFilteredLinkEntries.length
+  const aiTransferContextFiles = useMemo(() => {
+    const byKey = new Map<
+      string,
+      {
+        id: string
+        name: string
+        size: number
+        mimeType?: string
+        source: string
+        status: string
+        createdAt: string
+      }
+    >()
+
+    const addFile = (file: {
+      id: string
+      name: string
+      size: number
+      mimeType?: string
+      source: string
+      status: string
+      createdAt: string
+    }) => {
+      const key = `${file.name}::${file.size.toString()}::${file.createdAt}`
+      if (!byKey.has(key)) {
+        byKey.set(key, file)
+      }
+    }
+
+    for (const file of [...globalTransferEntries, ...sharedFileEntries, ...sharedMediaEntries]) {
+      addFile({
+        id: file.id,
+        name: file.fileName,
+        size: file.fileSize,
+        mimeType: file.mimeType,
+        source: file.fromSelf ? `发送到 ${file.subtitle}` : `来自 ${file.subtitle}`,
+        status: file.statusLabel,
+        createdAt: file.createdAt,
+      })
+    }
+
+    for (const file of historyFiles) {
+      addFile({
+        id: file.historyId,
+        name: file.fileName,
+        size: file.size,
+        mimeType: file.mimeType,
+        source: file.sourceDeviceName,
+        status: file.isPublic ? '公共房间历史' : '私密会话历史',
+        createdAt: file.createdAt,
+      })
+    }
+
+    return Array.from(byKey.values())
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .slice(0, 5)
+  }, [globalTransferEntries, historyFiles, sharedFileEntries, sharedMediaEntries])
+  const buildAiTransferAnalysisPrompt = () => {
+    if (aiTransferContextFiles.length === 0) {
+      return [
+        '请帮我为 DD直连文件传输生成一份简短说明。',
+        '',
+        '场景：我准备通过局域网 P2P 发送文件给附近设备。',
+        '请按“发送前检查 / 接收方需要做什么 / 注意事项 / 推荐文案”输出。',
+      ].join('\n')
+    }
+
+    return [
+      '请基于下面这些 DD直连传输/历史文件，帮我生成一份简洁的文件说明和接收方注意事项。',
+      '',
+      '文件列表：',
+      ...aiTransferContextFiles.map((file, index) => {
+        const mimeLabel = file.mimeType ? `，类型：${file.mimeType}` : ''
+        return `${(index + 1).toString()}. ${file.name}（${formatFileSize(file.size)}${mimeLabel}，来源：${file.source}，状态：${file.status}）`
+      }),
+      '',
+      '请按“文件概览 / 可能用途 / 接收方需要做什么 / 注意事项 / 可直接发送的说明文案”输出。',
+      '如果需要读取正文内容，请提醒我把对应文件拖入 AI 输入框。DD助手只读取我选择的内容。',
+    ].join('\n')
+  }
+  const buildAiTransferAnalysisContext = (): AiDraftContextPayload | undefined => {
+    if (aiTransferContextFiles.length === 0) {
+      return {
+        contextLabel: 'DD直连传输说明',
+      }
+    }
+
+    return {
+      contextLabel: `传输文件 · ${aiTransferContextFiles.length.toString()}`,
+      contextItems: aiTransferContextFiles.map((file) => ({
+        id: file.id,
+        label: file.name,
+        meta: `${formatFileSize(file.size)} · ${file.source}`,
+      })),
+    }
+  }
   const hasActiveRoom =
     Boolean(selectedRoomId) && !isLobbyOpen && !isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen
 
@@ -2093,10 +2758,25 @@ export function SnapLinkStage({
     onOpenAiChatView()
   }
 
+  const handleOpenImage = () => {
+    setActiveSharedTab(null)
+    setIsLobbyOpen(false)
+    onOpenImageView()
+  }
+
   const handleOpenCommand = () => {
     setActiveSharedTab(null)
     setIsLobbyOpen(false)
     onOpenCommandView()
+  }
+
+  const updateWorkbenchThemeMode = (nextThemeMode: ThemeMode) => {
+    setThemeMode(nextThemeMode)
+    writeSnapLinkClientPreference(snapLinkThemeModePreferenceKey, nextThemeMode)
+
+    if (typeof window !== 'undefined') {
+      setResolvedThemeMode(applyThemeMode(nextThemeMode))
+    }
   }
 
   const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
@@ -2168,6 +2848,11 @@ export function SnapLinkStage({
       return
     }
 
+    if (roomId === snapLinkImageSelectionValue) {
+      handleOpenImage()
+      return
+    }
+
     if (roomId === snapLinkCommandSelectionValue) {
       handleOpenCommand()
       return
@@ -2184,6 +2869,13 @@ export function SnapLinkStage({
     setIsLobbyOpen(false)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
+  }
+
+  const handleToggleWorkbenchRoomPinned = (room: RoomListItem) => {
+    onUpdateRoomState({
+      roomId: room.roomId,
+      pinned: !room.pinned,
+    })
   }
 
   const startDeviceRename = () => {
@@ -2209,10 +2901,282 @@ export function SnapLinkStage({
     cancelDeviceRename()
   }
 
+  const commitWorkbenchDeviceRename = () => {
+    const normalizedName = deviceNameDraft.trim()
+    if (!normalizedName) {
+      setDeviceNameError('设备名不能为空')
+      return false
+    }
+
+    const nextName = normalizedName.slice(0, 80)
+    onDeviceNameChange(nextName)
+    setDeviceNameDraft(nextName)
+    setDeviceNameError(null)
+    setIsRenamingDevice(false)
+    return true
+  }
+
   const handleBackToLobby = () => {
     setActiveSharedTab(null)
     setIsLobbyOpen(true)
     onOpenRoomHome()
+  }
+
+  const handleShowWorkbenchNearby = () => {
+    handleBackToLobby()
+    setWorkbenchMode('nearby')
+  }
+
+  const handleWorkbenchRescan = () => {
+    setSelectedWorkbenchDeviceId(null)
+    setIsWorkbenchScanning(true)
+    onRequestSnapshot()
+
+    if (workbenchScanResetTimeoutRef.current !== null) {
+      window.clearTimeout(workbenchScanResetTimeoutRef.current)
+    }
+
+    workbenchScanResetTimeoutRef.current = window.setTimeout(() => {
+      setIsWorkbenchScanning(false)
+      workbenchScanResetTimeoutRef.current = null
+    }, 900)
+  }
+
+  const handleShowWorkbenchRooms = () => {
+    handleBackToLobby()
+    setWorkbenchMode('rooms')
+  }
+
+  const handleShowWorkbenchQueue = () => {
+    handleBackToLobby()
+    setWorkbenchMode('transfers')
+  }
+
+  const handleShowWorkbenchFiles = () => {
+    handleBackToLobby()
+    setWorkbenchMode('files')
+  }
+
+  const handleShowWorkbenchText = () => {
+    handleBackToLobby()
+    setWorkbenchMode('text')
+  }
+
+  useEffect(() => {
+    if (previousWorkbenchTextRequestIdRef.current === workbenchTextRequestId) {
+      return
+    }
+
+    previousWorkbenchTextRequestIdRef.current = workbenchTextRequestId
+    setActiveSharedTab(null)
+    setIsLobbyOpen(true)
+    onOpenRoomHome()
+    setWorkbenchMode('text')
+  }, [onOpenRoomHome, workbenchTextRequestId])
+
+  const handleShowWorkbenchHistory = () => {
+    handleBackToLobby()
+    setWorkbenchMode('history')
+  }
+
+  const handleShowWorkbenchSettings = () => {
+    handleBackToLobby()
+    setDeviceNameDraft(deviceName)
+    setDeviceNameError(null)
+    setWorkbenchMode('settings')
+  }
+
+  const handleCreatePublicRoom = () => {
+    setRoomJoinError(null)
+    handleBackToLobby()
+    setWorkbenchMode('rooms')
+    onCreatePublicRoom()
+  }
+
+  const handleJoinRoomFromWorkbench = () => {
+    const normalizedRoomId = roomJoinDraft.trim().toUpperCase()
+    if (!normalizedRoomId) {
+      setRoomJoinError('请输入房间短码')
+      return
+    }
+
+    setRoomJoinError(null)
+    setRoomJoinDraft(normalizedRoomId)
+    handleBackToLobby()
+    setWorkbenchMode('rooms')
+    onJoinRoom(normalizedRoomId)
+  }
+
+  const handlePrepareWorkbenchDeviceTarget = (deviceId: string) => {
+    setSelectedWorkbenchDeviceId(deviceId)
+    setActiveSharedTab(null)
+    onStartPrivateChat(deviceId)
+  }
+
+  const executeWorkbenchDeviceAction = (action: SnapLinkPendingTrustAction) => {
+    if (action.kind === 'send-files') {
+      setWorkbenchMode('files')
+      setSelectedWorkbenchDeviceId(action.deviceId)
+      setActiveSharedTab(null)
+      armOutgoingEntryAnimation()
+      onDirectFileSelectionForDevice(action.deviceId, action.files)
+      return
+    }
+
+    if (action.kind === 'pick-file' || action.kind === 'pick-camera') {
+      setWorkbenchMode('files')
+      setSelectedWorkbenchDeviceId(action.deviceId)
+      setActiveSharedTab(null)
+      window.requestAnimationFrame(() => {
+        if (action.kind === 'pick-camera') {
+          workbenchCameraInputRef.current?.click()
+        } else {
+          workbenchFileInputRef.current?.click()
+        }
+      })
+      return
+    }
+
+    handlePrepareWorkbenchDeviceTarget(action.deviceId)
+
+    if (action.kind === 'file') {
+      setWorkbenchMode('files')
+      return
+    }
+
+    if (action.kind === 'text') {
+      setWorkbenchMode('text')
+      window.requestAnimationFrame(() => {
+        inputRef.current?.focus()
+      })
+      return
+    }
+  }
+
+  const requestTrustedWorkbenchDeviceAction = (deviceId: string, kind: SnapLinkTrustActionKind) => {
+    const device = onlineDeviceItems.find((item) => item.deviceId === deviceId)
+    const action: SnapLinkPendingTrustAction = { deviceId, kind }
+
+    if (!device || isSnapLinkDeviceTrusted(device, trustedDeviceIds)) {
+      executeWorkbenchDeviceAction(action)
+      return
+    }
+
+    setTrustPinDraft('')
+    setTrustPinError(null)
+    setTrustRememberDevice(true)
+    setPendingTrustAction(action)
+  }
+
+  const requestTrustedWorkbenchFileSend = (deviceId: string, files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    const device = onlineDeviceItems.find((item) => item.deviceId === deviceId)
+    const action: SnapLinkPendingTrustAction = { deviceId, kind: 'send-files', files }
+
+    if (!device || isSnapLinkDeviceTrusted(device, trustedDeviceIds)) {
+      executeWorkbenchDeviceAction(action)
+      return
+    }
+
+    setTrustPinDraft('')
+    setTrustPinError(null)
+    setTrustRememberDevice(true)
+    setPendingTrustAction(action)
+  }
+
+  const handleWorkbenchFilePick = () => {
+    setWorkbenchMode('files')
+
+    if (selectedWorkbenchDevice) {
+      requestTrustedWorkbenchDeviceAction(selectedWorkbenchDevice.deviceId, 'pick-file')
+      return
+    }
+
+    workbenchFileInputRef.current?.click()
+  }
+
+  const handleWorkbenchCameraPick = () => {
+    setWorkbenchMode('files')
+
+    if (selectedWorkbenchDevice) {
+      requestTrustedWorkbenchDeviceAction(selectedWorkbenchDevice.deviceId, 'pick-camera')
+      return
+    }
+
+    workbenchCameraInputRef.current?.click()
+  }
+
+  const handleWorkbenchDeviceSelect = (deviceId: string) => {
+    setSelectedWorkbenchDeviceId(deviceId)
+  }
+
+  const handleWorkbenchDeviceSendFile = (deviceId: string) => {
+    requestTrustedWorkbenchDeviceAction(deviceId, 'file')
+  }
+
+  const handleWorkbenchDeviceSendText = (deviceId: string) => {
+    requestTrustedWorkbenchDeviceAction(deviceId, 'text')
+  }
+
+  const handleWorkbenchDeviceDragEnter = (deviceId: string) => {
+    setWorkbenchDeviceDropTargetId(deviceId)
+  }
+
+  const handleWorkbenchDeviceDragOver = (deviceId: string) => {
+    setWorkbenchDeviceDropTargetId(deviceId)
+  }
+
+  const handleWorkbenchDeviceDragLeave = (deviceId: string) => {
+    setWorkbenchDeviceDropTargetId((current) => (current === deviceId ? null : current))
+  }
+
+  const handleWorkbenchDeviceDropFiles = async (deviceId: string, event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setWorkbenchDeviceDropTargetId(null)
+
+    const files = await collectDroppedFiles(event.dataTransfer)
+    if (files.length === 0) {
+      return
+    }
+
+    setSelectedWorkbenchDeviceId(deviceId)
+    setWorkbenchMode('files')
+    requestTrustedWorkbenchFileSend(deviceId, files)
+  }
+
+  const handleCancelTrustDeviceDialog = () => {
+    setPendingTrustAction(null)
+    setTrustPinDraft('')
+    setTrustPinError(null)
+  }
+
+  const handleConfirmTrustDeviceDialog = (rememberDevice: boolean) => {
+    if (!pendingTrustAction || !pendingTrustDevice) {
+      handleCancelTrustDeviceDialog()
+      return
+    }
+
+    const normalizedPin = trustPinDraft.trim().toUpperCase()
+    const expectedPin = pendingTrustDevice.shortCode?.trim().toUpperCase()
+
+    if (normalizedPin && expectedPin && normalizedPin !== expectedPin) {
+      setTrustPinError('短码不一致，请核对对方页面显示的短码。')
+      return
+    }
+
+    if (rememberDevice) {
+      trustDeviceLocally(pendingTrustDevice.deviceId)
+    }
+
+    const action = pendingTrustAction
+    setPendingTrustAction(null)
+    setTrustPinDraft('')
+    setTrustPinError(null)
+    executeWorkbenchDeviceAction(action)
   }
 
 
@@ -2238,6 +3202,31 @@ export function SnapLinkStage({
       shouldAnimateNextOutgoingEntryRef.current = false
       pendingOutgoingEntryAnimationTimeoutRef.current = null
     }, snapLinkPendingOutgoingEntryAnimationMs)
+  }
+
+  const handleDirectFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (files.length > 0) {
+      armOutgoingEntryAnimation()
+    }
+    onDirectFileSelection(files)
+  }
+
+  const handleWorkbenchDirectFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (files.length === 0) {
+      return
+    }
+
+    if (selectedWorkbenchDevice) {
+      requestTrustedWorkbenchFileSend(selectedWorkbenchDevice.deviceId, files)
+      return
+    }
+
+    armOutgoingEntryAnimation()
+    onDirectFileSelection(files)
   }
 
   const submitComposerDraft = () => {
@@ -2412,7 +3401,13 @@ export function SnapLinkStage({
       return
     }
 
-    if (event.shiftKey) {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault()
+      submitComposerDraft()
+      return
+    }
+
+    if (!devicePreferences.enterToSend || event.shiftKey) {
       return
     }
 
@@ -3187,7 +4182,7 @@ export function SnapLinkStage({
         ) : null}
         {file.action === 'retry' ? (
           <button type="button" onClick={() => onRetryTransfer(file.id)}>
-            继续
+            重试
           </button>
         ) : null}
         {file.action === 'cancel' ? (
@@ -3356,50 +4351,1198 @@ export function SnapLinkStage({
     </label>
   )
 
-  const renderFileCard = (file: SnapLinkFileEntry) => {
-    const progress = clampProgress(file.progress)
-    const progressPercent = Math.round(progress * 100)
+  const renderWorkbenchPageHeader = (
+    title: string,
+    description: string,
+    action?: ReactNode,
+  ) => (
+    <div className="dd-snaplink__workbench-page-head">
+      <span>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      {action ? <div className="dd-snaplink__workbench-page-action">{action}</div> : null}
+    </div>
+  )
+
+  const renderWorkbenchTargetSummary = (intent: 'file' | 'text' = 'file') => (
+    <div className="dd-snaplink__target-summary" aria-label="当前发送目标">
+      <span className="dd-snaplink__target-summary-icon">
+        <Send size={18} strokeWidth={1.9} aria-hidden="true" />
+      </span>
+      <span>
+        <strong>当前发送目标</strong>
+        <small>
+          {selectedWorkbenchDevice
+            ? intent === 'text'
+              ? '发送文本前会先确认设备，再建立直连或进入私聊房间'
+              : '选择文件后会先确认设备，再建立直连发送'
+            : activeTransferLabel}
+        </small>
+      </span>
+      {selectedWorkbenchDevice ? (
+        <em>预选：{selectedWorkbenchDevice.deviceName}</em>
+      ) : null}
+      {selectedWorkbenchDevice ? (
+        <button
+          type="button"
+          onClick={() => requestTrustedWorkbenchDeviceAction(selectedWorkbenchDevice.deviceId, 'connect')}
+        >
+          建立直连
+        </button>
+      ) : null}
+    </div>
+  )
+
+  const renderRoomConversationEmptyState = () => {
+    if (!selectedRoom) {
+      return (
+        <div className="dd-snaplink__room-empty-card">
+          <span className="dd-snaplink__room-empty-icon" aria-hidden="true">
+            <Users size={24} strokeWidth={1.8} />
+          </span>
+          <strong>选择房间或附近设备</strong>
+          <p>{fileConversationEmptyState}</p>
+          <div className="dd-snaplink__room-empty-actions">
+            <button type="button" onClick={handleShowWorkbenchRooms}>
+              查看房间
+            </button>
+            <button type="button" onClick={handleShowWorkbenchNearby}>
+              附近设备
+            </button>
+          </div>
+        </div>
+      )
+    }
 
     return (
-      <div className="dd-snaplink__file-card">
-        <div className="dd-snaplink__file-top">
-          <span className="dd-snaplink__file-ext">{getFileExtension(file.fileName)}</span>
-          <div>
-            <strong title={file.fileName}>{file.fileName}</strong>
-            <span>
-              {formatFileSize(file.fileSize)} · {file.statusLabel}
-            </span>
-          </div>
+      <div className="dd-snaplink__room-empty-card">
+        <span className="dd-snaplink__room-empty-icon" aria-hidden="true">
+          <Send size={24} strokeWidth={1.8} />
+        </span>
+        <strong>这里还没有消息</strong>
+        <p>{fileConversationEmptyState}</p>
+        <small>发送第一条文本，或把文件拖到对话区开始协作。传输状态会显示在右侧队列。</small>
+        <div className="dd-snaplink__room-empty-actions">
+          <button type="button" onClick={() => inputRef.current?.focus()}>
+            发送文本
+          </button>
+          <button
+            type="button"
+            onClick={() => document.getElementById(fileInputId)?.click()}
+          >
+            选择文件
+          </button>
+          <button type="button" onClick={handleShowWorkbenchNearby}>
+            查看附近设备
+          </button>
         </div>
-        {file.previewUrl && isImageFileEntry(file) ? (
-          <div className="dd-snaplink__file-preview">
-            <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
-          </div>
-        ) : null}
-        <div
-          className="dd-snaplink__file-progress"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progressPercent}
-        >
-          <div style={{ width: `${progressPercent}%` }} />
-        </div>
-        {renderFileActions(file)}
       </div>
     )
   }
+
+  const renderWorkbenchDeviceIcon = (device: OnlineDeviceListItem) => {
+    const kind = resolveSnapLinkDeviceKind(device.platform)
+
+    if (kind === 'phone') {
+      return <Smartphone size={24} strokeWidth={1.8} aria-hidden="true" />
+    }
+
+    if (kind === 'tablet') {
+      return <Tablet size={24} strokeWidth={1.8} aria-hidden="true" />
+    }
+
+    return <Laptop size={26} strokeWidth={1.7} aria-hidden="true" />
+  }
+
+  const renderWorkbenchDeviceCard = (device: OnlineDeviceListItem) => {
+    const mode = resolveSnapLinkTransportMode(device)
+    const trustLabel = resolveSnapLinkTrustLabel(device, trustedDeviceIds.has(device.deviceId))
+    const isSelected = selectedWorkbenchDevice?.deviceId === device.deviceId
+
+    return (
+      <DeviceCard
+        key={device.deviceId}
+        device={device}
+        deviceKind={resolveSnapLinkDeviceKind(device.platform)}
+        icon={renderWorkbenchDeviceIcon(device)}
+        transportTone={mode.tone}
+        transportLabel={mode.label}
+        trustLabel={trustLabel}
+        isSelected={isSelected}
+        isDropTarget={workbenchDeviceDropTargetId === device.deviceId}
+        onSelect={handleWorkbenchDeviceSelect}
+        onSendFile={handleWorkbenchDeviceSendFile}
+        onSendText={handleWorkbenchDeviceSendText}
+        onDragEnter={handleWorkbenchDeviceDragEnter}
+        onDragOver={handleWorkbenchDeviceDragOver}
+        onDragLeave={handleWorkbenchDeviceDragLeave}
+        onDropFiles={handleWorkbenchDeviceDropFiles}
+      />
+    )
+  }
+
+  const renderWorkbenchDeviceTargetButton = (device: OnlineDeviceListItem, intent: 'file' | 'text' = 'file') => {
+    const isSelected = selectedWorkbenchDevice?.deviceId === device.deviceId
+    const selectedLabel = intent === 'text' ? '已预选 · 发送文本到此设备' : '已预选 · 选择文件后发送'
+
+    return (
+      <button
+        key={device.deviceId}
+        type="button"
+        className={isSelected ? 'is-selected' : ''}
+        onClick={() => setSelectedWorkbenchDeviceId(device.deviceId)}
+      >
+        <span className={`dd-snaplink__target-device-icon is-${resolveSnapLinkDeviceKind(device.platform)}`}>
+          {renderWorkbenchDeviceIcon(device)}
+        </span>
+        <span>
+          <strong>{device.deviceName}</strong>
+          <small>{isSelected ? selectedLabel : device.scopeLabel}</small>
+        </span>
+      </button>
+    )
+  }
+
+  const renderWorkbenchRoomTargetButton = (room: RoomListItem, intent: 'file' | 'text' = 'file') => {
+    const isSelected = selectedRoomId === room.roomId && !isLobbyOpen
+    const onlineLabel = `${Math.max(room.onlineCount + 1, 1).toString()} 在线`
+    const inactiveLabel = intent === 'text' ? `${onlineLabel} · 进入后发文本` : `${onlineLabel} · 进入后发送`
+
+    return (
+      <button
+        key={room.roomId}
+        type="button"
+        className={isSelected ? 'is-selected' : ''}
+        title={`进入${room.title}`}
+        onClick={() => handleRoomSelection(room.roomId)}
+      >
+        <span className="dd-snaplink__target-device-icon is-room">
+          <Users size={20} strokeWidth={1.8} aria-hidden="true" />
+        </span>
+        <span>
+          <strong>{room.title}</strong>
+          <small>{isSelected ? '当前房间 · 可直接发送' : inactiveLabel}</small>
+        </span>
+      </button>
+    )
+  }
+
+  const renderWorkbenchRecentFile = (file: FileConversationEntry) => {
+    const status = resolveSnapLinkTransferStatus(file)
+    const progress = getSnapLinkTransferProgress(file)
+    const progressPercent = Math.round(progress * 100)
+    const actions = renderFileActions(file)
+
+    return (
+      <article key={file.id} className={`dd-snaplink__recent-send is-${status}`}>
+        <span className="dd-snaplink__queue-ext">{getFileExtension(file.fileName)}</span>
+        <div className="dd-snaplink__recent-send-body">
+          <div className="dd-snaplink__recent-send-top">
+            <strong title={file.fileName}>{file.fileName}</strong>
+            <small>{file.statusLabel}</small>
+          </div>
+          <small className="dd-snaplink__recent-send-meta">
+            {formatFileSize(file.fileSize)} · {file.fromSelf ? '发送到' : '来自'} {file.subtitle}
+          </small>
+          <div
+            className="dd-snaplink__recent-send-progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent}
+            aria-label={`${file.fileName} 传输进度`}
+          >
+            <span style={{ width: `${progressPercent.toString()}%` }} />
+          </div>
+          {actions ? <div className="dd-snaplink__recent-send-actions">{actions}</div> : null}
+        </div>
+      </article>
+    )
+  }
+
+  const renderWorkbenchTransferCard = (file: FileConversationEntry) => {
+    const status = resolveSnapLinkTransferStatus(file)
+    const progress = getSnapLinkTransferProgress(file)
+
+    return (
+      <TransferTaskCard
+        key={file.id}
+        file={file}
+        status={status}
+        progress={progress}
+        extension={getFileExtension(file.fileName)}
+        sizeLabel={formatFileSize(file.fileSize)}
+        actions={renderFileActions(file)}
+      />
+    )
+  }
+
+  const renderIncomingReceiveNotice = (variant: 'full' | 'compact' = 'full') => {
+    if (!latestIncomingReceiveEntry) {
+      return null
+    }
+
+    const incomingCountLabel =
+      activeIncomingReceiveEntries.length > 1
+        ? `${activeIncomingReceiveEntries.length.toString()} 个文件正在接收`
+        : latestIncomingReceiveEntry.fileName
+
+    return (
+      <section
+        className={`dd-snaplink__receive-notice${variant === 'compact' ? ' is-compact' : ''}`}
+        role="status"
+        aria-live="polite"
+      >
+        <span className="dd-snaplink__receive-notice-icon" aria-hidden="true">
+          <ShieldCheck size={18} strokeWidth={2} />
+        </span>
+        <span className="dd-snaplink__receive-notice-copy">
+          <strong title={incomingCountLabel}>{incomingCountLabel}</strong>
+          <small>
+            来自 {latestIncomingReceiveEntry.subtitle || '对方设备'} · 仅在设备之间传输，文件不经过服务器
+          </small>
+        </span>
+        <span className="dd-snaplink__receive-notice-actions">
+          <button type="button" onClick={handleShowWorkbenchQueue}>查看队列</button>
+          <button type="button" onClick={handleShowWorkbenchSettings}>设置</button>
+        </span>
+      </section>
+    )
+  }
+
+  const renderIncomingFileOfferDialog = () => {
+    if (!latestIncomingFileOffer) {
+      return null
+    }
+
+    const pendingExtraCount = Math.max(pendingIncomingFileOffers.length - 1, 0)
+    const senderName = latestIncomingFileOffer.fromDeviceName || '附近设备'
+    const isSenderTrusted = trustedDeviceIds.has(latestIncomingFileOffer.fromDeviceId)
+    const shouldTrustSender =
+      isSenderTrusted || trustedIncomingOfferIds.has(latestIncomingFileOffer.id)
+
+    const handleTrustToggle = (checked: boolean) => {
+      setTrustedIncomingOfferIds((current) => {
+        const next = new Set(current)
+        if (checked) {
+          next.add(latestIncomingFileOffer.id)
+        } else {
+          next.delete(latestIncomingFileOffer.id)
+        }
+        return next
+      })
+    }
+
+    const handleRejectOffer = () => {
+      setTrustedIncomingOfferIds((current) => {
+        if (!current.has(latestIncomingFileOffer.id)) {
+          return current
+        }
+
+        const next = new Set(current)
+        next.delete(latestIncomingFileOffer.id)
+        return next
+      })
+      onRejectIncomingFileOffer(latestIncomingFileOffer.id)
+    }
+
+    const handleAcceptOffer = () => {
+      if (shouldTrustSender) {
+        trustDeviceLocally(latestIncomingFileOffer.fromDeviceId)
+      }
+
+      setTrustedIncomingOfferIds((current) => {
+        if (!current.has(latestIncomingFileOffer.id)) {
+          return current
+        }
+
+        const next = new Set(current)
+        next.delete(latestIncomingFileOffer.id)
+        return next
+      })
+      onAcceptIncomingFileOffer(latestIncomingFileOffer.id)
+    }
+
+    return (
+      <ConfirmReceiveDialog
+        offer={latestIncomingFileOffer}
+        senderName={senderName}
+        fileExtension={getFileExtension(latestIncomingFileOffer.name)}
+        fileSizeLabel={formatFileSize(latestIncomingFileOffer.size)}
+        pendingExtraCount={pendingExtraCount}
+        isSenderTrusted={isSenderTrusted}
+        shouldTrustSender={shouldTrustSender}
+        onTrustChange={handleTrustToggle}
+        onReject={handleRejectOffer}
+        onAccept={handleAcceptOffer}
+      />
+    )
+  }
+
+  const renderTrustDeviceDialog = () => {
+    if (!pendingTrustAction || !pendingTrustDevice) {
+      return null
+    }
+
+    const mode = resolveSnapLinkTransportMode(pendingTrustDevice)
+    const actionLabel =
+      pendingTrustAction.kind === 'text'
+        ? '发送文本'
+        : pendingTrustAction.kind === 'connect'
+          ? '建立直连'
+          : pendingTrustAction.kind === 'pick-camera'
+            ? '发送图片'
+          : '发送文件'
+    const fingerprint = formatSnapLinkDeviceFingerprint(pendingTrustDevice)
+
+    return (
+      <TrustDeviceDialog
+        deviceName={pendingTrustDevice.deviceName}
+        actionLabel={actionLabel}
+        deviceKind={resolveSnapLinkDeviceKind(pendingTrustDevice.platform)}
+        deviceIcon={renderWorkbenchDeviceIcon(pendingTrustDevice)}
+        platformLabel={pendingTrustDevice.platform}
+        modeLabel={mode.label}
+        lastSeenLabel={pendingTrustDevice.lastSeenLabel}
+        shortCode={pendingTrustDevice.shortCode}
+        fingerprint={fingerprint}
+        pinDraft={trustPinDraft}
+        pinError={trustPinError}
+        rememberDevice={trustRememberDevice}
+        onPinChange={(value) => {
+          setTrustPinDraft(value)
+          setTrustPinError(null)
+        }}
+        onRememberChange={setTrustRememberDevice}
+        onCancel={handleCancelTrustDeviceDialog}
+        onContinueOnce={() => handleConfirmTrustDeviceDialog(false)}
+        onConfirm={() => handleConfirmTrustDeviceDialog(trustRememberDevice)}
+      />
+    )
+  }
+
+  const renderWorkbenchRoomsSection = (variant: 'compact' | 'full' = 'compact') => (
+    <RoomsPage
+      variant={variant}
+      rooms={variant === 'full' ? lobbyRoomListItems : workbenchRoomListItems}
+      totalRoomCount={lobbyRoomListItems.length}
+      publicRoomCount={workbenchPublicRoomCount}
+      roomJoinDraft={roomJoinDraft}
+      roomJoinError={roomJoinError}
+      onCreatePublicRoom={handleCreatePublicRoom}
+      onJoinDraftChange={(value) => {
+        setRoomJoinDraft(value.toUpperCase())
+        setRoomJoinError(null)
+      }}
+      onJoinRoomSubmit={handleJoinRoomFromWorkbench}
+      onOpenRoom={handleRoomSelection}
+      onToggleRoomPinned={handleToggleWorkbenchRoomPinned}
+    />
+  )
+
+  const renderWorkbenchDropZone = (variant: 'compact' | 'full' = 'compact') => (
+    <DropZone
+      variant={variant}
+      isActive={isDragging}
+      subtitle={workbenchDropSubtitle}
+      canSendText={Boolean(selectedWorkbenchDevice)}
+      onPickFile={handleWorkbenchFilePick}
+      onSendText={() => {
+        if (selectedWorkbenchDevice) {
+          handleWorkbenchDeviceSendText(selectedWorkbenchDevice.deviceId)
+        }
+      }}
+      onPickCamera={handleWorkbenchCameraPick}
+    />
+  )
+
+  const renderWorkbenchFileSendPage = () => (
+    <FileSendPage
+      header={renderWorkbenchPageHeader(
+        '文件发送',
+        '选择目标后拖拽文件，或用按钮选择文件。文件只在设备之间传输。',
+        <button type="button" onClick={handleWorkbenchFilePick}>
+          <Upload size={14} strokeWidth={2} aria-hidden="true" />
+          选择文件
+        </button>,
+      )}
+      targetSummary={renderWorkbenchTargetSummary('file')}
+      deviceTargets={onlineDeviceItems.slice(0, 4).map((device) => renderWorkbenchDeviceTargetButton(device, 'file'))}
+      roomTargets={lobbyRoomListItems.slice(0, 4).map((room) => renderWorkbenchRoomTargetButton(room, 'file'))}
+      dropZone={renderWorkbenchDropZone('full')}
+      recentFiles={workbenchTransferEntries.filter((file) => file.fromSelf).slice(0, 4).map(renderWorkbenchRecentFile)}
+    />
+  )
+
+  const renderWorkbenchTextEntry = (entry: SnapLinkTextEntry) => {
+    const preview = getRichTextPreviewText(entry.text) || '空文本'
+
+    return (
+      <article key={entry.id} className={`dd-snaplink__text-history-row${entry.status ? ` is-${entry.status}` : ''}`}>
+        <span>
+          <strong>{entry.fromSelf ? '我' : entry.senderName}</strong>
+          <small>{formatMessageClock(entry.createdAt)}{entry.status ? ` · ${entry.status === 'failed' ? '发送失败' : '发送中'}` : ''}</small>
+        </span>
+        <p>{preview}</p>
+        <div className="dd-snaplink__text-history-actions">
+          <button type="button" onClick={() => void copyRichTextToClipboard(entry.text)}>
+            复制
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              draftValueRef.current = preview
+              onChatDraftChange(preview)
+              setWorkbenchMode('text')
+            }}
+          >
+            再发一次
+          </button>
+        </div>
+      </article>
+    )
+  }
+
+  const renderWorkbenchTextPage = () => (
+    <TextSendPage
+      header={renderWorkbenchPageHeader(
+        '发送文本',
+        '把一段文字、链接或说明发给当前设备/房间。',
+      )}
+      targetSummary={renderWorkbenchTargetSummary('text')}
+      deviceTargets={onlineDeviceItems.slice(0, 4).map((device) => renderWorkbenchDeviceTargetButton(device, 'text'))}
+      roomTargets={lobbyRoomListItems.slice(0, 4).map((room) => renderWorkbenchRoomTargetButton(room, 'text'))}
+      draft={chatDraft}
+      draftLength={plainDraft.length}
+      enterToSend={devicePreferences.enterToSend}
+      isSendDisabled={isSendDisabled}
+      historyCount={workbenchTextEntries.length}
+      historyList={workbenchTextEntries.map(renderWorkbenchTextEntry)}
+      onDraftChange={(value) => {
+        draftValueRef.current = value
+        onChatDraftChange(value)
+      }}
+      onDraftKeyDown={(event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          event.preventDefault()
+          submitComposerDraft()
+          return
+        }
+
+        if (devicePreferences.enterToSend && event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault()
+          submitComposerDraft()
+        }
+      }}
+      onSubmit={(event) => {
+        event.preventDefault()
+        submitComposerDraft()
+      }}
+    />
+  )
+
+  const renderWorkbenchGlobalHistoryFile = (file: HistoryFileSummary) => {
+    const canRecallFile = file.sourceDeviceId === deviceId || canRecallAnyMessage
+
+    return (
+      <article key={file.historyId} className="dd-snaplink__text-history-row">
+        <span>
+          <strong title={file.fileName}>{file.fileName}</strong>
+          <small>{file.sourceDeviceName} · {formatMessageClock(file.createdAt)}</small>
+        </span>
+        <p>
+          {formatFileSize(file.size)} · {file.isPublic ? '公共房间' : '私密会话'}
+        </p>
+        <div className="dd-snaplink__text-history-actions">
+          <button type="button" onClick={() => onDownloadHistoryFile(file)}>
+            下载
+          </button>
+          {canRecallFile ? (
+            <button type="button" onClick={() => void Promise.resolve(onRecallFile(file.historyId))}>
+              撤回
+            </button>
+          ) : null}
+        </div>
+      </article>
+    )
+  }
+
+  const markHistoryActionCopied = (actionId: string) => {
+    setCopiedHistoryActionId(actionId)
+    window.setTimeout(() => {
+      setCopiedHistoryActionId((current) => (current === actionId ? null : current))
+    }, 1200)
+  }
+
+  const handleCopyHistoryText = (entry: HistoryTextSummary) => {
+    void copyRichTextToClipboard(entry.text).then(() => {
+      markHistoryActionCopied(`text-${entry.historyId}`)
+    })
+  }
+
+  const handleCopyHistoryLink = (entry: SnapLinkSharedLinkEntry) => {
+    void copyTextToClipboard(entry.url).then(() => {
+      markHistoryActionCopied(`link-${entry.id}`)
+    })
+  }
+
+  const renderWorkbenchGlobalHistoryText = (entry: HistoryTextSummary) => {
+    const preview = getRichTextPreviewText(entry.text) || '空文本'
+    const canRecallHistoryText = entry.sourceDeviceId === deviceId || canRecallAnyMessage
+    const copyActionId = `text-${entry.historyId}`
+
+    return (
+      <article key={entry.historyId} className="dd-snaplink__text-history-row">
+        <span>
+          <strong>{entry.sourceDeviceName}</strong>
+          <small>{formatMessageClock(entry.createdAt)}</small>
+        </span>
+        <p>{preview}</p>
+        <div className="dd-snaplink__text-history-actions">
+          <button
+            type="button"
+            className={copiedHistoryActionId === copyActionId ? 'is-copied' : ''}
+            onClick={() => handleCopyHistoryText(entry)}
+          >
+            {copiedHistoryActionId === copyActionId ? '已复制' : '复制'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              draftValueRef.current = preview
+              onChatDraftChange(preview)
+              setWorkbenchMode('text')
+            }}
+          >
+            再发一次
+          </button>
+          {canRecallHistoryText ? (
+            <button type="button" onClick={() => void Promise.resolve(onRecallText(entry.historyId))}>
+              撤回
+            </button>
+          ) : null}
+        </div>
+      </article>
+    )
+  }
+
+  const renderWorkbenchHistoryFilePanelContent = () => {
+    if (workbenchFilteredGlobalHistoryFiles.length > 0) {
+      return (
+        <div className="dd-snaplink__text-history-list">
+          {workbenchFilteredGlobalHistoryFiles.slice(0, 10).map(renderWorkbenchGlobalHistoryFile)}
+        </div>
+      )
+    }
+
+    if (workbenchFilteredHistoryFileEntries.length > 0) {
+      return (
+        <div className="dd-snaplink__shared-list">
+          {workbenchFilteredHistoryFileEntries.slice(0, 8).map((file) =>
+            renderSharedFileRow(file, resolveMediaFileEntryKind(file) ? 'media' : 'file'),
+          )}
+        </div>
+      )
+    }
+
+    return <div className="dd-snaplink__shared-empty">暂无历史文件</div>
+  }
+
+  const renderWorkbenchHistoryTextPanelContent = () => (
+    <>
+      {workbenchFilteredGlobalHistoryTexts.length > 0 ? (
+        <div className="dd-snaplink__text-history-list">
+          {workbenchFilteredGlobalHistoryTexts.slice(0, 10).map(renderWorkbenchGlobalHistoryText)}
+        </div>
+      ) : workbenchFilteredTextEntries.length > 0 ? (
+        <div className="dd-snaplink__text-history-list">
+          {workbenchFilteredTextEntries.slice(0, 6).map(renderWorkbenchTextEntry)}
+        </div>
+      ) : null}
+      {workbenchFilteredLinkEntries.length > 0 ? (
+        <div className="dd-snaplink__history-link-list">
+          {workbenchFilteredLinkEntries.slice(0, 6).map((entry) => (
+            <article key={entry.id} className="dd-snaplink__history-link-row">
+              <span>
+                <strong title={entry.label}>{entry.label}</strong>
+                <small>{entry.sourceName} · {formatMessageClock(entry.createdAt)}</small>
+              </span>
+              <div className="dd-snaplink__text-history-actions">
+                <button
+                  type="button"
+                  className={copiedHistoryActionId === `link-${entry.id}` ? 'is-copied' : ''}
+                  onClick={() => handleCopyHistoryLink(entry)}
+                >
+                  {copiedHistoryActionId === `link-${entry.id}` ? '已复制' : '复制链接'}
+                </button>
+                <a href={entry.url} target="_blank" rel="noreferrer">打开</a>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      {workbenchHistoryTextCount === 0 && workbenchFilteredLinkEntries.length === 0 ? (
+        <div className="dd-snaplink__shared-empty">暂无文本和链接</div>
+      ) : null}
+    </>
+  )
+
+  const renderWorkbenchHistoryPage = () => (
+    <HistoryPage
+      header={renderWorkbenchPageHeader(
+        '历史记录',
+        '集中查看文件、文本和链接历史，可下载、复制或复用。',
+      )}
+      searchQuery={historySearchQuery}
+      fileCount={workbenchHistoryFileCount}
+      textCount={workbenchHistoryTextCount}
+      linkCount={workbenchFilteredLinkEntries.length}
+      totalCount={workbenchHistoryCount}
+      rawCount={workbenchRawHistoryCount}
+      filePanelContent={renderWorkbenchHistoryFilePanelContent()}
+      textPanelContent={renderWorkbenchHistoryTextPanelContent()}
+      onSearchChange={setHistorySearchQuery}
+      onClearSearch={() => setHistorySearchQuery('')}
+      onShowFiles={handleShowWorkbenchFiles}
+      onShowText={handleShowWorkbenchText}
+      onShowRooms={handleShowWorkbenchRooms}
+    />
+  )
+
+  const renderWorkbenchSettingsPage = () => (
+    <SettingsPanel
+      header={renderWorkbenchPageHeader(
+        '设置',
+        '管理本机身份、发现方式、发送偏好和消息主题。',
+      )}
+      deviceName={deviceName}
+      deviceNameDraft={deviceNameDraft}
+      deviceNameError={deviceNameError}
+      devicePlatform={devicePlatform}
+      deviceShortCode={deviceShortCode}
+      deviceId={deviceId}
+      accountId={accountId}
+      discoverable={deviceSettings.discoverable !== false}
+      allowShortCode={deviceSettings.allowShortCode !== false}
+      autoConnect={deviceSettings.autoConnect !== false}
+      enterToSend={devicePreferences.enterToSend}
+      themeMode={themeMode}
+      resolvedThemeMode={resolvedThemeMode}
+      themeColors={themeColors}
+      themeOptions={snapLinkThemeColorOptions}
+      feedbackMessage={settingsFeedbackMessage}
+      onDeviceNameDraftChange={(value) => {
+        setDeviceNameDraft(value)
+        setDeviceNameError(null)
+      }}
+      onDeviceNameSubmit={(event) => {
+        event.preventDefault()
+        if (commitWorkbenchDeviceRename()) {
+          showSettingsFeedback('设备名已保存')
+        }
+      }}
+      onDiscoverableChange={(checked) => {
+        onDeviceSettingsChange({ discoverable: checked })
+        showSettingsFeedback(checked ? '已允许被附近设备发现' : '已关闭附近发现')
+      }}
+      onAllowShortCodeChange={(checked) => {
+        onDeviceSettingsChange({ allowShortCode: checked })
+        showSettingsFeedback(checked ? '已允许短码连接' : '已关闭短码连接')
+      }}
+      onAutoConnectChange={(checked) => {
+        onDeviceSettingsChange({ autoConnect: checked })
+        showSettingsFeedback(checked ? '已开启自动连接' : '已关闭自动连接')
+      }}
+      onEnterToSendChange={(checked) => {
+        onDevicePreferencesChange({ enterToSend: checked })
+        showSettingsFeedback(checked ? '已开启回车发送' : '已关闭回车发送')
+      }}
+      onThemeModeChange={(nextThemeMode) => {
+        updateWorkbenchThemeMode(nextThemeMode)
+        if (nextThemeMode === 'system') {
+          showSettingsFeedback('已跟随系统外观')
+          return
+        }
+
+        showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
+      }}
+      onThemeColorChange={(target, value) => {
+        updateThemeColor(target, value)
+        showSettingsFeedback('消息主题已更新')
+      }}
+      onThemePresetApply={(colors) => {
+        applyThemeColors(colors)
+        showSettingsFeedback('主题预设已应用')
+      }}
+      onThemeReset={() => {
+        resetThemeColors()
+        showSettingsFeedback('主题已恢复默认')
+      }}
+    />
+  )
+
+  const renderWorkbenchNearbySection = () => (
+    <NearbyDevicesPanel
+      devices={onlineDeviceItems}
+      discoveryHint={workbenchDiscoveryHint}
+      isScanning={isWorkbenchScanning}
+      renderDeviceCard={renderWorkbenchDeviceCard}
+      onRescan={handleWorkbenchRescan}
+    />
+  )
+
+  const renderWorkbenchTransferBoard = () => {
+    const activeEntries = workbenchTransferEntries.filter((file) =>
+      isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
+    )
+    const completedEntries = workbenchTransferEntries.filter(
+      (file) => resolveSnapLinkTransferStatus(file) === 'completed',
+    )
+    const failedEntries = workbenchTransferEntries.filter(
+      (file) => resolveSnapLinkTransferStatus(file) === 'failed',
+    )
+    const groupedSections = [
+      { id: 'active', label: '进行中', entries: activeEntries },
+      { id: 'failed', label: '失败', entries: failedEntries },
+      { id: 'completed', label: '已完成', entries: completedEntries },
+    ]
+
+    return (
+      <TransferQueuePage
+        sections={groupedSections}
+        totalCount={workbenchTransferEntries.length}
+        activeCount={workbenchActiveTransferCount}
+        completedCount={workbenchCompletedTransferCount}
+        failedCount={workbenchFailedTransferCount}
+        incomingNotice={renderIncomingReceiveNotice('full')}
+        renderTaskCard={renderWorkbenchTransferCard}
+        onShowNearby={handleShowWorkbenchNearby}
+        onShowFiles={handleShowWorkbenchFiles}
+      />
+    )
+  }
+
+  const renderWorkbenchModeOverview = () => {
+    const overview = (() => {
+      switch (workbenchMode) {
+        case 'rooms':
+          return {
+            title: '我的房间',
+            description: '公共房间和历史会话都在这里，适合多人共享文件与文本。',
+            accent: '房间',
+            actionLabel: '创建房间',
+            onAction: handleCreatePublicRoom,
+          }
+        case 'files':
+          return {
+            title: '发送文件',
+            description: '先选择附近设备或房间，再拖拽文件到页面发送。',
+            accent: '文件',
+            actionLabel: '选择文件',
+            onAction: handleWorkbenchFilePick,
+          }
+        case 'transfers':
+          return {
+            title: '传输队列',
+            description: '查看正在连接、发送、完成或失败的任务，进度只按真实确认字节显示。',
+            accent: '队列',
+            actionLabel: '发送文件',
+            onAction: handleShowWorkbenchFiles,
+          }
+        case 'text':
+          return {
+            title: '发送文本',
+            description: '把文本、链接或文件说明快速发送给当前设备/房间。',
+            accent: '文本',
+            actionLabel: '选择目标',
+            onAction: handleShowWorkbenchNearby,
+          }
+        case 'history':
+          return {
+            title: '历史记录',
+            description: '集中查看当前会话里的文件、媒体、链接和文本。',
+            accent: '历史',
+            actionLabel: '发送文件',
+            onAction: handleShowWorkbenchFiles,
+          }
+        case 'settings':
+          return {
+            title: '设置',
+            description: '管理本机身份、局域网发现方式、发送偏好和消息主题。',
+            accent: '设置',
+            actionLabel: '附近设备',
+            onAction: handleShowWorkbenchNearby,
+          }
+        case 'nearby':
+        default:
+          return {
+            title: '附近设备',
+            description: '发现同一局域网内的设备，点选设备即可发送文件、图片或文本。',
+            accent: '直连',
+            actionLabel: '重新扫描',
+            onAction: handleWorkbenchRescan,
+          }
+      }
+    })()
+
+    return (
+      <section className={`dd-snaplink__mode-overview is-${workbenchMode}`} aria-label="当前工作区">
+        <span className="dd-snaplink__mode-overview-mark">{overview.accent}</span>
+        <span className="dd-snaplink__mode-overview-copy">
+          <strong>{overview.title}</strong>
+          <small>{overview.description}</small>
+        </span>
+        <span className="dd-snaplink__mode-overview-stats" aria-label="工作区状态">
+          <em>{workbenchOnlineDeviceCount.toString()} 台在线</em>
+          <em>{workbenchTransferEntries.length.toString()} 个传输</em>
+          <em>{workbenchRoomListItems.length.toString()} 个房间</em>
+        </span>
+        <button type="button" onClick={overview.onAction}>
+          {overview.actionLabel}
+        </button>
+      </section>
+    )
+  }
+
+  const renderWorkbenchModeContent = () => {
+    if (workbenchMode === 'rooms') {
+      return renderWorkbenchRoomsSection('full')
+    }
+
+    if (workbenchMode === 'files') {
+      return renderWorkbenchFileSendPage()
+    }
+
+    if (workbenchMode === 'transfers') {
+      return renderWorkbenchTransferBoard()
+    }
+
+    if (workbenchMode === 'text') {
+      return renderWorkbenchTextPage()
+    }
+
+    if (workbenchMode === 'history') {
+      return renderWorkbenchHistoryPage()
+    }
+
+    if (workbenchMode === 'settings') {
+      return renderWorkbenchSettingsPage()
+    }
+
+    return (
+      <>
+        {renderWorkbenchNearbySection()}
+        <div className="dd-snaplink__workbench-lower">
+          {renderWorkbenchRoomsSection()}
+          {renderWorkbenchDropZone()}
+        </div>
+      </>
+    )
+  }
+
+  const renderWorkbenchView = () => {
+    return (
+    <section
+      className="dd-snaplink__workbench has-mobile-actions"
+      aria-label="DD直连 P2P 局域网文件共享工作台"
+    >
+      <input
+        ref={workbenchFileInputRef}
+        id={`${fileInputId}-workbench`}
+        type="file"
+        multiple
+        hidden
+        onChange={handleWorkbenchDirectFileInputChange}
+      />
+      <input
+        ref={workbenchCameraInputRef}
+        id={`${fileInputId}-workbench-camera`}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={handleWorkbenchDirectFileInputChange}
+      />
+      <SidebarNav
+        deviceName={deviceName}
+        activeMode={workbenchMode}
+        onShowNearby={handleShowWorkbenchNearby}
+        onShowRooms={handleShowWorkbenchRooms}
+        onShowFiles={handleShowWorkbenchFiles}
+        onShowQueue={handleShowWorkbenchQueue}
+        onShowText={handleShowWorkbenchText}
+        onShowHistory={handleShowWorkbenchHistory}
+        onOpenAiChat={handleOpenAiChat}
+        onOpenImage={handleOpenImage}
+        onOpenCommand={handleOpenCommand}
+        onShowSettings={handleShowWorkbenchSettings}
+      />
+
+      <div className="dd-snaplink__workbench-main">
+        <TopStatusBar
+          title={deviceName}
+          subtitle={`本机 · 在线 · ${deviceSettings.discoverable === false ? '发现已关闭' : '可被发现'}`}
+          icon={<Monitor size={17} strokeWidth={1.8} aria-hidden="true" />}
+          pillAriaLabel="连接状态"
+          pills={[
+            {
+              id: 'lan',
+              className: 'is-lan',
+              label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
+            },
+            { id: 'webrtc', className: 'is-webrtc', label: 'WebRTC 直连' },
+            {
+              id: 'serverless',
+              label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+            },
+            {
+              id: 'online-devices',
+              label: <><Users size={13} strokeWidth={2} aria-hidden="true" />{workbenchOnlineDeviceCount.toString()} 台设备在线</>,
+            },
+          ]}
+        />
+
+        <MobileWorkbenchNav
+          activeMode={workbenchMode}
+          ariaLabel="移动端功能导航"
+          onShowNearby={handleShowWorkbenchNearby}
+          onShowRooms={handleShowWorkbenchRooms}
+          onShowFiles={handleShowWorkbenchFiles}
+          onShowQueue={handleShowWorkbenchQueue}
+          onShowText={handleShowWorkbenchText}
+          onShowHistory={handleShowWorkbenchHistory}
+          onShowSettings={handleShowWorkbenchSettings}
+        />
+
+        <main className="dd-snaplink__workbench-content">
+          {visibleErrorText ? (
+            <div className="dd-snaplink__workbench-note is-error" role="status">
+              <span>{visibleErrorText}</span>
+              <button type="button" onClick={() => setDismissedErrorText(visibleErrorText)}>
+                关闭
+              </button>
+            </div>
+          ) : null}
+          {renderWorkbenchModeOverview()}
+          {renderWorkbenchModeContent()}
+        </main>
+        <MobileActionBar
+          onPickFile={handleWorkbenchFilePick}
+          onPickCamera={handleWorkbenchCameraPick}
+          onSendText={handleShowWorkbenchText}
+        />
+      </div>
+
+      <TransferQueuePanel
+        entries={workbenchTransferEntries}
+        activeCount={workbenchActiveTransferCount}
+        completedCount={workbenchCompletedTransferCount}
+        isMobileOpen={isMobileQueueOpen}
+        incomingNotice={renderIncomingReceiveNotice('compact')}
+        renderTaskCard={renderWorkbenchTransferCard}
+        onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+      />
+    </section>
+    )
+  }
+
+  const renderToolWorkbenchView = (content: ReactNode, tool: 'ai-chat' | 'image' | 'command') => {
+    const isAiTool = tool === 'ai-chat'
+    const isImageTool = tool === 'image'
+    const toolTitle = isAiTool ? 'AI 辅助' : isImageTool ? 'AI 图片' : '命令行'
+    const toolSubtitle = isAiTool
+      ? '本地优先 · 上下文不外传'
+      : isImageTool
+        ? '提示词生成 · 历史与额度同步'
+        : '浏览器 / Docker 沙箱 · 本页运行'
+    const toolLabel = isAiTool
+      ? 'DD直连 AI 辅助工作台'
+      : isImageTool
+        ? 'DD直连 AI 图片工作台'
+        : 'DD直连 命令行工作台'
+    const toolSideNote = isAiTool
+      ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
+      : isImageTool
+        ? '图片生成与历史记录独立保存，传输文件仍通过 DD直连队列管理。'
+        : '命令运行在浏览器或沙箱环境中，输出可复制后继续发送给附近设备。'
+    const hasCommandResultText = commandResultText.trim().length > 0
+    const toolSideActions: ToolContextPanelAction[] = isAiTool
+      ? [
+          {
+            label: aiTransferContextFiles.length > 0 ? '分析最近传输' : '辅助生成传输说明',
+            action: () => onPrepareAiDraft?.(buildAiTransferAnalysisPrompt(), buildAiTransferAnalysisContext()),
+            title:
+              aiTransferContextFiles.length > 0
+                ? '把最近传输/历史文件整理成 AI 分析草稿'
+                : '生成一段用于文件传输说明的 AI 草稿',
+          },
+          { label: '发送文本', action: handleShowWorkbenchText },
+          { label: '查看附近设备', action: handleShowWorkbenchNearby },
+        ]
+      : isImageTool
+        ? [
+            { label: '发送图片文件', action: handleShowWorkbenchFiles },
+            { label: '查看传输队列', action: handleShowWorkbenchQueue },
+            { label: '附近设备', action: handleShowWorkbenchNearby },
+          ]
+        : [
+            {
+              label: hasCommandResultText ? '发送运行结果' : '运行后发送结果',
+              action: () => {
+                onShareCommandResult?.()
+                handleShowWorkbenchText()
+              },
+              disabled: !hasCommandResultText,
+              title: hasCommandResultText ? '把当前运行输出填入文本发送页' : '先运行命令生成输出结果',
+            },
+            { label: '查看传输队列', action: handleShowWorkbenchQueue },
+            { label: '附近设备', action: handleShowWorkbenchNearby },
+          ]
+    const toolContextRows = isAiTool
+      ? [
+          { label: '上下文来源', value: sharedFileEntries.length + sharedMediaEntries.length > 0 ? '传输文件' : '按需选择' },
+          { label: '模型', value: selectedAiModelLabel || '未选择' },
+          { label: '文件上下文', value: `${aiTransferContextFiles.length.toString()} 项可分析` },
+        ]
+      : isImageTool
+        ? [
+            { label: '账号状态', value: '按页面状态' },
+            { label: '生成额度', value: aiQuotaLabel || '同步中' },
+            { label: '参考图', value: `${composerImageDrafts.length.toString()} 项` },
+          ]
+        : [
+            { label: '运行环境', value: '浏览器 / Docker 沙箱' },
+            { label: '输出状态', value: hasCommandResultText ? '有可发送结果' : '等待运行' },
+            { label: '传输联动', value: hasCommandResultText ? '可填入文本发送' : '复制后也可发送' },
+          ]
+
+    return (
+      <section className={`dd-snaplink__tool-workbench is-${tool}`} aria-label={toolLabel}>
+        <SidebarNav
+          deviceName={deviceName}
+          activeTool={tool}
+          onShowNearby={handleShowWorkbenchNearby}
+          onShowRooms={handleShowWorkbenchRooms}
+          onShowFiles={handleShowWorkbenchFiles}
+          onShowQueue={handleShowWorkbenchQueue}
+          onShowText={handleShowWorkbenchText}
+          onShowHistory={handleShowWorkbenchHistory}
+          onOpenAiChat={handleOpenAiChat}
+          onOpenImage={handleOpenImage}
+          onOpenCommand={handleOpenCommand}
+          onShowSettings={handleShowWorkbenchSettings}
+        />
+
+        <div className="dd-snaplink__tool-main">
+          <TopStatusBar
+            className="dd-snaplink__tool-status"
+            title={toolTitle}
+            subtitle={toolSubtitle}
+            icon={isAiTool ? (
+              <Bot size={17} strokeWidth={1.8} aria-hidden="true" />
+            ) : isImageTool ? (
+              <ImageIcon size={17} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <Command size={17} strokeWidth={1.8} aria-hidden="true" />
+            )}
+            pillAriaLabel="工具状态"
+            pills={[
+              {
+                id: 'lan-workbench',
+                className: 'is-lan',
+                label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
+              },
+              { id: 'webrtc', className: 'is-webrtc', label: 'WebRTC 直连' },
+              {
+                id: 'serverless',
+                label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+              },
+              {
+                id: 'online-devices',
+                label: <><Users size={13} strokeWidth={2} aria-hidden="true" />{workbenchOnlineDeviceCount.toString()} 台设备在线</>,
+              },
+            ]}
+          />
+
+          <MobileWorkbenchNav
+            className="dd-snaplink__tool-mobile-nav"
+            ariaLabel="移动端工作台导航"
+            onShowNearby={handleShowWorkbenchNearby}
+            onShowRooms={handleShowWorkbenchRooms}
+            onShowFiles={handleShowWorkbenchFiles}
+            onShowQueue={handleShowWorkbenchQueue}
+            onShowText={handleShowWorkbenchText}
+            onShowHistory={handleShowWorkbenchHistory}
+            onShowSettings={handleShowWorkbenchSettings}
+          />
+
+          <div className="dd-snaplink__tool-mobile-actions" aria-label={`${toolTitle}移动端快捷操作`}>
+            {toolSideActions.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                disabled={item.disabled}
+                title={item.title}
+                onClick={item.action}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="dd-snaplink__tool-mobile-queue">
+            <TransferQueuePanel
+              entries={workbenchTransferEntries}
+              activeCount={workbenchActiveTransferCount}
+              completedCount={workbenchCompletedTransferCount}
+              isMobileOpen={isMobileQueueOpen}
+              incomingNotice={renderIncomingReceiveNotice('compact')}
+              renderTaskCard={renderWorkbenchTransferCard}
+              onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+            />
+          </div>
+
+          <main className="dd-snaplink__tool-content">
+            {content}
+          </main>
+        </div>
+
+        <ToolContextPanel
+          title={toolTitle}
+          note={toolSideNote}
+          rows={toolContextRows}
+          actions={toolSideActions}
+          transferCount={workbenchTransferEntries.length}
+          activeTransferCount={workbenchActiveTransferCount}
+          completedTransferCount={workbenchCompletedTransferCount}
+          failedTransferCount={workbenchFailedTransferCount}
+          incomingNotice={renderIncomingReceiveNotice('compact')}
+          transferCards={workbenchTransferEntries.slice(0, 5).map(renderWorkbenchTransferCard)}
+        />
+      </section>
+    )
+  }
+
+  const renderFileCard = (file: SnapLinkFileEntry) => (
+    <FileMessageCard file={file} actions={renderFileActions(file)} />
+  )
 
   const imagePreviewImageStyle: CSSProperties | undefined = isImagePreviewZoomed
     ? {
         transform: `translate3d(${imagePreviewPan.x.toFixed(1)}px, ${imagePreviewPan.y.toFixed(1)}px, 0) scale(${snapLinkImagePreviewZoomScale.toString()})`,
       }
     : undefined
+  const snapLinkShellClassName = [
+    'dd-snaplink',
+    isDragging ? 'is-dragging' : '',
+    !isAdminOpen ? 'is-workbench-shell' : '',
+  ].filter(Boolean).join(' ')
 
   return (
     <>
       <section
-        className={`dd-snaplink${isDragging ? ' is-dragging' : ''}`}
+        className={snapLinkShellClassName}
         style={themeStyle}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
@@ -3415,7 +5558,8 @@ export function SnapLinkStage({
         <div className="dd-snaplink__top-left">
           <div className="dd-snaplink__brand">
             <i aria-hidden="true" />
-            <span>ddzhilian</span>
+            <span>DD直连</span>
+            <em>P2P 局域网工作台</em>
           </div>
           {isRenamingDevice ? (
             <form
@@ -3463,7 +5607,7 @@ export function SnapLinkStage({
               aria-label="选择对话"
               value={
                 isImageOpen
-                  ? ''
+                  ? snapLinkImageSelectionValue
                   : isCommandOpen
                     ? snapLinkCommandSelectionValue
                   : isAiChatOpen
@@ -3472,8 +5616,9 @@ export function SnapLinkStage({
               }
               onChange={(event) => handleRoomSelection(event.target.value)}
             >
-              <option value="">大厅</option>
-              <option value={snapLinkAiChatSelectionValue}>AI 聊天</option>
+              <option value="">附近设备</option>
+              <option value={snapLinkAiChatSelectionValue}>AI</option>
+              <option value={snapLinkImageSelectionValue}>图片</option>
               <option value={snapLinkCommandSelectionValue}>命令行</option>
               {roomListItems.map((room) => (
                 <option key={room.roomId} value={room.roomId}>
@@ -3549,17 +5694,24 @@ export function SnapLinkStage({
           </div>
           <button
             type="button"
-            className={!isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen ? 'is-active' : ''}
-            onClick={handleBackToLobby}
+            className={!isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen && workbenchMode === 'nearby' ? 'is-active' : ''}
+            onClick={handleShowWorkbenchNearby}
           >
-            对话
+            附近设备
           </button>
           <button
             type="button"
             className={isAiChatOpen ? 'is-active' : ''}
             onClick={handleOpenAiChat}
           >
-            AI 聊天
+            AI
+          </button>
+          <button
+            type="button"
+            className={isImageOpen ? 'is-active' : ''}
+            onClick={handleOpenImage}
+          >
+            图片
           </button>
           <button
             type="button"
@@ -3579,155 +5731,168 @@ export function SnapLinkStage({
           {isAdminOpen ? (
             adminElement
           ) : isImageOpen ? (
-            imageElement
+            renderToolWorkbenchView(imageElement, 'image')
           ) : isCommandOpen ? (
-            commandElement
+            renderToolWorkbenchView(commandElement, 'command')
           ) : isAiChatOpen ? (
-            aiChatElement
+            renderToolWorkbenchView(aiChatElement, 'ai-chat')
           ) : !hasActiveRoom ? (
-            <section className="dd-snaplink__lobby" aria-label="ddzhilian 大厅">
-              <h1 className="dd-snaplink__lobby-title">
-                <EncryptedText
-                  text={snapLinkLobbyGreetingText}
-                  className="dd-snaplink__lobby-type"
-                  encryptedClassName="dd-snaplink__lobby-encrypted"
-                  revealedClassName="dd-snaplink__lobby-revealed"
-                  charset={snapLinkLobbyGreetingScrambleCharset}
-                  revealDelayMs={68}
-                  flipDelayMs={34}
-                />
-                <span className="dd-snaplink__lobby-cursor" aria-hidden="true">_</span>
-              </h1>
-              <button
-                type="button"
-                className="dd-snaplink__create dd-snaplink__create--ai"
-                onClick={handleOpenAiChat}
-              >
-                Chat with AI
-              </button>
-              {(localError || errorMessage) && (
-                <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
-              )}
-              <div className="dd-snaplink__lobby-main">
-                <div className="dd-snaplink__room-list" aria-label="会话列表">
-                  <div className="dd-snaplink__room-list-head">
-                    <span>会话列表</span>
-                    <span className="dd-snaplink__room-list-actions">
-                      <small>{lobbyRoomListItems.length} 个</small>
-                    </span>
-                  </div>
-                  {lobbyRoomListItems.length > 0 ? (
-                    <div className="dd-snaplink__room-list-items">
-                      {lobbyRoomListItems.map((room) => (
-                        <button
-                          key={room.roomId}
-                          type="button"
-                          className={`dd-snaplink__room-item${room.isPublic ? ' is-public' : ''}`}
-                          onClick={() => handleRoomSelection(room.roomId)}
-                        >
-                          <span className="dd-snaplink__room-item-main">
-                            <span className="dd-snaplink__room-item-title">
-                              {room.title}
-                              {room.isPublic ? <em>公共</em> : null}
-                            </span>
-                            <span className="dd-snaplink__room-item-preview">{room.previewText}</span>
-                          </span>
-                          <span className="dd-snaplink__room-item-side">
-                            <span>{room.updatedAtLabel}</span>
-                            {room.unreadCount > 0 ? (
-                              <strong>{room.unreadCount > 99 ? '99+' : room.unreadCount}</strong>
-                            ) : null}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="dd-snaplink__room-empty">暂无会话</div>
-                  )}
-                </div>
-              </div>
-            </section>
+            renderWorkbenchView()
           ) : (
-            <section className="dd-snaplink__room" aria-label="ddzhilian 对话">
-              <div className="dd-snaplink__room-head">
-                <div className="dd-snaplink__room-left">
+            <section className="dd-snaplink__room-workbench" aria-label="DD直连房间会话工作台">
+              <SidebarNav
+                deviceName={deviceName}
+                activeMode="rooms"
+                onShowNearby={handleShowWorkbenchNearby}
+                onShowRooms={handleShowWorkbenchRooms}
+                onShowFiles={handleShowWorkbenchFiles}
+                onShowQueue={handleShowWorkbenchQueue}
+                onShowText={handleShowWorkbenchText}
+                onShowHistory={handleShowWorkbenchHistory}
+                onOpenAiChat={handleOpenAiChat}
+                onOpenImage={handleOpenImage}
+                onOpenCommand={handleOpenCommand}
+                onShowSettings={handleShowWorkbenchSettings}
+              />
+
+              <div className="dd-snaplink__room-workbench-main">
+                <TopStatusBar
+                  className="dd-snaplink__room-status"
+                  title={selectedConversationName}
+                  subtitle={activeTransferLabel}
+                  icon={<Users size={17} strokeWidth={1.8} aria-hidden="true" />}
+                  pillAriaLabel="房间连接状态"
+                  pills={[
+                    { id: 'room-code', className: 'is-lan', label: <>房间 {selectedRoomId ?? '当前'}</> },
+                    { id: 'room-transport', className: 'is-webrtc', label: 'WebRTC 直连' },
+                    { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
+                    { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
+                  ]}
+                />
+
+                <MobileWorkbenchNav
+                  activeMode="rooms"
+                  ariaLabel="移动端房间导航"
+                  onShowNearby={handleShowWorkbenchNearby}
+                  onShowRooms={handleShowWorkbenchRooms}
+                  onShowFiles={handleShowWorkbenchFiles}
+                  onShowQueue={handleShowWorkbenchQueue}
+                  onShowText={handleShowWorkbenchText}
+                  onShowHistory={handleShowWorkbenchHistory}
+                  onShowSettings={handleShowWorkbenchSettings}
+                />
+
+                <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间快捷操作">
                   <button
                     type="button"
-                    className="dd-snaplink__room-code"
-                    title="点击复制 roomId"
-                    onClick={handleCopyRoomId}
+                    className={isMobileRoomMembersOpen ? 'is-active' : ''}
+                    aria-pressed={isMobileRoomMembersOpen}
+                    onClick={() => {
+                      setActiveSharedTab(null)
+                      setIsMobileRoomMembersOpen((current) => !current)
+                    }}
                   >
-                    {copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
+                    成员 {selectedRoomOnlineCount.toString()}/{(selectedRoom?.memberCount ?? 1).toString()}
                   </button>
-                  <span className="dd-snaplink__status-dot" aria-hidden="true" />
-                  <span className="dd-snaplink__peer" title={activeTransferLabel}>
-                    {roomStatusLabel || selectedConversationName}
-                  </span>
-                </div>
-                <div className="dd-snaplink__room-actions">
                   <button
                     type="button"
                     className={effectiveActiveSharedTab ? 'is-active' : ''}
-                    aria-expanded={Boolean(effectiveActiveSharedTab)}
-                    aria-label="查看历史文件、媒体和链接"
-                    onClick={() => setActiveSharedTab((current) => (current ? null : 'files'))}
+                    aria-pressed={Boolean(effectiveActiveSharedTab)}
+                    onClick={() => {
+                      setIsMobileRoomMembersOpen(false)
+                      setActiveSharedTab((current) => (current ? null : 'files'))
+                    }}
                   >
-                    历史内容
-                    {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
+                    历史内容 {sharedContentCount.toString()}
                   </button>
-                  <button type="button" onClick={() => {
-                    setActiveSharedTab(null)
-                    setIsLobbyOpen(true)
-                  }}>
-                    离开
+                  <button type="button" onClick={handleCopyRoomId}>
+                    {copiedRoomId === selectedRoomId ? '已复制房间码' : '复制房间码'}
                   </button>
                 </div>
-              </div>
 
-              {effectiveActiveSharedTab ? (
-                <div className="dd-snaplink__shared-panel" aria-label={activeSharedTabItem?.label ?? '历史内容'}>
-                  <div className="dd-snaplink__shared-head">
-                    <strong>历史内容</strong>
-                    <button type="button" onClick={() => setActiveSharedTab(null)}>
-                      关闭
-                    </button>
+                <section className="dd-snaplink__room" aria-label="ddzhilian 对话">
+                  <RoomHeader
+                    roomCodeLabel={copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
+                    peerLabel={roomStatusLabel || selectedConversationName}
+                    peerTitle={activeTransferLabel}
+                    stats={[
+                      {
+                        id: 'members',
+                        label: '成员',
+                        value: selectedRoom ? selectedRoom.memberCount.toString() : '1',
+                      },
+                      {
+                        id: 'online',
+                        label: '在线',
+                        value: selectedRoomOnlineCount.toString(),
+                        tone: 'online',
+                      },
+                      {
+                        id: 'messages',
+                        label: '消息',
+                        value: visibleConversationEntries.length.toString(),
+                      },
+                      {
+                        id: 'shared',
+                        label: '共享内容',
+                        value: sharedContentCount.toString(),
+                      },
+                      {
+                        id: 'transfers',
+                        label: '传输中',
+                        value: workbenchActiveTransferCount.toString(),
+                        tone: workbenchActiveTransferCount > 0 ? 'transfer' : 'default',
+                      },
+                    ]}
+                    sharedContentCount={sharedContentCount}
+                    isSharedContentOpen={Boolean(effectiveActiveSharedTab)}
+                    onCopyRoomId={handleCopyRoomId}
+                    onToggleSharedContent={() => setActiveSharedTab((current) => (current ? null : 'files'))}
+                    onLeave={() => {
+                      setActiveSharedTab(null)
+                      setIsLobbyOpen(true)
+                    }}
+                  />
+
+              {isMobileRoomMembersOpen ? (
+                <aside className="dd-snaplink__room-member-panel" aria-label="房间成员">
+                  <div className="dd-snaplink__room-member-head">
+                    <strong>房间成员</strong>
+                    <span>{selectedRoomOnlineCount.toString()} 在线 · {(selectedRoom?.memberCount ?? 1).toString()} 成员</span>
                   </div>
-                  <div className="dd-snaplink__shared-tabs" role="tablist" aria-label="历史内容分类">
-                    {sharedTabItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={effectiveActiveSharedTab === item.id}
-                        className={effectiveActiveSharedTab === item.id ? 'is-active' : ''}
-                        onClick={() => setActiveSharedTab(item.id)}
-                      >
-                        {item.label}
-                        {item.count > 0 ? ` ${item.count.toString()}` : ''}
-                      </button>
+                  <div className="dd-snaplink__room-member-list">
+                    {(selectedRoom?.members ?? []).map((member) => (
+                      <span key={member.deviceId} className={member.online ? 'is-online' : ''}>
+                        <em>{member.deviceName.slice(0, 1).toUpperCase()}</em>
+                        <strong>{member.isSelf ? `${member.deviceName}（本机）` : member.deviceName}</strong>
+                        <small>{member.platform || '设备'} · {member.online ? '在线' : '离线'}</small>
+                      </span>
                     ))}
                   </div>
-                  <div className="dd-snaplink__shared-list">
-                    {renderSharedPanelContent()}
-                  </div>
-                </div>
+                </aside>
               ) : null}
 
-              {isDragging ? (
-                <div className="dd-snaplink__drag-overlay" role="status" aria-live="polite">
-                  <div className="dd-snaplink__drag-panel">
-                    <span className="dd-snaplink__drag-icon" aria-hidden="true">
-                      +
-                    </span>
-                    <strong>松开发送文件</strong>
-                    <span>拖到此处即可发送到当前对话</span>
-                  </div>
-                </div>
+              {effectiveActiveSharedTab ? (
+                <SharedContentPanel
+                  activeTab={effectiveActiveSharedTab}
+                  activeLabel={activeSharedTabItem?.label}
+                  tabs={sharedTabItems}
+                  onTabChange={setActiveSharedTab}
+                  onClose={() => setActiveSharedTab(null)}
+                >
+                  {renderSharedPanelContent()}
+                </SharedContentPanel>
               ) : null}
 
-              <div ref={messagesRef} className="dd-snaplink__messages" onScroll={handleMessagesScroll}>
-                {visibleConversationEntries.length > 0 || shouldShowAiThinking ? (
-                  <>
+              {isDragging ? <RoomDragOverlay /> : null}
+
+              <RoomConversationStream
+                messagesRef={messagesRef}
+                hasContent={visibleConversationEntries.length > 0 || shouldShowAiThinking}
+                emptyState={renderRoomConversationEmptyState()}
+                onScroll={handleMessagesScroll}
+              >
+                <>
                   {visibleConversationEntries.map((entry, index) => {
                     const previousIso = index > 0 ? visibleConversationEntries[index - 1].createdAt : null
                     const showDivider = shouldInsertDivider(previousIso, entry.createdAt)
@@ -3800,38 +5965,22 @@ export function SnapLinkStage({
                             </div>
                           ) : null}
                             {renderedEntry.entryType === 'text' ? (
-                              <div
-                                className={[
-                                  'dd-snaplink__bubble-shell',
-                                  isRecallingTextEntry ? 'is-recalling' : '',
-                                  isImageOnlyMessage ? 'is-image-comet' : '',
-                                ].filter(Boolean).join(' ')}
-                                data-recall-phase={isRecallingTextEntry ? 'animating' : recallState?.phase}
-                                onPointerMove={isImageOnlyMessage ? handleImageBubbleCometPointerMove : undefined}
-                                onPointerLeave={isImageOnlyMessage ? handleImageBubbleCometPointerReset : undefined}
-                                onPointerCancel={isImageOnlyMessage ? handleImageBubbleCometPointerReset : undefined}
-                              >
-                                <div
-                                  className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnlyMessage ? ' is-image-only' : ''}`}
-                                  onClick={handleRichBubbleClick}
-                                  onContextMenu={(event) => openMessageContextMenu(event, renderedEntry, actorIdentity.displayName)}
-                                  dangerouslySetInnerHTML={{
-                                    __html: isBotMessage
-                                      ? sanitizeBotReplyHtml(renderedEntry.text)
-                                      : sanitizeRichTextHtml(renderedEntry.text),
-                                  }}
-                                />
-                                {isRecallingTextEntry ? (
-                                  <span className="dd-snaplink__recall-particles" aria-hidden="true">
-                                    {snapLinkRecallParticleIndexes.map((particleIndex) => (
-                                      <span
-                                        key={`${entry.id}-recall-particle-${particleIndex.toString()}`}
-                                        style={getSnapLinkRecallParticleStyle(particleIndex)}
-                                      />
-                                    ))}
-                                  </span>
-                                ) : null}
-                              </div>
+                              <MessageBubble
+                                entryId={entry.id}
+                                html={
+                                  isBotMessage
+                                    ? sanitizeBotReplyHtml(renderedEntry.text)
+                                    : sanitizeRichTextHtml(renderedEntry.text)
+                                }
+                                isImageOnly={isImageOnlyMessage}
+                                isRecalling={isRecallingTextEntry}
+                                recallPhase={recallState?.phase}
+                                onClick={handleRichBubbleClick}
+                                onContextMenu={(event) => openMessageContextMenu(event, renderedEntry, actorIdentity.displayName)}
+                                onPointerMove={handleImageBubbleCometPointerMove}
+                                onPointerLeave={handleImageBubbleCometPointerReset}
+                                onPointerCancel={handleImageBubbleCometPointerReset}
+                              />
                             ) : (
                               renderFileCard(renderedEntry.file)
                             )}
@@ -3871,206 +6020,83 @@ export function SnapLinkStage({
                       </div>
                     </div>
                   ) : null}
-                  </>
-                ) : (
-                  <div className="dd-snaplink__empty">{fileConversationEmptyState}</div>
-                )}
+                </>
+              </RoomConversationStream>
+
+              {visibleErrorText ? (
+                <div className="dd-snaplink__note is-error" role="status">
+                  <span>{visibleErrorText}</span>
+                  <button type="button" onClick={() => setDismissedErrorText(visibleErrorText)}>
+                    关闭
+                  </button>
+                </div>
+              ) : null}
+
+              <RoomComposer
+                quoteDraft={quoteDraft}
+                images={composerImageDrafts}
+                fileInputId={fileInputId}
+                ocrPanelId={ocrPanelId}
+                defaultDraft={plainDraft}
+                isOcrPanelOpen={isOcrPanelOpen}
+                isBotDraft={isBotDraft}
+                isBotPanelOpen={isBotPanelOpen}
+                isAiGenerating={isAiGenerating}
+                selectedAiModel={selectedAiModel}
+                selectedAiModelLabel={selectedAiModelLabel}
+                aiQuotaLabel={aiQuotaLabel}
+                aiModelOptions={aiModelOptions}
+                isEmojiPickerOpen={isEmojiPickerOpen}
+                isSendDisabled={isSendDisabled}
+                ocrTriggerRef={ocrTriggerRef}
+                ocrFileInputRef={ocrFileInputRef}
+                botTriggerRef={botTriggerRef}
+                botPanelRef={botPanelRef}
+                inputRef={inputRef}
+                emojiTriggerRef={emojiTriggerRef}
+                emojiPickerRef={emojiPickerRef}
+                getAiModelOptionValue={getAiModelOptionValue}
+                onCancelQuote={() => setQuoteDraft(null)}
+                onImageRemove={onComposerImageRemove}
+                onSubmit={handleSubmit}
+                onDirectFileInputChange={handleDirectFileInputChange}
+                onOcrTriggerClick={handleOcrTriggerClick}
+                onOcrFileSelection={handleOcrFileSelection}
+                onBotTriggerClick={handleBotTriggerClick}
+                onBotMentionSelect={handleBotMentionSelect}
+                onAiModelChange={onAiModelChange}
+                onDraftChange={handleDraftChange}
+                onDraftCompositionStart={handleDraftCompositionStart}
+                onDraftCompositionEnd={handleDraftCompositionEnd}
+                onComposerPaste={handleComposerPaste}
+                onComposerKeyDown={handleComposerKeyDown}
+                onEmojiToggle={() => {
+                  setIsBotPanelOpen(false)
+                  setIsThemePanelOpen(false)
+                  botMentionTriggerRangeRef.current = null
+                  setIsEmojiPickerOpen((previous) => !previous)
+                }}
+                onEmojiInsert={handleEmojiInsert}
+              />
+                </section>
               </div>
 
-              {(localError || errorMessage) && (
-                <div className="dd-snaplink__note is-error">{localError ?? errorMessage}</div>
-              )}
-
-              {quoteDraft ? (
-                <div className="dd-snaplink__quote-preview">
-                  <div className="dd-snaplink__quote-preview-body">
-                    <div className="dd-snaplink__quote-preview-copy">
-                      <strong>{quoteDraft.senderName}</strong>
-                      <span>{quoteDraft.text}</span>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="取消引用"
-                      onClick={() => setQuoteDraft(null)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {composerImageDrafts.length > 0 ? (
-                <div className="dd-snaplink__image-drafts" aria-label="待发送图片">
-                  {composerImageDrafts.map((image) => (
-                    <figure key={image.id} className="dd-snaplink__image-draft">
-                      <img src={image.dataUrl} alt={image.name} />
-                      <button
-                        type="button"
-                        aria-label={`移除 ${image.name}`}
-                        onClick={() => onComposerImageRemove(image.id)}
-                      >
-                        ×
-                      </button>
-                    </figure>
-                  ))}
-                </div>
-              ) : null}
-
-              <form className="dd-snaplink__compose" onSubmit={handleSubmit}>
-                <label className="dd-snaplink__attach" htmlFor={fileInputId} title="发送文件">
-                  +
-                  <input
-                    id={fileInputId}
-                    type="file"
-                    multiple
-                    hidden
-                    onChange={(event) => {
-                      const files = Array.from(event.target.files ?? [])
-                      event.target.value = ''
-                      if (files.length > 0) {
-                        armOutgoingEntryAnimation()
-                      }
-                      onDirectFileSelection(files)
-                    }}
-                  />
-                </label>
-                <button
-                  ref={ocrTriggerRef}
-                  type="button"
-                  className={`dd-snaplink__ocr${isOcrPanelOpen ? ' is-active' : ''}`}
-                  aria-label="识别图片文字"
-                  aria-expanded={isOcrPanelOpen}
-                  aria-controls={ocrPanelId}
-                  title="识别图片文字"
-                  onClick={handleOcrTriggerClick}
-                >
-                  <ScanText size={16} strokeWidth={2.1} aria-hidden="true" />
-                </button>
-                <input
-                  ref={ocrFileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  hidden
-                  onChange={handleOcrFileSelection}
-                />
-                <button
-                  ref={botTriggerRef}
-                  type="button"
-                  className={`dd-snaplink__bot${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
-                  aria-label="输入 @DD直连小助手"
-                  aria-expanded={isBotPanelOpen}
-                  aria-haspopup="dialog"
-                  title="输入 @DD直连小助手"
-                  disabled={isAiGenerating}
-                  onClick={handleBotTriggerClick}
-                >
-                  {isAiGenerating ? '...' : '@'}
-                </button>
-                {isBotPanelOpen ? (
-                  <div
-                    ref={botPanelRef}
-                    className="dd-snaplink__bot-panel"
-                    role="dialog"
-                    aria-label="@DD直连小助手 模型选择"
-                  >
-                    <button
-                      type="button"
-                      className="dd-snaplink__bot-option"
-                      onClick={handleBotMentionSelect}
-                    >
-                      <strong>{AI_BOT_MENTION_LABEL}</strong>
-                      <span>{selectedAiModelLabel} · {aiQuotaLabel}</span>
-                    </button>
-                    <label className="dd-snaplink__bot-model">
-                      <span>模型</span>
-                      <select
-                        value={selectedAiModel}
-                        disabled={isAiGenerating || aiModelOptions.length === 0}
-                        onChange={(event) => onAiModelChange(event.target.value)}
-                      >
-                        {aiModelOptions.length > 0 ? (
-                          aiModelOptions.map((model) => (
-                            <option key={getAiModelOptionValue(model)} value={getAiModelOptionValue(model)}>
-                              {model.label}
-                            </option>
-                          ))
-                        ) : (
-                          <option value={selectedAiModel}>{selectedAiModelLabel}</option>
-                        )}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-                <div className="dd-snaplink__input-wrap">
-                  <textarea
-                    ref={inputRef}
-                    defaultValue={plainDraft}
-                    placeholder="输入消息..."
-                    autoComplete="off"
-                    rows={1}
-                    onChange={handleDraftChange}
-                    onCompositionStart={handleDraftCompositionStart}
-                    onCompositionEnd={handleDraftCompositionEnd}
-                    onPaste={handleComposerPaste}
-                    onKeyDown={handleComposerKeyDown}
-                  />
-                  <button
-                    ref={emojiTriggerRef}
-                    type="button"
-                    className={`dd-snaplink__emoji-trigger${isEmojiPickerOpen ? ' is-open' : ''}`}
-                    aria-label="选择 emoji"
-                    aria-expanded={isEmojiPickerOpen}
-                    aria-haspopup="dialog"
-                    title="选择 emoji"
-                    onClick={() => {
-                      setIsBotPanelOpen(false)
-                      setIsThemePanelOpen(false)
-                      botMentionTriggerRangeRef.current = null
-                      setIsEmojiPickerOpen((previous) => !previous)
-                    }}
-                  >
-                    🙂
-                  </button>
-                  {isEmojiPickerOpen ? (
-                    <div
-                      ref={emojiPickerRef}
-                      className="dd-snaplink__emoji-picker"
-                      role="dialog"
-                      aria-label="Emoji 选择器"
-                    >
-                      {snapLinkQuickEmojis.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="dd-snaplink__emoji-item"
-                          onClick={() => handleEmojiInsert(emoji)}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <button type="submit" className="dd-snaplink__send" disabled={isSendDisabled} title="发送">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
-                  </svg>
-                </button>
-              </form>
+              <TransferQueuePanel
+                entries={workbenchTransferEntries}
+                activeCount={workbenchActiveTransferCount}
+                completedCount={workbenchCompletedTransferCount}
+                isMobileOpen={isMobileQueueOpen}
+                incomingNotice={renderIncomingReceiveNotice('compact')}
+                renderTaskCard={renderWorkbenchTransferCard}
+                onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+              />
             </section>
           )}
         </div>
       </main>
       </section>
+      {renderTrustDeviceDialog()}
+      {renderIncomingFileOfferDialog()}
       {isOcrPanelOpen && createPortal(
         <div
           id={ocrPanelId}

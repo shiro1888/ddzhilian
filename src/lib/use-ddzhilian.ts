@@ -21,6 +21,7 @@ import type {
   DirectorySnapshotPayload,
   HistoryFileSummary,
   HistoryTextSummary,
+  IncomingFileOffer,
   LiveSession,
   OcrHistoryResponse,
   OcrJobResponse,
@@ -127,15 +128,29 @@ async function readApiError(response: Response, fallback: string) {
 }
 
 function normalizeApiErrorMessage(message: string) {
-  if (message === 'Missing bearer token.' || message === 'Invalid bearer token.') {
+  const normalizedMessage = message.trim()
+  const normalizedMessageKey = normalizedMessage.toLowerCase()
+
+  if (normalizedMessageKey === 'missing bearer token.' || normalizedMessageKey === 'invalid bearer token.') {
     return HISTORY_AUTH_EXPIRED_MESSAGE
   }
 
-  if (message === 'History file not found.') {
+  if (normalizedMessageKey === 'history file not found.') {
     return HISTORY_FILE_MISSING_MESSAGE
   }
 
-  return message
+  if (
+    normalizedMessageKey === 'the requested session does not exist.' ||
+    normalizedMessageKey.includes('requested session does not exist')
+  ) {
+    return '当前连接会话已失效，请重新选择设备或刷新后重试。'
+  }
+
+  if (normalizedMessageKey.includes('target device') && normalizedMessageKey.includes('not online')) {
+    return '目标设备已离线，请等待对方重新打开 DD直连后再发送。'
+  }
+
+  return normalizedMessage
 }
 
 function getHistoryDownloadErrorFallback(status: number) {
@@ -201,6 +216,7 @@ type IncomingTransferDraft = {
   createdAt: string
   receivedBytes: number
   chunks: Uint8Array[]
+  accepted: boolean
 }
 
 type SystemName = 'windows' | 'android' | 'ios' | 'ipad' | 'mac' | 'linux' | 'web'
@@ -472,6 +488,7 @@ export function useDdzhilian() {
   const [connectionStatesById, setConnectionStatesById] = useState<Record<string, PeerConnectionState>>({})
   const [textRecords, setTextRecords] = useState<TextRecord[]>([])
   const [receivedFiles, setReceivedFiles] = useState<ReceivedFile[]>([])
+  const [pendingIncomingFileOffers, setPendingIncomingFileOffers] = useState<IncomingFileOffer[]>([])
   const [transferItems, setTransferItems] = useState<TransferItem[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastCreatedPublicRoomId, setLastCreatedPublicRoomId] = useState<string | null>(null)
@@ -515,6 +532,7 @@ export function useDdzhilian() {
       string,
       {
         resolve: (value: ChannelMessage & { type: 'file-resume' }) => void
+        reject: (reason?: unknown) => void
         timeoutId: number
       }
     >(),
@@ -713,6 +731,15 @@ export function useDdzhilian() {
   }
 
   const updateTransfer = (transferId: string, patch: Partial<TransferItem>) => {
+    transferItemsRef.current = transferItemsRef.current.map((item) =>
+      item.id === transferId
+        ? {
+            ...item,
+            ...patch,
+          }
+        : item,
+    )
+
     startTransition(() => {
       setTransferItems((previous) =>
         previous.map((item) =>
@@ -754,13 +781,19 @@ export function useDdzhilian() {
     sessionId: string,
     next: Omit<PeerConnectionState, 'sessionId'> & { status: PeerConnectionState['status'] },
   ) => {
+    const nextState: PeerConnectionState = {
+      sessionId,
+      ...next,
+    }
+    connectionStatesRef.current = {
+      ...connectionStatesRef.current,
+      [sessionId]: nextState,
+    }
+
     startTransition(() => {
       setConnectionStatesById((previous) => ({
         ...previous,
-        [sessionId]: {
-          sessionId,
-          ...next,
-        },
+        [sessionId]: nextState,
       }))
     })
   }
@@ -1186,9 +1219,14 @@ export function useDdzhilian() {
     })
   }
 
-  const receiveFileChunk = (transferId: string, index: number, chunk: Uint8Array) => {
+  const receiveFileChunk = (sessionId: string, transferId: string, index: number, chunk: Uint8Array) => {
     const draft = incomingTransfersRef.current.get(transferId)
     if (!draft) {
+      return
+    }
+
+    if (!draft.accepted) {
+      debugLog('ignore file chunk before receiver acceptance', { transferId, index })
       return
     }
 
@@ -1213,9 +1251,21 @@ export function useDdzhilian() {
         ),
       )
     })
+
+    const channel = dataChannelsRef.current.get(sessionId)
+    if (channel && channel.readyState === 'open') {
+      channel.send(
+        JSON.stringify({
+          type: 'file-ack',
+          id: transferId,
+          receivedBytes: Math.min(draft.receivedBytes, draft.size),
+          completed: false,
+        } satisfies ChannelMessage),
+      )
+    }
   }
 
-  const handleBinaryChannelMessage = async (raw: unknown) => {
+  const handleBinaryChannelMessage = async (sessionId: string, raw: unknown) => {
     const buffer = await readBinaryMessageData(raw)
     if (!buffer) {
       return
@@ -1227,7 +1277,7 @@ export function useDdzhilian() {
         return
       }
 
-      receiveFileChunk(decoded.metadata.id, decoded.metadata.index, decoded.chunk)
+      receiveFileChunk(sessionId, decoded.metadata.id, decoded.metadata.index, decoded.chunk)
     } catch (error) {
       debugLog('binary chunk decode failed', error)
     }
@@ -1275,6 +1325,7 @@ export function useDdzhilian() {
 
     if (message.type === 'file-meta') {
       mergeSession(sessionId, { kind: 'file' })
+      const requiresAcceptance = message.requiresAcceptance === true
       const existingDraft = incomingTransfersRef.current.get(message.id)
       const draft =
         existingDraft &&
@@ -1297,9 +1348,40 @@ export function useDdzhilian() {
               createdAt: message.createdAt,
               receivedBytes: 0,
               chunks: [],
+              accepted: !requiresAcceptance,
             }
 
       incomingTransfersRef.current.set(message.id, draft)
+
+      if (requiresAcceptance && !draft.accepted) {
+        const fromDeviceName =
+          sessionsRef.current[sessionId]?.peer?.deviceName ||
+          sessionsRef.current[sessionId]?.peerId ||
+          fromDeviceId
+
+        startTransition(() => {
+          setPendingIncomingFileOffers((previous) => [
+            ...previous.filter((offer) => offer.id !== message.id),
+            {
+              id: message.id,
+              historyId: message.historyId,
+              sessionId,
+              fromDeviceId,
+              fromDeviceName,
+              name: message.name,
+              size: message.size,
+              mimeType: message.mimeType,
+              chunkSize: message.chunkSize,
+              createdAt: message.createdAt,
+            },
+          ])
+        })
+        return
+      }
+
+      startTransition(() => {
+        setPendingIncomingFileOffers((previous) => previous.filter((offer) => offer.id !== message.id))
+      })
 
       startTransition(() => {
         setReceivedFiles((previous) => {
@@ -1338,7 +1420,7 @@ export function useDdzhilian() {
     }
 
     if (message.type === 'file-chunk') {
-      receiveFileChunk(message.id, message.index, base64ToUint8Array(message.data))
+      receiveFileChunk(sessionId, message.id, message.index, base64ToUint8Array(message.data))
       return
     }
 
@@ -1409,6 +1491,26 @@ export function useDdzhilian() {
       return
     }
 
+    if (message.type === 'file-reject') {
+      const waiter = transferResumeWaitersRef.current.get(message.id)
+      if (waiter) {
+        window.clearTimeout(waiter.timeoutId)
+        transferResumeWaitersRef.current.delete(message.id)
+        waiter.reject(new Error(message.reason || '对方已拒绝接收。'))
+      }
+      return
+    }
+
+    if (message.type === 'file-cancel') {
+      incomingTransfersRef.current.delete(message.id)
+
+      startTransition(() => {
+        setPendingIncomingFileOffers((previous) => previous.filter((offer) => offer.id !== message.id))
+        setReceivedFiles((previous) => previous.filter((file) => file.id !== message.id))
+      })
+      return
+    }
+
     if (message.type === 'file-resume') {
       const waiter = transferResumeWaitersRef.current.get(message.id)
       if (waiter) {
@@ -1425,6 +1527,27 @@ export function useDdzhilian() {
         receivedBytes: message.receivedBytes,
         completed: message.completed,
       })
+      const currentTransfer = transferItemsRef.current.find((item) => item.id === message.id)
+      if (
+        currentTransfer &&
+        currentTransfer.status !== 'cancelled' &&
+        currentTransfer.status !== 'failed' &&
+        currentTransfer.status !== 'completed'
+      ) {
+        const acknowledgedBytes = Math.min(Math.max(message.receivedBytes, 0), currentTransfer.fileSize)
+        updateTransfer(message.id, {
+          acknowledgedBytes,
+          progress:
+            currentTransfer.status === 'transferring' && currentTransfer.fileSize > 0
+              ? acknowledgedBytes / currentTransfer.fileSize
+              : 0,
+        })
+      }
+
+      if (!message.completed) {
+        return
+      }
+
       const waiter = transferAckWaitersRef.current.get(message.id)
       if (waiter) {
         window.clearTimeout(waiter.timeoutId)
@@ -1547,7 +1670,7 @@ export function useDdzhilian() {
         return
       }
 
-      void handleBinaryChannelMessage(event.data)
+      void handleBinaryChannelMessage(sessionId, event.data)
     })
   }
 
@@ -1850,7 +1973,7 @@ export function useDdzhilian() {
     }
 
     if (event.type === 'error') {
-      setErrorMessage(event.payload.message)
+      setErrorMessage(normalizeApiErrorMessage(event.payload.message))
     }
   })
 
@@ -2008,7 +2131,17 @@ export function useDdzhilian() {
             ? connectionStatesById[item.sessionId]
             : undefined
           const connectedTarget = item.sessionId
-            ? connected.find((target) => target.sessionId === item.sessionId)
+            ? connected.find((target) => target.sessionId === item.sessionId) ??
+              (item.targetDeviceId
+                ? connected.find((target) => target.peerId === item.targetDeviceId)
+                : undefined)
+            : item.targetDeviceId
+              ? connected.find((target) => target.peerId === item.targetDeviceId)
+              : undefined
+          const connectingTargetState = item.targetDeviceId
+            ? Object.values(connectionStatesById).find(
+                (state) => state.peerId === item.targetDeviceId && state.status === 'connecting',
+              )
             : undefined
 
           if (
@@ -2038,14 +2171,15 @@ export function useDdzhilian() {
             return item
           }
 
-          if (sessionState?.status === 'connecting') {
+          if (sessionState?.status === 'connecting' || connectingTargetState) {
             return {
               ...item,
+              sessionId: sessionState?.sessionId ?? connectingTargetState?.sessionId ?? item.sessionId,
               status: 'connecting',
             }
           }
 
-          if (!item.sessionId && connected.length === 1) {
+          if (!item.sessionId && !item.targetDeviceId && connected.length === 1) {
             return {
               ...item,
               sessionId: connected[0].sessionId,
@@ -2060,7 +2194,7 @@ export function useDdzhilian() {
             return item
           }
 
-          if (!item.sessionId && connected.length > 1) {
+          if (!item.sessionId && !item.targetDeviceId && connected.length > 1) {
             return {
               ...item,
               status: 'queued',
@@ -2079,7 +2213,13 @@ export function useDdzhilian() {
   const createTransferItems = (
     files: File[],
     preferredSessionIds?: string | string[] | null,
-    options?: { archiveHistory?: boolean },
+    options?: {
+      archiveHistory?: boolean
+      preferredPeer?: {
+        peerId: string
+        peerName?: string
+      }
+    },
   ) => {
     const connected = getCurrentConnectedTargets()
     const connectingCount = Object.values(connectionStatesRef.current).filter(
@@ -2090,6 +2230,32 @@ export function useDdzhilian() {
       : preferredSessionIds
         ? [preferredSessionIds]
         : []
+    const preferredPeerTarget = options?.preferredPeer
+      ? (() => {
+          const connectedTarget = connected.find((target) => target.peerId === options.preferredPeer?.peerId)
+          if (connectedTarget) {
+            return connectedTarget
+          }
+
+          const session = Object.values(sessionsRef.current).find(
+            (item) => item.peerId === options.preferredPeer?.peerId || item.peer?.deviceId === options.preferredPeer?.peerId,
+          )
+          const connectionState = Object.values(connectionStatesRef.current).find(
+            (state) => state.peerId === options.preferredPeer?.peerId,
+          )
+
+          return {
+            sessionId: session?.sessionId ?? connectionState?.sessionId,
+            peerId: options.preferredPeer.peerId,
+            peerName:
+              session?.peer?.deviceName ??
+              connectionState?.peerName ??
+              options.preferredPeer.peerName ??
+              options.preferredPeer.peerId,
+            status: connectionState?.status ?? ('closed' as const),
+          }
+        })()
+      : null
     const targetSet =
       preferredIds.length > 0
         ? preferredIds.map((sessionId) => {
@@ -2108,6 +2274,8 @@ export function useDdzhilian() {
                 ('closed' as const),
             }
           })
+        : preferredPeerTarget
+          ? [preferredPeerTarget]
         : connected.length > 0
           ? connected
           : [null]
@@ -2180,6 +2348,36 @@ export function useDdzhilian() {
   }
 
   const cancelTransfer = (transferId: string) => {
+    const transfer = transferItemsRef.current.find((item) => item.id === transferId)
+
+    if (transfer?.sessionId) {
+      const channel = dataChannelsRef.current.get(transfer.sessionId)
+      if (channel && channel.readyState === 'open') {
+        channel.send(
+          JSON.stringify({
+            type: 'file-cancel',
+            id: transferId,
+            reason: '发送方已取消传输。',
+            createdAt: new Date().toISOString(),
+          } satisfies ChannelMessage),
+        )
+      }
+    }
+
+    const resumeWaiter = transferResumeWaitersRef.current.get(transferId)
+    if (resumeWaiter) {
+      window.clearTimeout(resumeWaiter.timeoutId)
+      transferResumeWaitersRef.current.delete(transferId)
+      resumeWaiter.reject(new Error('传输已取消。'))
+    }
+
+    const ackWaiter = transferAckWaitersRef.current.get(transferId)
+    if (ackWaiter) {
+      window.clearTimeout(ackWaiter.timeoutId)
+      transferAckWaitersRef.current.delete(transferId)
+      ackWaiter.reject(new Error('传输已取消。'))
+    }
+
     updateTransfer(transferId, {
       status: 'cancelled',
       errorMessage: undefined,
@@ -2210,8 +2408,13 @@ export function useDdzhilian() {
     const connected = getCurrentConnectedTargets()
     const reuseTarget =
       transfer.sessionId
-        ? connected.find((target) => target.sessionId === transfer.sessionId)
-        : null
+        ? connected.find((target) => target.sessionId === transfer.sessionId) ??
+          (transfer.targetDeviceId
+            ? connected.find((target) => target.peerId === transfer.targetDeviceId)
+            : undefined)
+        : transfer.targetDeviceId
+          ? connected.find((target) => target.peerId === transfer.targetDeviceId)
+          : null
 
     updateTransfer(transferId, {
       status: reuseTarget ? 'ready' : 'waiting_for_target',
@@ -2456,10 +2659,15 @@ export function useDdzhilian() {
     const connectedTargets = getCurrentConnectedTargets()
     const target =
       transfer.sessionId
-        ? connectedTargets.find((item) => item.sessionId === transfer.sessionId)
+        ? connectedTargets.find((item) => item.sessionId === transfer.sessionId) ??
+          (transfer.targetDeviceId
+            ? connectedTargets.find((item) => item.peerId === transfer.targetDeviceId)
+            : undefined)
         : preferredSessionId
           ? connectedTargets.find((item) => item.sessionId === preferredSessionId)
-          : connectedTargets[0]
+          : transfer.targetDeviceId
+            ? connectedTargets.find((item) => item.peerId === transfer.targetDeviceId)
+            : connectedTargets[0]
 
     if (!target) {
       updateTransfer(transferId, {
@@ -2514,18 +2722,20 @@ export function useDdzhilian() {
               mimeType: file.type || undefined,
               chunkSize: CHUNK_SIZE,
               createdAt,
+              requiresAcceptance: true,
             } satisfies ChannelMessage),
           )
         },
       )
       const startIndex = Math.min(Math.max(resume.nextIndex, 0), totalChunks)
       let sentBytes = Math.min(startIndex * CHUNK_SIZE, file.size)
+      const acknowledgedBytes = Math.min(Math.max(resume.receivedBytes, 0), file.size)
 
       updateTransfer(transferId, {
         status: 'transferring',
-        progress: file.size > 0 ? sentBytes / file.size : 0,
+        progress: file.size > 0 ? acknowledgedBytes / file.size : 0,
         sentBytes,
-        acknowledgedBytes: Math.min(resume.receivedBytes, file.size),
+        acknowledgedBytes,
         startedAt: new Date().toISOString(),
         sessionId: target.sessionId,
         targetDeviceId: target.peerId,
@@ -2558,7 +2768,6 @@ export function useDdzhilian() {
         updateTransfer(transferId, {
           status: 'transferring',
           sentBytes,
-          progress: sentBytes / file.size,
         })
         debugLog('bytes sent', { transferId, sentBytes, totalBytes: file.size })
 
@@ -2611,6 +2820,12 @@ export function useDdzhilian() {
         status: ack.completed ? 'completed' : 'failed',
       })
     } catch (error) {
+      const currentTransfer = transferItemsRef.current.find((item) => item.id === transferId)
+      if (currentTransfer?.status === 'cancelled') {
+        debugLog('transfer cancelled before completion', { transferId })
+        return
+      }
+
       updateTransfer(transferId, {
         status: 'failed',
         errorMessage: error instanceof Error ? error.message : '传输失败。',
@@ -2841,25 +3056,95 @@ export function useDdzhilian() {
     transferId: string,
     sendMetadata: () => void,
   ) => {
-    const resumePromise = new Promise<ChannelMessage & { type: 'file-resume' }>((resolve) => {
+    const resumePromise = new Promise<ChannelMessage & { type: 'file-resume' }>((resolve, reject) => {
       const timeoutId = window.setTimeout(() => {
         transferResumeWaitersRef.current.delete(transferId)
-        resolve({
-          type: 'file-resume',
-          id: transferId,
-          receivedBytes: 0,
-          nextIndex: 0,
-        })
-      }, 5_000)
+        reject(new Error('等待对方确认接收超时。'))
+      }, 120_000)
 
       transferResumeWaitersRef.current.set(transferId, {
         resolve,
+        reject,
         timeoutId,
       })
     })
 
     sendMetadata()
     return resumePromise
+  }
+
+  const acceptIncomingFileOffer = (offerId: string) => {
+    const draft = incomingTransfersRef.current.get(offerId)
+    if (!draft) {
+      startTransition(() => {
+        setPendingIncomingFileOffers((previous) => previous.filter((offer) => offer.id !== offerId))
+      })
+      return
+    }
+
+    const acceptedDraft: IncomingTransferDraft = {
+      ...draft,
+      accepted: true,
+    }
+    incomingTransfersRef.current.set(offerId, acceptedDraft)
+
+    startTransition(() => {
+      setPendingIncomingFileOffers((previous) => previous.filter((offer) => offer.id !== offerId))
+      setReceivedFiles((previous) => {
+        const existingFile = previous.find((file) => file.id === offerId)
+        return [
+          ...previous.filter((file) => file.id !== offerId),
+          {
+            id: offerId,
+            historyId: acceptedDraft.historyId,
+            sessionId: acceptedDraft.sessionId,
+            fromDeviceId: acceptedDraft.fromDeviceId,
+            name: acceptedDraft.name,
+            size: acceptedDraft.size,
+            mimeType: acceptedDraft.mimeType,
+            createdAt: acceptedDraft.createdAt,
+            receivedBytes: existingFile?.completed ? acceptedDraft.size : acceptedDraft.receivedBytes,
+            completed: existingFile?.completed ?? false,
+            objectUrl: existingFile?.objectUrl,
+          },
+        ]
+      })
+    })
+
+    const channel = dataChannelsRef.current.get(acceptedDraft.sessionId)
+    if (channel && channel.readyState === 'open') {
+      channel.send(
+        JSON.stringify({
+          type: 'file-resume',
+          id: offerId,
+          receivedBytes: acceptedDraft.receivedBytes,
+          nextIndex: acceptedDraft.chunks.length,
+        } satisfies ChannelMessage),
+      )
+    }
+  }
+
+  const rejectIncomingFileOffer = (offerId: string) => {
+    const draft = incomingTransfersRef.current.get(offerId)
+    const sessionId = draft?.sessionId
+    const channel = sessionId ? dataChannelsRef.current.get(sessionId) : undefined
+
+    if (channel && channel.readyState === 'open') {
+      channel.send(
+        JSON.stringify({
+          type: 'file-reject',
+          id: offerId,
+          reason: '对方已拒绝接收。',
+        } satisfies ChannelMessage),
+      )
+    }
+
+    incomingTransfersRef.current.delete(offerId)
+
+    startTransition(() => {
+      setPendingIncomingFileOffers((previous) => previous.filter((offer) => offer.id !== offerId))
+      setReceivedFiles((previous) => previous.filter((file) => file.id !== offerId))
+    })
   }
 
   const sendText = async (
@@ -3657,7 +3942,7 @@ export function useDdzhilian() {
           createdAt,
         }),
         roomId,
-        targetDeviceName: '服务器中转',
+        targetDeviceName: '公共房间',
         status: 'transferring',
         errorMessage: undefined,
         startedAt: existingTransfer?.startedAt ?? createdAt,
@@ -3763,7 +4048,7 @@ export function useDdzhilian() {
       } catch (error) {
         updateTransfer(historyId, {
           status: 'failed',
-          errorMessage: error instanceof Error ? error.message : '服务器中转上传失败。',
+          errorMessage: error instanceof Error ? error.message : '公共房间文件上传失败。',
         })
         throw error
       } finally {
@@ -3845,6 +4130,7 @@ export function useDdzhilian() {
     transferItems,
     textRecords,
     receivedFiles,
+    pendingIncomingFileOffers,
     historyFiles,
     historyTexts,
     historyTextPaginationByRoomId,
@@ -3865,6 +4151,8 @@ export function useDdzhilian() {
     createTransferItems,
     retryTransfer,
     cancelTransfer,
+    acceptIncomingFileOffer,
+    rejectIncomingFileOffer,
     downloadHistoryFile,
     loadHistoryFileBlob,
     resolveHistoryFileDownloadUrl,

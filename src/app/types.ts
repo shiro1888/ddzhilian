@@ -1,4 +1,5 @@
 import type { DocumentPreviewKind, DocumentPreviewPayload } from '../lib/document-preview'
+import type { TransferStatus } from '../lib/ddzhilian-types'
 
 export type NavView = 'text' | 'chat' | 'image' | 'admin' | 'command'
 export type PeerConnectionStatus = 'connecting' | 'connected' | 'failed' | 'closed'
@@ -19,6 +20,9 @@ export type FileConversationEntry = {
   subtitle: string
   detail: string
   statusLabel: string
+  transferStatus?: TransferStatus
+  transferSpeedLabel?: string
+  transferEtaLabel?: string
   tone: 'pending' | 'active' | 'completed' | 'failed'
   progress: number
   downloadUrl?: string
@@ -39,6 +43,22 @@ export type ComposerImageDraft = {
   size: number
   mimeType?: string
   dataUrl: string
+}
+
+export type AiDraftContextItem = {
+  id: string
+  label: string
+  meta?: string
+}
+
+export type AiDraftContextPayload = {
+  contextLabel?: string
+  contextItems?: AiDraftContextItem[]
+}
+
+export type AiDraftRequest = AiDraftContextPayload & {
+  id: number
+  text: string
 }
 
 export type ConversationNotice = {
@@ -79,6 +99,14 @@ export type UnifiedConversationEntry =
       file: FileConversationEntry
     }
 
+export type RoomListMemberItem = {
+  deviceId: string
+  deviceName: string
+  platform: string
+  online: boolean
+  isSelf: boolean
+}
+
 export type RoomListItem = {
   roomId: string
   title: string
@@ -89,6 +117,7 @@ export type RoomListItem = {
   publicIndex?: number
   memberCount: number
   onlineCount: number
+  members: RoomListMemberItem[]
   status: RoomListStatus
   pinned: boolean
   unreadCount: number
@@ -98,6 +127,8 @@ export type OnlineDeviceListItem = {
   deviceId: string
   deviceName: string
   platform: string
+  shortCode?: string
+  pairToken?: string
   scopeLabel: string
   lastSeenLabel: string
 }

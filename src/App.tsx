@@ -10,8 +10,11 @@ import { WebCommandStage } from './app/components/WebCommandStage'
 import { selectComposerAttachmentFiles, selectComposerImagePasteFiles } from './app/composer-image-paste'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
+  AiDraftContextPayload,
+  AiDraftRequest,
   ComposerImageDraft,
   ConversationNotice,
+  FileConversationEntry,
   NavView,
   RoomListItem,
   UnifiedConversationEntry,
@@ -34,6 +37,7 @@ import type {
   AiModelOption,
   AiQuotaStatus,
   RoomSummary,
+  TransferItem,
 } from './lib/ddzhilian-types'
 import { resolveDocumentPreviewKind } from './lib/document-preview'
 import type { DocumentPreviewSource } from './lib/document-preview'
@@ -115,6 +119,84 @@ type HistoryDownloadProgressState = {
   receivedBytes: number
   totalBytes: number
   progress: number
+}
+
+function formatTransferRate(bytesPerSecond: number) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return null
+  }
+
+  return `${formatFileSize(Math.round(bytesPerSecond))}/s`
+}
+
+function formatTransferEta(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 1) {
+    return '不到 1 秒'
+  }
+
+  if (seconds < 60) {
+    return `${Math.ceil(seconds).toString()} 秒`
+  }
+
+  if (seconds < 3600) {
+    return `${Math.ceil(seconds / 60).toString()} 分钟`
+  }
+
+  return `${Math.ceil(seconds / 3600).toString()} 小时`
+}
+
+function resolveTransferTelemetry(
+  item: Pick<TransferItem, 'status' | 'fileSize' | 'acknowledgedBytes' | 'createdAt' | 'startedAt'>,
+  bytesPerSecond: number | null,
+) {
+  if (item.status !== 'transferring') {
+    return {}
+  }
+
+  const acknowledgedBytes = Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
+
+  if (!bytesPerSecond || !Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0 || acknowledgedBytes <= 0) {
+    return {}
+  }
+
+  const speedLabel = formatTransferRate(bytesPerSecond)
+  if (!speedLabel) {
+    return {}
+  }
+
+  const remainingBytes = Math.max(item.fileSize - acknowledgedBytes, 0)
+  const etaSeconds = remainingBytes / bytesPerSecond
+
+  return {
+    transferSpeedLabel: `速度 ${speedLabel}`,
+    transferEtaLabel: remainingBytes > 0 ? `剩余 ${formatTransferEta(etaSeconds)}` : '即将完成',
+  }
+}
+
+function resolveAcknowledgedTransferProgress(
+  item: Pick<TransferItem, 'status' | 'fileSize' | 'acknowledgedBytes'>,
+) {
+  if (item.status === 'completed') {
+    return 1
+  }
+
+  if (item.status !== 'transferring' && item.status !== 'failed') {
+    return 0
+  }
+
+  if (item.fileSize <= 0) {
+    return 0
+  }
+
+  const acknowledgedBytes = Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
+
+  return acknowledgedBytes / item.fileSize
+}
+
+type TransferTelemetrySample = {
+  acknowledgedBytes: number
+  sampledAt: number
+  bytesPerSecond: number
 }
 
 function extractLinksFromRichText(value: string) {
@@ -316,9 +398,13 @@ function App() {
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
+  const [autoOpenRoomId, setAutoOpenRoomId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [aiGeneratingRoomId, setAiGeneratingRoomId] = useState<string | null>(null)
+  const [aiDraftRequest, setAiDraftRequest] = useState<AiDraftRequest | null>(null)
+  const [commandResultText, setCommandResultText] = useState('')
+  const [workbenchTextRequestId, setWorkbenchTextRequestId] = useState(0)
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
@@ -342,6 +428,8 @@ function App() {
   const joinedRoomLinkRef = useRef<string | null>(null)
   const handledPublicRoomRef = useRef<string | null>(null)
   const handledPrivateRoomRef = useRef<string | null>(null)
+  const suppressNextPrivateRoomAutoOpenRef = useRef(false)
+  const transferTelemetrySamplesRef = useRef<Record<string, TransferTelemetrySample>>({})
 
   const {
     self,
@@ -349,24 +437,31 @@ function App() {
     onlinePeers,
     rooms,
     roomStates,
+    preferences,
     sessions,
     connectionStates,
     connectedTargets,
     transferItems,
     textRecords,
     receivedFiles,
+    pendingIncomingFileOffers,
     historyFiles,
     historyTexts,
     errorMessage,
     lastCreatedPublicRoomId,
     lastCreatedPrivateRoomId,
     joinRoom,
+    createPublicRoom,
     requestConnect,
     updateSettings,
     updateRoomState,
+    updatePreferences,
+    requestSnapshot,
     createTransferItems,
     retryTransfer,
     cancelTransfer,
+    acceptIncomingFileOffer,
+    rejectIncomingFileOffer,
     downloadHistoryFile,
     loadHistoryFileBlob,
     resolveHistoryFileDownloadUrl,
@@ -461,6 +556,7 @@ function App() {
     joinedRoomLinkRef.current = roomId
     joinRoom(roomId)
     setPendingRoomSelectionId(roomId)
+    setAutoOpenRoomId(roomId)
     setLocalError(null)
 
     if (activeView !== 'text') {
@@ -476,6 +572,7 @@ function App() {
     handledPublicRoomRef.current = lastCreatedPublicRoomId
     setPendingRoomSelectionId(lastCreatedPublicRoomId)
     setSelectedRoomId(lastCreatedPublicRoomId)
+    setAutoOpenRoomId(lastCreatedPublicRoomId)
     setLocalError(null)
 
     if (activeView !== 'text') {
@@ -489,8 +586,16 @@ function App() {
     }
 
     handledPrivateRoomRef.current = lastCreatedPrivateRoomId
+
+    if (suppressNextPrivateRoomAutoOpenRef.current) {
+      suppressNextPrivateRoomAutoOpenRef.current = false
+      setLocalError(null)
+      return
+    }
+
     setPendingRoomSelectionId(lastCreatedPrivateRoomId)
     setSelectedRoomId(lastCreatedPrivateRoomId)
+    setAutoOpenRoomId(lastCreatedPrivateRoomId)
     setLocalError(null)
 
     if (activeView !== 'text') {
@@ -530,6 +635,8 @@ function App() {
             deviceId: peer.deviceId,
             deviceName: peer.deviceName,
             platform: peer.platform,
+            shortCode: peer.shortCode,
+            pairToken: peer.pairToken,
             scopeLabel: relationLabels.join(' · ') || '可发现设备',
             lastSeenLabel: formatRelativeTime(peer.lastSeenAt),
           }
@@ -685,6 +792,59 @@ function App() {
     () => transferItems.filter((item) => item.status !== 'cancelled'),
     [transferItems],
   )
+  const transferTelemetryById = useMemo(() => {
+    const now = Date.now()
+    const nextActiveIds = new Set<string>()
+    const nextTelemetryById: Record<string, ReturnType<typeof resolveTransferTelemetry>> = {}
+
+    for (const item of visibleTransferItems) {
+      if (item.status !== 'transferring') {
+        delete transferTelemetrySamplesRef.current[item.id]
+        continue
+      }
+
+      nextActiveIds.add(item.id)
+
+      const acknowledgedBytes = Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
+      const previousSample = transferTelemetrySamplesRef.current[item.id]
+
+      if (!previousSample || acknowledgedBytes < previousSample.acknowledgedBytes) {
+        transferTelemetrySamplesRef.current[item.id] = {
+          acknowledgedBytes,
+          sampledAt: now,
+          bytesPerSecond: 0,
+        }
+        continue
+      }
+
+      let bytesPerSecond = previousSample.bytesPerSecond
+      const deltaBytes = acknowledgedBytes - previousSample.acknowledgedBytes
+      const deltaSeconds = (now - previousSample.sampledAt) / 1000
+
+      if (deltaBytes > 0 && deltaSeconds >= 0.12) {
+        const instantBytesPerSecond = deltaBytes / deltaSeconds
+        bytesPerSecond = previousSample.bytesPerSecond > 0
+          ? previousSample.bytesPerSecond * 0.66 + instantBytesPerSecond * 0.34
+          : instantBytesPerSecond
+
+        transferTelemetrySamplesRef.current[item.id] = {
+          acknowledgedBytes,
+          sampledAt: now,
+          bytesPerSecond,
+        }
+      }
+
+      nextTelemetryById[item.id] = resolveTransferTelemetry(item, bytesPerSecond)
+    }
+
+    for (const id of Object.keys(transferTelemetrySamplesRef.current)) {
+      if (!nextActiveIds.has(id)) {
+        delete transferTelemetrySamplesRef.current[id]
+      }
+    }
+
+    return nextTelemetryById
+  }, [visibleTransferItems])
   const sortedChatRecords = collapseBroadcastTextRecords(
     [...textRecords].sort(
       (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
@@ -800,16 +960,24 @@ function App() {
           .filter((name): name is string => Boolean(name)),
       ),
     ]
+    const startedTimes = items
+      .map((item) => item.startedAt ? new Date(item.startedAt).getTime() : Number.NaN)
+      .filter((time) => Number.isFinite(time))
+    const completedTimes = items
+      .map((item) => item.completedAt ? new Date(item.completedAt).getTime() : Number.NaN)
+      .filter((time) => Number.isFinite(time))
 
     return {
       ...primary,
       status,
+      startedAt: startedTimes.length > 0 ? new Date(Math.min(...startedTimes)).toISOString() : primary.startedAt,
+      completedAt: completedTimes.length > 0 ? new Date(Math.max(...completedTimes)).toISOString() : primary.completedAt,
       sentBytes: Math.max(...items.map((item) => item.sentBytes)),
       acknowledgedBytes: Math.max(...items.map((item) => item.acknowledgedBytes)),
       progress:
         items.length > 1
-          ? Math.min(...items.map((item) => item.progress))
-          : primary.progress,
+          ? Math.min(...items.map(resolveAcknowledgedTransferProgress))
+          : resolveAcknowledgedTransferProgress(primary),
       targetDeviceName:
         targetNames.length > 1
           ? `${targetNames.length} 台设备`
@@ -880,6 +1048,12 @@ function App() {
           })
         : null
 
+      const acknowledgedBytes = item.status === 'completed'
+        ? item.fileSize
+        : Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
+      const transferTelemetry = transferTelemetryById[item.id] ?? {}
+      const transferProgress = resolveAcknowledgedTransferProgress(item)
+
       return {
         id: item.id,
         historyId: item.historyId,
@@ -892,10 +1066,13 @@ function App() {
         mimeType: item.fileMimeType,
         previewUrl: item.previewUrl,
         subtitle: item.targetDeviceName ?? activeTransferLabel,
-        detail: `${formatFileSize(item.sentBytes)} / ${formatFileSize(item.fileSize)}`,
+        detail: `${formatFileSize(acknowledgedBytes)} / ${formatFileSize(item.fileSize)}`,
         statusLabel: transferStatusLabel(item.status),
+        transferStatus: item.status,
+        transferSpeedLabel: transferTelemetry.transferSpeedLabel,
+        transferEtaLabel: transferTelemetry.transferEtaLabel,
         tone: transferStatusTone(item.status),
-        progress: item.progress,
+        progress: transferProgress,
         documentPreviewKind: documentPreviewPayload?.kind,
         documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
         onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
@@ -935,6 +1112,7 @@ function App() {
           ? `${formatFileSize(file.size)} · 已可下载`
           : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
         statusLabel: file.completed ? '已接收' : '接收中',
+        transferStatus: file.completed ? ('completed' as const) : ('transferring' as const),
         tone: file.completed ? ('completed' as const) : ('active' as const),
         progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
         downloadUrl: file.objectUrl,
@@ -967,6 +1145,7 @@ function App() {
           ? `${formatFileSize(downloadProgress.receivedBytes)} / ${formatFileSize(downloadProgress.totalBytes)}`
           : `${formatFileSize(file.size)} · 历史文件`,
         statusLabel: downloadProgress ? '下载中' : '可回放',
+        transferStatus: downloadProgress ? ('transferring' as const) : ('completed' as const),
         tone: downloadProgress ? ('active' as const) : ('completed' as const),
         progress: downloadProgress ? downloadProgress.progress : 1,
         downloadName: file.fileName,
@@ -987,6 +1166,94 @@ function App() {
             })
           : undefined,
         canRecall: file.sourceDeviceId === self?.deviceId || canRecallAnyMessage,
+      }
+    }),
+  ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+
+  const globalTransferEntries: FileConversationEntry[] = [
+    ...visibleTransferItems.map((item) => {
+      const documentPreviewPayload = item.documentPreviewUrl
+        ? buildDocumentPreviewPayload({
+            fileName: item.fileName,
+            mimeType: item.fileMimeType,
+            source: item.documentPreviewUrl,
+            downloadUrl: item.documentPreviewUrl,
+            downloadName: item.fileName,
+          })
+        : null
+      const acknowledgedBytes = item.status === 'completed'
+        ? item.fileSize
+        : Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
+      const transferTelemetry = transferTelemetryById[item.id] ?? {}
+      const transferProgress = resolveAcknowledgedTransferProgress(item)
+
+      return {
+        id: item.id,
+        historyId: item.historyId,
+        sessionId: item.sessionId,
+        kind: 'outgoing' as const,
+        fromSelf: true,
+        createdAt: item.createdAt,
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        mimeType: item.fileMimeType,
+        previewUrl: item.previewUrl,
+        subtitle: item.targetDeviceName ?? '目标设备',
+        detail: `${formatFileSize(acknowledgedBytes)} / ${formatFileSize(item.fileSize)}`,
+        statusLabel: transferStatusLabel(item.status),
+        transferStatus: item.status,
+        transferSpeedLabel: transferTelemetry.transferSpeedLabel,
+        transferEtaLabel: transferTelemetry.transferEtaLabel,
+        tone: transferStatusTone(item.status),
+        progress: transferProgress,
+        documentPreviewKind: documentPreviewPayload?.kind,
+        documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
+        onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
+        action:
+          item.status === 'failed'
+            ? ('retry' as const)
+            : item.status !== 'completed'
+              ? ('cancel' as const)
+              : undefined,
+        canRecall: item.status === 'completed',
+      }
+    }),
+    ...receivedFiles.map((file) => {
+      const documentPreviewPayload = file.completed && file.objectUrl
+        ? buildDocumentPreviewPayload({
+            fileName: file.name,
+            mimeType: file.mimeType,
+            source: file.objectUrl,
+            downloadUrl: file.objectUrl,
+            downloadName: file.name,
+          })
+        : null
+
+      return {
+        id: `incoming-${file.id}`,
+        historyId: file.historyId,
+        sessionId: file.sessionId,
+        kind: 'incoming' as const,
+        fromSelf: false,
+        createdAt: file.createdAt,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.mimeType,
+        previewUrl: file.completed && isPreviewableMediaType(file.mimeType) ? file.objectUrl : undefined,
+        subtitle: sessionPeerNameById.get(file.sessionId) ?? '对方设备',
+        detail: file.completed
+          ? `${formatFileSize(file.size)} · 已可下载`
+          : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
+        statusLabel: file.completed ? '已接收' : '接收中',
+        transferStatus: file.completed ? ('completed' as const) : ('transferring' as const),
+        tone: file.completed ? ('completed' as const) : ('active' as const),
+        progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
+        downloadUrl: file.objectUrl,
+        downloadName: file.name,
+        documentPreviewKind: documentPreviewPayload?.kind,
+        documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
+        onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
+        canRecall: Boolean(file.historyId && canRecallAnyMessage),
       }
     }),
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
@@ -1050,10 +1317,10 @@ function App() {
       ? isSelectedBotRoom
         ? '这里是和 DD直连小助手的私密聊天，不会出现在世界对话。'
         : selectedRoom.isPublic
-        ? '世界对话的文件会通过服务器中转保存。'
+        ? '公共房间适合多人共享文本，也可以从这里发起文件任务。'
         : selectedConnectedTarget
         ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedConversationName} 建立直连，发送的文件会先保存到当前对话。`
+        : `还没有与 ${selectedConversationName} 建立直连，发送文件前会先等待设备连接。`
       : '选择一个已有对话后，消息和文件会显示在这里。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
@@ -1250,6 +1517,13 @@ function App() {
         publicIndex: room.publicIndex,
         memberCount: room.members.length,
         onlineCount,
+        members: room.members.map((member) => ({
+          deviceId: member.deviceId,
+          deviceName: deviceNameById.get(member.deviceId) ?? member.deviceName,
+          platform: member.platform,
+          online: member.online,
+          isSelf: member.deviceId === self?.deviceId,
+        })),
         status,
         pinned: roomState?.pinned ?? false,
         unreadCount,
@@ -1348,6 +1622,42 @@ function App() {
     })
   }
 
+  const handleShareCommandResult = (text = commandResultText) => {
+    const normalizedText = text.trim()
+    if (!normalizedText) {
+      setLocalError('先运行命令，生成可发送的结果。')
+      handleViewChange('command')
+      return
+    }
+
+    setChatDraft((current) => {
+      const currentText = current.trim()
+      const resultText = `命令运行结果\n\n${normalizedText}`
+      return currentText ? `${current.trimEnd()}\n\n${resultText}` : resultText
+    })
+    setLocalError(null)
+    setWorkbenchTextRequestId((current) => current + 1)
+    handleViewChange('text')
+  }
+
+  const handlePrepareAiDraft = (text: string, context?: AiDraftContextPayload) => {
+    const normalizedText = text.trim()
+    if (!normalizedText) {
+      setLocalError('没有可发送给 AI 的上下文。')
+      handleViewChange('chat')
+      return
+    }
+
+    setAiDraftRequest({
+      id: Date.now(),
+      text: normalizedText,
+      contextLabel: context?.contextLabel,
+      contextItems: context?.contextItems,
+    })
+    setLocalError(null)
+    handleViewChange('chat')
+  }
+
   const handleSendFilesToCurrentConversation = async (
     files: File[],
     options: { preserveLocalError?: boolean } = {},
@@ -1396,6 +1706,51 @@ function App() {
       if (!options.preserveLocalError) {
         setLocalError(null)
       }
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '文件发送失败。')
+    }
+  }
+
+  const handleSendFilesToDevice = async (deviceId: string, files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+
+    const targetPeer = onlinePeers.find((peer) => peer.deviceId === deviceId)
+    const peerName = targetPeer?.deviceName ?? deviceNameById.get(deviceId) ?? deviceId
+    const targetSessions = connectedTargets
+      .filter((target) => target.peerId === deviceId)
+      .map((target) => target.session.sessionId)
+
+    try {
+      setIsDragging(false)
+      setSelectedPeerId(deviceId)
+      setSelectedRoomId(null)
+      setLocalError(null)
+
+      if (targetSessions.length === 0) {
+        suppressNextPrivateRoomAutoOpenRef.current = true
+        requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
+        window.setTimeout(() => {
+          suppressNextPrivateRoomAutoOpenRef.current = false
+        }, 10_000)
+      }
+
+      const created = createTransferItems(
+        files,
+        targetSessions.length > 0 ? targetSessions : null,
+        {
+          archiveHistory: false,
+          preferredPeer: {
+            peerId: deviceId,
+            peerName,
+          },
+        },
+      )
+      await startPendingTransfers(
+        created.map((item) => item.id),
+        targetSessions[0] ?? null,
+      )
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : '文件发送失败。')
     }
@@ -1669,6 +2024,24 @@ function App() {
     requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
   }
 
+  const handleCreatePublicRoom = () => {
+    createPublicRoom()
+    setLocalError(null)
+  }
+
+  const handleJoinRoomFromWorkbench = (roomId: string) => {
+    const normalizedRoomId = roomId.trim().toUpperCase()
+    if (!normalizedRoomId) {
+      setLocalError('请输入房间短码。')
+      return
+    }
+
+    joinRoom(normalizedRoomId)
+    setPendingRoomSelectionId(normalizedRoomId)
+    setAutoOpenRoomId(normalizedRoomId)
+    setLocalError(null)
+  }
+
   const handleDeviceNameChange = (deviceName: string) => {
     const normalizedName = deviceName.trim().slice(0, 80)
     if (!normalizedName) {
@@ -1714,6 +2087,7 @@ function App() {
       onSaveConversations={saveAiChatConversations}
       onDeleteConversationRemote={deleteAiChatConversation}
       onQuotaStatusChange={setAiQuotaStatus}
+      draftRequest={aiDraftRequest}
     />
   )
 
@@ -1728,7 +2102,12 @@ function App() {
     />
   ) : imageAuthGateElement
 
-  const webCommandElement = <WebCommandStage />
+  const webCommandElement = (
+    <WebCommandStage
+      onResultTextChange={setCommandResultText}
+      onShareResult={handleShareCommandResult}
+    />
+  )
 
   const snapLinkStageElement = (
     <SnapLinkStage
@@ -1736,9 +2115,17 @@ function App() {
       activeView={isAdminView ? 'admin' : isImageView ? 'image' : isCommandView ? 'command' : isAiChatView ? 'ai-chat' : 'conversation'}
       deviceId={self?.deviceId ?? localIdentity.deviceId}
       deviceName={selfName}
+      devicePlatform={self?.platform ?? localIdentity.platform}
+      deviceShortCode={self?.shortCode}
+      deviceSettings={{
+        autoConnect: self?.autoConnect ?? localIdentity.autoConnect,
+        discoverable: self?.discoverable ?? localIdentity.discoverable,
+        allowShortCode: self?.allowShortCode ?? localIdentity.allowShortCode,
+      }}
+      devicePreferences={preferences}
       accountId={self?.accountId ?? localIdentity.accountId}
       selectedRoomId={effectiveSelectedRoomId}
-      autoOpenRoomId={lastCreatedPrivateRoomId}
+      autoOpenRoomId={autoOpenRoomId}
       selectedConversationName={selectedConversationName}
       activeTransferLabel={activeTransferLabel}
       roomListItems={roomListItems}
@@ -1758,21 +2145,36 @@ function App() {
       selectedAiModelLabel={selectedAiModelLabel}
       unifiedConversationEntries={unifiedConversationEntries}
       fileConversationEmptyState={fileConversationEmptyState}
+      globalTransferEntries={globalTransferEntries}
       sharedMediaEntries={sharedMediaEntries}
       sharedFileEntries={sharedFileEntries}
       sharedLinkEntries={sharedLinkEntries}
+      historyFiles={historyFiles}
+      historyTexts={historyTexts}
+      pendingIncomingFileOffers={pendingIncomingFileOffers}
       localError={localError}
       errorMessage={errorMessage}
       aiChatElement={aiChatElement}
       imageElement={imageGenerationElement}
       adminElement={adminRouteElement}
       commandElement={webCommandElement}
+      commandResultText={commandResultText}
+      workbenchTextRequestId={workbenchTextRequestId}
+      onCreatePublicRoom={handleCreatePublicRoom}
+      onJoinRoom={handleJoinRoomFromWorkbench}
       onOpenRoomConversation={handleOpenRoomConversation}
+      onUpdateRoomState={updateRoomState}
       onStartPrivateChat={handleStartPrivateChat}
       onDeviceNameChange={handleDeviceNameChange}
+      onDeviceSettingsChange={updateSettings}
+      onDevicePreferencesChange={updatePreferences}
+      onRequestSnapshot={requestSnapshot}
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
+      onOpenImageView={() => handleViewChange('image')}
       onOpenCommandView={() => handleViewChange('command')}
+      onShareCommandResult={handleShareCommandResult}
+      onPrepareAiDraft={handlePrepareAiDraft}
       onChatDraftChange={setChatDraft}
       onAiModelChange={setSelectedAiModel}
       onPastedImageSelection={(files) => {
@@ -1784,6 +2186,10 @@ function App() {
       onDirectFileSelection={(files) => {
         void handleAttachFilesToCurrentConversation(files)
       }}
+      onDirectFileSelectionForDevice={(deviceId, files) => {
+        void handleSendFilesToDevice(deviceId, files)
+      }}
+      onDownloadHistoryFile={handleHistoryFileDownload}
       onStartOcrJob={startOcrJob}
       onListOcrHistory={listOcrHistory}
       onDeleteOcrHistory={deleteOcrHistory}
@@ -1796,6 +2202,8 @@ function App() {
       canRecallAnyMessage={canRecallAnyMessage}
       onRetryTransfer={retryTransfer}
       onCancelTransfer={cancelTransfer}
+      onAcceptIncomingFileOffer={acceptIncomingFileOffer}
+      onRejectIncomingFileOffer={rejectIncomingFileOffer}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

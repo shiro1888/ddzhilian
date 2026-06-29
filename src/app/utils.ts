@@ -15,11 +15,11 @@ export function transferStatusLabel(
     case 'queued':
       return '等待开始'
     case 'waiting_for_target':
-      return '等待已连接设备'
+      return '等待设备'
     case 'connecting':
-      return '正在建立连接'
+      return '正在建立直连'
     case 'ready':
-      return '准备发送'
+      return '等待对方确认'
     case 'transferring':
       return '正在发送'
     case 'completed':

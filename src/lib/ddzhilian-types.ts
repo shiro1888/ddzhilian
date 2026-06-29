@@ -284,6 +284,7 @@ export type ChannelMessage =
       mimeType?: string
       chunkSize: number
       createdAt: string
+      requiresAcceptance?: boolean
     }
   | {
       type: 'file-chunk'
@@ -299,6 +300,8 @@ export type ChannelMessage =
       total: number
     }
   | { type: 'file-resume'; id: string; receivedBytes: number; nextIndex: number }
+  | { type: 'file-reject'; id: string; reason?: string }
+  | { type: 'file-cancel'; id: string; reason?: string; createdAt?: string }
   | { type: 'file-complete'; id: string }
   | { type: 'file-ack'; id: string; receivedBytes: number; completed: boolean }
 
@@ -860,4 +863,17 @@ export type ReceivedFile = {
   receivedBytes: number
   completed: boolean
   objectUrl?: string
+}
+
+export type IncomingFileOffer = {
+  id: string
+  historyId?: string
+  sessionId: string
+  fromDeviceId: string
+  fromDeviceName?: string
+  name: string
+  size: number
+  mimeType?: string
+  chunkSize: number
+  createdAt: string
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Loader2, Play, RotateCcw, Trash2 } from 'lucide-react'
+import { Copy, Loader2, Play, RotateCcw, Send, Trash2 } from 'lucide-react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import {
@@ -21,6 +21,12 @@ const languageLabels: Record<WebCommandLanguage, string> = {
 
 const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c', 'plantuml']
 const plantUmlAutoRenderDelayMs = 5000
+type WebCommandMobilePane = 'source' | 'terminal' | 'result'
+
+type WebCommandStageProps = {
+  onResultTextChange?: (text: string) => void
+  onShareResult?: (text: string) => void
+}
 
 function getCopyDefaultLabel(language: WebCommandLanguage) {
   return language === 'plantuml' ? '复制图片' : '复制结果'
@@ -232,13 +238,14 @@ function createWebCommandErrorResult({
   }
 }
 
-export function WebCommandStage() {
+export function WebCommandStage({ onResultTextChange, onShareResult }: WebCommandStageProps) {
   const [language, setLanguage] = useState<WebCommandLanguage>('python')
   const [source, setSource] = useState(webCommandDefaultSources.python)
   const [stdin, setStdin] = useState('')
   const [result, setResult] = useState<WebCommandRunResult | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [copyLabel, setCopyLabel] = useState(getCopyDefaultLabel('python'))
+  const [mobilePane, setMobilePane] = useState<WebCommandMobilePane>('source')
   const terminalHostRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -278,6 +285,11 @@ export function WebCommandStage() {
 
     return outputBlocks.length > 0 ? outputBlocks.join('\n') : '无输出。'
   }, [isRunning, result])
+  const shareableResultText = result && !isRunning ? resultOutput.trim() : ''
+
+  useEffect(() => {
+    onResultTextChange?.(shareableResultText)
+  }, [onResultTextChange, shareableResultText])
 
   const resultStatus = useMemo(() => {
     if (!result) {
@@ -333,6 +345,7 @@ export function WebCommandStage() {
     if (currentLanguage === 'plantuml') {
       lastRenderedPlantUmlSourceRef.current = currentSource
     }
+    setMobilePane('terminal')
     setIsRunning(true)
 
     void (async () => {
@@ -382,6 +395,7 @@ export function WebCommandStage() {
     setResult(null)
     setIsRunning(false)
     setCopyLabel(getCopyDefaultLabel(nextLanguage))
+    setMobilePane('source')
   }, [])
 
   const resetCopyLabelSoon = useCallback((targetLanguage: WebCommandLanguage) => {
@@ -458,6 +472,20 @@ export function WebCommandStage() {
     }
   }, [language])
 
+  useEffect(() => {
+    if (mobilePane !== 'terminal') {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      try {
+        fitAddonRef.current?.fit()
+      } catch {
+        // The terminal may still be hidden during a responsive pane switch.
+      }
+    })
+  }, [mobilePane])
+
   const handleLanguageChange = (nextLanguage: WebCommandLanguage) => {
     switchLanguage(nextLanguage)
   }
@@ -516,16 +544,39 @@ export function WebCommandStage() {
       })
   }
 
+  const handleShareResult = () => {
+    if (!shareableResultText) {
+      setCopyLabel('先运行')
+      resetCopyLabelSoon(languageRef.current)
+      return
+    }
+
+    onShareResult?.(shareableResultText)
+  }
+
+  const sandboxLabel = language === 'java' || language === 'plantuml' ? 'Docker 沙箱' : '浏览器沙箱'
+  const sandboxDescription = language === 'java'
+    ? 'Java 代码通过后端 Docker 沙箱执行，支持标准输入。'
+    : language === 'plantuml'
+      ? 'PlantUML 通过后端沙箱渲染为 PNG 图片，停止输入后会自动预览。'
+      : `${languageLabels[language]} 在浏览器沙箱中运行，结果只显示在当前页面。`
+  const runState = isRunning ? 'running' : result ? (result.ok ? 'success' : 'failed') : 'idle'
+  const runStateLabel = isRunning ? '运行中' : result ? (result.ok ? '运行成功' : '运行失败') : '待运行'
+  const sourceLineCount = source.split(/\r?\n/).length
+  const mobileTerminalLabel = isPlantUmlMode ? '预览' : '终端'
+
   return (
-    <section className="dd-web-command" aria-label="Web 命令行">
+    <section className={`dd-web-command is-${runState} is-mobile-${mobilePane}${isPlantUmlMode ? ' is-plantuml' : ''}`} aria-label="Web 命令行">
       <header className="dd-web-command__head">
         <div>
           <span className="dd-web-command__eyebrow">
-            {language === 'java' || language === 'plantuml' ? 'Docker 沙箱' : '浏览器沙箱'}
+            {sandboxLabel}
           </span>
-          <h1>Web 命令行</h1>
+          <h1>命令行</h1>
+          <p>{sandboxDescription}</p>
         </div>
         <div className="dd-web-command__head-actions">
+          <span className={`dd-web-command__run-state is-${runState}`}>{runStateLabel}</span>
           <label>
             <span>语言</span>
             <select
@@ -554,6 +605,55 @@ export function WebCommandStage() {
           </button>
         </div>
       </header>
+
+      <div className="dd-web-command__safety-strip" aria-label="命令行运行范围">
+        <span>
+          <strong>运行环境</strong>
+          {sandboxLabel}
+        </span>
+        <span>
+          <strong>输出范围</strong>
+          结果只留在本页
+        </span>
+        <span>
+          <strong>传输联动</strong>
+          复制后可发送给附近设备
+        </span>
+      </div>
+
+      <div className="dd-web-command__status-strip" aria-label="运行状态">
+        <span>语言：{languageLabels[language]}</span>
+        <span>源码：{sourceLineCount.toString()} 行 · {source.length.toString()} 字符</span>
+        <span>状态：{resultStatus}</span>
+        <span>{language === 'java' ? `stdin：${stdin.length.toString()} 字符` : '本页运行结果不会写入文件'}</span>
+      </div>
+
+      <nav className="dd-web-command__mobile-tabs" aria-label="命令行移动端面板">
+        <button
+          type="button"
+          className={mobilePane === 'source' ? 'is-active' : ''}
+          aria-pressed={mobilePane === 'source'}
+          onClick={() => setMobilePane('source')}
+        >
+          代码
+        </button>
+        <button
+          type="button"
+          className={mobilePane === 'terminal' ? 'is-active' : ''}
+          aria-pressed={mobilePane === 'terminal'}
+          onClick={() => setMobilePane('terminal')}
+        >
+          {mobileTerminalLabel}
+        </button>
+        <button
+          type="button"
+          className={mobilePane === 'result' ? 'is-active' : ''}
+          aria-pressed={mobilePane === 'result'}
+          onClick={() => setMobilePane('result')}
+        >
+          输出
+        </button>
+      </nav>
 
       <div className="dd-web-command__workspace">
         <section
@@ -605,6 +705,10 @@ export function WebCommandStage() {
                     <Copy size={14} aria-hidden="true" />
                     {copyLabel}
                   </button>
+                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
+                    <Send size={14} aria-hidden="true" />
+                    发送结果
+                  </button>
                 </div>
               </div>
               <div className="dd-web-command__plantuml-viewer" aria-live="polite">
@@ -633,14 +737,28 @@ export function WebCommandStage() {
                     <Copy size={14} aria-hidden="true" />
                     {copyLabel}
                   </button>
+                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
+                    <Send size={14} aria-hidden="true" />
+                    发送结果
+                  </button>
                 </div>
               </div>
               <div ref={terminalHostRef} className="dd-web-command__terminal" />
               <div className="dd-web-command__result-head">
                 <strong>输出结果</strong>
-                <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
-                  {resultStatus}
-                </span>
+                <div className="dd-web-command__result-actions">
+                  <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
+                    {resultStatus}
+                  </span>
+                  <button type="button" onClick={handleCopyResult}>
+                    <Copy size={14} aria-hidden="true" />
+                    {copyLabel}
+                  </button>
+                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
+                    <Send size={14} aria-hidden="true" />
+                    发送结果
+                  </button>
+                </div>
               </div>
               <div className="dd-web-command__result-area">
                 <pre className="dd-web-command__result">{resultOutput}</pre>

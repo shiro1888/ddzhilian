@@ -8,7 +8,6 @@ import {
   LogOut,
   MoonStar,
   ShieldCheck,
-  Sparkles,
   SunMedium,
 } from 'lucide-react'
 import { useAdminV2Session } from '@/admin-v2/session'
@@ -123,8 +122,8 @@ function AdminV2Sidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" isActive={pathname === ADMIN_V2_DASHBOARD_PATH}>
               <Link href={ADMIN_V2_DASHBOARD_PATH} prefetch={false}>
-                <Sparkles />
-                <span>ddzhilian Admin V2</span>
+                <ShieldCheck />
+                <span>DD直连管理台</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -197,7 +196,7 @@ function AdminV2ShellChrome({
       defaultOpen={false}
       style={{
         '--sidebar-width': '17rem',
-        '--sidebar-width-icon': '33px',
+        '--sidebar-width-icon': '36px',
       } as CSSProperties}
     >
       <AdminV2Sidebar />

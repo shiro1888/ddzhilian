@@ -19,7 +19,6 @@ import type { LucideIcon } from 'lucide-react'
 import type { AdminStateResponse } from '@/lib/ddzhilian-types'
 import {
   ADMIN_V2_DASHBOARD_PATH,
-  ADMIN_V2_BASE_PATH,
   ADMIN_V2_LOGIN_PATH,
   ADMIN_V2_SECTION_META,
   type AdminV2Section,
@@ -389,10 +388,13 @@ export function AdminV2LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Badge>Phase 2</Badge>
-            <Badge variant="outline">{ADMIN_V2_BASE_PATH}</Badge>
+            <Badge>DD直连</Badge>
+            <Badge variant="outline">管理台</Badge>
           </div>
-          <CardTitle className="mt-3 text-2xl">全新独立管理台</CardTitle>
+          <CardTitle className="mt-3 text-2xl">DD直连管理台</CardTitle>
+          <CardDescription>
+            管理模型、供应商、在线设备和用户额度。
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">

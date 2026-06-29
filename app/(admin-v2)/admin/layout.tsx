@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { AdminV2Providers } from '@/admin-v2/providers'
 
 export const metadata: Metadata = {
-  title: '管理后台 V2 | ddzhilian',
+  title: 'DD直连管理台',
 }
 
 export default function AdminLayout({

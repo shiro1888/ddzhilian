@@ -1,28 +1,20 @@
-import { Geist, Geist_Mono } from 'next/font/google'
-
-const geist = Geist({
-  subsets: ['latin'],
-  variable: '--font-geist',
-})
-
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-geist-mono',
-})
+const systemFontVariables = 'dd-admin-font-vars'
 
 export const fontRegistry = {
   geist: {
     label: 'Geist',
-    font: geist,
+    font: {
+      variable: systemFontVariables,
+    },
   },
   geistMono: {
     label: 'Geist Mono',
-    font: geistMono,
+    font: {
+      variable: systemFontVariables,
+    },
   },
 } as const
 
 export type FontKey = keyof typeof fontRegistry
 
-export const fontVars = Object.values(fontRegistry)
-  .map((entry) => entry.font.variable)
-  .join(' ')
+export const fontVars = systemFontVariables

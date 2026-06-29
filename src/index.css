@@ -102,6 +102,57 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root.dark,
+:root[data-theme-mode="dark"] {
+  --ink: #f2f2f3;
+  --ink-soft: #a8a8ad;
+  --muted: #7f7f86;
+  --brand: #2fd574;
+  --brand-strong: #24bf66;
+  --focus: rgba(47, 213, 116, 0.32);
+  --success: #2fd574;
+  --success-soft: rgba(47, 213, 116, 0.14);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.16);
+  --warning: #ffb454;
+  --link: #7e9cd8;
+
+  --shell-bg: #1b1b1d;
+  --sidebar-bg: #161617;
+  --sidebar-border: #35353b;
+  --sidebar-border-soft: #2d2d33;
+  --surface: #2b2b2f;
+  --surface-strong: #323237;
+  --surface-elevated: #303035;
+  --surface-soft: #242427;
+  --panel-bg: #242427;
+  --panel-muted: #242427;
+  --panel-muted-soft: #202023;
+  --stage-bg: #1b1b1d;
+  --line: #35353b;
+  --line-soft: #2d2d33;
+  --line-strong: #44444b;
+  --row-hover: #323237;
+  --row-active: #3a3a41;
+  --row-active-strong: #44444b;
+  --row-tint: #252529;
+  --input-border: #45454d;
+  --input-border-soft: #393941;
+  --input-bg: #202023;
+  --button-primary-bg: #2fd574;
+  --button-secondary-bg: #2f2f35;
+  --button-neutral-bg: #28282d;
+  --button-contrast: #101012;
+  --badge-neutral-bg: #303035;
+  --badge-neutral-text: #b4b4ba;
+  --badge-pending-bg: rgba(47, 213, 116, 0.14);
+  --badge-pending-text: #2fd574;
+  --bubble-self: #3f6f33;
+  --bubble-self-text: #f2f2f3;
+  --bubble-peer: #2b2b2f;
+  --bubble-peer-text: #f2f2f3;
+}
+
 html {
   scroll-behavior: smooth;
 }
