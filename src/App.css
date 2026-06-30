@@ -9080,6 +9080,7 @@
 }
 
 .dd-snaplink__rail-nav button,
+.dd-snaplink__rail-tool,
 .dd-snaplink__rail-settings {
   display: grid;
   place-items: center;
@@ -9100,18 +9101,21 @@
 }
 
 .dd-snaplink__rail-nav button:hover,
+.dd-snaplink__rail-tool:hover,
 .dd-snaplink__rail-settings:hover {
   background: #e6e6e6;
   color: var(--snap-ink-soft);
 }
 
 .dd-snaplink__rail-nav button:focus-visible,
+.dd-snaplink__rail-tool:focus-visible,
 .dd-snaplink__rail-settings:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--snap-green) 42%, transparent);
   outline-offset: 2px;
 }
 
 .dd-snaplink__rail-nav button.is-active,
+.dd-snaplink__rail-tool.is-active,
 .dd-snaplink__rail-settings.is-active {
   background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
   color: #07a152;
@@ -9122,6 +9126,129 @@
   height: 1px;
   margin: 3px 0;
   background: var(--snap-border-soft);
+}
+
+.dd-snaplink__rail-tool-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.dd-snaplink__rail-tool-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.dd-snaplink__rail-tool-menu {
+  position: absolute;
+  top: 50%;
+  left: 62px;
+  z-index: 29;
+  display: grid;
+  gap: 4px;
+  width: 252px;
+  padding: 8px;
+  border: 1px solid var(--snap-border);
+  border-radius: 12px;
+  background: var(--snap-surface);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  transform: translateY(-50%);
+}
+
+.dd-snaplink__rail-tool-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px 8px;
+}
+
+.dd-snaplink__rail-tool-menu-head strong {
+  color: var(--snap-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dd-snaplink__rail-tool-menu-head small {
+  color: var(--snap-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.dd-snaplink__rail-tool-menu button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--snap-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-snaplink__rail-tool-menu button:hover,
+.dd-snaplink__rail-tool-menu button.is-current {
+  background: var(--snap-panel);
+}
+
+.dd-snaplink__rail-tool-menu button > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dd-snaplink__rail-tool-menu button > span.is-ai {
+  background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
+  color: var(--snap-green);
+}
+
+.dd-snaplink__rail-tool-menu button > span.is-image {
+  background: #eef1f6;
+  color: var(--snap-blue);
+}
+
+.dd-snaplink__rail-tool-menu button > span.is-command {
+  background: rgba(250, 157, 59, 0.14);
+  color: #a86417;
+}
+
+.dd-snaplink__rail-tool-menu em {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-style: normal;
+}
+
+.dd-snaplink__rail-tool-menu em strong {
+  overflow: hidden;
+  color: var(--snap-ink);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__rail-tool-menu em small {
+  overflow: hidden;
+  color: var(--snap-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dd-snaplink__rail-settings {
@@ -9830,7 +9957,7 @@
 .dd-snaplink__workbench-room:has(.dd-snaplink__workbench-room-pin:focus-visible) {
   border-color: color-mix(in srgb, var(--snap-green) 42%, var(--snap-border));
   background: color-mix(in srgb, var(--snap-green) 5%, #ffffff);
-  transform: translateY(-1px);
+  transform: none;
   outline: none;
 }
 
@@ -10019,7 +10146,8 @@
 
 .dd-snaplink__workbench-transfer-board {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  grid-auto-rows: auto;
   gap: 14px;
   min-width: 0;
   padding: 18px;
@@ -10033,6 +10161,79 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   min-width: 0;
+}
+
+.dd-snaplink__transfer-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--snap-border-soft) 82%, var(--snap-green) 18%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--snap-panel) 82%, #ffffff 18%);
+  overflow: visible;
+}
+
+.dd-snaplink__transfer-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--snap-ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.dd-snaplink__transfer-tabs button:hover {
+  border-color: color-mix(in srgb, var(--snap-green) 26%, var(--snap-border));
+  background: color-mix(in srgb, var(--snap-green) 5%, #ffffff);
+  color: var(--snap-ink);
+  transform: translateY(-1px);
+}
+
+.dd-snaplink__transfer-tabs button.is-active {
+  border-color: color-mix(in srgb, var(--snap-green) 36%, var(--snap-border));
+  background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
+  color: var(--snap-green);
+  box-shadow: 0 6px 14px rgba(7, 193, 96, 0.12);
+}
+
+.dd-snaplink__transfer-tabs em {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: var(--snap-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.dd-snaplink__transfer-tabs button.is-active em {
+  background: #ffffff;
+  color: var(--snap-green);
 }
 
 .dd-snaplink__transfer-status-guide span {
@@ -10084,6 +10285,23 @@
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
+}
+
+.dd-snaplink__transfer-history-tab {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dd-snaplink__transfer-history-tab > .dd-snaplink__workbench-page {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.dd-snaplink__transfer-history-tab .dd-snaplink__workbench-page.is-embedded {
+  gap: 12px;
 }
 
 .dd-snaplink__workbench-room-empty.is-transfer-empty {
@@ -12360,7 +12578,7 @@
   .dd-snaplink__mobile-workbench-nav {
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     gap: 4px;
     width: 100%;
@@ -12402,9 +12620,68 @@
     outline-offset: 2px;
   }
 
+  .dd-snaplink__mobile-more-wrap {
+    position: relative;
+    display: block;
+    z-index: 58;
+    min-width: 0;
+  }
+
+  .dd-snaplink__mobile-more-wrap > button {
+    width: 100%;
+  }
+
+  .dd-snaplink__mobile-more-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    display: grid;
+    gap: 5px;
+    width: min(220px, calc(100vw - 24px));
+    padding: 8px;
+    border: 1px solid var(--snap-border);
+    border-radius: 12px;
+    background: var(--snap-surface);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+  }
+
+  .dd-snaplink__mobile-more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(15, 23, 42, 0.08);
+    cursor: default;
+  }
+
+  .dd-snaplink__mobile-more-menu button {
+    justify-content: flex-start;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--snap-ink-soft);
+    font-size: 12px;
+    font-weight: 800;
+    text-align: left;
+  }
+
+  .dd-snaplink__mobile-more-menu button:hover,
+  .dd-snaplink__mobile-more-menu button.is-current {
+    background: var(--snap-panel);
+    color: var(--snap-green);
+  }
+
   @media (max-width: 480px) {
     .dd-snaplink__mobile-workbench-nav {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 5px;
       min-height: auto;
       padding: 8px 10px;
@@ -12412,8 +12689,8 @@
 
     .dd-snaplink__mobile-workbench-nav button {
       min-height: 32px;
-      padding: 0 3px;
-      font-size: 10.5px;
+      padding: 0 2px;
+      font-size: 10px;
     }
   }
 
@@ -12531,6 +12808,17 @@
 
   .dd-snaplink__transfer-status-guide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dd-snaplink__transfer-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: auto;
+    gap: 8px;
+  }
+
+  .dd-snaplink__transfer-tabs button {
+    min-height: 38px;
+    padding: 0 10px;
   }
 
   .dd-snaplink__transfer-status-guide strong,
@@ -18019,12 +18307,14 @@
 }
 
 .dd-snaplink__tool-workbench .dd-snaplink__rail-nav button,
+.dd-snaplink__tool-workbench .dd-snaplink__rail-tool,
 .dd-snaplink__tool-workbench .dd-snaplink__rail-settings {
   min-width: 58px;
   min-height: 48px;
 }
 
-.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button.is-active {
+.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button.is-active,
+.dd-snaplink__tool-workbench .dd-snaplink__rail-tool.is-active {
   border-color: color-mix(in srgb, var(--snap-green) 22%, transparent);
   background: var(--snap-green-soft);
   color: var(--snap-green);
@@ -18575,7 +18865,7 @@
   .dd-snaplink__tool-mobile-nav {
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     gap: 4px;
     width: 100%;
@@ -18648,15 +18938,15 @@
 
   @media (max-width: 480px) {
     .dd-snaplink__tool-mobile-nav {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 5px;
       padding: 8px 10px;
     }
 
     .dd-snaplink__tool-mobile-nav button {
       min-height: 32px;
-      padding: 0 3px;
-      font-size: 10.5px;
+      padding: 0 2px;
+      font-size: 10px;
     }
 
     .dd-snaplink__tool-mobile-actions {
@@ -19890,5 +20180,81 @@
     max-height: min(26vh, 236px);
     padding: 10px;
     overscroll-behavior: contain;
+  }
+}
+
+/* Codex UI pass: mobile tool pages use the top "传输"入口 instead of an inline queue,
+   so AI/chat/image/command content is not pushed down or covered by a queue drawer. */
+@media (max-width: 900px) {
+  .dd-snaplink__tool-main {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .dd-snaplink__tool-mobile-queue {
+    display: none;
+  }
+
+  .dd-snaplink__mobile-more-wrap {
+    position: relative;
+    display: block;
+    z-index: 58;
+    min-width: 0;
+  }
+
+  .dd-snaplink__mobile-more-wrap > button {
+    width: 100%;
+  }
+
+  .dd-snaplink__mobile-more-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    display: grid;
+    gap: 5px;
+    width: min(220px, calc(100vw - 24px));
+    padding: 8px;
+    border: 1px solid var(--snap-border);
+    border-radius: 12px;
+    background: var(--snap-surface);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+  }
+
+  .dd-snaplink__mobile-more-menu button {
+    justify-content: flex-start;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--snap-ink-soft);
+    font-size: 12px;
+    font-weight: 800;
+    text-align: left;
+  }
+
+  .dd-snaplink__mobile-more-menu button:hover,
+  .dd-snaplink__mobile-more-menu button.is-current {
+    background: var(--snap-panel);
+    color: var(--snap-green);
+  }
+
+  .dd-snaplink__mobile-workbench-nav .dd-snaplink__mobile-more-backdrop,
+  .dd-snaplink__tool-mobile-nav .dd-snaplink__mobile-more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(15, 23, 42, 0.08);
+    box-shadow: none;
+    cursor: default;
+    appearance: none;
   }
 }

@@ -3,7 +3,8 @@ import { History, Search } from 'lucide-react'
 import { EmptyState } from './EmptyState'
 
 type HistoryPageProps = {
-  header: ReactNode
+  header?: ReactNode
+  embedded?: boolean
   searchQuery: string
   fileCount: number
   textCount: number
@@ -21,6 +22,7 @@ type HistoryPageProps = {
 
 export function HistoryPage({
   header,
+  embedded = false,
   searchQuery,
   fileCount,
   textCount,
@@ -36,8 +38,8 @@ export function HistoryPage({
   onShowRooms,
 }: HistoryPageProps) {
   return (
-    <section className="dd-snaplink__workbench-page is-history" aria-label="历史记录">
-      {header}
+    <section className={`dd-snaplink__workbench-page is-history${embedded ? ' is-embedded' : ''}`} aria-label="历史记录">
+      {header ? header : null}
       <label className="dd-snaplink__history-search">
         <Search size={15} strokeWidth={2} aria-hidden="true" />
         <span>搜索历史</span>

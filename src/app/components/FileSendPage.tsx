@@ -21,7 +21,7 @@ export function FileSendPage({
   recentFiles,
 }: FileSendPageProps) {
   return (
-    <section className="dd-snaplink__workbench-page is-files" aria-label="文件发送">
+    <section className="dd-snaplink__workbench-page is-files" aria-label="发送">
       {header}
       <SendTargetSelector
         targetSummary={targetSummary}
@@ -33,7 +33,7 @@ export function FileSendPage({
         <div className="dd-snaplink__section-head">
           <span>
             <strong>最近发送</strong>
-            <small>{recentFiles.length > 0 ? '最近的文件任务会显示在这里' : '还没有文件任务'}</small>
+            <small>{recentFiles.length > 0 ? '最近的文件任务会显示在这里' : '还没有发送任务'}</small>
           </span>
         </div>
         {recentFiles.length > 0 ? (
@@ -45,7 +45,7 @@ export function FileSendPage({
             className="dd-snaplink__workbench-room-empty"
             icon={<FolderOpen size={23} strokeWidth={1.8} aria-hidden="true" />}
             title="暂无最近发送"
-            description={<span>选择文件后，任务会立即进入右侧传输队列。</span>}
+            description={<span>选择文件、拍照或发送文本后，任务会进入传输队列。</span>}
           />
         )}
       </div>

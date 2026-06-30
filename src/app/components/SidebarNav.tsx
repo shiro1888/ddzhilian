@@ -1,11 +1,8 @@
+import { useState } from 'react'
 import {
-  Bot,
-  Clock3,
-  Command,
-  FileText,
-  FolderOpen,
+  Grid2X2,
   History,
-  ImageIcon,
+  Send,
   Settings,
   Users,
   Wifi,
@@ -43,28 +40,34 @@ export function SidebarNav({
   onShowRooms,
   onShowFiles,
   onShowQueue,
-  onShowText,
-  onShowHistory,
   onOpenAiChat,
   onOpenImage,
   onOpenCommand,
   onShowSettings,
 }: SidebarNavProps) {
+  const [isToolMenuOpen, setIsToolMenuOpen] = useState(false)
+  const isToolActive = activeTool === 'ai-chat' || activeTool === 'image' || activeTool === 'command'
+
+  const openTool = (action: () => void) => {
+    setIsToolMenuOpen(false)
+    action()
+  }
+
   return (
     <aside className="dd-snaplink__rail" aria-label="主导航">
       <div className="dd-snaplink__rail-logo">
         <img src="/logo-dd-link.svg" alt="" />
       </div>
-      <nav className="dd-snaplink__rail-nav" aria-label="DD直连功能">
+      <nav className="dd-snaplink__rail-nav" aria-label="DD直连主功能">
         <button
           type="button"
           className={activeMode === 'nearby' ? 'is-active' : ''}
           aria-pressed={activeMode === 'nearby'}
           onClick={onShowNearby}
-          title="附近设备"
+          title="附近"
         >
           <Wifi size={22} strokeWidth={1.8} aria-hidden="true" />
-          <span>附近设备</span>
+          <span>附近</span>
         </button>
         <button
           type="button"
@@ -81,10 +84,10 @@ export function SidebarNav({
           className={activeMode === 'files' ? 'is-active' : ''}
           aria-pressed={activeMode === 'files'}
           onClick={onShowFiles}
-          title="文件发送"
+          title="发送"
         >
-          <FolderOpen size={21} strokeWidth={1.8} aria-hidden="true" />
-          <span>文件</span>
+          <Send size={21} strokeWidth={1.8} aria-hidden="true" />
+          <span>发送</span>
         </button>
         <button
           type="button"
@@ -96,58 +99,74 @@ export function SidebarNav({
           <History size={20} strokeWidth={1.8} aria-hidden="true" />
           <span>传输</span>
         </button>
-        <span className="dd-snaplink__rail-nav-separator" aria-hidden="true" />
-        <button
-          type="button"
-          className={activeMode === 'text' ? 'is-active' : ''}
-          aria-pressed={activeMode === 'text'}
-          onClick={onShowText}
-          title="发送文本"
-        >
-          <FileText size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>文本</span>
-        </button>
-        <button
-          type="button"
-          className={activeMode === 'history' ? 'is-active' : ''}
-          aria-pressed={activeMode === 'history'}
-          onClick={onShowHistory}
-          title="历史记录"
-        >
-          <Clock3 size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>历史</span>
-        </button>
-        <button
-          type="button"
-          className={activeTool === 'ai-chat' ? 'is-active' : ''}
-          aria-pressed={activeTool === 'ai-chat'}
-          onClick={onOpenAiChat}
-          title="AI"
-        >
-          <Bot size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>AI</span>
-        </button>
-        <button
-          type="button"
-          className={activeTool === 'image' ? 'is-active' : ''}
-          aria-pressed={activeTool === 'image'}
-          onClick={onOpenImage}
-          title="AI 图片"
-        >
-          <ImageIcon size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>图片</span>
-        </button>
-        <button
-          type="button"
-          className={activeTool === 'command' ? 'is-active' : ''}
-          aria-pressed={activeTool === 'command'}
-          onClick={onOpenCommand}
-          title="命令行"
-        >
-          <Command size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>命令</span>
-        </button>
       </nav>
+      <span className="dd-snaplink__rail-nav-separator" aria-hidden="true" />
+      <div className="dd-snaplink__rail-tool-wrap">
+        <button
+          type="button"
+          className={`dd-snaplink__rail-tool${isToolActive || isToolMenuOpen ? ' is-active' : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={isToolMenuOpen}
+          aria-pressed={isToolActive || isToolMenuOpen}
+          onClick={() => setIsToolMenuOpen((current) => !current)}
+          title="工具中心"
+        >
+          <Grid2X2 size={20} strokeWidth={1.8} aria-hidden="true" />
+          <span>工具</span>
+        </button>
+        {isToolMenuOpen ? (
+          <>
+            <button
+              type="button"
+              className="dd-snaplink__rail-tool-scrim"
+              aria-label="关闭工具中心"
+              onClick={() => setIsToolMenuOpen(false)}
+            />
+            <div className="dd-snaplink__rail-tool-menu" role="menu" aria-label="工具中心">
+              <span className="dd-snaplink__rail-tool-menu-head">
+                <strong>工具中心</strong>
+                <small>辅助能力 · 非主流程</small>
+              </span>
+              <button
+                type="button"
+                role="menuitem"
+                className={activeTool === 'ai-chat' ? 'is-current' : ''}
+                onClick={() => openTool(onOpenAiChat)}
+              >
+                <span className="is-ai">AI</span>
+                <em>
+                  <strong>AI 助手</strong>
+                  <small>生成文件说明 · 总结传输内容</small>
+                </em>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={activeTool === 'image' ? 'is-current' : ''}
+                onClick={() => openTool(onOpenImage)}
+              >
+                <span className="is-image">图</span>
+                <em>
+                  <strong>图片工具</strong>
+                  <small>图片生成与传输文件联动</small>
+                </em>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={activeTool === 'command' ? 'is-current' : ''}
+                onClick={() => openTool(onOpenCommand)}
+              >
+                <span className="is-command">&gt;_</span>
+                <em>
+                  <strong>Web 命令行</strong>
+                  <small>运行代码并发送结果</small>
+                </em>
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
       <button
         type="button"
         className={`dd-snaplink__rail-settings${activeMode === 'settings' ? ' is-active' : ''}`}

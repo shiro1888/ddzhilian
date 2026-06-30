@@ -85,6 +85,7 @@ import { TextSendPage } from './TextSendPage'
 import { ToolContextPanel } from './ToolContextPanel'
 import type { ToolContextPanelAction } from './ToolContextPanel'
 import { TransferQueuePage } from './TransferQueuePage'
+import type { TransferQueuePageTab } from './TransferQueuePage'
 import { TransferQueuePanel } from './TransferQueuePanel'
 import { TransferTaskCard } from './TransferTaskCard'
 
@@ -92,6 +93,7 @@ type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }
 type SnapLinkTextEntry = Extract<UnifiedConversationEntry, { entryType: 'text' }>
 type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
 type SnapLinkWorkbenchMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'settings'
+type SnapLinkWorkbenchTransferTab = TransferQueuePageTab['id']
 type SnapLinkTrustActionKind = 'connect' | 'file' | 'text' | 'pick-file' | 'pick-camera'
 
 type SnapLinkPendingTrustAction =
@@ -1481,6 +1483,7 @@ export function SnapLinkStage({
   const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
   const [workbenchDeviceDropTargetId, setWorkbenchDeviceDropTargetId] = useState<string | null>(null)
   const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('nearby')
+  const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
   const [isMobileRoomMembersOpen, setIsMobileRoomMembersOpen] = useState(false)
@@ -2952,6 +2955,12 @@ export function SnapLinkStage({
     setWorkbenchMode('transfers')
   }
 
+  const handleShowWorkbenchTransferTab = (tab: SnapLinkWorkbenchTransferTab) => {
+    handleBackToLobby()
+    setWorkbenchTransferTab(tab)
+    setWorkbenchMode('transfers')
+  }
+
   const handleShowWorkbenchFiles = () => {
     handleBackToLobby()
     setWorkbenchMode('files')
@@ -2975,8 +2984,7 @@ export function SnapLinkStage({
   }, [onOpenRoomHome, workbenchTextRequestId])
 
   const handleShowWorkbenchHistory = () => {
-    handleBackToLobby()
-    setWorkbenchMode('history')
+    handleShowWorkbenchTransferTab('history')
   }
 
   const handleShowWorkbenchSettings = () => {
@@ -4604,7 +4612,7 @@ export function SnapLinkStage({
           </small>
         </span>
         <span className="dd-snaplink__receive-notice-actions">
-          <button type="button" onClick={handleShowWorkbenchQueue}>查看队列</button>
+          <button type="button" onClick={() => handleShowWorkbenchQueue()}>查看队列</button>
           <button type="button" onClick={handleShowWorkbenchSettings}>设置</button>
         </span>
       </section>
@@ -4760,8 +4768,8 @@ export function SnapLinkStage({
   const renderWorkbenchFileSendPage = () => (
     <FileSendPage
       header={renderWorkbenchPageHeader(
-        '文件发送',
-        '选择目标后拖拽文件，或用按钮选择文件。文件只在设备之间传输。',
+        '发送',
+        '文件、图片、文本统一发给设备或房间，传输任务会进入右侧队列。',
         <button type="button" onClick={handleWorkbenchFilePick}>
           <Upload size={14} strokeWidth={2} aria-hidden="true" />
           选择文件
@@ -4988,12 +4996,17 @@ export function SnapLinkStage({
     </>
   )
 
-  const renderWorkbenchHistoryPage = () => (
+  const renderWorkbenchHistoryPage = (embedded = false) => (
     <HistoryPage
-      header={renderWorkbenchPageHeader(
-        '历史记录',
-        '集中查看文件、文本和链接历史，可下载、复制或复用。',
-      )}
+      embedded={embedded}
+      header={
+        embedded
+          ? undefined
+          : renderWorkbenchPageHeader(
+              '历史记录',
+              '集中查看文件、文本和链接历史，可下载、复制或复用。',
+            )
+      }
       searchQuery={historySearchQuery}
       fileCount={workbenchHistoryFileCount}
       textCount={workbenchHistoryTextCount}
@@ -5102,21 +5115,46 @@ export function SnapLinkStage({
     const failedEntries = workbenchTransferEntries.filter(
       (file) => resolveSnapLinkTransferStatus(file) === 'failed',
     )
-    const groupedSections = [
-      { id: 'active', label: '进行中', entries: activeEntries },
-      { id: 'failed', label: '失败', entries: failedEntries },
-      { id: 'completed', label: '已完成', entries: completedEntries },
+    const transferTabs: TransferQueuePageTab[] = [
+      { id: 'active', label: '进行中', count: activeEntries.length },
+      { id: 'completed', label: '已完成', count: completedEntries.length },
+      { id: 'failed', label: '失败', count: failedEntries.length },
+      { id: 'history', label: '历史', count: workbenchHistoryCount },
     ]
+    const tabEntries = workbenchTransferTab === 'completed'
+      ? completedEntries
+      : workbenchTransferTab === 'failed'
+        ? failedEntries
+        : activeEntries
+    const groupedSections = workbenchTransferTab === 'history'
+      ? []
+      : [
+          {
+            id: workbenchTransferTab,
+            label:
+              workbenchTransferTab === 'completed'
+                ? '已完成'
+                : workbenchTransferTab === 'failed'
+                  ? '失败'
+                  : '进行中',
+            entries: tabEntries,
+          },
+        ]
 
     return (
       <TransferQueuePage
         sections={groupedSections}
-        totalCount={workbenchTransferEntries.length}
+        tabs={transferTabs}
+        activeTab={workbenchTransferTab}
+        totalCount={tabEntries.length}
         activeCount={workbenchActiveTransferCount}
         completedCount={workbenchCompletedTransferCount}
         failedCount={workbenchFailedTransferCount}
+        historyCount={workbenchHistoryCount}
+        historyContent={workbenchHistoryCount > 0 ? renderWorkbenchHistoryPage(true) : undefined}
         incomingNotice={renderIncomingReceiveNotice('full')}
         renderTaskCard={renderWorkbenchTransferCard}
+        onTabChange={setWorkbenchTransferTab}
         onShowNearby={handleShowWorkbenchNearby}
         onShowFiles={handleShowWorkbenchFiles}
       />
@@ -5136,18 +5174,18 @@ export function SnapLinkStage({
           }
         case 'files':
           return {
-            title: '发送文件',
-            description: '先选择附近设备或房间，再拖拽文件到页面发送。',
-            accent: '文件',
+            title: '发送',
+            description: '文件、图片、文本统一发给设备或房间，主流程保持在一个页面。',
+            accent: '发送',
             actionLabel: '选择文件',
             onAction: handleWorkbenchFilePick,
           }
         case 'transfers':
           return {
-            title: '传输队列',
-            description: '查看正在连接、发送、完成或失败的任务，进度只按真实确认字节显示。',
-            accent: '队列',
-            actionLabel: '发送文件',
+            title: '传输',
+            description: '查看进行中、完成、失败和历史记录，进度只按真实确认字节显示。',
+            accent: '传输',
+            actionLabel: '去发送',
             onAction: handleShowWorkbenchFiles,
           }
         case 'text':
@@ -5313,6 +5351,9 @@ export function SnapLinkStage({
           onShowText={handleShowWorkbenchText}
           onShowHistory={handleShowWorkbenchHistory}
           onShowSettings={handleShowWorkbenchSettings}
+          onOpenAiChat={handleOpenAiChat}
+          onOpenImage={handleOpenImage}
+          onOpenCommand={handleOpenCommand}
         />
 
         <main className="dd-snaplink__workbench-content">
@@ -5467,6 +5508,7 @@ export function SnapLinkStage({
 
           <MobileWorkbenchNav
             className="dd-snaplink__tool-mobile-nav"
+            activeTool={tool}
             ariaLabel="移动端工作台导航"
             onShowNearby={handleShowWorkbenchNearby}
             onShowRooms={handleShowWorkbenchRooms}
@@ -5475,6 +5517,9 @@ export function SnapLinkStage({
             onShowText={handleShowWorkbenchText}
             onShowHistory={handleShowWorkbenchHistory}
             onShowSettings={handleShowWorkbenchSettings}
+            onOpenAiChat={handleOpenAiChat}
+            onOpenImage={handleOpenImage}
+            onOpenCommand={handleOpenCommand}
           />
 
           <div className="dd-snaplink__tool-mobile-actions" aria-label={`${toolTitle}移动端快捷操作`}>
@@ -5780,6 +5825,9 @@ export function SnapLinkStage({
                   onShowText={handleShowWorkbenchText}
                   onShowHistory={handleShowWorkbenchHistory}
                   onShowSettings={handleShowWorkbenchSettings}
+                  onOpenAiChat={handleOpenAiChat}
+                  onOpenImage={handleOpenImage}
+                  onOpenCommand={handleOpenCommand}
                 />
 
                 <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间快捷操作">
