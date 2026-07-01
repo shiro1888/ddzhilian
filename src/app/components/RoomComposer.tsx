@@ -6,7 +6,15 @@ import type {
   KeyboardEventHandler,
   RefObject,
 } from 'react'
-import { ScanText } from 'lucide-react'
+import { useRef, useState } from 'react'
+import {
+  Bot,
+  Camera,
+  Command,
+  Image as ImageIcon,
+  Paperclip,
+  ScanText,
+} from 'lucide-react'
 
 import type { ComposerImageDraft } from '../types'
 import type { AiModelOption } from '../../lib/ddzhilian-types'
@@ -57,6 +65,8 @@ type RoomComposerProps = {
   onComposerKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
   onEmojiToggle: () => void
   onEmojiInsert: (emoji: string) => void
+  onOpenImageTool?: () => void
+  onOpenCommandTool?: () => void
 }
 
 const roomComposerQuickEmojis = [
@@ -108,7 +118,23 @@ export function RoomComposer({
   onComposerKeyDown,
   onEmojiToggle,
   onEmojiInsert,
+  onOpenImageTool,
+  onOpenCommandTool,
 }: RoomComposerProps) {
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false)
+  const filePickerRef = useRef<HTMLInputElement | null>(null)
+  const cameraPickerRef = useRef<HTMLInputElement | null>(null)
+
+  const runPlusAction = (action: () => void) => {
+    setIsPlusMenuOpen(false)
+    action()
+  }
+
+  const handleFileInputChange: ChangeEventHandler<HTMLInputElement> = (event) => {
+    setIsPlusMenuOpen(false)
+    onDirectFileInputChange(event)
+  }
+
   return (
     <>
       {quoteDraft ? (
@@ -128,28 +154,136 @@ export function RoomComposer({
       <ComposerImageDraftStrip images={images} onRemove={onImageRemove} />
 
       <form className="dd-snaplink__compose" onSubmit={onSubmit}>
-        <label className="dd-snaplink__attach" htmlFor={fileInputId} title="发送文件">
-          +
-          <input
-            id={fileInputId}
-            type="file"
-            multiple
-            hidden
-            onChange={onDirectFileInputChange}
-          />
-        </label>
-        <button
-          ref={ocrTriggerRef}
-          type="button"
-          className={`dd-snaplink__ocr${isOcrPanelOpen ? ' is-active' : ''}`}
-          aria-label="识别图片文字"
-          aria-expanded={isOcrPanelOpen}
-          aria-controls={ocrPanelId}
-          title="识别图片文字"
-          onClick={onOcrTriggerClick}
-        >
-          <ScanText size={16} strokeWidth={2.1} aria-hidden="true" />
-        </button>
+        <span className="dd-snaplink__plus-wrap">
+          <button
+            type="button"
+            className={`dd-snaplink__attach${isPlusMenuOpen ? ' is-active' : ''}`}
+            aria-label="打开发送菜单"
+            aria-expanded={isPlusMenuOpen}
+            aria-haspopup="menu"
+            title="更多发送方式"
+            onClick={() => {
+              if (isEmojiPickerOpen) {
+                onEmojiToggle()
+              }
+              setIsPlusMenuOpen((current) => !current)
+            }}
+          >
+            +
+          </button>
+          {isPlusMenuOpen ? (
+            <>
+              <button
+                type="button"
+                className="dd-snaplink__plus-backdrop"
+                aria-label="关闭发送菜单"
+                onClick={() => setIsPlusMenuOpen(false)}
+              />
+              <span className="dd-snaplink__plus-menu" role="menu" aria-label="发送菜单">
+                <button
+                  type="button"
+                  className="dd-snaplink__plus-item"
+                  role="menuitem"
+                  onClick={() => filePickerRef.current?.click()}
+                >
+                  <Paperclip size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>发送文件</strong>
+                    <small>文件、图片或压缩包</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="dd-snaplink__plus-item"
+                  role="menuitem"
+                  onClick={() => cameraPickerRef.current?.click()}
+                >
+                  <Camera size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>拍照</strong>
+                    <small>手机端可直接调用相机</small>
+                  </span>
+                </button>
+                <button
+                  ref={ocrTriggerRef}
+                  type="button"
+                  className={`dd-snaplink__plus-item${isOcrPanelOpen ? ' is-active' : ''}`}
+                  role="menuitem"
+                  aria-expanded={isOcrPanelOpen}
+                  aria-controls={ocrPanelId}
+                  onClick={() => runPlusAction(onOcrTriggerClick)}
+                >
+                  <ScanText size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>识别图片文字</strong>
+                    <small>从图片提取文本再发送</small>
+                  </span>
+                </button>
+                <button
+                  ref={botTriggerRef}
+                  type="button"
+                  className={`dd-snaplink__plus-item${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
+                  role="menuitem"
+                  disabled={isAiGenerating}
+                  aria-expanded={isBotPanelOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => runPlusAction(onBotTriggerClick)}
+                >
+                  <Bot size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>DD助手</strong>
+                    <small>{isAiGenerating ? '正在回复中' : selectedAiModelLabel}</small>
+                  </span>
+                </button>
+                {onOpenImageTool ? (
+                  <button
+                    type="button"
+                    className="dd-snaplink__plus-item"
+                    role="menuitem"
+                    onClick={() => runPlusAction(onOpenImageTool)}
+                  >
+                    <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />
+                    <span>
+                      <strong>图片工具</strong>
+                      <small>生成或处理图片</small>
+                    </span>
+                  </button>
+                ) : null}
+                {onOpenCommandTool ? (
+                  <button
+                    type="button"
+                    className="dd-snaplink__plus-item"
+                    role="menuitem"
+                    onClick={() => runPlusAction(onOpenCommandTool)}
+                  >
+                    <Command size={17} strokeWidth={2} aria-hidden="true" />
+                    <span>
+                      <strong>Web 命令行</strong>
+                      <small>运行命令并发送结果</small>
+                    </span>
+                  </button>
+                ) : null}
+              </span>
+            </>
+          ) : null}
+        </span>
+        <input
+          ref={filePickerRef}
+          id={fileInputId}
+          type="file"
+          multiple
+          hidden
+          onChange={handleFileInputChange}
+        />
+        <input
+          ref={cameraPickerRef}
+          id={`${fileInputId}-camera`}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={handleFileInputChange}
+        />
         <input
           ref={ocrFileInputRef}
           type="file"
@@ -157,19 +291,6 @@ export function RoomComposer({
           hidden
           onChange={onOcrFileSelection}
         />
-        <button
-          ref={botTriggerRef}
-          type="button"
-          className={`dd-snaplink__bot${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
-          aria-label="输入 @DD直连小助手"
-          aria-expanded={isBotPanelOpen}
-          aria-haspopup="dialog"
-          title="输入 @DD直连小助手"
-          disabled={isAiGenerating}
-          onClick={onBotTriggerClick}
-        >
-          {isAiGenerating ? '...' : '@'}
-        </button>
         {isBotPanelOpen ? (
           <div
             ref={botPanelRef}

@@ -6213,6 +6213,8 @@ export function SnapLinkStage({
                   setIsEmojiPickerOpen((previous) => !previous)
                 }}
                 onEmojiInsert={handleEmojiInsert}
+                onOpenImageTool={handleOpenImage}
+                onOpenCommandTool={handleOpenCommand}
               />
                 </section>
               </div>
