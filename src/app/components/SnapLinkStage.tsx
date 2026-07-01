@@ -5487,6 +5487,14 @@ export function SnapLinkStage({
     return workbenchOnlineDeviceCount > 0 ? `${workbenchOnlineDeviceCount.toString()} 台设备` : '无设备'
   }
 
+  const getWorkbenchStatusSubtitle = () => {
+    if (deviceSettings.discoverable === false) {
+      return '发现已关闭 · 无设备'
+    }
+
+    return `局域网在线 · ${getWorkbenchConnectionSummary()} · 直连`
+  }
+
   const renderWorkbenchConnectionStatus = () => (
     <StatusPillsCollapsible
       online={deviceSettings.discoverable !== false}
@@ -5583,7 +5591,7 @@ export function SnapLinkStage({
       <div className="dd-snaplink__workbench-main">
         <TopStatusBar
           title={deviceName}
-          subtitle={deviceSettings.discoverable === false ? '发现已关闭' : '局域网在线'}
+          subtitle={getWorkbenchStatusSubtitle()}
           icon={<Monitor size={17} strokeWidth={1.8} aria-hidden="true" />}
           pillAriaLabel="连接状态"
           statusContent={renderWorkbenchConnectionStatus()}

@@ -21374,7 +21374,7 @@
   }
 }
 
-/* 移动端顶部栏减重：像聊天 App 一样只保留设备名和在线入口 */
+/* 移动端顶部栏减重：像聊天 App 一样只留设备名 + 一行灰色连接状态 */
 @media (max-width: 760px) {
   .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status {
     flex-direction: row;
@@ -21397,13 +21397,13 @@
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__identity small {
-    display: none;
+    display: block;
+    color: var(--snap-muted);
+    font-size: 11px;
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__status-pills {
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 42vw;
+    display: none;
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
