@@ -21727,3 +21727,79 @@
     border-radius: 11px;
   }
 }
+
+/* 桌面会话中栏搜索：从静态占位变成可用的微信式搜索框 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dd-snaplink__conversation-side-search {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.dd-snaplink__conversation-side-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--snap-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dd-snaplink__conversation-side-search input::placeholder {
+  color: var(--snap-muted);
+}
+
+.dd-snaplink__conversation-side-search:focus-within {
+  border-color: color-mix(in srgb, var(--snap-green) 28%, transparent);
+  background: var(--snap-surface);
+}
+
+.dd-snaplink__conversation-side-search button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--snap-muted) 14%, transparent);
+  color: var(--snap-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dd-snaplink__conversation-side-search button:hover,
+.dd-snaplink__conversation-side-search button:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--snap-green) 13%, transparent);
+  color: var(--snap-green);
+}
+
+.dd-snaplink__conversation-empty {
+  margin: 10px 8px;
+  padding: 18px 12px;
+  border: 1px dashed var(--snap-border);
+  border-radius: 10px;
+  color: var(--snap-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
