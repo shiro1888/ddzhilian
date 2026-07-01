@@ -22142,6 +22142,17 @@
   }
 }
 
+/* 微信版主界面：移动端不再常驻工作区概览条，首屏直接显示列表/内容 */
+@media (max-width: 760px) {
+  .dd-snaplink__mode-overview {
+    display: none;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-content {
+    padding-top: 10px;
+  }
+}
+
 /* 移动端会话继续减重：顶部只保留会话名，房间码/历史等细节收进“更多” */
 @media (max-width: 760px) {
   .dd-snaplink__room-workbench .dd-snaplink__room-status {
