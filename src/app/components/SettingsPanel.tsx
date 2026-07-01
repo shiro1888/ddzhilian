@@ -17,7 +17,7 @@ type SettingsPanelThemeModeOption = {
 }
 
 type SettingsPanelProps = {
-  header: ReactNode
+  header?: ReactNode
   deviceName: string
   deviceNameDraft: string
   deviceNameError: string | null

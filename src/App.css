@@ -11028,6 +11028,16 @@
   order: -1;
 }
 
+@media (min-width: 901px) {
+  .dd-snaplink__settings-card.is-my-shortcuts {
+    grid-column: 1 / -1;
+  }
+
+  .dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .dd-snaplink__settings-feedback {
   display: inline-flex;
   align-items: center;
