@@ -11024,6 +11024,10 @@
   align-content: start;
 }
 
+.dd-snaplink__settings-card.is-my-shortcuts {
+  order: -1;
+}
+
 .dd-snaplink__settings-feedback {
   display: inline-flex;
   align-items: center;

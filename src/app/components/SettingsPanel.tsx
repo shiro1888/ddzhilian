@@ -168,7 +168,7 @@ export function SettingsPanel({
   const hasMyShortcuts = Boolean(onShowHistory || onOpenAiChat || onOpenImage || onOpenCommand)
 
   return (
-    <section className="dd-snaplink__workbench-page is-settings" aria-label="设置">
+    <section className="dd-snaplink__workbench-page is-settings" aria-label="更多">
       {header}
       {feedbackMessage ? (
         <div className="dd-snaplink__settings-feedback" role="status" aria-live="polite">
@@ -222,20 +222,11 @@ export function SettingsPanel({
             <div className="dd-snaplink__settings-card-head">
               <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
               <span>
-                <strong>我的功能</strong>
-                <small>历史记录和高级工具收纳在这里，主界面保持简洁</small>
+                <strong>工具中心</strong>
+                <small>AI、图片、命令行和历史记录收在这里，主界面保持简洁</small>
               </span>
             </div>
             <div className="dd-snaplink__settings-menu-list">
-              {onShowHistory ? (
-                <button type="button" onClick={onShowHistory}>
-                  <Clock3 size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>历史记录</strong>
-                    <small>查看文件、文本和链接记录</small>
-                  </span>
-                </button>
-              ) : null}
               {onOpenAiChat ? (
                 <button type="button" onClick={onOpenAiChat}>
                   <Bot size={17} strokeWidth={1.9} aria-hidden="true" />
@@ -260,6 +251,15 @@ export function SettingsPanel({
                   <span>
                     <strong>Web 命令行</strong>
                     <small>运行命令并发送结果文本</small>
+                  </span>
+                </button>
+              ) : null}
+              {onShowHistory ? (
+                <button type="button" onClick={onShowHistory}>
+                  <Clock3 size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>历史记录</strong>
+                    <small>查看文件、文本和链接记录</small>
                   </span>
                 </button>
               ) : null}

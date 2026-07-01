@@ -5226,8 +5226,8 @@ export function SnapLinkStage({
   const renderWorkbenchSettingsPage = () => (
     <SettingsPanel
       header={renderWorkbenchPageHeader(
-        '我的',
-        '管理本机身份、历史记录、工具中心和基础设置。',
+        '更多',
+        '工具中心、历史记录和基础设置都收在这里。',
       )}
       deviceName={deviceName}
       deviceNameDraft={deviceNameDraft}
