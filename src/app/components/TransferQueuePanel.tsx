@@ -46,8 +46,8 @@ export function TransferQueuePanel({
           title={desktopToggleLabel}
           onClick={onToggleDesktopCollapsed}
         >
-          <span>传输队列</span>
-          <em>{entries.length.toString()}</em>
+          <span>传输</span>
+          {entries.length > 0 ? <em>{entries.length.toString()}</em> : null}
         </button>
       ) : null}
       <div className="dd-snaplink__queue-head">

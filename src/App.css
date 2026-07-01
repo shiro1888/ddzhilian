@@ -21691,11 +21691,32 @@
 
   .dd-snaplink__workbench.is-queue-collapsed,
   .dd-snaplink__room-workbench.is-queue-collapsed {
-    grid-template-columns: 64px minmax(0, 1fr) 52px;
+    grid-template-columns: 64px minmax(0, 1fr) 44px;
   }
 
   .dd-snaplink__tool-workbench {
     grid-template-columns: 64px minmax(0, 1fr) minmax(288px, 320px);
+  }
+}
+
+@media (min-width: 1181px) {
+  .dd-snaplink__queue.is-desktop-collapsed > .dd-snaplink__queue-collapsed-rail {
+    gap: 8px;
+    padding: 14px 0;
+    background: #fbfbfb;
+  }
+
+  .dd-snaplink__queue-collapsed-rail span {
+    font-size: 11px;
+    font-weight: 850;
+    letter-spacing: 0.06em;
+  }
+
+  .dd-snaplink__queue-collapsed-rail em {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10px;
   }
 }
 
