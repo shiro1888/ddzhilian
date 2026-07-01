@@ -21095,3 +21095,86 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 移动端消息页继续减重：首屏优先显示会话列表，创建/加入房间收为次级工具条 */
+@media (max-width: 760px) {
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mode-overview {
+    display: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-content {
+    padding-top: 10px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-rooms {
+    gap: 8px;
+    padding: 8px 10px 12px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-rooms > .dd-snaplink__section-head {
+    display: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room-list {
+    order: 1;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-actions-panel {
+    order: 2;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 0;
+    padding: 9px 10px;
+    background: #ffffff;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-icon,
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card small {
+    display: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card span:not(.dd-snaplink__room-action-icon) {
+    gap: 0;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card button {
+    grid-column: auto;
+    width: auto;
+    min-height: 34px;
+    padding: 0 12px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-join-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 9px 10px;
+    background: #ffffff;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-join-card label {
+    gap: 0;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-join-card label span {
+    display: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-join-card input {
+    height: 34px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__room-join-card button {
+    align-self: center;
+    width: auto;
+    min-width: 56px;
+    min-height: 34px;
+    padding: 0 12px;
+  }
+}
