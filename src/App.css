@@ -21227,3 +21227,48 @@
     display: none;
   }
 }
+
+/* 移动端房间空状态减重：从大卡片改成聊天区里的轻提示 */
+@media (max-width: 760px) {
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-card {
+    width: min(100%, 320px);
+    gap: 7px;
+    padding: 14px 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-icon,
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-card small {
+    display: none;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-card strong {
+    color: var(--snap-ink-soft);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-card p {
+    max-width: 260px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-actions {
+    display: flex;
+    width: auto;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-actions button,
+  .dd-snaplink__room-workbench .dd-snaplink__room-empty-actions button:nth-child(3) {
+    width: auto;
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+  }
+}
