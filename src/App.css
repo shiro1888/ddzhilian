@@ -20616,6 +20616,62 @@
   border-radius: 10px;
 }
 
+/* 桌面房间页继续减重：创建/加入房间从大卡片改成轻工具条 */
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-actions-panel {
+  grid-template-columns: minmax(0, 0.92fr) minmax(260px, 0.8fr);
+  gap: 10px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-action-card,
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card {
+  min-height: 54px;
+  background: var(--snap-surface);
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-action-card {
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-action-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-action-card small {
+  display: none;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-action-card button,
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card button {
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card {
+  padding: 9px 10px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card label {
+  gap: 0;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card label span {
+  display: none;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card input {
+  height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.dd-snaplink__workbench-rooms.is-full .dd-snaplink__room-join-card button {
+  align-self: center;
+}
+
 .dd-snaplink__workbench-device:hover,
 .dd-snaplink__queue-card:hover {
   border-color: #d9d9d9;
