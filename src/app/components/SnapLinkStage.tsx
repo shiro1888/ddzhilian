@@ -4820,10 +4820,10 @@ export function SnapLinkStage({
     const hasSearchResult = shouldShowAssistant || filteredRooms.length > 0
 
     return (
-      <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
+      <aside className="dd-snaplink__conversation-side" aria-label="会话列表">
         <div className="dd-snaplink__conversation-side-head">
           <span>
-            <strong>消息</strong>
+            <strong>会话</strong>
             <small>世界对话、房间和 DD助手</small>
           </span>
           <button
@@ -6059,7 +6059,7 @@ export function SnapLinkStage({
                     className="dd-snaplink__room-mobile-back"
                     onClick={handleShowWorkbenchRooms}
                   >
-                    ‹ 返回消息
+                    ‹ 返回会话
                   </button>
                   <button
                     type="button"

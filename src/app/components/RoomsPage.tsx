@@ -47,7 +47,7 @@ export function RoomsPage({
     >
       <div className="dd-snaplink__section-head">
         <span>
-          <strong>消息</strong>
+          <strong>会话</strong>
           <small>
             {totalRoomCount > 0
               ? `${publicRoomCount.toString()} 个公共 · ${totalRoomCount.toString()} 个会话`
