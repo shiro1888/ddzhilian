@@ -1511,7 +1511,7 @@ export function SnapLinkStage({
   const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
-  const [isDesktopQueueCollapsed, setIsDesktopQueueCollapsed] = useState(false)
+  const [isDesktopQueueCollapsed, setIsDesktopQueueCollapsed] = useState(true)
   const [isMobileRoomMembersOpen, setIsMobileRoomMembersOpen] = useState(false)
   const [dismissedErrorText, setDismissedErrorText] = useState<string | null>(null)
   const [trustedDeviceIds, setTrustedDeviceIds] = useState<Set<string>>(() => readStoredSnapLinkTrustedDeviceIds())
@@ -1880,6 +1880,10 @@ export function SnapLinkStage({
   )
   const latestIncomingReceiveEntry = activeIncomingReceiveEntries[0] ?? null
   const latestIncomingFileOffer = pendingIncomingFileOffers[0] ?? null
+  const shouldAutoExpandDesktopQueue =
+    workbenchActiveTransferCount > 0 ||
+    activeIncomingReceiveEntries.length > 0 ||
+    pendingIncomingFileOffers.length > 0
   const selectedWorkbenchDevice =
     onlineDeviceItems.find((device) => device.deviceId === selectedWorkbenchDeviceId) ??
     onlineDeviceItems[0] ??
@@ -2366,6 +2370,17 @@ export function SnapLinkStage({
     selectedRoomId,
     visibleConversationEntries.length,
   ])
+
+  useEffect(() => {
+    if (shouldAutoExpandDesktopQueue) {
+      setIsDesktopQueueCollapsed(false)
+      return
+    }
+
+    if (workbenchTransferEntries.length === 0) {
+      setIsDesktopQueueCollapsed(true)
+    }
+  }, [shouldAutoExpandDesktopQueue, workbenchTransferEntries.length])
 
   useEffect(() => {
     const messages = messagesRef.current
