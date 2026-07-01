@@ -10,9 +10,10 @@ type TopStatusBarProps = {
   title: string
   subtitle: string
   icon: ReactNode
-  pills: TopStatusPill[]
+  pills?: TopStatusPill[]
   pillAriaLabel: string
   className?: string
+  statusContent?: ReactNode
 }
 
 export function TopStatusBar({
@@ -22,6 +23,7 @@ export function TopStatusBar({
   pills,
   pillAriaLabel,
   className,
+  statusContent,
 }: TopStatusBarProps) {
   return (
     <header className={['dd-snaplink__workbench-status', className ?? ''].filter(Boolean).join(' ')}>
@@ -35,11 +37,12 @@ export function TopStatusBar({
         </span>
       </div>
       <div className="dd-snaplink__status-pills" aria-label={pillAriaLabel}>
-        {pills.map((pill) => (
-          <span key={pill.id} className={pill.className}>
-            {pill.label}
-          </span>
-        ))}
+        {statusContent
+          ?? pills?.map((pill) => (
+            <span key={pill.id} className={pill.className}>
+              {pill.label}
+            </span>
+          ))}
       </div>
     </header>
   )

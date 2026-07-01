@@ -34,6 +34,8 @@ export function RoomsPage({
   onToggleRoomPinned,
 }: RoomsPageProps) {
   const isFull = variant === 'full'
+  const publicRoom = rooms.find((room) => room.isPublic)
+  const canJoinRoom = roomJoinDraft.trim().length > 0
 
   return (
     <section
@@ -63,10 +65,17 @@ export function RoomsPage({
             </span>
             <span>
               <strong>公共房间</strong>
-              <small>创建一个可分享短码的房间，用来收发文件和文本。</small>
+              <small>
+                {publicRoom
+                  ? '公共房间已创建，进入后可复制短码分享给别人。'
+                  : '创建一个可分享短码的房间，用来收发文件和文本。'}
+              </small>
             </span>
-            <button type="button" onClick={onCreatePublicRoom}>
-              创建房间
+            <button
+              type="button"
+              onClick={publicRoom ? () => onOpenRoom(publicRoom.roomId) : onCreatePublicRoom}
+            >
+              {publicRoom ? '进入房间' : '创建房间'}
             </button>
           </div>
           <form
@@ -83,10 +92,11 @@ export function RoomsPage({
                 placeholder="输入房间短码"
                 autoCapitalize="characters"
                 spellCheck={false}
-                onChange={(event) => onJoinDraftChange(event.target.value.toUpperCase())}
+                aria-invalid={Boolean(roomJoinError)}
+                onChange={(event) => onJoinDraftChange(event.target.value)}
               />
             </label>
-            <button type="submit">加入</button>
+            <button type="submit" disabled={!canJoinRoom}>加入</button>
             {roomJoinError ? <p>{roomJoinError}</p> : null}
           </form>
         </div>

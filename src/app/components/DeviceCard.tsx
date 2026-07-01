@@ -1,6 +1,6 @@
 import type { DragEvent, ReactNode } from 'react'
-import { FileText, Send } from 'lucide-react'
 import type { OnlineDeviceListItem } from '../types'
+import { PeerActionsMenu } from './PeerActionsMenu'
 
 type DeviceCardProps = {
   device: OnlineDeviceListItem
@@ -14,6 +14,8 @@ type DeviceCardProps = {
   onSelect: (deviceId: string) => void
   onSendFile: (deviceId: string) => void
   onSendText: (deviceId: string) => void
+  onTrustDevice: (deviceId: string) => void
+  onShowDetail: (deviceId: string) => void
   onDragEnter: (deviceId: string) => void
   onDragOver: (deviceId: string) => void
   onDragLeave: (deviceId: string) => void
@@ -32,6 +34,8 @@ export function DeviceCard({
   onSelect,
   onSendFile,
   onSendText,
+  onTrustDevice,
+  onShowDetail,
   onDragEnter,
   onDragOver,
   onDragLeave,
@@ -88,14 +92,13 @@ export function DeviceCard({
         </span>
       </button>
       <div className="dd-snaplink__workbench-device-actions">
-        <button type="button" className="is-primary" onClick={() => onSendFile(device.deviceId)}>
-          <Send size={14} strokeWidth={2} aria-hidden="true" />
-          发送文件
-        </button>
-        <button type="button" onClick={() => onSendText(device.deviceId)}>
-          <FileText size={14} strokeWidth={2} aria-hidden="true" />
-          文本
-        </button>
+        <PeerActionsMenu
+          trusted={trustLabel === '已信任'}
+          onSend={() => onSendFile(device.deviceId)}
+          onSendText={() => onSendText(device.deviceId)}
+          onTrust={() => onTrustDevice(device.deviceId)}
+          onDetail={() => onShowDetail(device.deviceId)}
+        />
       </div>
     </article>
   )

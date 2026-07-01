@@ -435,9 +435,7 @@ const devAdminSession: AdminAccountSession = {
 const accountAuthConfirmDefaultPath = '/image';
 const accountAuthConfirmErrorPath = '/auth/confirm';
 const openRouterFallbackModelIds = [
-  'inclusionai/ling-2.6-flash:free',
-  'inclusionai/ling-2.6-1t:free',
-  'openrouter/free',
+  'openai/gpt-oss-20b:free',
 ];
 const openAiCompatibleModelRefreshIntervalMs = 60 * 60 * 1000;
 const openAiCompatibleModelListTimeoutMs = 12_000;

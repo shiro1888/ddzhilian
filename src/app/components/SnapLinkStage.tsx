@@ -68,6 +68,7 @@ import { RoomsPage } from './RoomsPage'
 import { SettingsPanel } from './SettingsPanel'
 import { SharedContentPanel } from './SharedContentPanel'
 import { SidebarNav } from './SidebarNav'
+import { StatusPillsCollapsible } from './StatusPillsCollapsible'
 import { TopStatusBar } from './TopStatusBar'
 import { TrustDeviceDialog } from './TrustDeviceDialog'
 import type { DocumentPreviewPayload } from '../../lib/document-preview'
@@ -122,11 +123,35 @@ type BotMentionTriggerRange = {
 }
 
 const AI_BOT_MENTION_LABEL = '@DD直连小助手'
+const ROOM_JOIN_CODE_MAX_LENGTH = 12
 
 type SnapLinkOcrImageTarget = {
   src: string
   name: string
   mimeType?: string
+}
+
+function normalizeRoomJoinCode(value: string) {
+  const trimmed = value.trim()
+  const queryIndex = trimmed.indexOf('?')
+  const hashIndex = trimmed.indexOf('#')
+  let candidate = trimmed
+
+  if (queryIndex >= 0 || hashIndex >= 0) {
+    const searchStart = queryIndex >= 0 ? queryIndex : hashIndex
+    const searchEnd = queryIndex >= 0 && hashIndex > queryIndex ? hashIndex : trimmed.length
+    const search = trimmed.slice(searchStart, searchEnd).replace(/^#/, '?')
+    const roomParam = new URLSearchParams(search).get('room')
+
+    if (roomParam) {
+      candidate = roomParam
+    }
+  }
+
+  return candidate
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, ROOM_JOIN_CODE_MAX_LENGTH)
 }
 
 type SnapLinkMessageContextMenuState = {
@@ -1486,6 +1511,7 @@ export function SnapLinkStage({
   const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
+  const [isDesktopQueueCollapsed, setIsDesktopQueueCollapsed] = useState(false)
   const [isMobileRoomMembersOpen, setIsMobileRoomMembersOpen] = useState(false)
   const [dismissedErrorText, setDismissedErrorText] = useState<string | null>(null)
   const [trustedDeviceIds, setTrustedDeviceIds] = useState<Set<string>>(() => readStoredSnapLinkTrustedDeviceIds())
@@ -2995,14 +3021,22 @@ export function SnapLinkStage({
   }
 
   const handleCreatePublicRoom = () => {
+    const existingPublicRoom = lobbyRoomListItems.find((room) => room.isPublic)
+
     setRoomJoinError(null)
+
+    if (existingPublicRoom) {
+      handleRoomSelection(existingPublicRoom.roomId)
+      return
+    }
+
     handleBackToLobby()
     setWorkbenchMode('rooms')
     onCreatePublicRoom()
   }
 
   const handleJoinRoomFromWorkbench = () => {
-    const normalizedRoomId = roomJoinDraft.trim().toUpperCase()
+    const normalizedRoomId = normalizeRoomJoinCode(roomJoinDraft)
     if (!normalizedRoomId) {
       setRoomJoinError('请输入房间短码')
       return
@@ -3127,6 +3161,25 @@ export function SnapLinkStage({
 
   const handleWorkbenchDeviceSendText = (deviceId: string) => {
     requestTrustedWorkbenchDeviceAction(deviceId, 'text')
+  }
+
+  const handleWorkbenchDeviceTrust = (deviceId: string) => {
+    const device = onlineDeviceItems.find((item) => item.deviceId === deviceId)
+
+    if (!device) {
+      setSelectedWorkbenchDeviceId(deviceId)
+      return
+    }
+
+    setSelectedWorkbenchDeviceId(deviceId)
+    setTrustPinDraft('')
+    setTrustPinError(null)
+    setTrustRememberDevice(!isSnapLinkDeviceTrusted(device, trustedDeviceIds))
+    setPendingTrustAction({ deviceId, kind: 'connect' })
+  }
+
+  const handleWorkbenchDeviceDetail = (deviceId: string) => {
+    setSelectedWorkbenchDeviceId(deviceId)
   }
 
   const handleWorkbenchDeviceDragEnter = (deviceId: string) => {
@@ -4482,6 +4535,8 @@ export function SnapLinkStage({
         onSelect={handleWorkbenchDeviceSelect}
         onSendFile={handleWorkbenchDeviceSendFile}
         onSendText={handleWorkbenchDeviceSendText}
+        onTrustDevice={handleWorkbenchDeviceTrust}
+        onShowDetail={handleWorkbenchDeviceDetail}
         onDragEnter={handleWorkbenchDeviceDragEnter}
         onDragOver={handleWorkbenchDeviceDragOver}
         onDragLeave={handleWorkbenchDeviceDragLeave}
@@ -4740,7 +4795,7 @@ export function SnapLinkStage({
       roomJoinError={roomJoinError}
       onCreatePublicRoom={handleCreatePublicRoom}
       onJoinDraftChange={(value) => {
-        setRoomJoinDraft(value.toUpperCase())
+        setRoomJoinDraft(normalizeRoomJoinCode(value))
         setRoomJoinError(null)
       }}
       onJoinRoomSubmit={handleJoinRoomFromWorkbench}
@@ -5279,10 +5334,65 @@ export function SnapLinkStage({
     )
   }
 
+  const renderWorkbenchConnectionStatus = () => (
+    <StatusPillsCollapsible
+      online={deviceSettings.discoverable !== false}
+      summary={`${workbenchOnlineDeviceCount.toString()} 台在线`}
+      details={[
+        {
+          id: 'lan',
+          label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
+        },
+        { id: 'webrtc', label: 'WebRTC 直连' },
+        {
+          id: 'serverless',
+          label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+        },
+      ]}
+    />
+  )
+
+  const renderToolConnectionStatus = () => (
+    <StatusPillsCollapsible
+      online={deviceSettings.discoverable !== false}
+      summary={`${workbenchOnlineDeviceCount.toString()} 台在线`}
+      details={[
+        {
+          id: 'lan-workbench',
+          label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
+        },
+        { id: 'webrtc', label: 'WebRTC 直连' },
+        {
+          id: 'serverless',
+          label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+        },
+      ]}
+      ariaLabel="工具连接状态"
+    />
+  )
+
+  const renderRoomConnectionStatus = () => (
+    <StatusPillsCollapsible
+      online
+      summary={`${selectedRoomOnlineCount.toString()} 在线`}
+      details={[
+        { id: 'room-code', label: `房间 ${selectedRoomId ?? '当前'}` },
+        { id: 'room-transport', label: 'WebRTC 直连' },
+        { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
+        { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
+      ]}
+      ariaLabel="房间连接状态"
+    />
+  )
+
   const renderWorkbenchView = () => {
     return (
     <section
-      className="dd-snaplink__workbench has-mobile-actions"
+      className={[
+        'dd-snaplink__workbench',
+        'has-mobile-actions',
+        isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+      ].filter(Boolean).join(' ')}
       aria-label="DD直连 P2P 局域网文件共享工作台"
     >
       <input
@@ -5323,22 +5433,7 @@ export function SnapLinkStage({
           subtitle={`本机 · 在线 · ${deviceSettings.discoverable === false ? '发现已关闭' : '可被发现'}`}
           icon={<Monitor size={17} strokeWidth={1.8} aria-hidden="true" />}
           pillAriaLabel="连接状态"
-          pills={[
-            {
-              id: 'lan',
-              className: 'is-lan',
-              label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
-            },
-            { id: 'webrtc', className: 'is-webrtc', label: 'WebRTC 直连' },
-            {
-              id: 'serverless',
-              label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
-            },
-            {
-              id: 'online-devices',
-              label: <><Users size={13} strokeWidth={2} aria-hidden="true" />{workbenchOnlineDeviceCount.toString()} 台设备在线</>,
-            },
-          ]}
+          statusContent={renderWorkbenchConnectionStatus()}
         />
 
         <MobileWorkbenchNav
@@ -5380,9 +5475,11 @@ export function SnapLinkStage({
         activeCount={workbenchActiveTransferCount}
         completedCount={workbenchCompletedTransferCount}
         isMobileOpen={isMobileQueueOpen}
+        isDesktopCollapsed={isDesktopQueueCollapsed}
         incomingNotice={renderIncomingReceiveNotice('compact')}
         renderTaskCard={renderWorkbenchTransferCard}
         onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+        onToggleDesktopCollapsed={() => setIsDesktopQueueCollapsed((current) => !current)}
       />
     </section>
     )
@@ -5488,22 +5585,7 @@ export function SnapLinkStage({
               <Command size={17} strokeWidth={1.8} aria-hidden="true" />
             )}
             pillAriaLabel="工具状态"
-            pills={[
-              {
-                id: 'lan-workbench',
-                className: 'is-lan',
-                label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
-              },
-              { id: 'webrtc', className: 'is-webrtc', label: 'WebRTC 直连' },
-              {
-                id: 'serverless',
-                label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
-              },
-              {
-                id: 'online-devices',
-                label: <><Users size={13} strokeWidth={2} aria-hidden="true" />{workbenchOnlineDeviceCount.toString()} 台设备在线</>,
-              },
-            ]}
+            statusContent={renderToolConnectionStatus()}
           />
 
           <MobileWorkbenchNav
@@ -5784,7 +5866,13 @@ export function SnapLinkStage({
           ) : !hasActiveRoom ? (
             renderWorkbenchView()
           ) : (
-            <section className="dd-snaplink__room-workbench" aria-label="DD直连房间会话工作台">
+            <section
+              className={[
+                'dd-snaplink__room-workbench',
+                isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+              ].filter(Boolean).join(' ')}
+              aria-label="DD直连房间会话工作台"
+            >
               <SidebarNav
                 deviceName={deviceName}
                 activeMode="rooms"
@@ -5807,12 +5895,7 @@ export function SnapLinkStage({
                   subtitle={activeTransferLabel}
                   icon={<Users size={17} strokeWidth={1.8} aria-hidden="true" />}
                   pillAriaLabel="房间连接状态"
-                  pills={[
-                    { id: 'room-code', className: 'is-lan', label: <>房间 {selectedRoomId ?? '当前'}</> },
-                    { id: 'room-transport', className: 'is-webrtc', label: 'WebRTC 直连' },
-                    { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
-                    { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
-                  ]}
+                  statusContent={renderRoomConnectionStatus()}
                 />
 
                 <MobileWorkbenchNav
@@ -6134,9 +6217,11 @@ export function SnapLinkStage({
                 activeCount={workbenchActiveTransferCount}
                 completedCount={workbenchCompletedTransferCount}
                 isMobileOpen={isMobileQueueOpen}
+                isDesktopCollapsed={isDesktopQueueCollapsed}
                 incomingNotice={renderIncomingReceiveNotice('compact')}
                 renderTaskCard={renderWorkbenchTransferCard}
                 onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+                onToggleDesktopCollapsed={() => setIsDesktopQueueCollapsed((current) => !current)}
               />
             </section>
           )}

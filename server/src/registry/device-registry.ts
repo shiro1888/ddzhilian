@@ -49,9 +49,7 @@ function normalizeText(value: string | undefined, fallback: string) {
 }
 
 function normalizeDeviceName(value: string | undefined, fallback: string) {
-  const deviceName = normalizeText(value, fallback);
-
-  return deviceName === '陈冠嵘' ? '黄石容' : deviceName;
+  return normalizeText(value, fallback);
 }
 
 function normalizeAccountId(value: string | undefined) {

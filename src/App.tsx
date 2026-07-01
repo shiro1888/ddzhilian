@@ -233,7 +233,9 @@ function extractLinksFromRichText(value: string) {
 }
 
 function readRoomIdFromSearch(search: string) {
-  return new URLSearchParams(search).get('room')?.trim().toUpperCase() || null
+  const roomId = new URLSearchParams(search).get('room')
+
+  return roomId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || null
 }
 
 function isBotChatRoom(room: Pick<RoomSummary, 'reason'> | null | undefined) {

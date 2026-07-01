@@ -34,6 +34,7 @@ export function MobileWorkbenchNav({
   onShowRooms,
   onShowFiles,
   onShowQueue,
+  onShowText,
   onShowHistory,
   onShowSettings,
   onOpenAiChat,
@@ -51,7 +52,7 @@ export function MobileWorkbenchNav({
     activeTool || activeMode === 'text' || activeMode === 'history' || activeMode === 'settings',
   )
 
-  const openMoreAction = (action: () => void) => {
+  const runNavAction = (action: () => void) => {
     setIsMoreMenuOpen(false)
     action()
   }
@@ -67,7 +68,7 @@ export function MobileWorkbenchNav({
             type="button"
             className={isActive ? 'is-active' : ''}
             aria-pressed={isActive}
-            onClick={item.onClick}
+            onClick={() => runNavAction(item.onClick)}
           >
             {item.label}
           </button>
@@ -97,7 +98,7 @@ export function MobileWorkbenchNav({
                 type="button"
                 role="menuitem"
                 className={activeTool === 'ai-chat' ? 'is-current' : ''}
-                onClick={() => openMoreAction(onOpenAiChat)}
+                onClick={() => runNavAction(onOpenAiChat)}
               >
                 AI 助手
               </button>
@@ -105,7 +106,7 @@ export function MobileWorkbenchNav({
                 type="button"
                 role="menuitem"
                 className={activeTool === 'image' ? 'is-current' : ''}
-                onClick={() => openMoreAction(onOpenImage)}
+                onClick={() => runNavAction(onOpenImage)}
               >
                 图片工具
               </button>
@@ -113,15 +114,23 @@ export function MobileWorkbenchNav({
                 type="button"
                 role="menuitem"
                 className={activeTool === 'command' ? 'is-current' : ''}
-                onClick={() => openMoreAction(onOpenCommand)}
+                onClick={() => runNavAction(onOpenCommand)}
               >
                 Web 命令行
               </button>
               <button
                 type="button"
                 role="menuitem"
+                className={activeMode === 'text' ? 'is-current' : ''}
+                onClick={() => runNavAction(onShowText)}
+              >
+                文本发送
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 className={activeMode === 'history' ? 'is-current' : ''}
-                onClick={() => openMoreAction(onShowHistory)}
+                onClick={() => runNavAction(onShowHistory)}
               >
                 历史记录
               </button>
@@ -129,7 +138,7 @@ export function MobileWorkbenchNav({
                 type="button"
                 role="menuitem"
                 className={activeMode === 'settings' ? 'is-current' : ''}
-                onClick={() => openMoreAction(onShowSettings)}
+                onClick={() => runNavAction(onShowSettings)}
               >
                 设置
               </button>
