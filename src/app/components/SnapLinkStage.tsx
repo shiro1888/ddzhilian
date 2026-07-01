@@ -1507,7 +1507,7 @@ export function SnapLinkStage({
   )
   const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
   const [workbenchDeviceDropTargetId, setWorkbenchDeviceDropTargetId] = useState<string | null>(null)
-  const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('nearby')
+  const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('rooms')
   const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
@@ -4801,6 +4801,7 @@ export function SnapLinkStage({
       onJoinRoomSubmit={handleJoinRoomFromWorkbench}
       onOpenRoom={handleRoomSelection}
       onToggleRoomPinned={handleToggleWorkbenchRoomPinned}
+      onOpenAssistant={handleOpenAiChat}
     />
   )
 
@@ -5081,8 +5082,8 @@ export function SnapLinkStage({
   const renderWorkbenchSettingsPage = () => (
     <SettingsPanel
       header={renderWorkbenchPageHeader(
-        '设置',
-        '管理本机身份、发现方式、发送偏好和消息主题。',
+        '我的',
+        '管理本机身份、历史记录、工具中心和基础设置。',
       )}
       deviceName={deviceName}
       deviceNameDraft={deviceNameDraft}
@@ -5147,6 +5148,10 @@ export function SnapLinkStage({
         resetThemeColors()
         showSettingsFeedback('主题已恢复默认')
       }}
+      onShowHistory={handleShowWorkbenchHistory}
+      onOpenAiChat={handleOpenAiChat}
+      onOpenImage={handleOpenImage}
+      onOpenCommand={handleOpenCommand}
     />
   )
 
@@ -5221,9 +5226,9 @@ export function SnapLinkStage({
       switch (workbenchMode) {
         case 'rooms':
           return {
-            title: '我的房间',
-            description: '公共房间和历史会话都在这里，适合多人共享文件与文本。',
-            accent: '房间',
+            title: '消息',
+            description: '世界对话、房间和最近会话都在这里，点进去即可聊天或传文件。',
+            accent: '消息',
             actionLabel: '创建房间',
             onAction: handleCreatePublicRoom,
           }
@@ -5261,18 +5266,18 @@ export function SnapLinkStage({
           }
         case 'settings':
           return {
-            title: '设置',
-            description: '管理本机身份、局域网发现方式、发送偏好和消息主题。',
-            accent: '设置',
-            actionLabel: '附近设备',
-            onAction: handleShowWorkbenchNearby,
+            title: '我的',
+            description: '管理当前设备、历史记录、工具中心和基础设置。',
+            accent: '我的',
+            actionLabel: '历史记录',
+            onAction: handleShowWorkbenchHistory,
           }
         case 'nearby':
         default:
           return {
-            title: '附近设备',
-            description: '发现同一局域网内的设备，点选设备即可发送文件、图片或文本。',
-            accent: '直连',
+            title: '设备',
+            description: '发现同一局域网内的设备，点击设备进入会话，更多操作放在菜单里。',
+            accent: '设备',
             actionLabel: '重新扫描',
             onAction: handleWorkbenchRescan,
           }

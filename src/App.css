@@ -20716,3 +20716,102 @@
   font-size: 13px;
   font-weight: 500;
 }
+
+/* 微信式信息架构：一级导航收敛为 消息 / 设备 / 传输 / 我的 */
+.dd-snaplink__mode-overview {
+  min-height: auto;
+  padding-block: 14px;
+}
+
+.dd-snaplink__mode-overview-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.dd-snaplink__workbench-room:has(.dd-snaplink__workbench-room-avatar) .dd-snaplink__workbench-room-open {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+
+.dd-snaplink__workbench-room-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eef1f5;
+  color: #576b95;
+}
+
+.dd-snaplink__workbench-room-avatar.is-assistant {
+  background: rgba(7, 193, 96, 0.14);
+  color: #07a152;
+}
+
+.dd-snaplink__workbench-room.is-assistant {
+  background: #fff;
+}
+
+.dd-snaplink__settings-menu-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dd-snaplink__settings-menu-list button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 10px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fff;
+  color: #222;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-snaplink__settings-menu-list button:hover,
+.dd-snaplink__settings-menu-list button:focus-visible {
+  border-color: rgba(7, 193, 96, 0.28);
+  background: rgba(7, 193, 96, 0.05);
+  outline: none;
+}
+
+.dd-snaplink__settings-menu-list button > svg {
+  justify-self: center;
+  color: #07a152;
+}
+
+.dd-snaplink__settings-menu-list button span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dd-snaplink__settings-menu-list button strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dd-snaplink__settings-menu-list button small {
+  color: #999;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .dd-snaplink__mobile-workbench-nav,
+  .dd-snaplink__tool-mobile-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .dd-snaplink__mobile-workbench-nav,
+  .dd-snaplink__tool-mobile-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

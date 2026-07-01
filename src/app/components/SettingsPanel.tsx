@@ -1,5 +1,5 @@
 import type { FormEventHandler, ReactNode } from 'react'
-import { FileText, Monitor, MoonStar, Settings, Wifi } from 'lucide-react'
+import { Bot, Clock3, Command, FileText, Image as ImageIcon, Monitor, MoonStar, Settings, Wifi } from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 
 export type SettingsPanelThemeColorTarget = 'self' | 'peer' | 'ai'
@@ -44,6 +44,10 @@ type SettingsPanelProps = {
   onThemeColorChange: (target: SettingsPanelThemeColorTarget, value: string) => void
   onThemePresetApply: (colors: SettingsPanelThemeColors) => void
   onThemeReset: () => void
+  onShowHistory?: () => void
+  onOpenAiChat?: () => void
+  onOpenImage?: () => void
+  onOpenCommand?: () => void
 }
 
 type SettingsSwitchProps = {
@@ -156,7 +160,13 @@ export function SettingsPanel({
   onThemeColorChange,
   onThemePresetApply,
   onThemeReset,
+  onShowHistory,
+  onOpenAiChat,
+  onOpenImage,
+  onOpenCommand,
 }: SettingsPanelProps) {
+  const hasMyShortcuts = Boolean(onShowHistory || onOpenAiChat || onOpenImage || onOpenCommand)
+
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="设置">
       {header}
@@ -206,6 +216,56 @@ export function SettingsPanel({
             保存设备名
           </button>
         </form>
+
+        {hasMyShortcuts ? (
+          <div className="dd-snaplink__settings-card is-my-shortcuts">
+            <div className="dd-snaplink__settings-card-head">
+              <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
+              <span>
+                <strong>我的功能</strong>
+                <small>历史记录和高级工具收纳在这里，主界面保持简洁</small>
+              </span>
+            </div>
+            <div className="dd-snaplink__settings-menu-list">
+              {onShowHistory ? (
+                <button type="button" onClick={onShowHistory}>
+                  <Clock3 size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>历史记录</strong>
+                    <small>查看文件、文本和链接记录</small>
+                  </span>
+                </button>
+              ) : null}
+              {onOpenAiChat ? (
+                <button type="button" onClick={onOpenAiChat}>
+                  <Bot size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>DD助手</strong>
+                    <small>总结传输内容，辅助生成文本</small>
+                  </span>
+                </button>
+              ) : null}
+              {onOpenImage ? (
+                <button type="button" onClick={onOpenImage}>
+                  <ImageIcon size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>图片工具</strong>
+                    <small>图片生成与传输文件联动</small>
+                  </span>
+                </button>
+              ) : null}
+              {onOpenCommand ? (
+                <button type="button" onClick={onOpenCommand}>
+                  <Command size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>Web 命令行</strong>
+                    <small>运行命令并发送结果文本</small>
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <div className="dd-snaplink__settings-card">
           <div className="dd-snaplink__settings-card-head">

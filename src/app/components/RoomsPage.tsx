@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react'
+import { Bot, Users } from 'lucide-react'
 
 import type { RoomListItem } from '../types'
 import { EmptyState } from './EmptyState'
@@ -18,6 +18,7 @@ type RoomsPageProps = {
   onJoinRoomSubmit: () => void
   onOpenRoom: (roomId: string) => void
   onToggleRoomPinned: (room: RoomListItem) => void
+  onOpenAssistant?: () => void
 }
 
 export function RoomsPage({
@@ -32,10 +33,12 @@ export function RoomsPage({
   onJoinRoomSubmit,
   onOpenRoom,
   onToggleRoomPinned,
+  onOpenAssistant,
 }: RoomsPageProps) {
   const isFull = variant === 'full'
   const publicRoom = rooms.find((room) => room.isPublic)
   const canJoinRoom = roomJoinDraft.trim().length > 0
+  const hasConversationRows = rooms.length > 0 || Boolean(onOpenAssistant)
 
   return (
     <section
@@ -44,11 +47,11 @@ export function RoomsPage({
     >
       <div className="dd-snaplink__section-head">
         <span>
-          <strong>房间</strong>
+          <strong>消息</strong>
           <small>
             {totalRoomCount > 0
               ? `${publicRoomCount.toString()} 个公共 · ${totalRoomCount.toString()} 个会话`
-              : '公共房间和历史会话会显示在这里'}
+              : '世界对话、房间和设备会话会显示在这里'}
           </small>
         </span>
         {rooms[0] ? (
@@ -101,8 +104,32 @@ export function RoomsPage({
           </form>
         </div>
       ) : null}
-      {rooms.length > 0 ? (
+      {hasConversationRows ? (
         <div className="dd-snaplink__workbench-room-list">
+          {onOpenAssistant ? (
+            <article className="dd-snaplink__workbench-room is-assistant is-pinned">
+              <button
+                type="button"
+                className="dd-snaplink__workbench-room-open"
+                onClick={onOpenAssistant}
+                title="打开 DD助手"
+              >
+                <span className="dd-snaplink__workbench-room-avatar is-assistant" aria-hidden="true">
+                  <Bot size={18} strokeWidth={1.9} />
+                </span>
+                <span className="dd-snaplink__workbench-room-main">
+                  <span className="dd-snaplink__workbench-room-title">
+                    <strong>DD助手</strong>
+                    <em>置顶</em>
+                  </span>
+                  <span className="dd-snaplink__workbench-room-preview">总结传输记录，生成文件说明</span>
+                </span>
+                <span className="dd-snaplink__workbench-room-side">
+                  <small>刚刚</small>
+                </span>
+              </button>
+            </article>
+          ) : null}
           {rooms.map((room) => (
             <RoomCard
               key={room.roomId}
