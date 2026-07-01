@@ -4799,6 +4799,88 @@ export function SnapLinkStage({
     )
   }
 
+  const renderDesktopConversationSideList = () => (
+    <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
+      <div className="dd-snaplink__conversation-side-head">
+        <span>
+          <strong>消息</strong>
+          <small>世界对话、房间和 DD助手</small>
+        </span>
+        <button type="button" onClick={handleShowWorkbenchRooms}>
+          全部
+        </button>
+      </div>
+      <div className="dd-snaplink__conversation-side-search" aria-hidden="true">
+        搜索会话
+      </div>
+      <div className="dd-snaplink__conversation-side-list">
+        <button
+          type="button"
+          className="dd-snaplink__conversation-row is-assistant"
+          onClick={handleOpenAiChat}
+          title="打开 DD助手"
+        >
+          <span className="dd-snaplink__conversation-avatar is-assistant" aria-hidden="true">
+            <Bot size={17} strokeWidth={1.9} />
+          </span>
+          <span className="dd-snaplink__conversation-main">
+            <span className="dd-snaplink__conversation-title">
+              <strong>DD助手</strong>
+              <em>置顶</em>
+            </span>
+            <small>总结传输记录，生成文件说明</small>
+          </span>
+          <span className="dd-snaplink__conversation-meta">刚刚</span>
+        </button>
+        {lobbyRoomListItems.map((room) => {
+          const isActive = room.roomId === selectedRoomId
+
+          return (
+            <button
+              key={room.roomId}
+              type="button"
+              className={[
+                'dd-snaplink__conversation-row',
+                room.isPublic ? 'is-public' : '',
+                room.pinned ? 'is-pinned' : '',
+                room.unreadCount > 0 ? 'has-unread' : '',
+                isActive ? 'is-active' : '',
+              ].filter(Boolean).join(' ')}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => handleRoomSelection(room.roomId)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                handleToggleWorkbenchRoomPinned(room)
+              }}
+              title={`进入${room.title}`}
+            >
+              <span className="dd-snaplink__conversation-avatar" aria-hidden="true">
+                {room.isPublic ? '世' : Array.from(room.title.trim() || '房')[0]}
+                <i className={room.onlineCount > 0 ? 'is-online' : ''} />
+              </span>
+              <span className="dd-snaplink__conversation-main">
+                <span className="dd-snaplink__conversation-title">
+                  <strong>{room.title}</strong>
+                  <em>{room.isPublic ? '公共' : '房间'}</em>
+                  {room.pinned ? <em>置顶</em> : null}
+                </span>
+                <small>{room.previewText || '暂无消息'}</small>
+              </span>
+              <span className="dd-snaplink__conversation-side-meta">
+                <small>{room.updatedAtLabel}</small>
+                {room.unreadCount > 0 ? (
+                  <strong>{room.unreadCount > 99 ? '99+' : room.unreadCount}</strong>
+                ) : (
+                  <em>{Math.min(room.memberCount, room.onlineCount + 1).toString()} 在线</em>
+                )}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </aside>
+  )
+
   const renderWorkbenchRoomsSection = (variant: 'compact' | 'full' = 'compact') => (
     <RoomsPage
       variant={variant}
@@ -5912,6 +5994,9 @@ export function SnapLinkStage({
                   statusContent={renderRoomConnectionStatus()}
                 />
 
+                {renderDesktopConversationSideList()}
+
+                <div className="dd-snaplink__room-detail-pane">
                 <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间更多入口">
                   <button
                     type="button"
@@ -6231,6 +6316,7 @@ export function SnapLinkStage({
                 onOpenCommandTool={handleOpenCommand}
               />
                 </section>
+                </div>
               </div>
 
               <TransferQueuePanel
