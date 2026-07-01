@@ -21432,6 +21432,10 @@
     display: none;
   }
 
+  .dd-snaplink__tool-mobile-actions {
+    display: none;
+  }
+
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
     min-height: 44px;
     padding: 6px 10px;
