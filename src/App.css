@@ -11088,6 +11088,81 @@
   }
 }
 
+.dd-snaplink__settings-card:not(.is-my-shortcuts) {
+  gap: 10px;
+  padding: 12px;
+  border-color: #eeeeee;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-card-head {
+  gap: 8px;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-card-head > svg {
+  width: 16px;
+  height: 16px;
+  color: #7a7a7a;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-card-head small,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-switch small,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-mode-option small,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__theme-field small,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-mode-note,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-status-list {
+  display: none;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-field {
+  gap: 6px;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-field input {
+  min-height: 34px;
+  background: #fafafa;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-device-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-device-facts span {
+  gap: 2px;
+  padding: 7px 8px;
+  background: #fafafa;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-switch-list,
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-theme-fields {
+  gap: 6px;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-switch {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-color: transparent;
+  background: #fafafa;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-mode-option {
+  min-height: 42px;
+  padding: 8px 10px;
+  background: #fafafa;
+}
+
+.dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-theme-fields .dd-snaplink__theme-field {
+  padding: 7px 8px;
+  background: #fafafa;
+}
+
+@media (min-width: 1200px) {
+  .dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-device-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .dd-snaplink__settings-feedback {
   display: inline-flex;
   align-items: center;
