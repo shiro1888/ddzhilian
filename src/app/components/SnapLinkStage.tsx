@@ -5370,9 +5370,9 @@ export function SnapLinkStage({
       switch (workbenchMode) {
         case 'rooms':
           return {
-            title: '消息',
+            title: '会话',
             description: '世界对话、房间和最近会话都在这里，点进去即可聊天或传文件。',
-            accent: '消息',
+            accent: '会话',
             actionLabel: '创建房间',
             onAction: handleCreatePublicRoom,
           }
@@ -5410,18 +5410,18 @@ export function SnapLinkStage({
           }
         case 'settings':
           return {
-            title: '我的',
-            description: '管理当前设备、历史记录、工具中心和基础设置。',
-            accent: '我的',
+            title: '更多',
+            description: '工具中心、历史记录和基础设置都收在这里。',
+            accent: '更多',
             actionLabel: '历史记录',
             onAction: handleShowWorkbenchHistory,
           }
         case 'nearby':
         default:
           return {
-            title: '设备',
+            title: '附近',
             description: '发现同一局域网内的设备，点击设备进入会话，更多操作放在菜单里。',
-            accent: '设备',
+            accent: '附近',
             actionLabel: '重新扫描',
             onAction: handleWorkbenchRescan,
           }

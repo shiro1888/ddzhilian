@@ -20884,7 +20884,7 @@
   font-weight: 500;
 }
 
-/* 微信式信息架构：一级导航收敛为 消息 / 设备 / 传输 / 我的 */
+/* 微信式信息架构：一级导航收敛为 会话 / 附近 / 传输 / 更多 */
 .dd-snaplink__mode-overview {
   min-height: auto;
   padding-block: 14px;
@@ -21834,6 +21834,48 @@
 .dd-snaplink__workbench-room.is-public .dd-snaplink__workbench-room-avatar {
   background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
   color: var(--snap-green);
+}
+
+/* 桌面也去掉重复的绿色标题块，让工作区标题更像会话列表顶部栏 */
+.dd-snaplink__mode-overview {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dd-snaplink__mode-overview-mark {
+  display: none;
+}
+
+/* 移动端工作区标题再减重：只留当前页标题和一个主操作 */
+@media (max-width: 760px) {
+  .dd-snaplink__mode-overview {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 12px;
+    border-width: 0 0 1px;
+    border-color: var(--snap-border);
+    border-radius: 0;
+    background: var(--snap-surface);
+  }
+
+  .dd-snaplink__mode-overview-mark,
+  .dd-snaplink__mode-overview-copy small,
+  .dd-snaplink__mode-overview-stats {
+    display: none;
+  }
+
+  .dd-snaplink__mode-overview-copy strong {
+    font-size: 14px;
+    font-weight: 850;
+  }
+
+  .dd-snaplink__mode-overview button {
+    grid-column: auto;
+    width: auto;
+    min-height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    font-size: 11.5px;
+  }
 }
 
 /* 移动端会话继续减重：顶部只保留会话名，房间码/历史等细节收进“更多” */
