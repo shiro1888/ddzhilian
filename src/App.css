@@ -20038,7 +20038,8 @@
   .dd-snaplink__room-mobile-actions {
     box-sizing: border-box;
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     flex: 0 0 auto;
     gap: 6px;
     width: 100%;
@@ -20070,6 +20071,20 @@
     outline: none;
     border-color: color-mix(in srgb, var(--snap-green) 48%, var(--snap-border));
     background: var(--snap-green-soft);
+    color: var(--snap-green);
+  }
+
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back {
+    border-color: transparent;
+    background: transparent;
+    color: var(--snap-ink-soft);
+    padding-left: 4px;
+  }
+
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back:hover,
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back:focus-visible {
+    border-color: transparent;
+    background: transparent;
     color: var(--snap-green);
   }
 

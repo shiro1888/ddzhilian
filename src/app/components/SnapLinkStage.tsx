@@ -5912,22 +5912,14 @@ export function SnapLinkStage({
                   statusContent={renderRoomConnectionStatus()}
                 />
 
-                <MobileWorkbenchNav
-                  activeMode="rooms"
-                  ariaLabel="移动端房间导航"
-                  onShowNearby={handleShowWorkbenchNearby}
-                  onShowRooms={handleShowWorkbenchRooms}
-                  onShowFiles={handleShowWorkbenchFiles}
-                  onShowQueue={handleShowWorkbenchQueue}
-                  onShowText={handleShowWorkbenchText}
-                  onShowHistory={handleShowWorkbenchHistory}
-                  onShowSettings={handleShowWorkbenchSettings}
-                  onOpenAiChat={handleOpenAiChat}
-                  onOpenImage={handleOpenImage}
-                  onOpenCommand={handleOpenCommand}
-                />
-
                 <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间更多入口">
+                  <button
+                    type="button"
+                    className="dd-snaplink__room-mobile-back"
+                    onClick={handleShowWorkbenchRooms}
+                  >
+                    ‹ 返回消息
+                  </button>
                   <button
                     type="button"
                     className={isMobileRoomMembersOpen || Boolean(effectiveActiveSharedTab) ? 'is-active' : ''}
