@@ -21178,3 +21178,45 @@
     padding: 0 12px;
   }
 }
+
+/* 移动端顶部栏减重：像聊天 App 一样只保留设备名和在线入口 */
+@media (max-width: 760px) {
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 52px;
+    padding: 8px 12px;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__identity {
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__identity-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__identity small {
+    display: none;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-status .dd-snaplink__status-pills {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 42vw;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
+    min-height: 44px;
+    padding: 6px 10px;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button {
+    min-height: 32px;
+  }
+}
