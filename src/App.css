@@ -11026,6 +11026,56 @@
 
 .dd-snaplink__settings-card.is-my-shortcuts {
   order: -1;
+  gap: 10px;
+  padding: 14px;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-card-head {
+  gap: 8px;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-card-head > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-card-head small {
+  display: none;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list button {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 8px;
+  min-height: 72px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list button > svg {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--snap-green) 9%, #ffffff);
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list button span {
+  justify-items: center;
+  gap: 0;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list button strong {
+  font-size: 13px;
+}
+
+.dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list button small {
+  display: none;
 }
 
 @media (min-width: 901px) {
