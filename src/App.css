@@ -21677,3 +21677,53 @@
     max-width: 100%;
   }
 }
+
+/* 微信式桌面结构：窄栏收敛到 64px，贴近企业微信/微信桌面版 */
+@media (min-width: 1181px) {
+  .dd-snaplink__workbench,
+  .dd-snaplink__room-workbench {
+    grid-template-columns: 64px minmax(0, 1fr) minmax(320px, 360px);
+  }
+
+  .dd-snaplink__workbench.is-queue-collapsed,
+  .dd-snaplink__room-workbench.is-queue-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr) 52px;
+  }
+
+  .dd-snaplink__tool-workbench {
+    grid-template-columns: 64px minmax(0, 1fr) minmax(288px, 320px);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .dd-snaplink__workbench,
+  .dd-snaplink__room-workbench,
+  .dd-snaplink__tool-workbench {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 761px) {
+  .dd-snaplink__rail-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dd-snaplink__rail-logo img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .dd-snaplink__rail-nav button,
+  .dd-snaplink__rail-tool,
+  .dd-snaplink__rail-settings {
+    width: 50px;
+    min-height: 56px;
+  }
+
+  .dd-snaplink__rail-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+}
