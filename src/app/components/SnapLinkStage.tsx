@@ -57,7 +57,6 @@ import { FileSendPage } from './FileSendPage'
 import { FileMessageCard } from './FileMessageCard'
 import { HistoryPage } from './HistoryPage'
 import { MessageBubble } from './MessageBubble'
-import { MobileActionBar } from './MobileActionBar'
 import { MobileWorkbenchNav } from './MobileWorkbenchNav'
 import { NearbyDevicesPanel } from './NearbyDevicesPanel'
 import { RoomComposer } from './RoomComposer'
@@ -5410,7 +5409,7 @@ export function SnapLinkStage({
     <section
       className={[
         'dd-snaplink__workbench',
-        'has-mobile-actions',
+        'has-no-mobile-actions',
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
       ].filter(Boolean).join(' ')}
       aria-label="DD直连 P2P 局域网文件共享工作台"
@@ -5483,11 +5482,6 @@ export function SnapLinkStage({
           {renderWorkbenchModeOverview()}
           {renderWorkbenchModeContent()}
         </main>
-        <MobileActionBar
-          onPickFile={handleWorkbenchFilePick}
-          onPickCamera={handleWorkbenchCameraPick}
-          onSendText={handleShowWorkbenchText}
-        />
       </div>
 
       <TransferQueuePanel
