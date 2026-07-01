@@ -21651,3 +21651,29 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* 微信式消息列表：移动端也保留 DD助手置顶会话，但压低视觉权重 */
+@media (max-width: 760px) {
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant {
+    display: grid;
+    min-height: 52px;
+    border-color: color-mix(in srgb, var(--snap-green) 18%, var(--snap-border-soft));
+    background: color-mix(in srgb, var(--snap-green) 4%, var(--snap-surface));
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant .dd-snaplink__workbench-room-open {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    min-height: 48px;
+    padding: 5px 7px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant .dd-snaplink__workbench-room-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant .dd-snaplink__workbench-room-preview {
+    max-width: 100%;
+  }
+}
