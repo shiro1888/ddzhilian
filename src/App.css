@@ -22156,10 +22156,56 @@
   .dd-snaplink__room-workbench .dd-snaplink__room-status .dd-snaplink__identity {
     flex: 1 1 auto;
     min-width: 0;
+    padding: 0 58px 0 34px;
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-status .dd-snaplink__status-pills {
     display: none;
+  }
+
+  .dd-snaplink__room-detail-pane {
+    position: relative;
+  }
+
+  .dd-snaplink__room-mobile-actions {
+    position: absolute;
+    top: -44px;
+    right: 10px;
+    left: 10px;
+    z-index: 11;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .dd-snaplink__room-mobile-actions button {
+    min-height: 34px;
+    padding: 0 12px;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: auto;
+  }
+
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back {
+    width: 34px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back::before {
+    content: '‹';
+    color: var(--snap-ink);
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .dd-snaplink__room-mobile-actions button:not(.dd-snaplink__room-mobile-back) {
+    border-color: var(--snap-border);
+    background: rgba(255, 255, 255, 0.82);
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
