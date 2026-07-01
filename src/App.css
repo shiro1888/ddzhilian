@@ -21220,3 +21220,10 @@
     min-height: 32px;
   }
 }
+
+/* 移动端消息列表只放真实会话：AI 助手保留在工具入口里，不再置顶占位 */
+@media (max-width: 760px) {
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant {
+    display: none;
+  }
+}
