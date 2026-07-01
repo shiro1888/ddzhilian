@@ -9931,6 +9931,10 @@
   line-height: 1.4;
 }
 
+.dd-snaplink__mobile-room-actions {
+  display: none;
+}
+
 .dd-snaplink__workbench-room-list {
   display: grid;
   align-content: start;
@@ -21291,7 +21295,7 @@
   }
 }
 
-/* 移动端消息页继续减重：首屏优先显示会话列表，创建/加入房间收为次级工具条 */
+/* 移动端消息页继续减重：首屏优先显示会话列表，创建/加入房间收进折叠工具 */
 @media (max-width: 760px) {
   .dd-snaplink__canvas.is-lobby .dd-snaplink__mode-overview {
     display: none;
@@ -21306,6 +21310,10 @@
     padding: 8px 10px 12px;
   }
 
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-rooms.is-full {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
   .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-rooms > .dd-snaplink__section-head {
     display: none;
   }
@@ -21315,9 +21323,147 @@
   }
 
   .dd-snaplink__canvas.is-lobby .dd-snaplink__room-actions-panel {
+    display: none;
     order: 2;
     gap: 8px;
     margin-top: 2px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions {
+    display: block;
+    order: 2;
+    overflow: hidden;
+    border: 1px solid var(--snap-border-soft);
+    border-radius: 12px;
+    background: var(--snap-surface);
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px 12px;
+    color: var(--snap-ink);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions > summary::after {
+    content: '›';
+    color: var(--snap-muted);
+    font-size: 18px;
+    line-height: 1;
+    transition: transform 160ms ease;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions[open] > summary::after {
+    transform: rotate(90deg);
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions strong,
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions strong {
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions small {
+    margin-top: 2px;
+    color: var(--snap-muted);
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions-body {
+    display: grid;
+    gap: 8px;
+    padding: 0 10px 10px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-create,
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-create {
+    width: 100%;
+    border: 1px solid color-mix(in srgb, var(--snap-green) 32%, var(--snap-border));
+    background: color-mix(in srgb, var(--snap-green) 9%, #ffffff);
+    color: var(--snap-green-deep);
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join input {
+    min-width: 0;
+    height: 38px;
+    padding: 0 11px;
+    border: 1px solid var(--snap-border);
+    border-radius: 10px;
+    outline: none;
+    background: #ffffff;
+    color: var(--snap-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join input::placeholder {
+    color: var(--snap-muted);
+    font-weight: 550;
+    letter-spacing: 0;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join input:focus {
+    border-color: color-mix(in srgb, var(--snap-green) 50%, var(--snap-border));
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join button {
+    min-width: 58px;
+    padding: 0 12px;
+    border: 1px solid var(--snap-border);
+    background: #ffffff;
+    color: var(--snap-ink);
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join button:disabled {
+    background: #f5f5f5;
+    color: var(--snap-muted);
+    cursor: not-allowed;
+    opacity: 0.72;
+  }
+
+  .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-join p {
+    grid-column: 1 / -1;
+    margin: -2px 0 0;
+    color: var(--danger);
+    font-size: 11.5px;
   }
 
   .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card {

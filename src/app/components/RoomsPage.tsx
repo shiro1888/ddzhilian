@@ -154,6 +154,44 @@ export function RoomsPage({
           )}
         />
       )}
+      {isFull ? (
+        <details className="dd-snaplink__mobile-room-actions">
+          <summary>
+            <span>
+              <strong>房间工具</strong>
+              <small>创建或加入公共房间</small>
+            </span>
+          </summary>
+          <div className="dd-snaplink__mobile-room-actions-body">
+            <button
+              type="button"
+              className="dd-snaplink__mobile-room-create"
+              onClick={publicRoom ? () => onOpenRoom(publicRoom.roomId) : onCreatePublicRoom}
+            >
+              {publicRoom ? '进入公共房间' : '创建公共房间'}
+            </button>
+            <form
+              className="dd-snaplink__mobile-room-join"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onJoinRoomSubmit()
+              }}
+            >
+              <input
+                value={roomJoinDraft}
+                placeholder="输入房间短码"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-invalid={Boolean(roomJoinError)}
+                aria-label="输入房间短码"
+                onChange={(event) => onJoinDraftChange(event.target.value)}
+              />
+              <button type="submit" disabled={!canJoinRoom}>加入</button>
+              {roomJoinError ? <p>{roomJoinError}</p> : null}
+            </form>
+          </div>
+        </details>
+      ) : null}
     </section>
   )
 }
