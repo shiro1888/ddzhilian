@@ -21831,3 +21831,28 @@
   background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
   color: var(--snap-green);
 }
+
+/* 移动端会话继续减重：顶部只保留会话名，房间码/历史等细节收进“更多” */
+@media (max-width: 760px) {
+  .dd-snaplink__room-workbench .dd-snaplink__room-status {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 52px;
+    padding: 8px 12px;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-status .dd-snaplink__identity {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-status .dd-snaplink__status-pills {
+    display: none;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
+    display: none;
+  }
+}

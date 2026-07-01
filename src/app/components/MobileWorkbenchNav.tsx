@@ -37,20 +37,20 @@ export function MobileWorkbenchNav({
   const items: Array<MobileWorkbenchNavItem & { isActive?: boolean }> = [
     {
       mode: 'rooms',
-      label: '消息',
+      label: '会话',
       onClick: onShowRooms,
       isActive: activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files',
     },
     {
       mode: 'nearby',
-      label: '设备',
+      label: '附近',
       onClick: onShowNearby,
       isActive: activeMode === 'nearby',
     },
     { mode: 'transfers', label: '传输', onClick: onShowQueue },
     {
       mode: 'settings',
-      label: '我的',
+      label: '更多',
       onClick: onShowSettings,
       isActive: activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool),
     },
