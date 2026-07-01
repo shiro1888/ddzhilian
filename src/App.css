@@ -21803,3 +21803,31 @@
   font-weight: 700;
   text-align: center;
 }
+
+/* 微信式消息列表：普通房间行补头像在线点 */
+.dd-snaplink__workbench-room-avatar {
+  position: relative;
+  flex: none;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dd-snaplink__workbench-room-avatar i {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--snap-surface);
+  border-radius: 999px;
+  background: #c4c8cc;
+}
+
+.dd-snaplink__workbench-room-avatar i.is-online {
+  background: var(--snap-green);
+}
+
+.dd-snaplink__workbench-room.is-public .dd-snaplink__workbench-room-avatar {
+  background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
+  color: var(--snap-green);
+}
