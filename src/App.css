@@ -21406,6 +21406,32 @@
     display: none;
   }
 
+  .dd-snaplink__tool-status {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 52px;
+    padding: 8px 12px;
+  }
+
+  .dd-snaplink__tool-status .dd-snaplink__identity {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .dd-snaplink__tool-status .dd-snaplink__identity small {
+    display: block;
+    color: var(--snap-muted);
+    font-size: 11px;
+  }
+
+  .dd-snaplink__tool-status .dd-snaplink__status-pills {
+    display: none;
+  }
+
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
     min-height: 44px;
     padding: 6px 10px;
