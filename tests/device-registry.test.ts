@@ -16,7 +16,7 @@ function createSocket() {
 }
 
 describe('DeviceRegistry device name rules', () => {
-  it('replaces the reserved device name during registration', () => {
+  it('keeps a custom Chinese device name during registration', () => {
     const registry = new DeviceRegistry()
 
     const device = registry.register(
@@ -28,10 +28,10 @@ describe('DeviceRegistry device name rules', () => {
       testNetwork,
     )
 
-    expect(device.deviceName).toBe('黄石容')
+    expect(device.deviceName).toBe('陈冠嵘')
   })
 
-  it('replaces the reserved device name during updates', () => {
+  it('trims and keeps a custom Chinese device name during updates', () => {
     const registry = new DeviceRegistry()
     registry.register(
       createSocket(),
@@ -46,6 +46,6 @@ describe('DeviceRegistry device name rules', () => {
       deviceName: ' 陈冠嵘 ',
     })
 
-    expect(updated?.deviceName).toBe('黄石容')
+    expect(updated?.deviceName).toBe('陈冠嵘')
   })
 })

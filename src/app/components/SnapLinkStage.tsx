@@ -824,8 +824,8 @@ export type SnapLinkStageProps = {
   deviceName: string
   devicePlatform: string
   deviceShortCode?: string
-  deviceSettings: Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>
-  devicePreferences: DevicePreferencesPayload
+  deviceSettings?: Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>
+  devicePreferences?: DevicePreferencesPayload
   accountId?: string
   selectedRoomId: string | null
   autoOpenRoomId?: string | null
@@ -845,13 +845,13 @@ export type SnapLinkStageProps = {
   selectedAiModelLabel: string
   unifiedConversationEntries: UnifiedConversationEntry[]
   fileConversationEmptyState: string
-  globalTransferEntries: FileConversationEntry[]
-  sharedMediaEntries: FileConversationEntry[]
-  sharedFileEntries: FileConversationEntry[]
-  sharedLinkEntries: SnapLinkSharedLinkEntry[]
-  historyFiles: HistoryFileSummary[]
-  historyTexts: HistoryTextSummary[]
-  pendingIncomingFileOffers: IncomingFileOffer[]
+  globalTransferEntries?: FileConversationEntry[]
+  sharedMediaEntries?: FileConversationEntry[]
+  sharedFileEntries?: FileConversationEntry[]
+  sharedLinkEntries?: SnapLinkSharedLinkEntry[]
+  historyFiles?: HistoryFileSummary[]
+  historyTexts?: HistoryTextSummary[]
+  pendingIncomingFileOffers?: IncomingFileOffer[]
   localError: string | null
   errorMessage: string | null
   aiChatElement: ReactNode
@@ -1405,8 +1405,8 @@ export function SnapLinkStage({
   deviceName,
   devicePlatform,
   deviceShortCode,
-  deviceSettings,
-  devicePreferences,
+  deviceSettings = { autoConnect: true, discoverable: true, allowShortCode: true },
+  devicePreferences = { enterToSend: true },
   accountId,
   selectedRoomId,
   autoOpenRoomId,
@@ -1426,13 +1426,13 @@ export function SnapLinkStage({
   selectedAiModelLabel,
   unifiedConversationEntries,
   fileConversationEmptyState,
-  globalTransferEntries,
-  sharedMediaEntries,
-  sharedFileEntries,
-  sharedLinkEntries,
-  historyFiles,
-  historyTexts,
-  pendingIncomingFileOffers,
+  globalTransferEntries = [],
+  sharedMediaEntries = [],
+  sharedFileEntries = [],
+  sharedLinkEntries = [],
+  historyFiles = [],
+  historyTexts = [],
+  pendingIncomingFileOffers = [],
   localError,
   errorMessage,
   aiChatElement,

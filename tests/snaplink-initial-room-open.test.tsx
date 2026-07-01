@@ -77,7 +77,7 @@ describe('SnapLinkStage initial room opening', () => {
     const onOpenRoomConversation = vi.fn()
     const { rerender } = render(<SnapLinkStage {...createBaseProps()} />)
 
-    expect(screen.getByText('会话列表')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
 
     rerender(
       <SnapLinkStage
@@ -118,7 +118,7 @@ describe('SnapLinkStage initial room opening', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('会话列表')).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /世界对话 1/ })).toBeInTheDocument()
     })
 
@@ -128,7 +128,7 @@ describe('SnapLinkStage initial room opening', () => {
     fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
 
     expect(onOpenRoomConversation).toHaveBeenCalledWith('ROOM123')
-    expect(screen.queryByText('会话列表')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).not.toBeInTheDocument()
     expect(screen.getByText('历史内容')).toBeInTheDocument()
     expect(screen.getByText('你好，房间已经打开了')).toBeInTheDocument()
   })

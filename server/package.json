@@ -13,7 +13,7 @@
     "@supabase/supabase-js": "^2.104.1",
     "dotenv": "^17.2.3",
     "resend": "^6.12.3",
-    "ws": "^8.18.3"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",

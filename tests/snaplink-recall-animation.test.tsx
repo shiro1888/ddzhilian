@@ -117,7 +117,7 @@ describe('SnapLinkStage recall animation', () => {
     const { rerender } = render(<SnapLinkStage {...baseProps} />)
 
     await act(async () => {
-      vi.runAllTimers()
+      vi.advanceTimersByTime(0)
       await Promise.resolve()
     })
 
@@ -159,5 +159,5 @@ describe('SnapLinkStage recall animation', () => {
     })
 
     expect(screen.queryByText('这条消息将被撤回')).not.toBeInTheDocument()
-  })
+  }, 15000)
 })

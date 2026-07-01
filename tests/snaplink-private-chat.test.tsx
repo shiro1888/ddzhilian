@@ -93,7 +93,7 @@ describe('SnapLinkStage private chat entry', () => {
       />,
     )
 
-    expect(screen.getByText('会话列表')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /发起私聊/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: '选择在线设备' })).not.toBeInTheDocument()
     expect(onStartPrivateChat).not.toHaveBeenCalled()
@@ -152,7 +152,7 @@ describe('SnapLinkStage private chat entry', () => {
     )
 
     return waitFor(() => {
-      expect(screen.queryByText('会话列表')).not.toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).not.toBeInTheDocument()
       expect(screen.getByText('历史内容')).toBeInTheDocument()
       expect(screen.getByText('私聊已建立')).toBeInTheDocument()
       expect(onOpenRoomConversation).not.toHaveBeenCalled()

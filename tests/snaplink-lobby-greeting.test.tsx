@@ -66,7 +66,7 @@ function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkS
   }
 }
 
-describe('SnapLinkStage lobby greeting', () => {
+describe('SnapLinkStage lobby workbench', () => {
   beforeEach(() => {
     window.localStorage.clear()
     vi.clearAllMocks()
@@ -76,22 +76,11 @@ describe('SnapLinkStage lobby greeting', () => {
     cleanup()
   })
 
-  it('renders the greeting through EncryptedText without changing the accessible heading', () => {
-    const { container } = render(<SnapLinkStage {...createBaseProps()} />)
-    const greetingText = '你好，我是ddzhilian'
+  it('renders the default nearby workbench with an accessible region and title', () => {
+    render(<SnapLinkStage {...createBaseProps()} />)
 
-    const heading = screen.getByRole('heading', { name: greetingText })
-    expect(heading).toBeInTheDocument()
-
-    const encryptedText = container.querySelector('.dd-snaplink__lobby-type')
-    expect(encryptedText).toHaveAttribute('aria-label', greetingText)
-    expect(encryptedText).toHaveAttribute('role', 'text')
-
-    const characterSpans = container.querySelectorAll(
-      '.dd-snaplink__lobby-encrypted, .dd-snaplink__lobby-revealed',
-    )
-
-    expect(characterSpans).toHaveLength(greetingText.length)
-    expect(container.querySelector('.dd-snaplink__lobby-cursor')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '附近设备' })).toBeInTheDocument()
+    expect(screen.getByText('等待同一 Wi-Fi / 局域网内的设备出现')).toBeInTheDocument()
   })
 })

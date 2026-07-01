@@ -77,7 +77,7 @@ describe('AdminV2ProtectedLayout sidebar', () => {
   it('expands the desktop admin sidebar on hover and collapses after leave', () => {
     renderAdminShell()
 
-    expect(getSidebarWrapperNode().style.getPropertyValue('--sidebar-width-icon')).toBe('33px')
+    expect(getSidebarWrapperNode().style.getPropertyValue('--sidebar-width-icon')).toBe('36px')
     expect(getDesktopSidebarStateNode()).toHaveAttribute('data-state', 'collapsed')
 
     fireEvent.mouseEnter(getDesktopSidebarHoverNode())

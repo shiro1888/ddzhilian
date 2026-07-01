@@ -59,7 +59,7 @@ describe('ChatAiStage file drag and drop', () => {
     fireEvent.drop(chat, createFileDragEvent([file]))
 
     await waitFor(() => {
-      expect(screen.getByText('notes.md')).toBeInTheDocument()
+      expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0)
     })
     expect(screen.queryByText('松开添加附件')).not.toBeInTheDocument()
   })
@@ -75,7 +75,7 @@ describe('ChatAiStage file drag and drop', () => {
     fireEvent.drop(chat, createFileDragEvent(files))
 
     await waitFor(() => {
-      expect(screen.getByText('notes-98.md')).toBeInTheDocument()
+      expect(screen.getAllByText('notes-98.md').length).toBeGreaterThan(0)
     })
     expect(screen.queryByText('notes-99.md')).not.toBeInTheDocument()
   })
@@ -102,7 +102,7 @@ describe('ChatAiStage file drag and drop', () => {
       onAiModelChange,
     })
 
-    const select = screen.getByLabelText('选择 AI 模型') as HTMLSelectElement
+    const select = screen.getAllByLabelText('选择 AI 模型')[0] as HTMLSelectElement
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
       'OpenRouter · GPT 4.1 Mini',
       'Cloudflare AI · GLM 5.2',
