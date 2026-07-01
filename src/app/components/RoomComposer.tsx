@@ -123,6 +123,7 @@ export function RoomComposer({
 }: RoomComposerProps) {
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false)
   const filePickerRef = useRef<HTMLInputElement | null>(null)
+  const imagePickerRef = useRef<HTMLInputElement | null>(null)
   const cameraPickerRef = useRef<HTMLInputElement | null>(null)
 
   const runPlusAction = (action: () => void) => {
@@ -190,6 +191,18 @@ export function RoomComposer({
                   <span>
                     <strong>发送文件</strong>
                     <small>文件、图片或压缩包</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="dd-snaplink__plus-item"
+                  role="menuitem"
+                  onClick={() => imagePickerRef.current?.click()}
+                >
+                  <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>照片</strong>
+                    <small>从相册选择图片</small>
                   </span>
                 </button>
                 <button
@@ -271,6 +284,15 @@ export function RoomComposer({
           ref={filePickerRef}
           id={fileInputId}
           type="file"
+          multiple
+          hidden
+          onChange={handleFileInputChange}
+        />
+        <input
+          ref={imagePickerRef}
+          id={`${fileInputId}-image`}
+          type="file"
+          accept="image/*"
           multiple
           hidden
           onChange={handleFileInputChange}
