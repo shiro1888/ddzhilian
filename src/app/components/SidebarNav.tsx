@@ -54,20 +54,20 @@ export function SidebarNav({
           className={isMessagesActive ? 'is-active' : ''}
           aria-pressed={isMessagesActive}
           onClick={onShowRooms}
-          title="会话"
+          title="消息"
         >
           <MessageCircle size={22} strokeWidth={1.8} aria-hidden="true" />
-          <span>会话</span>
+          <span>消息</span>
         </button>
         <button
           type="button"
           className={isDevicesActive ? 'is-active' : ''}
           aria-pressed={isDevicesActive}
           onClick={onShowNearby}
-          title="附近"
+          title="设备"
         >
           <MonitorSmartphone size={21} strokeWidth={1.8} aria-hidden="true" />
-          <span>附近</span>
+          <span>设备</span>
         </button>
         <button
           type="button"
@@ -84,10 +84,10 @@ export function SidebarNav({
           className={isMeActive ? 'is-active' : ''}
           aria-pressed={isMeActive}
           onClick={onShowSettings}
-          title="更多"
+          title="我的"
         >
           <User size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>更多</span>
+          <span>我的</span>
         </button>
       </nav>
       <span className="dd-snaplink__rail-avatar">{getSidebarInitial(deviceName)}</span>

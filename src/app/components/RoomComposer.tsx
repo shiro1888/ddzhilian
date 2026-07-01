@@ -11,6 +11,7 @@ import {
   Bot,
   Camera,
   Command,
+  FileText,
   Image as ImageIcon,
   Paperclip,
   ScanText,
@@ -215,6 +216,18 @@ export function RoomComposer({
                   <span>
                     <strong>拍照</strong>
                     <small>手机端可直接调用相机</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="dd-snaplink__plus-item"
+                  role="menuitem"
+                  onClick={() => runPlusAction(() => inputRef.current?.focus())}
+                >
+                  <FileText size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>文本</strong>
+                    <small>回到输入框发送文字</small>
                   </span>
                 </button>
                 <button

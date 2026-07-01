@@ -4510,7 +4510,7 @@ export function SnapLinkStage({
             选择文件
           </button>
           <button type="button" onClick={handleShowWorkbenchNearby}>
-            查看附近设备
+            查看设备
           </button>
         </div>
       </div>
@@ -4820,10 +4820,10 @@ export function SnapLinkStage({
     const hasSearchResult = shouldShowAssistant || filteredRooms.length > 0
 
     return (
-      <aside className="dd-snaplink__conversation-side" aria-label="会话列表">
+      <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
         <div className="dd-snaplink__conversation-side-head">
           <span>
-            <strong>会话</strong>
+            <strong>消息</strong>
             <small>世界对话、房间和 DD助手</small>
           </span>
           <button
@@ -5366,9 +5366,9 @@ export function SnapLinkStage({
       switch (workbenchMode) {
         case 'rooms':
           return {
-            title: '会话',
+            title: '消息',
             description: '世界对话、房间和最近会话都在这里，点进去即可聊天或传文件。',
-            accent: '会话',
+            accent: '消息',
             actionLabel: '创建房间',
             onAction: handleCreatePublicRoom,
           }
@@ -5406,18 +5406,18 @@ export function SnapLinkStage({
           }
         case 'settings':
           return {
-            title: '更多',
+            title: '我的',
             description: '工具中心、历史记录和基础设置都收在这里。',
-            accent: '更多',
+            accent: '我的',
             actionLabel: '历史记录',
             onAction: handleShowWorkbenchHistory,
           }
         case 'nearby':
         default:
           return {
-            title: '附近',
+            title: '设备',
             description: '发现同一局域网内的设备，点击设备进入会话，更多操作放在菜单里。',
-            accent: '附近',
+            accent: '设备',
             actionLabel: '重新扫描',
             onAction: handleWorkbenchRescan,
           }
@@ -6055,7 +6055,7 @@ export function SnapLinkStage({
                     className="dd-snaplink__room-mobile-back"
                     onClick={handleShowWorkbenchRooms}
                   >
-                    ‹ 返回会话
+                    ‹ 返回消息
                   </button>
                   <button
                     type="button"

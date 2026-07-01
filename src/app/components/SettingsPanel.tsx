@@ -168,7 +168,7 @@ export function SettingsPanel({
   const hasMyShortcuts = Boolean(onShowHistory || onOpenAiChat || onOpenImage || onOpenCommand)
 
   return (
-    <section className="dd-snaplink__workbench-page is-settings" aria-label="更多">
+    <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
       {header}
       {feedbackMessage ? (
         <div className="dd-snaplink__settings-feedback" role="status" aria-live="polite">
