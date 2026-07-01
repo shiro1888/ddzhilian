@@ -5918,31 +5918,18 @@ export function SnapLinkStage({
                   onOpenCommand={handleOpenCommand}
                 />
 
-                <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间快捷操作">
+                <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间更多入口">
                   <button
                     type="button"
-                    className={isMobileRoomMembersOpen ? 'is-active' : ''}
+                    className={isMobileRoomMembersOpen || Boolean(effectiveActiveSharedTab) ? 'is-active' : ''}
                     aria-pressed={isMobileRoomMembersOpen}
+                    aria-expanded={isMobileRoomMembersOpen}
                     onClick={() => {
                       setActiveSharedTab(null)
                       setIsMobileRoomMembersOpen((current) => !current)
                     }}
                   >
-                    成员 {selectedRoomOnlineCount.toString()}/{(selectedRoom?.memberCount ?? 1).toString()}
-                  </button>
-                  <button
-                    type="button"
-                    className={effectiveActiveSharedTab ? 'is-active' : ''}
-                    aria-pressed={Boolean(effectiveActiveSharedTab)}
-                    onClick={() => {
-                      setIsMobileRoomMembersOpen(false)
-                      setActiveSharedTab((current) => (current ? null : 'files'))
-                    }}
-                  >
-                    历史内容 {sharedContentCount.toString()}
-                  </button>
-                  <button type="button" onClick={handleCopyRoomId}>
-                    {copiedRoomId === selectedRoomId ? '已复制房间码' : '复制房间码'}
+                    更多
                   </button>
                 </div>
 
@@ -5993,8 +5980,34 @@ export function SnapLinkStage({
               {isMobileRoomMembersOpen ? (
                 <aside className="dd-snaplink__room-member-panel" aria-label="房间成员">
                   <div className="dd-snaplink__room-member-head">
-                    <strong>房间成员</strong>
-                    <span>{selectedRoomOnlineCount.toString()} 在线 · {(selectedRoom?.memberCount ?? 1).toString()} 成员</span>
+                    <strong>房间详情</strong>
+                    <span>
+                      {selectedRoomOnlineCount.toString()} 在线 · {(selectedRoom?.memberCount ?? 1).toString()} 成员
+                    </span>
+                  </div>
+                  <div className="dd-snaplink__room-member-actions" aria-label="房间操作">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileRoomMembersOpen(false)
+                        setActiveSharedTab('files')
+                      }}
+                    >
+                      历史内容 {sharedContentCount.toString()}
+                    </button>
+                    <button type="button" onClick={handleCopyRoomId}>
+                      {copiedRoomId === selectedRoomId ? '已复制房间码' : '复制房间码'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSharedTab(null)
+                        setIsMobileRoomMembersOpen(false)
+                        setIsLobbyOpen(true)
+                      }}
+                    >
+                      离开房间
+                    </button>
                   </div>
                   <div className="dd-snaplink__room-member-list">
                     {(selectedRoom?.members ?? []).map((member) => (
