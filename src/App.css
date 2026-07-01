@@ -21860,10 +21860,36 @@
 /* 桌面也去掉重复的绿色标题块，让工作区标题更像会话列表顶部栏 */
 .dd-snaplink__mode-overview {
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 44px;
+  padding: 7px 0 11px;
+  border-width: 0 0 1px;
+  border-color: var(--snap-border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .dd-snaplink__mode-overview-mark {
   display: none;
+}
+
+.dd-snaplink__mode-overview-copy {
+  gap: 0;
+}
+
+.dd-snaplink__mode-overview-copy strong {
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.dd-snaplink__mode-overview-copy small {
+  display: none;
+}
+
+.dd-snaplink__mode-overview button {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
 }
 
 /* 移动端工作区标题再减重：只留当前页标题和一个主操作 */
