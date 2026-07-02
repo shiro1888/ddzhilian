@@ -2174,6 +2174,7 @@ function App() {
       onOpenRoomHome={() => handleViewChange('text')}
       onOpenAiChatView={() => handleViewChange('chat')}
       onOpenImageView={() => handleViewChange('image')}
+      onOpenAdminView={() => handleViewChange('admin')}
       onOpenCommandView={() => handleViewChange('command')}
       onShareCommandResult={handleShareCommandResult}
       onPrepareAiDraft={handlePrepareAiDraft}

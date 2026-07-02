@@ -867,6 +867,7 @@ export type SnapLinkStageProps = {
   onOpenRoomHome: () => void
   onOpenAiChatView: () => void
   onOpenImageView: () => void
+  onOpenAdminView: () => void
   onOpenCommandView: () => void
   onShareCommandResult?: () => void
   onPrepareAiDraft?: (text: string, context?: AiDraftContextPayload) => void
@@ -1448,6 +1449,7 @@ export function SnapLinkStage({
   onOpenRoomHome,
   onOpenAiChatView,
   onOpenImageView,
+  onOpenAdminView,
   onOpenCommandView,
   onShareCommandResult,
   onPrepareAiDraft,
@@ -5484,6 +5486,9 @@ export function SnapLinkStage({
       themeColors={themeColors}
       themeOptions={snapLinkThemeColorOptions}
       feedbackMessage={settingsFeedbackMessage}
+      aiModelLabel={selectedAiModelLabel}
+      aiQuotaLabel={aiQuotaLabel}
+      canOpenAdmin={canRecallAnyMessage}
       onDeviceNameDraftChange={(value) => {
         setDeviceNameDraft(value)
         setDeviceNameError(null)
@@ -5535,6 +5540,7 @@ export function SnapLinkStage({
       onOpenAiChat={handleOpenAiChat}
       onOpenImage={handleOpenImage}
       onOpenCommand={handleOpenCommand}
+      onOpenAdmin={onOpenAdminView}
     />
   )
 

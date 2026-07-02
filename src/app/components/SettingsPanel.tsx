@@ -1,5 +1,5 @@
 import type { FormEventHandler, ReactNode } from 'react'
-import { Bot, Clock3, Command, FileText, Image as ImageIcon, Monitor, MoonStar, Settings, Wifi } from 'lucide-react'
+import { Bot, Clock3, Command, FileText, Image as ImageIcon, Monitor, MoonStar, Settings, ShieldCheck, Wifi } from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 
 export type SettingsPanelThemeColorTarget = 'self' | 'peer' | 'ai'
@@ -34,6 +34,9 @@ type SettingsPanelProps = {
   themeColors: SettingsPanelThemeColors
   themeOptions: SettingsPanelThemeOption[]
   feedbackMessage: string | null
+  aiModelLabel?: string
+  aiQuotaLabel?: string
+  canOpenAdmin?: boolean
   onDeviceNameDraftChange: (value: string) => void
   onDeviceNameSubmit: FormEventHandler<HTMLFormElement>
   onDiscoverableChange: (checked: boolean) => void
@@ -48,6 +51,7 @@ type SettingsPanelProps = {
   onOpenAiChat?: () => void
   onOpenImage?: () => void
   onOpenCommand?: () => void
+  onOpenAdmin?: () => void
 }
 
 type SettingsSwitchProps = {
@@ -150,6 +154,9 @@ export function SettingsPanel({
   themeColors,
   themeOptions,
   feedbackMessage,
+  aiModelLabel,
+  aiQuotaLabel,
+  canOpenAdmin = false,
   onDeviceNameDraftChange,
   onDeviceNameSubmit,
   onDiscoverableChange,
@@ -164,8 +171,9 @@ export function SettingsPanel({
   onOpenAiChat,
   onOpenImage,
   onOpenCommand,
+  onOpenAdmin,
 }: SettingsPanelProps) {
-  const hasMyShortcuts = Boolean(onShowHistory || onOpenAiChat || onOpenImage || onOpenCommand)
+  const hasMyShortcuts = Boolean(onShowHistory || onOpenAiChat || onOpenImage || onOpenCommand || (canOpenAdmin && onOpenAdmin))
 
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
@@ -236,6 +244,15 @@ export function SettingsPanel({
                   </span>
                 </button>
               ) : null}
+              {onOpenAiChat ? (
+                <button type="button" onClick={onOpenAiChat}>
+                  <Settings size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>AI 设置</strong>
+                    <small>{[aiModelLabel || '默认模型', aiQuotaLabel || '额度同步'].join(' · ')}</small>
+                  </span>
+                </button>
+              ) : null}
               {onOpenImage ? (
                 <button type="button" onClick={onOpenImage}>
                   <ImageIcon size={17} strokeWidth={1.9} aria-hidden="true" />
@@ -251,6 +268,15 @@ export function SettingsPanel({
                   <span>
                     <strong>Web 命令行</strong>
                     <small>运行命令并发送结果文本</small>
+                  </span>
+                </button>
+              ) : null}
+              {canOpenAdmin && onOpenAdmin ? (
+                <button type="button" onClick={onOpenAdmin}>
+                  <ShieldCheck size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>管理员</strong>
+                    <small>设备管理、模型策略和后台控制面板</small>
                   </span>
                 </button>
               ) : null}
