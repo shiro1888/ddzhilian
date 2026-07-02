@@ -13943,6 +13943,63 @@
   color: var(--snap-warning);
 }
 
+.dd-snaplink__room-more-security {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--snap-border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--snap-green) 4%, var(--snap-bg));
+}
+
+.dd-snaplink__room-more-security > strong {
+  color: var(--snap-ink);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dd-snaplink__room-more-security > div {
+  display: grid;
+  gap: 5px;
+}
+
+.dd-snaplink__room-more-security span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dd-snaplink__room-more-security small {
+  overflow: hidden;
+  color: var(--snap-muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-more-security em {
+  overflow: hidden;
+  color: var(--snap-ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-more-security span.is-safe em {
+  color: var(--snap-green);
+}
+
+.dd-snaplink__room-more-security span.is-warning em {
+  color: var(--snap-warning);
+}
+
 .dd-snaplink__room-more-actions {
   display: grid;
   gap: 6px;

@@ -6253,6 +6253,33 @@ export function SnapLinkStage({
                         tone: workbenchActiveTransferCount > 0 ? 'transfer' : 'default',
                       },
                     ]}
+                    connectionDetails={[
+                      {
+                        id: 'room-code',
+                        label: '房间',
+                        value: copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId ?? '当前',
+                      },
+                      {
+                        id: 'transport',
+                        label: '传输通道',
+                        value: 'WebRTC 直连',
+                        tone: 'safe',
+                      },
+                      {
+                        id: 'serverless',
+                        label: '文件路径',
+                        value: '不经过服务器',
+                        tone: 'safe',
+                      },
+                      {
+                        id: 'active-transfer',
+                        label: '传输状态',
+                        value: workbenchActiveTransferCount > 0
+                          ? `${workbenchActiveTransferCount.toString()} 个进行中`
+                          : '空闲',
+                        tone: workbenchActiveTransferCount > 0 ? 'warning' : 'default',
+                      },
+                    ]}
                     sharedContentCount={sharedContentCount}
                     isSharedContentOpen={Boolean(effectiveActiveSharedTab)}
                     onCopyRoomId={handleCopyRoomId}

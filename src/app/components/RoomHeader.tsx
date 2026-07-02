@@ -7,11 +7,19 @@ type RoomHeaderStat = {
   tone?: 'default' | 'online' | 'transfer'
 }
 
+type RoomHeaderConnectionDetail = {
+  id: string
+  label: string
+  value: ReactNode
+  tone?: 'default' | 'safe' | 'warning'
+}
+
 type RoomHeaderProps = {
   roomCodeLabel: ReactNode
   peerLabel: string
   peerTitle: string
   stats?: RoomHeaderStat[]
+  connectionDetails?: RoomHeaderConnectionDetail[]
   sharedContentCount: number
   isSharedContentOpen: boolean
   onCopyRoomId: () => void
@@ -24,6 +32,7 @@ export function RoomHeader({
   peerLabel,
   peerTitle,
   stats = [],
+  connectionDetails = [],
   sharedContentCount,
   isSharedContentOpen,
   onCopyRoomId,
@@ -111,6 +120,22 @@ export function RoomHeader({
                         <strong>{item.value}</strong>
                       </span>
                     ))}
+                  </div>
+                ) : null}
+                {connectionDetails.length > 0 ? (
+                  <div className="dd-snaplink__room-more-security" aria-label="连接与安全">
+                    <strong>连接与安全</strong>
+                    <div>
+                      {connectionDetails.map((item) => (
+                        <span
+                          key={item.id}
+                          className={item.tone ? `is-${item.tone}` : undefined}
+                        >
+                          <small>{item.label}</small>
+                          <em>{item.value}</em>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
                 <div className="dd-snaplink__room-more-actions">
