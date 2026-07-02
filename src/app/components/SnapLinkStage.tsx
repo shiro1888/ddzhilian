@@ -2981,6 +2981,9 @@ export function SnapLinkStage({
     onOpenRoomHome()
   }
 
+  const shouldShowConversationOnDesktop = () =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 761px)').matches
+
   const handleShowWorkbenchNearby = () => {
     handleBackToLobby()
     setWorkbenchMode('nearby')
@@ -3002,7 +3005,9 @@ export function SnapLinkStage({
   }
 
   const handleShowWorkbenchRooms = () => {
-    handleBackToLobby()
+    setActiveSharedTab(null)
+    onOpenRoomHome()
+    setIsLobbyOpen(!(selectedRoomId && shouldShowConversationOnDesktop()))
     setWorkbenchMode('rooms')
   }
 
