@@ -22350,6 +22350,10 @@
     display: none;
   }
 
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-transfer-board > .dd-snaplink__section-head small {
+    display: none;
+  }
+
   .dd-snaplink__workbench.has-empty-transfer-queue > .dd-snaplink__queue,
   .dd-snaplink__room-workbench.has-empty-transfer-queue > .dd-snaplink__queue {
     display: none;
