@@ -22709,3 +22709,56 @@
     display: none;
   }
 }
+
+/* 微信版 v2：桌面窄栏更接近聊天工具，减少左侧浅灰块对内容的干扰 */
+@media (min-width: 761px) {
+  .dd-snaplink__rail {
+    border-right-color: #20262d;
+    background: #252b32;
+  }
+
+  .dd-snaplink__rail-logo {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  .dd-snaplink__rail-nav button {
+    color: rgba(255, 255, 255, 0.56);
+  }
+
+  .dd-snaplink__rail-nav button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .dd-snaplink__rail-nav button.is-active {
+    background: rgba(7, 193, 96, 0.16);
+    color: #31d17b;
+  }
+
+  .dd-snaplink__rail-badge {
+    border-color: #252b32;
+    background: var(--snap-green);
+  }
+
+  .dd-snaplink__rail-avatar {
+    margin-top: auto;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* 微信版 v2：未读/房间角标默认安静化，失败态仍由传输卡片使用红色表达 */
+.dd-snaplink__conversation-row.has-unread .dd-snaplink__conversation-main small {
+  color: var(--snap-ink-soft);
+}
+
+.dd-snaplink__conversation-side-meta strong {
+  background: #eef0f2;
+  color: #5f6670;
+}
+
+:root.dark .dd-snaplink__conversation-side-meta strong,
+:root[data-theme-mode="dark"] .dd-snaplink__conversation-side-meta strong {
+  background: #30343a;
+  color: #b8c0ca;
+}

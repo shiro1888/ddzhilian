@@ -95,7 +95,14 @@ export function SidebarNav({
           <span>我的</span>
         </button>
       </nav>
-      <span className="dd-snaplink__rail-avatar">{getSidebarInitial(deviceName)}</span>
+      <span
+        className="dd-snaplink__rail-avatar"
+        role="img"
+        aria-label={`当前设备：${deviceName}`}
+        title={`当前设备：${deviceName}`}
+      >
+        {getSidebarInitial(deviceName)}
+      </span>
     </aside>
   )
 }
