@@ -42,9 +42,11 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
         ? rawProgressPercent
         : 0
     : rawProgressPercent
+  const isCompleted = file.transferStatus === 'completed' || file.tone === 'completed'
+  const isActive = file.transferStatus === 'transferring' || file.tone === 'active'
 
   return (
-    <div className="dd-snaplink__file-card">
+    <div className={`dd-snaplink__file-card${isCompleted ? ' is-completed' : isActive ? ' is-active' : ''}`}>
       <div className="dd-snaplink__file-top">
         <span className="dd-snaplink__file-ext">{getFileExtension(file.fileName)}</span>
         <div>
@@ -59,15 +61,22 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
           <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
         </div>
       ) : null}
-      <div
-        className="dd-snaplink__file-progress"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progressPercent}
-      >
-        <div style={{ width: `${progressPercent}%` }} />
-      </div>
+      {isCompleted ? (
+        <div className="dd-snaplink__file-done" aria-label="发送成功">
+          <span aria-hidden="true">✓</span>
+          发送成功
+        </div>
+      ) : (
+        <div
+          className="dd-snaplink__file-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+        >
+          <div style={{ width: `${progressPercent}%` }} />
+        </div>
+      )}
       {actions}
     </div>
   )

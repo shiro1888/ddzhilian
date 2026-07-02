@@ -1,4 +1,4 @@
-import type { FormEventHandler, ReactNode } from 'react'
+import type { CSSProperties, FormEventHandler, ReactNode } from 'react'
 import {
   Bot,
   Clock3,
@@ -31,6 +31,7 @@ type SettingsPanelThemeModeOption = {
 type SettingsPanelProps = {
   header?: ReactNode
   deviceName: string
+  avatarDataUrl?: string | null
   deviceNameDraft: string
   deviceNameError: string | null
   devicePlatform: string
@@ -47,6 +48,7 @@ type SettingsPanelProps = {
   themeOptions: SettingsPanelThemeOption[]
   feedbackMessage: string | null
   canOpenAdmin?: boolean
+  onAvatarClick?: () => void
   onDeviceNameDraftChange: (value: string) => void
   onDeviceNameSubmit: FormEventHandler<HTMLFormElement>
   onDiscoverableChange: (checked: boolean) => void
@@ -149,6 +151,7 @@ function ThemeColorField({
 export function SettingsPanel({
   header,
   deviceName,
+  avatarDataUrl = null,
   deviceNameDraft,
   deviceNameError,
   devicePlatform,
@@ -165,6 +168,7 @@ export function SettingsPanel({
   themeOptions,
   feedbackMessage,
   canOpenAdmin = false,
+  onAvatarClick,
   onDeviceNameDraftChange,
   onDeviceNameSubmit,
   onDiscoverableChange,
@@ -195,7 +199,17 @@ export function SettingsPanel({
       <div className="dd-snaplink__settings-grid">
         <form className="dd-snaplink__settings-card" onSubmit={onDeviceNameSubmit}>
           <div className="dd-snaplink__settings-card-head">
-            <Monitor size={18} strokeWidth={1.8} aria-hidden="true" />
+            <button
+              type="button"
+              className={`dd-snaplink__settings-avatar${avatarDataUrl ? ' has-image' : ''}`}
+              style={avatarDataUrl ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties : undefined}
+              aria-label="更换头像"
+              title="更换头像"
+              onClick={onAvatarClick}
+            >
+              {avatarDataUrl ? null : <Monitor size={18} strokeWidth={1.8} aria-hidden="true" />}
+              <i aria-hidden="true">相</i>
+            </button>
             <span>
               <strong>当前设备</strong>
               <small>这个名字会显示给附近设备</small>

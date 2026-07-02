@@ -31,6 +31,7 @@ type RoomComposerProps = {
   images: ComposerImageDraft[]
   fileInputId: string
   ocrPanelId: string
+  targetName?: string
   defaultDraft: string
   isOcrPanelOpen: boolean
   isBotDraft: boolean
@@ -66,6 +67,8 @@ type RoomComposerProps = {
   onComposerKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
   onEmojiToggle: () => void
   onEmojiInsert: (emoji: string) => void
+  onEmojiBackspace: () => void
+  onEmojiSend: () => void
   onOpenImageTool?: () => void
   onOpenCommandTool?: () => void
 }
@@ -84,6 +87,7 @@ export function RoomComposer({
   images,
   fileInputId,
   ocrPanelId,
+  targetName,
   defaultDraft,
   isOcrPanelOpen,
   isBotDraft,
@@ -119,6 +123,8 @@ export function RoomComposer({
   onComposerKeyDown,
   onEmojiToggle,
   onEmojiInsert,
+  onEmojiBackspace,
+  onEmojiSend,
   onOpenImageTool,
   onOpenCommandTool,
 }: RoomComposerProps) {
@@ -361,7 +367,7 @@ export function RoomComposer({
           <textarea
             ref={inputRef}
             defaultValue={defaultDraft}
-            placeholder="输入消息..."
+            placeholder={targetName ? `发送给 ${targetName} · 或直接把文件拖进窗口` : '输入消息...'}
             autoComplete="off"
             rows={1}
             onChange={onDraftChange}
@@ -389,16 +395,30 @@ export function RoomComposer({
               role="dialog"
               aria-label="Emoji 选择器"
             >
-              {roomComposerQuickEmojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="dd-snaplink__emoji-item"
-                  onClick={() => onEmojiInsert(emoji)}
-                >
-                  {emoji}
+              <div className="dd-snaplink__emoji-picker-head">
+                <strong>表情</strong>
+                <small>连续点选不会关闭面板</small>
+              </div>
+              <div className="dd-snaplink__emoji-grid">
+                {roomComposerQuickEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="dd-snaplink__emoji-item"
+                    onClick={() => onEmojiInsert(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="dd-snaplink__emoji-actions">
+                <button type="button" onClick={onEmojiBackspace}>
+                  回删
                 </button>
-              ))}
+                <button type="button" className="is-primary" onClick={onEmojiSend}>
+                  发送
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

@@ -4,15 +4,18 @@ import {
   MonitorSmartphone,
   User,
 } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
 export type SidebarNavMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'settings'
 export type SidebarNavTool = 'ai-chat' | 'image' | 'command'
 
 type SidebarNavProps = {
   deviceName: string
+  avatarDataUrl?: string | null
   activeMode?: SidebarNavMode | null
   activeTool?: SidebarNavTool | null
   activeTransferCount?: number
+  onAvatarClick?: () => void
   onShowNearby: () => void
   onShowRooms: () => void
   onShowQueue: () => void
@@ -26,9 +29,11 @@ function getSidebarInitial(value: string) {
 
 export function SidebarNav({
   deviceName,
+  avatarDataUrl = null,
   activeMode = null,
   activeTool = null,
   activeTransferCount = 0,
+  onAvatarClick,
   onShowRooms,
   onShowNearby,
   onShowQueue,
@@ -95,14 +100,16 @@ export function SidebarNav({
           <span>我的</span>
         </button>
       </nav>
-      <span
-        className="dd-snaplink__rail-avatar"
-        role="img"
+      <button
+        type="button"
+        className={`dd-snaplink__rail-avatar${avatarDataUrl ? ' has-image' : ''}`}
+        style={avatarDataUrl ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties : undefined}
         aria-label={`当前设备：${deviceName}`}
-        title={`当前设备：${deviceName}`}
+        title={onAvatarClick ? '更换头像' : `当前设备：${deviceName}`}
+        onClick={onAvatarClick}
       >
-        {getSidebarInitial(deviceName)}
-      </span>
+        {avatarDataUrl ? null : getSidebarInitial(deviceName)}
+      </button>
     </aside>
   )
 }

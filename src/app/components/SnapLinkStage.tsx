@@ -14,13 +14,21 @@ import type {
 import { createPortal, flushSync } from 'react-dom'
 import {
   Bot,
+  Copy,
   Command,
+  FileUp,
   ImageIcon,
   Laptop,
+  Maximize2,
+  Minimize2,
   Monitor,
+  MoonStar,
+  Plus,
+  Radio,
   Send,
   ShieldCheck,
   Smartphone,
+  SunMedium,
   Tablet,
   Upload,
   Users,
@@ -48,7 +56,10 @@ import type {
 } from '../../lib/ddzhilian-types'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 import { applyThemeMode, subscribeToSystemTheme } from '../../lib/preferences/theme-utils'
+import { CommandPalette } from './CommandPalette'
+import type { CommandPaletteItem } from './CommandPalette'
 import { ConfirmReceiveDialog } from './ConfirmReceiveDialog'
+import { DeviceRadar } from './DeviceRadar'
 import { DeviceCard } from './DeviceCard'
 import { DocumentPreviewDialog } from './DocumentPreviewDialog'
 import type { DocumentPreviewDialogState } from './DocumentPreviewDialog'
@@ -216,6 +227,7 @@ const snapLinkNewOutgoingEntryAnimationCleanupMs = snapLinkNewOutgoingEntryAnima
 const snapLinkPendingOutgoingEntryAnimationMs = 12_000
 const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
 const snapLinkThemeModePreferenceKey = 'theme_mode'
+const snapLinkThemeModeLocalStorageKey = 'dd_theme'
 const snapLinkPreferenceCookieMaxAgeSeconds = 60 * 60 * 24 * 365
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
 const snapLinkThemeSubmitDebounceMs = 700
@@ -359,6 +371,17 @@ function readStoredSnapLinkThemeMode(): ThemeMode {
   const cookieThemeMode = readSnapLinkCookie(snapLinkThemeModePreferenceKey)
   if (isSnapLinkThemeMode(cookieThemeMode)) {
     return cookieThemeMode
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const localThemeMode = window.localStorage.getItem(snapLinkThemeModeLocalStorageKey)
+      if (isSnapLinkThemeMode(localThemeMode)) {
+        return localThemeMode
+      }
+    } catch {
+      // Ignore unavailable localStorage and fall back to light mode.
+    }
   }
 
   return 'light'
@@ -671,6 +694,7 @@ function getSnapLinkOcrHistorySummary(job: OcrJobResponse) {
 }
 
 const snapLinkTrustedDevicesStorageKey = 'ddzhilian:trusted-devices:v1'
+const snapLinkAvatarStorageKey = 'dd_avatar'
 
 function readStoredSnapLinkTrustedDeviceIds() {
   if (typeof window === 'undefined') {
@@ -706,6 +730,64 @@ function writeStoredSnapLinkTrustedDeviceIds(deviceIds: Set<string>) {
   } catch {
     // localStorage may be unavailable in private contexts; trust state then remains in memory for this tab.
   }
+}
+
+function readStoredSnapLinkAvatar() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window.localStorage.getItem(snapLinkAvatarStorageKey)
+  } catch {
+    return null
+  }
+}
+
+function writeStoredSnapLinkAvatar(value: string | null) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    if (value) {
+      window.localStorage.setItem(snapLinkAvatarStorageKey, value)
+    } else {
+      window.localStorage.removeItem(snapLinkAvatarStorageKey)
+    }
+  } catch {
+    // Avatar is local-only; if storage is unavailable, keep the in-memory preview for this tab.
+  }
+}
+
+function createSnapLinkAvatarDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('头像读取失败'))
+    reader.onload = () => {
+      const image = new Image()
+      image.onerror = () => reject(new Error('头像图片解析失败'))
+      image.onload = () => {
+        const canvas = document.createElement('canvas')
+        const size = 128
+        canvas.width = size
+        canvas.height = size
+        const context = canvas.getContext('2d')
+        if (!context) {
+          reject(new Error('当前浏览器不支持头像裁切'))
+          return
+        }
+
+        const scale = Math.max(size / image.width, size / image.height)
+        const width = image.width * scale
+        const height = image.height * scale
+        context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      image.src = String(reader.result ?? '')
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 function resolveSnapLinkDeviceKind(platform: string) {
@@ -1502,6 +1584,9 @@ export function SnapLinkStage({
   const [resolvedThemeMode, setResolvedThemeMode] = useState<ResolvedThemeMode>(() =>
     resolveInitialSnapLinkThemeMode(readStoredSnapLinkThemeMode()),
   )
+  const [deviceAvatarDataUrl, setDeviceAvatarDataUrl] = useState<string | null>(() => readStoredSnapLinkAvatar())
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [isZenMode, setIsZenMode] = useState(false)
   const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
   const [workbenchDeviceDropTargetId, setWorkbenchDeviceDropTargetId] = useState<string | null>(null)
   const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('rooms')
@@ -1568,6 +1653,7 @@ export function SnapLinkStage({
   const handledAutoOpenRoomIdRef = useRef<string | null>(null)
   const handledInitialDesktopRoomOpenRef = useRef(false)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null)
   const workbenchFileInputRef = useRef<HTMLInputElement | null>(null)
   const workbenchCameraInputRef = useRef<HTMLInputElement | null>(null)
   const workbenchScanResetTimeoutRef = useRef<number | null>(null)
@@ -1678,6 +1764,22 @@ export function SnapLinkStage({
       setResolvedThemeMode(nextResolvedMode)
     })
   }, [themeMode])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const handleCommandShortcut = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setIsCommandPaletteOpen(true)
+      }
+    }
+
+    window.addEventListener('keydown', handleCommandShortcut)
+    return () => window.removeEventListener('keydown', handleCommandShortcut)
+  }, [])
 
   const showSettingsFeedback = (message: string) => {
     setSettingsFeedbackMessage(message)
@@ -2829,13 +2931,53 @@ export function SnapLinkStage({
     onOpenCommandView()
   }
 
+  const openAvatarPicker = () => {
+    avatarFileInputRef.current?.click()
+  }
+
+  const handleAvatarFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    if (!file.type.toLowerCase().startsWith('image/')) {
+      showSettingsFeedback('请选择图片作为头像')
+      return
+    }
+
+    void createSnapLinkAvatarDataUrl(file)
+      .then((dataUrl) => {
+        setDeviceAvatarDataUrl(dataUrl)
+        writeStoredSnapLinkAvatar(dataUrl)
+        showSettingsFeedback('头像已更新')
+      })
+      .catch((error) => {
+        showSettingsFeedback(error instanceof Error ? error.message : '头像处理失败')
+      })
+  }
+
   const updateWorkbenchThemeMode = (nextThemeMode: ThemeMode) => {
     setThemeMode(nextThemeMode)
     writeSnapLinkClientPreference(snapLinkThemeModePreferenceKey, nextThemeMode)
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(snapLinkThemeModeLocalStorageKey, nextThemeMode)
+      } catch {
+        // Cookie persistence above is enough when localStorage is unavailable.
+      }
+    }
 
     if (typeof window !== 'undefined') {
       setResolvedThemeMode(applyThemeMode(nextThemeMode))
     }
+  }
+
+  const toggleResolvedThemeMode = () => {
+    const nextThemeMode: ThemeMode = resolvedThemeMode === 'dark' ? 'light' : 'dark'
+    updateWorkbenchThemeMode(nextThemeMode)
+    showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
   }
 
   const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
@@ -3314,6 +3456,19 @@ export function SnapLinkStage({
     onDirectFileSelection(files)
   }
 
+  const openCurrentFilePicker = () => {
+    const roomFileInput = typeof document !== 'undefined'
+      ? document.getElementById(fileInputId)
+      : null
+
+    if (roomFileInput instanceof HTMLInputElement) {
+      roomFileInput.click()
+      return
+    }
+
+    handleWorkbenchFilePick()
+  }
+
   const handleWorkbenchDirectFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
@@ -3425,10 +3580,40 @@ export function SnapLinkStage({
     const nextCaretPosition = selectionStart + emoji.length
 
     commitComposerDraft(nextDraft, nextCaretPosition)
-    setIsEmojiPickerOpen(false)
     setIsBotPanelOpen(false)
     botMentionTriggerRangeRef.current = null
     focusComposerInput(nextCaretPosition)
+  }
+
+  const handleEmojiBackspace = () => {
+    const input = inputRef.current
+    const currentDraft = getComposerDraft()
+    const selectionStart = input?.selectionStart ?? currentDraft.length
+    const selectionEnd = input?.selectionEnd ?? currentDraft.length
+
+    if (selectionStart !== selectionEnd) {
+      const nextDraft = `${currentDraft.slice(0, selectionStart)}${currentDraft.slice(selectionEnd)}`
+      commitComposerDraft(nextDraft, selectionStart)
+      focusComposerInput(selectionStart)
+      return
+    }
+
+    if (selectionStart <= 0) {
+      focusComposerInput(0)
+      return
+    }
+
+    const beforeCaret = Array.from(currentDraft.slice(0, selectionStart))
+    beforeCaret.pop()
+    const nextPrefix = beforeCaret.join('')
+    const nextDraft = `${nextPrefix}${currentDraft.slice(selectionStart)}`
+    commitComposerDraft(nextDraft, nextPrefix.length)
+    focusComposerInput(nextPrefix.length)
+  }
+
+  const handleEmojiSend = () => {
+    setIsEmojiPickerOpen(false)
+    submitComposerDraft()
   }
 
   const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -5123,6 +5308,13 @@ export function SnapLinkStage({
         </aside>
 
         <div className="dd-snaplink__devices-detail" aria-label="设备详情">
+          <DeviceRadar
+            devices={onlineDeviceItems}
+            selectedDeviceId={activeDevice?.deviceId ?? null}
+            renderIcon={renderWorkbenchDeviceIcon}
+            onSelect={handleWorkbenchDeviceListClick}
+            onOpenConversation={handleWorkbenchDeviceSendText}
+          />
           {activeDevice ? (
             <section className="dd-snaplink__device-detail-card">
               <span className={`dd-snaplink__device-detail-icon is-${resolveSnapLinkDeviceKind(activeDevice.platform)}`} aria-hidden="true">
@@ -5482,6 +5674,7 @@ export function SnapLinkStage({
   const renderWorkbenchSettingsPage = () => (
     <SettingsPanel
       deviceName={deviceName}
+      avatarDataUrl={deviceAvatarDataUrl}
       deviceNameDraft={deviceNameDraft}
       deviceNameError={deviceNameError}
       devicePlatform={devicePlatform}
@@ -5498,6 +5691,7 @@ export function SnapLinkStage({
       themeOptions={snapLinkThemeColorOptions}
       feedbackMessage={settingsFeedbackMessage}
       canOpenAdmin={canRecallAnyMessage}
+      onAvatarClick={openAvatarPicker}
       onDeviceNameDraftChange={(value) => {
         setDeviceNameDraft(value)
         setDeviceNameError(null)
@@ -5675,55 +5869,178 @@ export function SnapLinkStage({
     return `局域网在线 · ${getWorkbenchConnectionSummary()} · 直连`
   }
 
+  const commandPaletteItems: CommandPaletteItem[] = [
+    {
+      id: 'send-file',
+      label: '发送文件到当前会话',
+      description: '打开文件选择器，走现有 P2P 发送流程',
+      icon: <FileUp size={16} strokeWidth={2} />,
+      action: openCurrentFilePicker,
+    },
+    {
+      id: 'theme-toggle',
+      label: resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式',
+      description: '立即切换界面外观，并保存到本机',
+      icon: resolvedThemeMode === 'dark'
+        ? <SunMedium size={16} strokeWidth={2} />
+        : <MoonStar size={16} strokeWidth={2} />,
+      action: toggleResolvedThemeMode,
+    },
+    {
+      id: 'zen-toggle',
+      label: isZenMode ? '退出极简模式' : '进入极简模式',
+      description: '桌面端收起中栏，专注当前会话',
+      icon: isZenMode ? <Maximize2 size={16} strokeWidth={2} /> : <Minimize2 size={16} strokeWidth={2} />,
+      action: () => setIsZenMode((current) => !current),
+    },
+    {
+      id: 'device-radar',
+      label: '打开设备雷达',
+      description: '查看同一局域网 / 账号下发现的设备',
+      icon: <Radio size={16} strokeWidth={2} />,
+      action: handleShowWorkbenchNearby,
+    },
+    {
+      id: 'transfer-queue',
+      label: '查看传输队列',
+      description: `${workbenchActiveTransferCount.toString()} 个进行中，${workbenchCompletedTransferCount.toString()} 个已完成`,
+      icon: <Upload size={16} strokeWidth={2} />,
+      action: handleShowWorkbenchQueue,
+    },
+    {
+      id: 'new-room',
+      label: '新建 / 进入公共房间',
+      description: '创建公共房间，或进入已有世界对话',
+      icon: <Plus size={16} strokeWidth={2} />,
+      action: handleCreatePublicRoom,
+    },
+    {
+      id: 'copy-link',
+      label: selectedRoomId ? '复制当前房间码' : '复制当前页面链接',
+      description: selectedRoomId ? '复制短码给另一台设备加入' : '复制 DD直连访问地址',
+      icon: <Copy size={16} strokeWidth={2} />,
+      action: () => {
+        const text = selectedRoomId || (typeof window !== 'undefined' ? window.location.href : '')
+        if (text && navigator.clipboard) {
+          void navigator.clipboard.writeText(text)
+        }
+        showSettingsFeedback(selectedRoomId ? '房间码已复制' : '页面链接已复制')
+      },
+    },
+  ]
+
   const renderWorkbenchConnectionStatus = () => (
-    <StatusPillsCollapsible
-      online={deviceSettings.discoverable !== false}
-      summary={getWorkbenchConnectionSummary()}
-      details={[
-        {
-          id: 'lan',
-          label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
-        },
-        { id: 'webrtc', label: 'WebRTC 直连' },
-        {
-          id: 'serverless',
-          label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
-        },
-      ]}
-    />
+    <div className="dd-snaplink__status-actions">
+      <StatusPillsCollapsible
+        online={deviceSettings.discoverable !== false}
+        summary={getWorkbenchConnectionSummary()}
+        details={[
+          {
+            id: 'lan',
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
+          },
+          { id: 'webrtc', label: 'WebRTC 直连' },
+          {
+            id: 'serverless',
+            label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+          },
+        ]}
+      />
+      <button
+        type="button"
+        className="dd-snaplink__status-command"
+        onClick={() => setIsCommandPaletteOpen(true)}
+      >
+        命令 <kbd>⌘K</kbd>
+      </button>
+      <button
+        type="button"
+        className="dd-snaplink__status-icon"
+        aria-label={resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+        onClick={toggleResolvedThemeMode}
+      >
+        {resolvedThemeMode === 'dark' ? (
+          <SunMedium size={15} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <MoonStar size={15} strokeWidth={2} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   )
 
   const renderToolConnectionStatus = () => (
-    <StatusPillsCollapsible
-      online={deviceSettings.discoverable !== false}
-      summary={getWorkbenchConnectionSummary()}
-      details={[
-        {
-          id: 'lan-workbench',
-          label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
-        },
-        { id: 'webrtc', label: 'WebRTC 直连' },
-        {
-          id: 'serverless',
-          label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
-        },
-      ]}
-      ariaLabel="工具连接状态"
-    />
+    <div className="dd-snaplink__status-actions">
+      <StatusPillsCollapsible
+        online={deviceSettings.discoverable !== false}
+        summary={getWorkbenchConnectionSummary()}
+        details={[
+          {
+            id: 'lan-workbench',
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
+          },
+          { id: 'webrtc', label: 'WebRTC 直连' },
+          {
+            id: 'serverless',
+            label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+          },
+        ]}
+        ariaLabel="工具连接状态"
+      />
+      <button
+        type="button"
+        className="dd-snaplink__status-command"
+        onClick={() => setIsCommandPaletteOpen(true)}
+      >
+        命令 <kbd>⌘K</kbd>
+      </button>
+      <button
+        type="button"
+        className="dd-snaplink__status-icon"
+        aria-label={resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+        onClick={toggleResolvedThemeMode}
+      >
+        {resolvedThemeMode === 'dark' ? (
+          <SunMedium size={15} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <MoonStar size={15} strokeWidth={2} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   )
 
   const renderRoomConnectionStatus = () => (
-    <StatusPillsCollapsible
-      online
-      summary={`${selectedRoomOnlineCount.toString()} 在线`}
-      details={[
-        { id: 'room-code', label: `房间 ${selectedRoomId ?? '当前'}` },
-        { id: 'room-transport', label: 'WebRTC 直连' },
-        { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
-        { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
-      ]}
-      ariaLabel="房间连接状态"
-    />
+    <div className="dd-snaplink__status-actions">
+      <StatusPillsCollapsible
+        online
+        summary={`${selectedRoomOnlineCount.toString()} 在线`}
+        details={[
+          { id: 'room-code', label: `房间 ${selectedRoomId ?? '当前'}` },
+          { id: 'room-transport', label: 'WebRTC 直连' },
+          { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
+          { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
+        ]}
+        ariaLabel="房间连接状态"
+      />
+      <button
+        type="button"
+        className="dd-snaplink__status-command"
+        onClick={() => setIsCommandPaletteOpen(true)}
+      >
+        命令 <kbd>⌘K</kbd>
+      </button>
+      <button
+        type="button"
+        className="dd-snaplink__status-icon"
+        aria-label={resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+        onClick={toggleResolvedThemeMode}
+      >
+        {resolvedThemeMode === 'dark' ? (
+          <SunMedium size={15} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <MoonStar size={15} strokeWidth={2} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   )
 
   const renderWorkbenchView = () => {
@@ -5732,6 +6049,7 @@ export function SnapLinkStage({
       className={[
         'dd-snaplink__workbench',
         'has-no-mobile-actions',
+        isZenMode ? 'is-zen' : '',
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
         workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
@@ -5756,8 +6074,10 @@ export function SnapLinkStage({
       />
       <SidebarNav
         deviceName={deviceName}
+        avatarDataUrl={deviceAvatarDataUrl}
         activeMode={workbenchMode}
         activeTransferCount={workbenchActiveTransferCount}
+        onAvatarClick={openAvatarPicker}
         onShowNearby={handleShowWorkbenchNearby}
         onShowRooms={handleShowWorkbenchRooms}
         onShowQueue={handleShowWorkbenchQueue}
@@ -5885,9 +6205,11 @@ export function SnapLinkStage({
       <section className={`dd-snaplink__tool-workbench is-${tool}`} aria-label={toolLabel}>
         <SidebarNav
           deviceName={deviceName}
+          avatarDataUrl={deviceAvatarDataUrl}
           activeMode={isAiTool ? 'rooms' : undefined}
           activeTool={isAiTool ? undefined : tool}
           activeTransferCount={workbenchActiveTransferCount}
+          onAvatarClick={openAvatarPicker}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
@@ -5986,6 +6308,13 @@ export function SnapLinkStage({
 
   return (
     <>
+      <input
+        ref={avatarFileInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handleAvatarFileSelection}
+      />
       <section
         className={snapLinkShellClassName}
         style={themeStyle}
@@ -6187,6 +6516,7 @@ export function SnapLinkStage({
             <section
               className={[
                 'dd-snaplink__room-workbench',
+                isZenMode ? 'is-zen' : '',
                 isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
                 workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
               ].filter(Boolean).join(' ')}
@@ -6194,8 +6524,10 @@ export function SnapLinkStage({
             >
               <SidebarNav
                 deviceName={deviceName}
+                avatarDataUrl={deviceAvatarDataUrl}
                 activeMode="rooms"
                 activeTransferCount={workbenchActiveTransferCount}
+                onAvatarClick={openAvatarPicker}
                 onShowNearby={handleShowWorkbenchNearby}
                 onShowRooms={handleShowWorkbenchRooms}
                 onShowQueue={handleShowWorkbenchQueue}
@@ -6207,7 +6539,11 @@ export function SnapLinkStage({
                   className="dd-snaplink__room-status"
                   title={selectedConversationName}
                   subtitle={activeTransferLabel}
-                  icon={<Users size={17} strokeWidth={1.8} aria-hidden="true" />}
+                  icon={selectedRoom?.isAssistant ? (
+                    <Bot size={17} strokeWidth={1.8} aria-hidden="true" />
+                  ) : (
+                    <Users size={17} strokeWidth={1.8} aria-hidden="true" />
+                  )}
                   pillAriaLabel="房间连接状态"
                   statusContent={renderRoomConnectionStatus()}
                 />
@@ -6364,7 +6700,7 @@ export function SnapLinkStage({
                 </SharedContentPanel>
               ) : null}
 
-              {isDragging ? <RoomDragOverlay /> : null}
+              {isDragging ? <RoomDragOverlay targetName={selectedConversationName} /> : null}
 
               <RoomConversationStream
                 messagesRef={messagesRef}
@@ -6414,7 +6750,12 @@ export function SnapLinkStage({
                     const avatarClassName = [
                       'dd-snaplink__avatar',
                       showSenderIdentity ? '' : 'is-placeholder',
+                      renderedEntry.fromSelf && deviceAvatarDataUrl && showSenderIdentity ? 'has-image' : '',
                     ].filter(Boolean).join(' ')
+                    const selfAvatarStyle =
+                      renderedEntry.fromSelf && deviceAvatarDataUrl && showSenderIdentity
+                        ? { '--dd-avatar': `url("${deviceAvatarDataUrl}")` } as CSSProperties
+                        : undefined
                     const isImageOnlyMessage =
                       renderedEntry.entryType === 'text' && isImageOnlyRichText(renderedEntry.text)
 
@@ -6471,8 +6812,8 @@ export function SnapLinkStage({
                             ) : null}
                           </div>
                           {renderedEntry.fromSelf ? (
-                            <span className={avatarClassName} aria-hidden="true">
-                              {actorIdentity.avatarLabel}
+                            <span className={avatarClassName} style={selfAvatarStyle} aria-hidden="true">
+                              {selfAvatarStyle ? null : actorIdentity.avatarLabel}
                             </span>
                           ) : null}
                         </div>
@@ -6517,6 +6858,7 @@ export function SnapLinkStage({
                 images={composerImageDrafts}
                 fileInputId={fileInputId}
                 ocrPanelId={ocrPanelId}
+                targetName={selectedConversationName}
                 defaultDraft={plainDraft}
                 isOcrPanelOpen={isOcrPanelOpen}
                 isBotDraft={isBotDraft}
@@ -6557,6 +6899,8 @@ export function SnapLinkStage({
                   setIsEmojiPickerOpen((previous) => !previous)
                 }}
                 onEmojiInsert={handleEmojiInsert}
+                onEmojiBackspace={handleEmojiBackspace}
+                onEmojiSend={handleEmojiSend}
                 onOpenImageTool={handleOpenImage}
                 onOpenCommandTool={handleOpenCommand}
               />
@@ -6582,6 +6926,11 @@ export function SnapLinkStage({
       </section>
       {renderTrustDeviceDialog()}
       {renderIncomingFileOfferDialog()}
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        commands={commandPaletteItems}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
       {isOcrPanelOpen && createPortal(
         <div
           id={ocrPanelId}

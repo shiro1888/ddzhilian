@@ -764,7 +764,7 @@ function App() {
       ? connectedTargets.filter((target) => target.peerId === selectedDevicePeer.deviceId)
       : []
   const selectedConversationName = isSelectedBotRoom
-    ? 'DD直连小助手'
+    ? 'DD助手'
     : selectedRoom?.isPublic
     ? resolvePublicRoomTitle(selectedRoom.publicIndex)
     : selectedRoom && selectedRoomMemberNames.length > 0
@@ -781,7 +781,9 @@ function App() {
 
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const activeTransferLabel =
-    selectedRoom
+    isSelectedBotRoom
+      ? 'AI 助手 · 随时可用'
+      : selectedRoom
       ? `${selectedConversationName} · ${selectedRoomConnectedTargets.length} 台已连接设备`
       : selectedDevicePeer
         ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
