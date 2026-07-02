@@ -57,6 +57,9 @@ export function MobileWorkbenchNav({
     <nav className={className} aria-label={ariaLabel}>
       {items.map((item) => {
         const isActive = item.isActive ?? activeMode === item.mode
+        const itemAriaLabel = item.badgeCount && item.badgeCount > 0
+          ? `${item.label} · ${item.badgeCount.toString()} 个进行中`
+          : item.label
 
         return (
           <button
@@ -64,11 +67,12 @@ export function MobileWorkbenchNav({
             type="button"
             className={isActive ? 'is-active' : ''}
             aria-pressed={isActive}
+            aria-label={itemAriaLabel}
             onClick={item.onClick}
           >
             <span className="dd-snaplink__mobile-nav-label">{item.label}</span>
             {item.badgeCount && item.badgeCount > 0 ? (
-              <span className="dd-snaplink__mobile-nav-badge" aria-label={`${item.badgeCount.toString()} 个传输中`}>
+              <span className="dd-snaplink__mobile-nav-badge" aria-hidden="true">
                 {item.badgeCount > 99 ? '99+' : item.badgeCount.toString()}
               </span>
             ) : null}
