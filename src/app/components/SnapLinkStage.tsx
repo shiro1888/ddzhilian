@@ -1566,6 +1566,7 @@ export function SnapLinkStage({
   const shouldAnimateNextOutgoingEntryRef = useRef(false)
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
   const handledAutoOpenRoomIdRef = useRef<string | null>(null)
+  const handledInitialDesktopRoomOpenRef = useRef(false)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const workbenchFileInputRef = useRef<HTMLInputElement | null>(null)
   const workbenchCameraInputRef = useRef<HTMLInputElement | null>(null)
@@ -1709,6 +1710,22 @@ export function SnapLinkStage({
       window.cancelAnimationFrame(frameId)
     }
   }, [activeView, autoOpenRoomId, selectedRoomId])
+
+  useEffect(() => {
+    if (
+      handledInitialDesktopRoomOpenRef.current ||
+      activeView !== 'conversation' ||
+      !isLobbyOpen ||
+      !selectedRoomId ||
+      typeof window === 'undefined' ||
+      !window.matchMedia('(min-width: 761px)').matches
+    ) {
+      return
+    }
+
+    handledInitialDesktopRoomOpenRef.current = true
+    setIsLobbyOpen(false)
+  }, [activeView, isLobbyOpen, selectedRoomId])
 
   const lobbyRoomListItems = useMemo(
     () =>
