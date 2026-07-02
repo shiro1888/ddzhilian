@@ -5798,7 +5798,7 @@ export function SnapLinkStage({
   const renderToolWorkbenchView = (content: ReactNode, tool: 'ai-chat' | 'image' | 'command') => {
     const isAiTool = tool === 'ai-chat'
     const isImageTool = tool === 'image'
-    const toolTitle = isAiTool ? 'AI 辅助' : isImageTool ? 'AI 图片' : '命令行'
+    const toolTitle = isAiTool ? 'DD助手' : isImageTool ? 'AI 图片' : '命令行'
     const toolSubtitle = isAiTool
       ? '本地优先 · 上下文不外传'
       : isImageTool
