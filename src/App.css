@@ -9079,9 +9079,7 @@
   display: none;
 }
 
-.dd-snaplink__rail-nav button,
-.dd-snaplink__rail-tool,
-.dd-snaplink__rail-settings {
+.dd-snaplink__rail-nav button {
   display: grid;
   place-items: center;
   gap: 4px;
@@ -9100,161 +9098,19 @@
   cursor: pointer;
 }
 
-.dd-snaplink__rail-nav button:hover,
-.dd-snaplink__rail-tool:hover,
-.dd-snaplink__rail-settings:hover {
+.dd-snaplink__rail-nav button:hover {
   background: #e6e6e6;
   color: var(--snap-ink-soft);
 }
 
-.dd-snaplink__rail-nav button:focus-visible,
-.dd-snaplink__rail-tool:focus-visible,
-.dd-snaplink__rail-settings:focus-visible {
+.dd-snaplink__rail-nav button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--snap-green) 42%, transparent);
   outline-offset: 2px;
 }
 
-.dd-snaplink__rail-nav button.is-active,
-.dd-snaplink__rail-tool.is-active,
-.dd-snaplink__rail-settings.is-active {
+.dd-snaplink__rail-nav button.is-active {
   background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
   color: #07a152;
-}
-
-.dd-snaplink__rail-nav-separator {
-  width: 32px;
-  height: 1px;
-  margin: 3px 0;
-  background: var(--snap-border-soft);
-}
-
-.dd-snaplink__rail-tool-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-}
-
-.dd-snaplink__rail-tool-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 28;
-  border: 0;
-  background: transparent;
-  cursor: default;
-}
-
-.dd-snaplink__rail-tool-menu {
-  position: absolute;
-  top: 50%;
-  left: 62px;
-  z-index: 29;
-  display: grid;
-  gap: 4px;
-  width: 252px;
-  padding: 8px;
-  border: 1px solid var(--snap-border);
-  border-radius: 12px;
-  background: var(--snap-surface);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
-  transform: translateY(-50%);
-}
-
-.dd-snaplink__rail-tool-menu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 5px 8px 8px;
-}
-
-.dd-snaplink__rail-tool-menu-head strong {
-  color: var(--snap-ink);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.dd-snaplink__rail-tool-menu-head small {
-  color: var(--snap-muted);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.dd-snaplink__rail-tool-menu button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-  padding: 9px 8px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--snap-ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.dd-snaplink__rail-tool-menu button:hover,
-.dd-snaplink__rail-tool-menu button.is-current {
-  background: var(--snap-panel);
-}
-
-.dd-snaplink__rail-tool-menu button > span {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.dd-snaplink__rail-tool-menu button > span.is-ai {
-  background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
-  color: var(--snap-green);
-}
-
-.dd-snaplink__rail-tool-menu button > span.is-image {
-  background: #eef1f6;
-  color: var(--snap-blue);
-}
-
-.dd-snaplink__rail-tool-menu button > span.is-command {
-  background: rgba(250, 157, 59, 0.14);
-  color: #a86417;
-}
-
-.dd-snaplink__rail-tool-menu em {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  font-style: normal;
-}
-
-.dd-snaplink__rail-tool-menu em strong {
-  overflow: hidden;
-  color: var(--snap-ink);
-  font-size: 13px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dd-snaplink__rail-tool-menu em small {
-  overflow: hidden;
-  color: var(--snap-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dd-snaplink__rail-settings {
-  width: 50px;
-  min-height: 50px;
-  margin-top: auto;
 }
 
 .dd-snaplink__rail-avatar {
@@ -18665,15 +18521,12 @@
   min-height: 0;
 }
 
-.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button,
-.dd-snaplink__tool-workbench .dd-snaplink__rail-tool,
-.dd-snaplink__tool-workbench .dd-snaplink__rail-settings {
+.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button {
   min-width: 58px;
   min-height: 48px;
 }
 
-.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button.is-active,
-.dd-snaplink__tool-workbench .dd-snaplink__rail-tool.is-active {
+.dd-snaplink__tool-workbench .dd-snaplink__rail-nav button.is-active {
   border-color: color-mix(in srgb, var(--snap-green) 22%, transparent);
   background: var(--snap-green-soft);
   color: var(--snap-green);
@@ -22632,9 +22485,7 @@
     height: 28px;
   }
 
-  .dd-snaplink__rail-nav button,
-  .dd-snaplink__rail-tool,
-  .dd-snaplink__rail-settings {
+  .dd-snaplink__rail-nav button {
     width: 50px;
     min-height: 56px;
   }
