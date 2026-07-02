@@ -21820,13 +21820,6 @@
   }
 }
 
-/* 移动端消息列表只放真实会话：AI 助手保留在工具入口里，不再置顶占位 */
-@media (max-width: 760px) {
-  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant {
-    display: none;
-  }
-}
-
 /* 移动端房间空状态减重：从大卡片改成聊天区里的轻提示 */
 @media (max-width: 760px) {
   .dd-snaplink__room-workbench .dd-snaplink__room-empty-card {
@@ -22252,9 +22245,11 @@
   }
 }
 
-/* 微信式消息列表：移动端只放真实会话，DD助手收进输入栏 + 菜单和「我的」工具中心 */
+/* 微信式消息列表：移动端有真实会话时只放真实会话，DD助手收进输入栏 + 菜单和「我的」工具中心 */
 @media (max-width: 760px) {
-  .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-room.is-assistant {
+  .dd-snaplink__canvas.is-lobby
+    .dd-snaplink__workbench-room-list:has(.dd-snaplink__workbench-room:not(.is-assistant))
+    .dd-snaplink__workbench-room.is-assistant {
     display: none;
   }
 }
