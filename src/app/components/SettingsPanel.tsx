@@ -267,136 +267,146 @@ export function SettingsPanel({
           </div>
         ) : null}
 
-        <div className="dd-snaplink__settings-card">
-          <div className="dd-snaplink__settings-card-head">
-            <Wifi size={18} strokeWidth={1.8} aria-hidden="true" />
+        <details className="dd-snaplink__settings-advanced">
+          <summary>
             <span>
-              <strong>连接与发现</strong>
-              <small>这些设置会同步到后端发现服务</small>
+              <strong>高级设置</strong>
+              <small>连接、发送、外观和消息主题</small>
             </span>
-          </div>
-          <div className="dd-snaplink__settings-switch-list">
-            <SettingsSwitch
-              label="允许被发现"
-              description="同一局域网内的设备可以看到这台设备"
-              checked={discoverable}
-              onChange={onDiscoverableChange}
-            />
-            <SettingsSwitch
-              label="允许短码连接"
-              description="其他设备可以通过短码发起连接"
-              checked={allowShortCode}
-              onChange={onAllowShortCodeChange}
-            />
-            <SettingsSwitch
-              label="自动连接同账号设备"
-              description="同账号设备上线后自动尝试直连"
-              checked={autoConnect}
-              onChange={onAutoConnectChange}
-            />
-          </div>
-          <div className="dd-snaplink__settings-status-list">
-            <span>WebRTC 直连</span>
-            <span>文件不经过服务器</span>
-          </div>
-        </div>
-
-        <div className="dd-snaplink__settings-card">
-          <div className="dd-snaplink__settings-card-head">
-            <FileText size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>
-              <strong>发送偏好</strong>
-              <small>控制文本输入的发送方式</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-switch-list">
-            <SettingsSwitch
-              label="回车发送"
-              description="开启后 Enter 发送，Shift + Enter 换行"
-              checked={enterToSend}
-              onChange={onEnterToSendChange}
-            />
-          </div>
-        </div>
-
-        <div className="dd-snaplink__settings-card">
-          <div className="dd-snaplink__settings-card-head">
-            <MoonStar size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>
-              <strong>外观模式</strong>
-              <small>默认浅色，也可以切换深色或跟随系统</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-mode-group" role="group" aria-label="外观模式">
-            {themeModeOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`dd-snaplink__settings-mode-option${themeMode === option.value ? ' is-active' : ''}`}
-                aria-pressed={themeMode === option.value}
-                onClick={() => onThemeModeChange(option.value)}
-              >
-                <strong>{option.label}</strong>
-                <small>{option.description}</small>
-              </button>
-            ))}
-          </div>
-          <p className="dd-snaplink__settings-mode-note">
-            {getThemeModeSummary(themeMode, resolvedThemeMode)}
-          </p>
-        </div>
-
-        <div className="dd-snaplink__settings-card">
-          <div className="dd-snaplink__settings-card-head">
-            <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>
-              <strong>消息主题</strong>
-              <small>只调整前端显示，不影响传输逻辑</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-theme-fields">
-            <ThemeColorField
-              target="self"
-              label="发送的信息框"
-              description="自己发送的消息气泡"
-              value={themeColors.self}
-              onChange={onThemeColorChange}
-            />
-            <ThemeColorField
-              target="peer"
-              label="接收的信息框"
-              description="其他成员发送的消息气泡"
-              value={themeColors.peer}
-              onChange={onThemeColorChange}
-            />
-            <ThemeColorField
-              target="ai"
-              label="AI 的信息框"
-              description="DD直连小助手回复气泡"
-              value={themeColors.ai}
-              onChange={onThemeColorChange}
-            />
-          </div>
-          <div className="dd-snaplink__settings-theme-presets" aria-label="主题预设">
-            {themeOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => onThemePresetApply(option.colors)}
-              >
-                <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
-                  <i style={{ background: option.colors.self }} />
-                  <i style={{ background: option.colors.peer }} />
-                  <i style={{ background: option.colors.ai }} />
+          </summary>
+          <div className="dd-snaplink__settings-advanced-grid">
+            <div className="dd-snaplink__settings-card">
+              <div className="dd-snaplink__settings-card-head">
+                <Wifi size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>
+                  <strong>连接与发现</strong>
+                  <small>这些设置会同步到后端发现服务</small>
                 </span>
-                {option.label}
+              </div>
+              <div className="dd-snaplink__settings-switch-list">
+                <SettingsSwitch
+                  label="允许被发现"
+                  description="同一局域网内的设备可以看到这台设备"
+                  checked={discoverable}
+                  onChange={onDiscoverableChange}
+                />
+                <SettingsSwitch
+                  label="允许短码连接"
+                  description="其他设备可以通过短码发起连接"
+                  checked={allowShortCode}
+                  onChange={onAllowShortCodeChange}
+                />
+                <SettingsSwitch
+                  label="自动连接同账号设备"
+                  description="同账号设备上线后自动尝试直连"
+                  checked={autoConnect}
+                  onChange={onAutoConnectChange}
+                />
+              </div>
+              <div className="dd-snaplink__settings-status-list">
+                <span>WebRTC 直连</span>
+                <span>文件不经过服务器</span>
+              </div>
+            </div>
+
+            <div className="dd-snaplink__settings-card">
+              <div className="dd-snaplink__settings-card-head">
+                <FileText size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>
+                  <strong>发送偏好</strong>
+                  <small>控制文本输入的发送方式</small>
+                </span>
+              </div>
+              <div className="dd-snaplink__settings-switch-list">
+                <SettingsSwitch
+                  label="回车发送"
+                  description="开启后 Enter 发送，Shift + Enter 换行"
+                  checked={enterToSend}
+                  onChange={onEnterToSendChange}
+                />
+              </div>
+            </div>
+
+            <div className="dd-snaplink__settings-card">
+              <div className="dd-snaplink__settings-card-head">
+                <MoonStar size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>
+                  <strong>外观模式</strong>
+                  <small>默认浅色，也可以切换深色或跟随系统</small>
+                </span>
+              </div>
+              <div className="dd-snaplink__settings-mode-group" role="group" aria-label="外观模式">
+                {themeModeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`dd-snaplink__settings-mode-option${themeMode === option.value ? ' is-active' : ''}`}
+                    aria-pressed={themeMode === option.value}
+                    onClick={() => onThemeModeChange(option.value)}
+                  >
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </button>
+                ))}
+              </div>
+              <p className="dd-snaplink__settings-mode-note">
+                {getThemeModeSummary(themeMode, resolvedThemeMode)}
+              </p>
+            </div>
+
+            <div className="dd-snaplink__settings-card">
+              <div className="dd-snaplink__settings-card-head">
+                <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>
+                  <strong>消息主题</strong>
+                  <small>只调整前端显示，不影响传输逻辑</small>
+                </span>
+              </div>
+              <div className="dd-snaplink__settings-theme-fields">
+                <ThemeColorField
+                  target="self"
+                  label="发送的信息框"
+                  description="自己发送的消息气泡"
+                  value={themeColors.self}
+                  onChange={onThemeColorChange}
+                />
+                <ThemeColorField
+                  target="peer"
+                  label="接收的信息框"
+                  description="其他成员发送的消息气泡"
+                  value={themeColors.peer}
+                  onChange={onThemeColorChange}
+                />
+                <ThemeColorField
+                  target="ai"
+                  label="AI 的信息框"
+                  description="DD直连小助手回复气泡"
+                  value={themeColors.ai}
+                  onChange={onThemeColorChange}
+                />
+              </div>
+              <div className="dd-snaplink__settings-theme-presets" aria-label="主题预设">
+                {themeOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => onThemePresetApply(option.colors)}
+                  >
+                    <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
+                      <i style={{ background: option.colors.self }} />
+                      <i style={{ background: option.colors.peer }} />
+                      <i style={{ background: option.colors.ai }} />
+                    </span>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="dd-snaplink__settings-reset" onClick={onThemeReset}>
+                恢复默认
               </button>
-            ))}
+            </div>
           </div>
-          <button type="button" className="dd-snaplink__settings-reset" onClick={onThemeReset}>
-            恢复默认
-          </button>
-        </div>
+        </details>
       </div>
     </section>
   )

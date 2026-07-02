@@ -11029,7 +11029,6 @@
 }
 
 .dd-snaplink__settings-card.is-my-shortcuts {
-  order: -1;
   gap: 10px;
   padding: 14px;
 }
@@ -11084,11 +11083,86 @@
 
 @media (min-width: 901px) {
   .dd-snaplink__settings-card.is-my-shortcuts {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   .dd-snaplink__settings-card.is-my-shortcuts .dd-snaplink__settings-menu-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dd-snaplink__settings-advanced {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--snap-border-soft);
+  border-radius: 10px;
+  background: var(--snap-surface);
+}
+
+.dd-snaplink__settings-advanced summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 14px;
+  color: var(--snap-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dd-snaplink__settings-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.dd-snaplink__settings-advanced summary::after {
+  content: '›';
+  color: var(--snap-muted);
+  font-size: 22px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 160ms ease;
+}
+
+.dd-snaplink__settings-advanced[open] summary::after {
+  transform: rotate(-90deg);
+}
+
+.dd-snaplink__settings-advanced summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dd-snaplink__settings-advanced summary strong {
+  color: var(--snap-ink);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.dd-snaplink__settings-advanced summary small {
+  overflow: hidden;
+  color: var(--snap-muted);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__settings-advanced-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.dd-snaplink__settings-advanced:not([open]) .dd-snaplink__settings-advanced-grid {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .dd-snaplink__settings-advanced-grid {
+    grid-template-columns: 1fr;
   }
 }
 
