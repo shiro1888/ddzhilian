@@ -6,6 +6,7 @@ type MobileWorkbenchNavProps = {
   activeTool?: SidebarNavTool | null
   className?: string
   ariaLabel: string
+  activeTransferCount?: number
   onShowNearby: () => void
   onShowRooms: () => void
   onShowQueue: () => void
@@ -16,6 +17,7 @@ type MobileWorkbenchNavItem = {
   mode: SidebarNavMode
   label: string
   onClick: () => void
+  badgeCount?: number
 }
 
 export function MobileWorkbenchNav({
@@ -23,6 +25,7 @@ export function MobileWorkbenchNav({
   activeTool = null,
   className = 'dd-snaplink__mobile-nav dd-snaplink__mobile-workbench-nav',
   ariaLabel,
+  activeTransferCount = 0,
   onShowRooms,
   onShowNearby,
   onShowQueue,
@@ -41,7 +44,7 @@ export function MobileWorkbenchNav({
       onClick: onShowNearby,
       isActive: activeMode === 'nearby',
     },
-    { mode: 'transfers', label: '传输', onClick: onShowQueue },
+    { mode: 'transfers', label: '传输', onClick: onShowQueue, badgeCount: activeTransferCount },
     {
       mode: 'settings',
       label: '我的',
@@ -63,7 +66,12 @@ export function MobileWorkbenchNav({
             aria-pressed={isActive}
             onClick={item.onClick}
           >
-            {item.label}
+            <span className="dd-snaplink__mobile-nav-label">{item.label}</span>
+            {item.badgeCount && item.badgeCount > 0 ? (
+              <span className="dd-snaplink__mobile-nav-badge" aria-label={`${item.badgeCount.toString()} 个传输中`}>
+                {item.badgeCount > 99 ? '99+' : item.badgeCount.toString()}
+              </span>
+            ) : null}
           </button>
         )
       })}

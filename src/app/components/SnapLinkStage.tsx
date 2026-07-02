@@ -5734,6 +5734,7 @@ export function SnapLinkStage({
         <MobileWorkbenchNav
           activeMode={workbenchMode}
           ariaLabel="移动端功能导航"
+          activeTransferCount={workbenchActiveTransferCount}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
@@ -5869,6 +5870,7 @@ export function SnapLinkStage({
             className="dd-snaplink__tool-mobile-nav"
             activeTool={tool}
             ariaLabel="移动端工作台导航"
+            activeTransferCount={workbenchActiveTransferCount}
             onShowNearby={handleShowWorkbenchNearby}
             onShowRooms={handleShowWorkbenchRooms}
             onShowQueue={handleShowWorkbenchQueue}

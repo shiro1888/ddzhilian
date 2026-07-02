@@ -19077,7 +19077,7 @@
   .dd-snaplink__tool-mobile-nav {
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: center;
     gap: 4px;
     width: 100%;
@@ -19089,6 +19089,7 @@
   }
 
   .dd-snaplink__tool-mobile-nav button {
+    position: relative;
     min-width: 0;
     min-height: 36px;
     padding: 0 4px;
@@ -21519,6 +21520,7 @@
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button {
+    position: relative;
     min-height: 44px;
   }
 }
@@ -22328,6 +22330,33 @@
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button.is-active {
     border-color: color-mix(in srgb, var(--snap-green) 24%, transparent);
     background: color-mix(in srgb, var(--snap-green) 10%, #ffffff);
+  }
+
+  .dd-snaplink__mobile-nav-label {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    justify-content: center;
+  }
+
+  .dd-snaplink__mobile-nav-badge {
+    position: absolute;
+    top: 5px;
+    right: max(12px, 24%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border: 2px solid color-mix(in srgb, var(--snap-panel) 94%, #ffffff);
+    border-radius: 999px;
+    background: var(--danger, #fa5151);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-more-menu {
