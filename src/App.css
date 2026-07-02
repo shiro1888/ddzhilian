@@ -21079,16 +21079,9 @@
   font-weight: 500;
 }
 
-/* 微信式信息架构：一级导航收敛为 会话 / 附近 / 传输 / 更多 */
+/* 微信式信息架构：主功能直接进入列表/内容，不再用装饰性概览横幅抢占首屏 */
 .dd-snaplink__mode-overview {
-  min-height: auto;
-  padding-block: 14px;
-}
-
-.dd-snaplink__mode-overview-mark {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  display: none;
 }
 
 .dd-snaplink__workbench-room:has(.dd-snaplink__workbench-room-avatar) .dd-snaplink__workbench-room-open {
