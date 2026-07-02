@@ -9442,104 +9442,6 @@
   background: rgba(255, 255, 255, 0.95);
 }
 
-.dd-snaplink__mode-overview {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--snap-border-soft);
-  border-radius: 10px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--snap-green) 8%, #ffffff), #ffffff 46%),
-    var(--snap-surface);
-}
-
-.dd-snaplink__mode-overview-mark {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
-  background: var(--snap-green);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.02em;
-}
-
-.dd-snaplink__mode-overview-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.dd-snaplink__mode-overview-copy strong {
-  overflow: hidden;
-  color: var(--snap-ink);
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dd-snaplink__mode-overview-copy small {
-  overflow: hidden;
-  color: var(--snap-muted);
-  font-size: 12.5px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dd-snaplink__mode-overview-stats {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
-}
-
-.dd-snaplink__mode-overview-stats em {
-  flex: none;
-  min-height: 26px;
-  padding: 5px 9px;
-  border: 1px solid var(--snap-border-soft);
-  border-radius: 999px;
-  background: var(--snap-bg);
-  color: var(--snap-ink-soft);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.dd-snaplink__mode-overview button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid color-mix(in srgb, var(--snap-green) 40%, var(--snap-border));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
-  color: #078a49;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.dd-snaplink__mode-overview button:hover {
-  background: var(--snap-green);
-  color: #ffffff;
-}
-
 .dd-snaplink__nearby {
   display: grid;
   gap: 14px;
@@ -20074,48 +19976,7 @@
 }
 
 @media (max-width: 760px) {
-  .dd-snaplink__mode-overview {
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 9px 10px;
-    padding: 12px;
   }
-
-  .dd-snaplink__mode-overview-mark {
-    width: 38px;
-    height: 38px;
-    border-radius: 9px;
-    font-size: 11px;
-  }
-
-  .dd-snaplink__mode-overview-copy strong {
-    font-size: 16px;
-  }
-
-  .dd-snaplink__mode-overview-copy small {
-    display: -webkit-box;
-    overflow: hidden;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .dd-snaplink__mode-overview-stats {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .dd-snaplink__mode-overview-stats::-webkit-scrollbar {
-    display: none;
-  }
-
-  .dd-snaplink__mode-overview button {
-    grid-column: 1 / -1;
-    width: 100%;
-    min-height: 38px;
-  }
-}
 
 @media (max-width: 1240px) {
   .dd-snaplink__app.is-image {
@@ -20899,16 +20760,6 @@
   background: #fafafa;
 }
 
-.dd-snaplink__mode-overview-stats {
-  display: none;
-}
-
-.dd-snaplink__mode-overview {
-  box-shadow: none;
-  border: 1px solid #ececec;
-  background: #fff;
-}
-
 .dd-snaplink__queue {
   border-left: 1px solid #ececec;
   background: #fbfbfb;
@@ -21161,11 +21012,6 @@
   font-weight: 500;
 }
 
-/* 微信式信息架构：主功能直接进入列表/内容，不再用装饰性概览横幅抢占首屏 */
-.dd-snaplink__mode-overview {
-  display: none;
-}
-
 .dd-snaplink__workbench-room:has(.dd-snaplink__workbench-room-avatar) .dd-snaplink__workbench-room-open {
   grid-template-columns: 42px minmax(0, 1fr) auto;
 }
@@ -21377,10 +21223,6 @@
 
 /* 移动端消息页继续减重：首屏优先显示会话列表，创建/加入房间收进折叠工具 */
 @media (max-width: 760px) {
-  .dd-snaplink__canvas.is-lobby .dd-snaplink__mode-overview {
-    display: none;
-  }
-
   .dd-snaplink__canvas.is-lobby .dd-snaplink__workbench-content {
     padding-top: 10px;
   }
@@ -22908,80 +22750,12 @@
   color: var(--snap-green);
 }
 
-/* 桌面也去掉重复的绿色标题块，让工作区标题更像会话列表顶部栏 */
-.dd-snaplink__mode-overview {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  min-height: 44px;
-  padding: 7px 0 11px;
-  border-width: 0 0 1px;
-  border-color: var(--snap-border);
-  border-radius: 0;
-  background: transparent;
-}
-
-.dd-snaplink__mode-overview-mark {
-  display: none;
-}
-
-.dd-snaplink__mode-overview-copy {
-  gap: 0;
-}
-
-.dd-snaplink__mode-overview-copy strong {
-  font-size: 16px;
-  font-weight: 850;
-}
-
-.dd-snaplink__mode-overview-copy small {
-  display: none;
-}
-
-.dd-snaplink__mode-overview button {
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-}
-
 /* 移动端工作区标题再减重：只留当前页标题和一个主操作 */
 @media (max-width: 760px) {
-  .dd-snaplink__mode-overview {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    padding: 8px 12px;
-    border-width: 0 0 1px;
-    border-color: var(--snap-border);
-    border-radius: 0;
-    background: var(--snap-surface);
   }
-
-  .dd-snaplink__mode-overview-mark,
-  .dd-snaplink__mode-overview-copy small,
-  .dd-snaplink__mode-overview-stats {
-    display: none;
-  }
-
-  .dd-snaplink__mode-overview-copy strong {
-    font-size: 14px;
-    font-weight: 850;
-  }
-
-  .dd-snaplink__mode-overview button {
-    grid-column: auto;
-    width: auto;
-    min-height: 30px;
-    padding: 0 11px;
-    border-radius: 999px;
-    font-size: 11.5px;
-  }
-}
 
 /* 微信版主界面：移动端不再常驻工作区概览条，首屏直接显示列表/内容 */
 @media (max-width: 760px) {
-  .dd-snaplink__mode-overview {
-    display: none;
-  }
-
   .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-content {
     padding-top: 10px;
   }
