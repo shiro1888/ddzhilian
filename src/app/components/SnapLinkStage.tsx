@@ -5871,6 +5871,13 @@ export function SnapLinkStage({
 
   const commandPaletteItems: CommandPaletteItem[] = [
     {
+      id: 'web-command',
+      label: '打开 Web 命令行',
+      description: '进入命令行工具，运行命令并把结果发送回当前会话',
+      icon: <Command size={16} strokeWidth={2} />,
+      action: handleOpenCommand,
+    },
+    {
       id: 'send-file',
       label: '发送文件到当前会话',
       description: '打开文件选择器，走现有 P2P 发送流程',
@@ -5949,9 +5956,11 @@ export function SnapLinkStage({
       <button
         type="button"
         className="dd-snaplink__status-command"
+        aria-label="打开快捷操作面板"
+        title="打开快捷操作面板 Ctrl / ⌘ + K"
         onClick={() => setIsCommandPaletteOpen(true)}
       >
-        命令 <kbd>⌘K</kbd>
+        快捷 <kbd>⌘K</kbd>
       </button>
       <button
         type="button"
@@ -5989,9 +5998,11 @@ export function SnapLinkStage({
       <button
         type="button"
         className="dd-snaplink__status-command"
+        aria-label="打开快捷操作面板"
+        title="打开快捷操作面板 Ctrl / ⌘ + K"
         onClick={() => setIsCommandPaletteOpen(true)}
       >
-        命令 <kbd>⌘K</kbd>
+        快捷 <kbd>⌘K</kbd>
       </button>
       <button
         type="button"
@@ -6024,9 +6035,11 @@ export function SnapLinkStage({
       <button
         type="button"
         className="dd-snaplink__status-command"
+        aria-label="打开快捷操作面板"
+        title="打开快捷操作面板 Ctrl / ⌘ + K"
         onClick={() => setIsCommandPaletteOpen(true)}
       >
-        命令 <kbd>⌘K</kbd>
+        快捷 <kbd>⌘K</kbd>
       </button>
       <button
         type="button"
