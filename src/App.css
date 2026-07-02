@@ -22192,6 +22192,69 @@
   }
 }
 
+/* Claude 微信版主界面：移动端「+」改为真正底部上滑 Sheet，减少悬浮弹窗感 */
+@keyframes ddSnaplinkPlusSheetIn {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 700px) {
+  .dd-snaplink__plus-backdrop {
+    z-index: 78;
+    background: rgba(0, 0, 0, 0.28);
+  }
+
+  .dd-snaplink__plus-menu {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 79;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 6px;
+    width: 100%;
+    max-height: min(56vh, 420px);
+    padding: 22px 16px calc(26px + var(--snap-bottom-safe, 0px));
+    overflow-y: auto;
+    border: 0;
+    border-top: 1px solid var(--snap-border, #e5e5e5);
+    border-radius: 16px 16px 0 0;
+    background: #f7f7f8;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.14);
+    animation: ddSnaplinkPlusSheetIn 0.22s ease both;
+  }
+
+  .dd-snaplink__plus-menu::before {
+    top: 8px;
+    background: #d0d0d0;
+  }
+
+  .dd-snaplink__plus-item {
+    min-height: 72px;
+    padding: 6px 2px;
+    border-radius: 10px;
+  }
+
+  .dd-snaplink__plus-item > svg {
+    width: 46px;
+    height: 46px;
+    border-color: transparent;
+    background: #ffffff;
+  }
+
+  .dd-snaplink__plus-item:hover,
+  .dd-snaplink__plus-item:focus-visible,
+  .dd-snaplink__plus-item.is-active {
+    background: rgba(7, 193, 96, 0.08);
+  }
+}
+
 /* 微信式消息列表：移动端有真实会话时只放真实会话，DD助手收进输入栏 + 菜单和「我的」工具中心 */
 @media (max-width: 760px) {
   .dd-snaplink__canvas.is-lobby
