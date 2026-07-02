@@ -22334,15 +22334,6 @@
   }
 }
 
-/* 微信式消息列表：移动端有真实会话时只放真实会话，DD助手收进输入栏 + 菜单和「我的」工具中心 */
-@media (max-width: 760px) {
-  .dd-snaplink__canvas.is-lobby
-    .dd-snaplink__workbench-room-list:has(.dd-snaplink__workbench-room:not(.is-assistant))
-    .dd-snaplink__workbench-room.is-assistant {
-    display: none;
-  }
-}
-
 /* 微信式桌面结构：窄栏收敛到 64px，贴近企业微信/微信桌面版 */
 @media (min-width: 1181px) {
   .dd-snaplink__workbench,
