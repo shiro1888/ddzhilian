@@ -1,5 +1,17 @@
 import type { FormEventHandler, ReactNode } from 'react'
-import { Bot, Clock3, Command, FileText, Image as ImageIcon, Monitor, MoonStar, Settings, ShieldCheck, Wifi } from 'lucide-react'
+import {
+  Bot,
+  Clock3,
+  Command,
+  FileText,
+  Image as ImageIcon,
+  Monitor,
+  MoonStar,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Wifi,
+} from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 
 export type SettingsPanelThemeColorTarget = 'self' | 'peer' | 'ai'
@@ -259,6 +271,15 @@ export function SettingsPanel({
                   <span>
                     <strong>DD助手</strong>
                     <small>总结传输内容，辅助生成文本</small>
+                  </span>
+                </button>
+              ) : null}
+              {onOpenAiChat ? (
+                <button type="button" onClick={onOpenAiChat}>
+                  <SlidersHorizontal size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span>
+                    <strong>AI 设置</strong>
+                    <small>模型、联网搜索和额度在 DD助手里调整</small>
                   </span>
                 </button>
               ) : null}
