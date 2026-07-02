@@ -22342,6 +22342,10 @@
     bottom: calc(72px + var(--snap-bottom-safe));
   }
 
+  .dd-snaplink.is-workbench-shell .dd-snaplink__nearby + .dd-snaplink__workbench-lower {
+    display: none;
+  }
+
   .dd-snaplink__workbench.has-empty-transfer-queue > .dd-snaplink__queue,
   .dd-snaplink__room-workbench.has-empty-transfer-queue > .dd-snaplink__queue {
     display: none;
