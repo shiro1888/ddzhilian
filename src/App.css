@@ -21104,6 +21104,11 @@
   color: #07a152;
 }
 
+.dd-snaplink__workbench-room-avatar.is-device {
+  background: #eef1f5;
+  color: #576b95;
+}
+
 .dd-snaplink__workbench-room.is-assistant {
   background: #fff;
 }
@@ -21936,6 +21941,11 @@
 .dd-snaplink__conversation-avatar.is-assistant {
   background: var(--snap-green);
   color: #ffffff;
+}
+
+.dd-snaplink__conversation-avatar.is-device {
+  background: #eef1f5;
+  color: #576b95;
 }
 
 .dd-snaplink__conversation-avatar i {

@@ -4817,7 +4817,20 @@ export function SnapLinkStage({
 
           return searchableText.includes(normalizedQuery)
         })
-    const hasSearchResult = shouldShowAssistant || filteredRooms.length > 0
+    const filteredDevices = normalizedQuery.length === 0
+      ? onlineDeviceItems
+      : onlineDeviceItems.filter((device) => {
+          const searchableText = [
+            device.deviceName,
+            device.platform,
+            device.scopeLabel,
+            device.shortCode,
+            '设备 私聊 附近',
+          ].filter(Boolean).join(' ').toLowerCase()
+
+          return searchableText.includes(normalizedQuery)
+        })
+    const hasSearchResult = shouldShowAssistant || filteredRooms.length > 0 || filteredDevices.length > 0
 
     return (
       <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
@@ -4919,6 +4932,40 @@ export function SnapLinkStage({
               </button>
             )
           })}
+          {filteredDevices.map((device) => {
+            const isActive = selectedWorkbenchDevice?.deviceId === device.deviceId
+
+            return (
+              <button
+                key={`device-${device.deviceId}`}
+                type="button"
+                className={[
+                  'dd-snaplink__conversation-row',
+                  'is-device',
+                  isActive ? 'is-active' : '',
+                ].filter(Boolean).join(' ')}
+                aria-current={isActive ? 'page' : undefined}
+                onClick={() => handleWorkbenchDeviceSendText(device.deviceId)}
+                title={`打开 ${device.deviceName} 的设备会话`}
+              >
+                <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
+                  {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
+                  <i className="is-online" />
+                </span>
+                <span className="dd-snaplink__conversation-main">
+                  <span className="dd-snaplink__conversation-title">
+                    <strong>{device.deviceName}</strong>
+                    <em>设备</em>
+                  </span>
+                  <small>{device.scopeLabel || device.platform || '附近设备'} · {device.lastSeenLabel || '在线'}</small>
+                </span>
+                <span className="dd-snaplink__conversation-side-meta">
+                  <small>在线</small>
+                  <em>{device.shortCode || device.platform || '直连'}</em>
+                </span>
+              </button>
+            )
+          })}
           {!hasSearchResult ? (
             <div className="dd-snaplink__conversation-empty">
               没有找到相关会话
@@ -4946,6 +4993,8 @@ export function SnapLinkStage({
       onOpenRoom={handleRoomSelection}
       onToggleRoomPinned={handleToggleWorkbenchRoomPinned}
       onOpenAssistant={handleOpenAiChat}
+      deviceConversations={onlineDeviceItems}
+      onOpenDeviceConversation={handleWorkbenchDeviceSendText}
     />
   )
 

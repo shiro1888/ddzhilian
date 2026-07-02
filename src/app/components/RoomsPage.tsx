@@ -1,6 +1,6 @@
 import { Bot, Users } from 'lucide-react'
 
-import type { RoomListItem } from '../types'
+import type { OnlineDeviceListItem, RoomListItem } from '../types'
 import { EmptyState } from './EmptyState'
 import { RoomCard } from './RoomCard'
 
@@ -19,6 +19,13 @@ type RoomsPageProps = {
   onOpenRoom: (roomId: string) => void
   onToggleRoomPinned: (room: RoomListItem) => void
   onOpenAssistant?: () => void
+  deviceConversations?: OnlineDeviceListItem[]
+  onOpenDeviceConversation?: (deviceId: string) => void
+}
+
+function getConversationInitial(value: string, fallback: string) {
+  const normalizedValue = value.trim()
+  return (normalizedValue ? Array.from(normalizedValue)[0] : fallback).toUpperCase()
 }
 
 export function RoomsPage({
@@ -34,11 +41,14 @@ export function RoomsPage({
   onOpenRoom,
   onToggleRoomPinned,
   onOpenAssistant,
+  deviceConversations = [],
+  onOpenDeviceConversation,
 }: RoomsPageProps) {
   const isFull = variant === 'full'
   const publicRoom = rooms.find((room) => room.isPublic)
   const canJoinRoom = roomJoinDraft.trim().length > 0
-  const hasConversationRows = rooms.length > 0 || Boolean(onOpenAssistant)
+  const hasDeviceConversations = deviceConversations.length > 0 && Boolean(onOpenDeviceConversation)
+  const hasConversationRows = rooms.length > 0 || Boolean(onOpenAssistant) || hasDeviceConversations
 
   return (
     <section
@@ -138,6 +148,35 @@ export function RoomsPage({
               onTogglePinned={onToggleRoomPinned}
             />
           ))}
+          {onOpenDeviceConversation
+            ? deviceConversations.map((device) => (
+                <article key={device.deviceId} className="dd-snaplink__workbench-room is-device">
+                  <button
+                    type="button"
+                    className="dd-snaplink__workbench-room-open"
+                    onClick={() => onOpenDeviceConversation(device.deviceId)}
+                    title={`打开 ${device.deviceName} 的设备会话`}
+                  >
+                    <span className="dd-snaplink__workbench-room-avatar is-device" aria-hidden="true">
+                      {getConversationInitial(device.deviceName, '设')}
+                      <i className="is-online" />
+                    </span>
+                    <span className="dd-snaplink__workbench-room-main">
+                      <span className="dd-snaplink__workbench-room-title">
+                        <strong>{device.deviceName}</strong>
+                        <em>设备</em>
+                      </span>
+                      <span className="dd-snaplink__workbench-room-preview">
+                        {device.scopeLabel || device.platform || '附近设备'} · {device.lastSeenLabel || '在线'}
+                      </span>
+                    </span>
+                    <span className="dd-snaplink__workbench-room-side">
+                      <small>在线</small>
+                    </span>
+                  </button>
+                </article>
+              ))
+            : null}
         </div>
       ) : (
         <EmptyState
