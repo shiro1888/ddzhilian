@@ -8,14 +8,8 @@ type MobileWorkbenchNavProps = {
   ariaLabel: string
   onShowNearby: () => void
   onShowRooms: () => void
-  onShowFiles: () => void
   onShowQueue: () => void
-  onShowText: () => void
-  onShowHistory: () => void
   onShowSettings: () => void
-  onOpenAiChat: () => void
-  onOpenImage: () => void
-  onOpenCommand: () => void
 }
 
 type MobileWorkbenchNavItem = {

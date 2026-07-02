@@ -14,13 +14,7 @@ type SidebarNavProps = {
   activeTool?: SidebarNavTool | null
   onShowNearby: () => void
   onShowRooms: () => void
-  onShowFiles: () => void
   onShowQueue: () => void
-  onShowText: () => void
-  onShowHistory: () => void
-  onOpenAiChat: () => void
-  onOpenImage: () => void
-  onOpenCommand: () => void
   onShowSettings: () => void
 }
 

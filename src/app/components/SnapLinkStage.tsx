@@ -5744,13 +5744,7 @@ export function SnapLinkStage({
         activeMode={workbenchMode}
         onShowNearby={handleShowWorkbenchNearby}
         onShowRooms={handleShowWorkbenchRooms}
-        onShowFiles={handleShowWorkbenchFiles}
         onShowQueue={handleShowWorkbenchQueue}
-        onShowText={handleShowWorkbenchText}
-        onShowHistory={handleShowWorkbenchHistory}
-        onOpenAiChat={handleOpenAiChat}
-        onOpenImage={handleOpenImage}
-        onOpenCommand={handleOpenCommand}
         onShowSettings={handleShowWorkbenchSettings}
       />
 
@@ -5768,14 +5762,8 @@ export function SnapLinkStage({
           ariaLabel="移动端功能导航"
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
-          onShowFiles={handleShowWorkbenchFiles}
           onShowQueue={handleShowWorkbenchQueue}
-          onShowText={handleShowWorkbenchText}
-          onShowHistory={handleShowWorkbenchHistory}
           onShowSettings={handleShowWorkbenchSettings}
-          onOpenAiChat={handleOpenAiChat}
-          onOpenImage={handleOpenImage}
-          onOpenCommand={handleOpenCommand}
         />
 
         <main className={`dd-snaplink__workbench-content is-${workbenchMode}`}>
@@ -5883,13 +5871,7 @@ export function SnapLinkStage({
           activeTool={tool}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
-          onShowFiles={handleShowWorkbenchFiles}
           onShowQueue={handleShowWorkbenchQueue}
-          onShowText={handleShowWorkbenchText}
-          onShowHistory={handleShowWorkbenchHistory}
-          onOpenAiChat={handleOpenAiChat}
-          onOpenImage={handleOpenImage}
-          onOpenCommand={handleOpenCommand}
           onShowSettings={handleShowWorkbenchSettings}
         />
 
@@ -5915,14 +5897,8 @@ export function SnapLinkStage({
             ariaLabel="移动端工作台导航"
             onShowNearby={handleShowWorkbenchNearby}
             onShowRooms={handleShowWorkbenchRooms}
-            onShowFiles={handleShowWorkbenchFiles}
             onShowQueue={handleShowWorkbenchQueue}
-            onShowText={handleShowWorkbenchText}
-            onShowHistory={handleShowWorkbenchHistory}
             onShowSettings={handleShowWorkbenchSettings}
-            onOpenAiChat={handleOpenAiChat}
-            onOpenImage={handleOpenImage}
-            onOpenCommand={handleOpenCommand}
           />
 
           <div className="dd-snaplink__tool-mobile-actions" aria-label={`${toolTitle}移动端快捷操作`}>
@@ -6200,13 +6176,7 @@ export function SnapLinkStage({
                 activeMode="rooms"
                 onShowNearby={handleShowWorkbenchNearby}
                 onShowRooms={handleShowWorkbenchRooms}
-                onShowFiles={handleShowWorkbenchFiles}
                 onShowQueue={handleShowWorkbenchQueue}
-                onShowText={handleShowWorkbenchText}
-                onShowHistory={handleShowWorkbenchHistory}
-                onOpenAiChat={handleOpenAiChat}
-                onOpenImage={handleOpenImage}
-                onOpenCommand={handleOpenCommand}
                 onShowSettings={handleShowWorkbenchSettings}
               />
 
