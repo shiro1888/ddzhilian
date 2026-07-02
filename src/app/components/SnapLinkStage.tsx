@@ -748,10 +748,6 @@ function resolveSnapLinkTrustLabel(device: OnlineDeviceListItem, isLocallyTruste
     return '已信任'
   }
 
-  if (device.scopeLabel.includes('局域网')) {
-    return '同网设备'
-  }
-
   return '未验证'
 }
 
