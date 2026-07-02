@@ -5459,8 +5459,6 @@ export function SnapLinkStage({
       themeColors={themeColors}
       themeOptions={snapLinkThemeColorOptions}
       feedbackMessage={settingsFeedbackMessage}
-      aiModelLabel={selectedAiModelLabel}
-      aiQuotaLabel={aiQuotaLabel}
       canOpenAdmin={canRecallAnyMessage}
       onDeviceNameDraftChange={(value) => {
         setDeviceNameDraft(value)

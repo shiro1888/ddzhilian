@@ -34,8 +34,6 @@ type SettingsPanelProps = {
   themeColors: SettingsPanelThemeColors
   themeOptions: SettingsPanelThemeOption[]
   feedbackMessage: string | null
-  aiModelLabel?: string
-  aiQuotaLabel?: string
   canOpenAdmin?: boolean
   onDeviceNameDraftChange: (value: string) => void
   onDeviceNameSubmit: FormEventHandler<HTMLFormElement>
@@ -154,8 +152,6 @@ export function SettingsPanel({
   themeColors,
   themeOptions,
   feedbackMessage,
-  aiModelLabel,
-  aiQuotaLabel,
   canOpenAdmin = false,
   onDeviceNameDraftChange,
   onDeviceNameSubmit,
@@ -241,15 +237,6 @@ export function SettingsPanel({
                   <span>
                     <strong>DD助手</strong>
                     <small>总结传输内容，辅助生成文本</small>
-                  </span>
-                </button>
-              ) : null}
-              {onOpenAiChat ? (
-                <button type="button" onClick={onOpenAiChat}>
-                  <Settings size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>AI 设置</strong>
-                    <small>{[aiModelLabel || '默认模型', aiQuotaLabel || '额度同步'].join(' · ')}</small>
                   </span>
                 </button>
               ) : null}
