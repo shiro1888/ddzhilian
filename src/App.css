@@ -22297,6 +22297,51 @@
 
 /* 微信式移动端：没有传输/接收任务时，不让空队列常驻占住聊天底部 */
 @media (max-width: 760px) {
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: calc(58px + var(--snap-bottom-safe));
+    padding: 7px 12px calc(7px + var(--snap-bottom-safe));
+    border-top: 1px solid var(--snap-border);
+    border-bottom: 0;
+    background: color-mix(in srgb, var(--snap-panel) 94%, #ffffff);
+    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button {
+    min-height: 40px;
+    border-color: transparent;
+    border-radius: 12px;
+    background: transparent;
+    font-size: 12px;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button.is-active {
+    border-color: color-mix(in srgb, var(--snap-green) 24%, transparent);
+    background: color-mix(in srgb, var(--snap-green) 10%, #ffffff);
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-more-menu {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-main {
+    scroll-padding-bottom: calc(86px + var(--snap-bottom-safe));
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-content {
+    padding-bottom: calc(88px + var(--snap-bottom-safe));
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench.has-no-mobile-actions > .dd-snaplink__queue {
+    bottom: calc(72px + var(--snap-bottom-safe));
+  }
+
   .dd-snaplink__workbench.has-empty-transfer-queue > .dd-snaplink__queue,
   .dd-snaplink__room-workbench.has-empty-transfer-queue > .dd-snaplink__queue {
     display: none;
@@ -22311,13 +22356,13 @@
   .dd-snaplink.is-workbench-shell
     .dd-snaplink__workbench.has-no-mobile-actions.has-empty-transfer-queue
     .dd-snaplink__workbench-main {
-    scroll-padding-bottom: calc(22px + var(--snap-bottom-safe));
+    scroll-padding-bottom: calc(86px + var(--snap-bottom-safe));
   }
 
   .dd-snaplink.is-workbench-shell
     .dd-snaplink__workbench.has-no-mobile-actions.has-empty-transfer-queue
     .dd-snaplink__workbench-content {
-    padding-bottom: calc(22px + var(--snap-bottom-safe));
+    padding-bottom: calc(88px + var(--snap-bottom-safe));
   }
 }
 
