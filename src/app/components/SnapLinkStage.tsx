@@ -4978,41 +4978,9 @@ export function SnapLinkStage({
     <section className="dd-snaplink__messages-shell" aria-label="消息工作台">
       {renderDesktopConversationSideList()}
       <div className="dd-snaplink__messages-detail" aria-label="消息详情占位">
-        <section className="dd-snaplink__messages-hero">
-          <span className="dd-snaplink__messages-hero-mark" aria-hidden="true">DD</span>
-          <span className="dd-snaplink__messages-hero-copy">
-            <strong>选择一个会话开始直连</strong>
-            <small>世界对话、房间和设备私聊都在左侧。像聊天一样发送文本、文件和图片。</small>
-          </span>
-          <div className="dd-snaplink__messages-hero-actions" aria-label="消息快捷操作">
-            <button type="button" onClick={handleCreatePublicRoom}>
-              创建房间
-            </button>
-            <button type="button" onClick={handleWorkbenchFilePick}>
-              选择文件
-            </button>
-            <button type="button" onClick={handleShowWorkbenchNearby}>
-              查看设备
-            </button>
-          </div>
-        </section>
-
-        <section className="dd-snaplink__messages-plus-preview" aria-label="会话加号菜单预览">
-          <span>
-            <strong>常用入口已收进「＋」</strong>
-            <small>文件、图片、文本、AI 和命令行不再抢主导航。</small>
-          </span>
-          <div>
-            <button type="button" onClick={handleWorkbenchFilePick}>文件</button>
-            <button type="button" onClick={handleWorkbenchCameraPick}>图片</button>
-            <button type="button" onClick={handleOpenAiChat}>DD助手</button>
-            <button type="button" onClick={handleOpenCommand}>命令行</button>
-          </div>
-        </section>
-
         <section className="dd-snaplink__messages-empty-chat" aria-label="空会话提示">
-          <strong>没有选中会话</strong>
-          <small>从左侧选择世界对话、房间或设备。传输队列会在右侧显示真实进度。</small>
+          <strong>选择一个会话</strong>
+          <small>从左侧打开世界对话、房间、设备或 DD助手。文件、图片和工具都在会话输入栏的「＋」里。</small>
         </section>
       </div>
     </section>
