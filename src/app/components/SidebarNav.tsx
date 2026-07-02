@@ -12,6 +12,7 @@ type SidebarNavProps = {
   deviceName: string
   activeMode?: SidebarNavMode | null
   activeTool?: SidebarNavTool | null
+  activeTransferCount?: number
   onShowNearby: () => void
   onShowRooms: () => void
   onShowQueue: () => void
@@ -27,6 +28,7 @@ export function SidebarNav({
   deviceName,
   activeMode = null,
   activeTool = null,
+  activeTransferCount = 0,
   onShowRooms,
   onShowNearby,
   onShowQueue,
@@ -68,10 +70,15 @@ export function SidebarNav({
           className={isTransfersActive ? 'is-active' : ''}
           aria-pressed={isTransfersActive}
           onClick={onShowQueue}
-          title="传输"
+          title={activeTransferCount > 0 ? `传输 · ${activeTransferCount.toString()} 个进行中` : '传输'}
         >
           <History size={20} strokeWidth={1.8} aria-hidden="true" />
           <span>传输</span>
+          {activeTransferCount > 0 ? (
+            <em className="dd-snaplink__rail-badge" aria-label={`${activeTransferCount.toString()} 个传输中`}>
+              {activeTransferCount > 99 ? '99+' : activeTransferCount.toString()}
+            </em>
+          ) : null}
         </button>
         <button
           type="button"

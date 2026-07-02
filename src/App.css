@@ -9080,6 +9080,7 @@
 }
 
 .dd-snaplink__rail-nav button {
+  position: relative;
   display: grid;
   place-items: center;
   gap: 4px;
@@ -9111,6 +9112,27 @@
 .dd-snaplink__rail-nav button.is-active {
   background: color-mix(in srgb, var(--snap-green) 12%, #ffffff);
   color: #07a152;
+}
+
+.dd-snaplink__rail-badge {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid #ededed;
+  border-radius: 999px;
+  background: var(--danger, #fa5151);
+  color: #ffffff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .dd-snaplink__rail-avatar {

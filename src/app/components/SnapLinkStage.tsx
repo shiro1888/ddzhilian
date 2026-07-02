@@ -5719,6 +5719,7 @@ export function SnapLinkStage({
       <SidebarNav
         deviceName={deviceName}
         activeMode={workbenchMode}
+        activeTransferCount={workbenchActiveTransferCount}
         onShowNearby={handleShowWorkbenchNearby}
         onShowRooms={handleShowWorkbenchRooms}
         onShowQueue={handleShowWorkbenchQueue}
@@ -5847,6 +5848,7 @@ export function SnapLinkStage({
         <SidebarNav
           deviceName={deviceName}
           activeTool={tool}
+          activeTransferCount={workbenchActiveTransferCount}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
@@ -6153,6 +6155,7 @@ export function SnapLinkStage({
               <SidebarNav
                 deviceName={deviceName}
                 activeMode="rooms"
+                activeTransferCount={workbenchActiveTransferCount}
                 onShowNearby={handleShowWorkbenchNearby}
                 onShowRooms={handleShowWorkbenchRooms}
                 onShowQueue={handleShowWorkbenchQueue}
