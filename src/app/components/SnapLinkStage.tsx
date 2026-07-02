@@ -5805,7 +5805,7 @@ export function SnapLinkStage({
         ? '提示词生成 · 历史与额度同步'
         : '浏览器 / Docker 沙箱 · 本页运行'
     const toolLabel = isAiTool
-      ? 'DD直连 AI 辅助工作台'
+      ? 'DD直连 DD助手会话'
       : isImageTool
         ? 'DD直连 AI 图片工作台'
         : 'DD直连 命令行工作台'
@@ -5869,7 +5869,8 @@ export function SnapLinkStage({
       <section className={`dd-snaplink__tool-workbench is-${tool}`} aria-label={toolLabel}>
         <SidebarNav
           deviceName={deviceName}
-          activeTool={tool}
+          activeMode={isAiTool ? 'rooms' : undefined}
+          activeTool={isAiTool ? undefined : tool}
           activeTransferCount={workbenchActiveTransferCount}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
@@ -5895,7 +5896,8 @@ export function SnapLinkStage({
 
           <MobileWorkbenchNav
             className="dd-snaplink__tool-mobile-nav"
-            activeTool={tool}
+            activeMode={isAiTool ? 'rooms' : undefined}
+            activeTool={isAiTool ? undefined : tool}
             ariaLabel="移动端工作台导航"
             activeTransferCount={workbenchActiveTransferCount}
             onShowNearby={handleShowWorkbenchNearby}
