@@ -22232,6 +22232,61 @@
   }
 }
 
+/* 空传输队列不再占一整条右侧栏：降级为右下角小浮标，有任务时仍沿用侧栏 */
+@media (min-width: 1181px) {
+  .dd-snaplink__workbench.is-queue-collapsed.has-empty-transfer-queue,
+  .dd-snaplink__room-workbench.is-queue-collapsed.has-empty-transfer-queue {
+    grid-template-columns: 64px minmax(0, 1fr) 0;
+  }
+
+  .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em)) {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 30;
+    width: 54px;
+    height: 54px;
+    min-height: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em))
+    > .dd-snaplink__queue-collapsed-rail {
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    min-height: 54px;
+    height: 54px;
+    padding: 0;
+    border: 1px solid #e5e5e5;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 10px 24px rgba(17, 17, 17, 0.10);
+    color: #606060;
+    pointer-events: auto;
+  }
+
+  .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em))
+    > .dd-snaplink__queue-collapsed-rail:hover,
+  .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em))
+    > .dd-snaplink__queue-collapsed-rail:focus-visible {
+    border-color: color-mix(in srgb, var(--snap-green) 34%, #e5e5e5);
+    background: #ffffff;
+    color: var(--snap-green);
+    outline: none;
+  }
+
+  .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em))
+    .dd-snaplink__queue-collapsed-rail span {
+    writing-mode: initial;
+    text-orientation: initial;
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+}
+
 @media (min-width: 761px) and (max-width: 1180px) {
   .dd-snaplink__workbench,
   .dd-snaplink__room-workbench,

@@ -5553,6 +5553,7 @@ export function SnapLinkStage({
         'dd-snaplink__workbench',
         'has-no-mobile-actions',
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+        workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
       aria-label="DD直连 P2P 局域网文件共享工作台"
     >
@@ -6026,6 +6027,7 @@ export function SnapLinkStage({
               className={[
                 'dd-snaplink__room-workbench',
                 isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+                workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
               ].filter(Boolean).join(' ')}
               aria-label="DD直连房间会话工作台"
             >
