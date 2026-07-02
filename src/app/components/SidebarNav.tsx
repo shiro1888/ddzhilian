@@ -38,6 +38,9 @@ export function SidebarNav({
   const isDevicesActive = activeMode === 'nearby'
   const isTransfersActive = activeMode === 'transfers'
   const isMeActive = activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool)
+  const transferLabel = activeTransferCount > 0
+    ? `传输 · ${activeTransferCount.toString()} 个进行中`
+    : '传输'
 
   return (
     <aside className="dd-snaplink__rail" aria-label="主导航">
@@ -69,13 +72,14 @@ export function SidebarNav({
           type="button"
           className={isTransfersActive ? 'is-active' : ''}
           aria-pressed={isTransfersActive}
+          aria-label={transferLabel}
           onClick={onShowQueue}
-          title={activeTransferCount > 0 ? `传输 · ${activeTransferCount.toString()} 个进行中` : '传输'}
+          title={transferLabel}
         >
           <History size={20} strokeWidth={1.8} aria-hidden="true" />
           <span>传输</span>
           {activeTransferCount > 0 ? (
-            <em className="dd-snaplink__rail-badge" aria-label={`${activeTransferCount.toString()} 个传输中`}>
+            <em className="dd-snaplink__rail-badge" aria-hidden="true">
               {activeTransferCount > 99 ? '99+' : activeTransferCount.toString()}
             </em>
           ) : null}
