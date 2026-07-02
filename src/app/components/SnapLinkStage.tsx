@@ -2813,7 +2813,7 @@ export function SnapLinkStage({
 
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
-    setIsLobbyOpen(false)
+    setWorkbenchMode('rooms')
     onOpenAiChatView()
   }
 
@@ -4827,12 +4827,14 @@ export function SnapLinkStage({
 
   const renderDesktopConversationSideList = () => {
     const normalizedQuery = conversationSearchQuery.trim().toLowerCase()
+    const assistantRoom = lobbyRoomListItems.find((room) => room.isAssistant)
     const shouldShowAssistant =
       normalizedQuery.length === 0 ||
       'dd助手 ai 辅助 总结 传输 说明'.includes(normalizedQuery)
+    const visibleLobbyRooms = lobbyRoomListItems.filter((room) => !room.isAssistant)
     const filteredRooms = normalizedQuery.length === 0
-      ? lobbyRoomListItems
-      : lobbyRoomListItems.filter((room) => {
+      ? visibleLobbyRooms
+      : visibleLobbyRooms.filter((room) => {
           const searchableText = [
             room.title,
             room.previewText,
@@ -4895,8 +4897,20 @@ export function SnapLinkStage({
           {shouldShowAssistant ? (
             <button
               type="button"
-              className="dd-snaplink__conversation-row is-assistant"
-              onClick={handleOpenAiChat}
+              className={[
+                'dd-snaplink__conversation-row',
+                'is-assistant',
+                assistantRoom?.roomId === selectedRoomId ? 'is-active' : '',
+              ].filter(Boolean).join(' ')}
+              aria-current={assistantRoom?.roomId === selectedRoomId ? 'page' : undefined}
+              onClick={() => {
+                if (assistantRoom) {
+                  handleRoomSelection(assistantRoom.roomId)
+                  return
+                }
+
+                handleOpenAiChat()
+              }}
               title="打开 DD助手"
             >
               <span className="dd-snaplink__conversation-avatar is-assistant" aria-hidden="true">
@@ -4907,9 +4921,11 @@ export function SnapLinkStage({
                   <strong>DD助手</strong>
                   <em>置顶</em>
                 </span>
-                <small>总结传输记录，生成文件说明</small>
+                <small>{assistantRoom?.previewText || '总结传输记录，生成文件说明'}</small>
               </span>
-              <span className="dd-snaplink__conversation-meta">刚刚</span>
+              <span className="dd-snaplink__conversation-meta">
+                {assistantRoom?.updatedAtLabel || '刚刚'}
+              </span>
             </button>
           ) : null}
           {filteredRooms.map((room) => {

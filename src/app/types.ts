@@ -121,6 +121,7 @@ export type RoomListItem = {
   status: RoomListStatus
   pinned: boolean
   unreadCount: number
+  isAssistant?: boolean
 }
 
 export type OnlineDeviceListItem = {

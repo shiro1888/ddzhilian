@@ -454,6 +454,7 @@ function App() {
     lastCreatedPrivateRoomId,
     joinRoom,
     createPublicRoom,
+    createBotRoom,
     requestConnect,
     updateSettings,
     updateRoomState,
@@ -1529,6 +1530,7 @@ function App() {
         status,
         pinned: roomState?.pinned ?? false,
         unreadCount,
+        isAssistant: isBotChatRoom(room),
       }
     })
     .sort((left, right) => {
@@ -2031,6 +2033,30 @@ function App() {
     setLocalError(null)
   }
 
+  const handleOpenAssistantConversation = () => {
+    const existingBotRoom = rooms.find((room) => isBotChatRoom(room))
+
+    setLocalError(null)
+
+    if (existingBotRoom) {
+      setPendingRoomSelectionId(existingBotRoom.roomId)
+      setSelectedRoomId(existingBotRoom.roomId)
+      setAutoOpenRoomId(existingBotRoom.roomId)
+      updateRoomState({ roomId: existingBotRoom.roomId, lastReadAt: new Date().toISOString() })
+
+      if (activeView !== 'text') {
+        navigate(pathForView('text'))
+      }
+      return
+    }
+
+    createBotRoom()
+
+    if (activeView !== 'text') {
+      navigate(pathForView('text'))
+    }
+  }
+
   const handleJoinRoomFromWorkbench = (roomId: string) => {
     const normalizedRoomId = roomId.trim().toUpperCase()
     if (!normalizedRoomId) {
@@ -2172,7 +2198,7 @@ function App() {
       onDevicePreferencesChange={updatePreferences}
       onRequestSnapshot={requestSnapshot}
       onOpenRoomHome={() => handleViewChange('text')}
-      onOpenAiChatView={() => handleViewChange('chat')}
+      onOpenAiChatView={handleOpenAssistantConversation}
       onOpenImageView={() => handleViewChange('image')}
       onOpenAdminView={() => handleViewChange('admin')}
       onOpenCommandView={() => handleViewChange('command')}
