@@ -495,6 +495,7 @@ export function useDdzhilian() {
   const [lastCreatedPrivateRoomId, setLastCreatedPrivateRoomId] = useState<string | null>(null)
 
   const socketRef = useRef<WebSocket | null>(null)
+  const pendingClientEventsRef = useRef<ClientEvent[]>([])
   const reconnectTimerRef = useRef<number | null>(null)
   const connectSocketRef = useRef<(() => void) | null>(null)
   const reconnectCallbacksRef = useRef<Array<() => void>>([])
@@ -605,9 +606,68 @@ export function useDdzhilian() {
     historyTextPaginationRef.current = historyTextPaginationByRoomId
   }, [historyTextPaginationByRoomId])
 
+  const shouldQueueClientEvent = (event: ClientEvent) => {
+    switch (event.type) {
+      case 'hello':
+      case 'signal':
+      case 'session-state':
+        return false
+      default:
+        return true
+    }
+  }
+
+  const shouldReplacePendingEvent = (existing: ClientEvent, next: ClientEvent) => {
+    if (existing.type !== next.type) {
+      return false
+    }
+
+    if (
+      next.type === 'request-snapshot' ||
+      next.type === 'create-public-room' ||
+      next.type === 'create-bot-room' ||
+      next.type === 'update-settings' ||
+      next.type === 'update-preferences'
+    ) {
+      return true
+    }
+
+    return (
+      existing.type === 'update-room-state' &&
+      next.type === 'update-room-state' &&
+      existing.payload.roomId === next.payload.roomId
+    )
+  }
+
+  const enqueuePendingClientEvent = (event: ClientEvent) => {
+    if (!shouldQueueClientEvent(event)) {
+      return
+    }
+
+    const nextQueue = pendingClientEventsRef.current.filter(
+      (existing) => !shouldReplacePendingEvent(existing, event),
+    )
+    nextQueue.push(event)
+    pendingClientEventsRef.current = nextQueue.slice(-40)
+  }
+
+  const flushPendingClientEvents = () => {
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN || pendingClientEventsRef.current.length === 0) {
+      return
+    }
+
+    const events = pendingClientEventsRef.current
+    pendingClientEventsRef.current = []
+    for (const event of events) {
+      socket.send(JSON.stringify(event))
+    }
+  }
+
   const sendEvent = (event: ClientEvent) => {
     const socket = socketRef.current
     if (!socket || socket.readyState !== WebSocket.OPEN) {
+      enqueuePendingClientEvent(event)
       return
     }
 
@@ -1871,6 +1931,7 @@ export function useDdzhilian() {
       setSocketState('open')
       setErrorMessage(null)
       restorePublicRoomMembership(event.payload)
+      flushPendingClientEvents()
 
       const reconnectCallbacks = reconnectCallbacksRef.current
       reconnectCallbacksRef.current = []
