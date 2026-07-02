@@ -22881,25 +22881,35 @@
 .dd-command-palette__scrim {
   position: absolute;
   inset: 0;
+  z-index: 0;
   border: 0;
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(15, 23, 42, 0.42);
   cursor: default;
 }
 
 .dd-command-palette__panel {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  --dd-command-bg: #ffffff;
+  --dd-command-bg-subtle: #f8fafc;
+  --dd-command-border: #d6dde8;
+  --dd-command-ink: #0f172a;
+  --dd-command-muted: #475569;
+  --dd-command-soft: #64748b;
+  --dd-command-hover: #eefcf4;
+  --dd-command-green: #06a65b;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(480px, calc(100vw - 32px));
   max-height: min(640px, calc(100svh - 128px));
   overflow: hidden;
-  border: 1px solid var(--snap-border);
+  border: 1px solid var(--dd-command-border);
   border-radius: 14px;
-  background: var(--snap-surface);
-  color: var(--snap-ink);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
+  background: var(--dd-command-bg);
+  color: var(--dd-command-ink);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.32);
   animation: ddRise 180ms ease both;
+  isolation: isolate;
 }
 
 .dd-command-palette__search {
@@ -22908,18 +22918,23 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--snap-border);
-  color: var(--snap-muted);
+  border-bottom: 1px solid var(--dd-command-border);
+  color: var(--dd-command-muted);
 }
 
 .dd-command-palette__search input {
   min-width: 0;
   border: 0;
   background: transparent;
-  color: var(--snap-ink);
+  color: var(--dd-command-ink);
   font: inherit;
   font-size: 14px;
   outline: none;
+}
+
+.dd-command-palette__search input::placeholder {
+  color: var(--dd-command-soft);
+  opacity: 1;
 }
 
 .dd-command-palette__list {
@@ -22950,7 +22965,7 @@
 .dd-command-palette__item:hover,
 .dd-command-palette__item:focus-visible {
   outline: none;
-  background: var(--snap-bg);
+  background: var(--dd-command-hover);
 }
 
 .dd-command-palette__icon {
@@ -22959,8 +22974,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--snap-green) 11%, var(--snap-surface));
-  color: var(--snap-green);
+  background: #dcfce7;
+  color: var(--dd-command-green);
 }
 
 .dd-command-palette__item span:last-child {
@@ -22977,20 +22992,20 @@
 }
 
 .dd-command-palette__item strong {
-  color: var(--snap-ink);
+  color: var(--dd-command-ink);
   font-size: 13.5px;
   font-weight: 850;
 }
 
 .dd-command-palette__item small {
-  color: var(--snap-muted);
+  color: var(--dd-command-muted);
   font-size: 11.5px;
   font-weight: 650;
 }
 
 .dd-command-palette__empty {
   padding: 28px 12px;
-  color: var(--snap-muted);
+  color: var(--dd-command-muted);
   font-size: 13px;
   font-weight: 700;
   text-align: center;
@@ -23002,11 +23017,17 @@
   justify-content: space-between;
   gap: 8px;
   padding: 9px 12px;
-  border-top: 1px solid var(--snap-border);
-  background: var(--snap-bg);
-  color: var(--snap-muted);
+  border-top: 1px solid var(--dd-command-border);
+  background: var(--dd-command-bg-subtle);
+  color: var(--dd-command-muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.dd-command-palette .dd-command-palette__panel kbd {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .dd-snaplink__device-radar-card {

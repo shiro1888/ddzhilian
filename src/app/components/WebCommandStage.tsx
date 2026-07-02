@@ -24,6 +24,7 @@ const plantUmlAutoRenderDelayMs = 5000
 type WebCommandMobilePane = 'source' | 'terminal' | 'result'
 
 type WebCommandStageProps = {
+  historyAuthToken?: string
   onResultTextChange?: (text: string) => void
   onShareResult?: (text: string) => void
 }
@@ -80,18 +81,30 @@ async function readWebCommandApiError(response: Response, fallback: string) {
     : fallback
 }
 
+function buildServerSandboxHeaders(historyAuthToken?: string) {
+  const token = historyAuthToken?.trim()
+  if (!token) {
+    throw new Error('连接凭证还没准备好，请等待 DD直连显示在线后再运行服务端沙箱。')
+  }
+
+  return {
+    'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
+  }
+}
+
 async function runJavaDockerSandbox({
   source,
   stdin,
+  historyAuthToken,
 }: {
   source: string
   stdin: string
+  historyAuthToken?: string
 }) {
   const response = await fetch(`${resolveWebCommandApiBaseUrl()}/api/web-command/java`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
+    headers: buildServerSandboxHeaders(historyAuthToken),
     body: JSON.stringify({ source, stdin }),
   })
 
@@ -102,12 +115,16 @@ async function runJavaDockerSandbox({
   return normalizeJavaRunResult(await response.json())
 }
 
-async function runPlantUmlDockerSandbox({ source }: { source: string }) {
+async function runPlantUmlDockerSandbox({
+  source,
+  historyAuthToken,
+}: {
+  source: string
+  historyAuthToken?: string
+}) {
   const response = await fetch(`${resolveWebCommandApiBaseUrl()}/api/web-command/plantuml`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
+    headers: buildServerSandboxHeaders(historyAuthToken),
     body: JSON.stringify({ source }),
   })
 
@@ -238,7 +255,11 @@ function createWebCommandErrorResult({
   }
 }
 
-export function WebCommandStage({ onResultTextChange, onShareResult }: WebCommandStageProps) {
+export function WebCommandStage({
+  historyAuthToken,
+  onResultTextChange,
+  onShareResult,
+}: WebCommandStageProps) {
   const [language, setLanguage] = useState<WebCommandLanguage>('python')
   const [source, setSource] = useState(webCommandDefaultSources.python)
   const [stdin, setStdin] = useState('')
@@ -339,6 +360,7 @@ export function WebCommandStage({ onResultTextChange, onShareResult }: WebComman
     const currentLanguage = languageRef.current
     const currentSource = sourceRef.current
     const currentStdin = stdinRef.current
+    const currentHistoryAuthToken = historyAuthToken
     const runId = runSequenceRef.current + 1
     const started = Date.now()
     runSequenceRef.current = runId
@@ -354,6 +376,7 @@ export function WebCommandStage({ onResultTextChange, onShareResult }: WebComman
           language: currentLanguage,
           source: currentSource,
           stdin: currentStdin,
+          historyAuthToken: currentHistoryAuthToken,
         })
 
         if (runSequenceRef.current !== runId) {
@@ -380,7 +403,7 @@ export function WebCommandStage({ onResultTextChange, onShareResult }: WebComman
         }
       }
     })()
-  }, [writeRunResult])
+  }, [historyAuthToken, writeRunResult])
 
   const switchLanguage = useCallback((nextLanguage: WebCommandLanguage) => {
     runSequenceRef.current += 1
@@ -775,16 +798,18 @@ function runCurrentSource({
   language,
   source,
   stdin,
+  historyAuthToken,
 }: {
   language: WebCommandLanguage
   source: string
   stdin: string
+  historyAuthToken?: string
 }) {
   switch (language) {
     case 'java':
-      return runJavaDockerSandbox({ source, stdin })
+      return runJavaDockerSandbox({ source, stdin, historyAuthToken })
     case 'plantuml':
-      return runPlantUmlDockerSandbox({ source })
+      return runPlantUmlDockerSandbox({ source, historyAuthToken })
     case 'python':
     case 'c':
       return Promise.resolve(runWebCommandSandbox({ language, source }))

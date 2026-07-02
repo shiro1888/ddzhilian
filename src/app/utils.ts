@@ -209,6 +209,44 @@ function isSafeUrl(value: string, kind: 'href' | 'src') {
   return /^(https?:|mailto:|tel:)/i.test(normalizedValue)
 }
 
+function sanitizeCssDeclarationValue(property: string, value: string) {
+  const normalizedValue = value.trim()
+  if (
+    !normalizedValue ||
+    normalizedValue.length > 160 ||
+    /[;{}<>]/.test(normalizedValue) ||
+    /(?:url\s*\(|expression\s*\(|@import|javascript:)/i.test(normalizedValue)
+  ) {
+    return ''
+  }
+
+  switch (property) {
+    case 'color':
+      return /^(?:#[0-9a-f]{3,8}|rgba?\([\d\s,.%+-]+\)|hsla?\([\d\s,.%+-]+\)|[a-z]+|transparent|currentColor)$/i
+        .test(normalizedValue)
+        ? normalizedValue
+        : ''
+    case 'font-family':
+      return /^[\p{L}\p{N}\s"',.-]+$/u.test(normalizedValue) ? normalizedValue : ''
+    case 'font-size':
+      return /^(?:\d{1,3}(?:\.\d{1,2})?(?:px|em|rem|%)|small|medium|large|x-small|x-large|xx-large|smaller|larger)$/i
+        .test(normalizedValue)
+        ? normalizedValue
+        : ''
+    case 'text-align':
+      return /^(?:left|center|right|justify|start|end)$/i.test(normalizedValue)
+        ? normalizedValue.toLowerCase()
+        : ''
+    case 'text-indent':
+    case 'margin-left':
+      return /^-?\d{1,4}(?:\.\d{1,2})?(?:px|em|rem|%)$/i.test(normalizedValue)
+        ? normalizedValue
+        : ''
+    default:
+      return ''
+  }
+}
+
 function normalizeAutolinkHref(value: string) {
   const href = value.startsWith('www.') ? `https://${value}` : value
 
@@ -1185,7 +1223,7 @@ function sanitizeStyleAttribute(style: CSSStyleDeclaration) {
   const allowedProperties = ['color', 'font-family', 'font-size', 'text-align', 'text-indent', 'margin-left']
 
   for (const property of allowedProperties) {
-    const value = style.getPropertyValue(property).trim()
+    const value = sanitizeCssDeclarationValue(property, style.getPropertyValue(property))
     if (value) {
       declarations.push(`${property}: ${value}`)
     }
@@ -1389,13 +1427,15 @@ export function sanitizeRichTextHtml(value: string) {
 
     if (tagName === 'font') {
       const color = node.getAttribute('color')?.trim()
-      if (color) {
-        styleDeclarations.push(`color: ${color}`)
+      const sanitizedColor = color ? sanitizeCssDeclarationValue('color', color) : ''
+      if (sanitizedColor) {
+        styleDeclarations.push(`color: ${sanitizedColor}`)
       }
 
       const face = node.getAttribute('face')?.trim()
-      if (face) {
-        styleDeclarations.push(`font-family: ${face}`)
+      const sanitizedFace = face ? sanitizeCssDeclarationValue('font-family', face) : ''
+      if (sanitizedFace) {
+        styleDeclarations.push(`font-family: ${sanitizedFace}`)
       }
 
       const size = node.getAttribute('size')?.trim()

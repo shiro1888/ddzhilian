@@ -656,6 +656,12 @@ async function handleWebCommandJavaRunRequest(
     return;
   }
 
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
   const maxPayloadBytes =
     config.javaDockerSandbox.maxSourceBytes +
     config.javaDockerSandbox.maxStdinBytes +
@@ -724,6 +730,12 @@ async function handleWebCommandPlantUmlRunRequest(
     writeJson(response, 503, {
       error: 'PlantUML Docker 沙箱未启用。生产环境需要显式设置 PLANTUML_DOCKER_SANDBOX_ENABLED=true。',
     });
+    return;
+  }
+
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
     return;
   }
 

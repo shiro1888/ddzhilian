@@ -2200,6 +2200,7 @@ function App() {
 
   const webCommandElement = (
     <WebCommandStage
+      historyAuthToken={self?.historyAuthToken}
       onResultTextChange={setCommandResultText}
       onShareResult={handleShareCommandResult}
     />
