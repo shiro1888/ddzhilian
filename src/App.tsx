@@ -242,6 +242,19 @@ function isBotChatRoom(room: Pick<RoomSummary, 'reason'> | null | undefined) {
   return room?.reason === 'bot-chat'
 }
 
+function getPrivateRoomPeerKey(room: Pick<RoomListItem, 'isPublic' | 'isAssistant' | 'members'>) {
+  if (room.isPublic || room.isAssistant) {
+    return null
+  }
+
+  const peerIds = room.members
+    .filter((member) => !member.isSelf)
+    .map((member) => member.deviceId)
+    .sort()
+
+  return peerIds.length > 0 ? peerIds.join('|') : null
+}
+
 function resolvePublicRoomTitle(publicIndex?: number) {
   return publicIndex ? `世界对话 ${publicIndex.toString()}` : '世界对话'
 }
@@ -610,6 +623,21 @@ function App() {
     () => new Map(rooms.map((room) => [room.roomId, room] as const)),
     [rooms],
   )
+  const findExistingPrivateRoomForDevice = (deviceId: string) => {
+    const selfDeviceId = self?.deviceId
+    if (!selfDeviceId) {
+      return null
+    }
+
+    return [...rooms]
+      .filter((room) =>
+        !room.isPublic &&
+        !isBotChatRoom(room) &&
+        room.members.some((member) => member.deviceId === selfDeviceId) &&
+        room.members.some((member) => member.deviceId === deviceId),
+      )
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null
+  }
   const roomStateById = useMemo(
     () => new Map(roomStates.map((state) => [state.roomId, state] as const)),
     [roomStates],
@@ -1535,6 +1563,26 @@ function App() {
         isAssistant: isBotChatRoom(room),
       }
     })
+    .reduce<RoomListItem[]>((visibleRooms, room) => {
+      const peerKey = getPrivateRoomPeerKey(room)
+      if (!peerKey) {
+        visibleRooms.push(room)
+        return visibleRooms
+      }
+
+      const existingIndex = visibleRooms.findIndex((item) => getPrivateRoomPeerKey(item) === peerKey)
+      if (existingIndex === -1) {
+        visibleRooms.push(room)
+        return visibleRooms
+      }
+
+      const existingRoom = visibleRooms[existingIndex]
+      if (Date.parse(room.updatedAt) > Date.parse(existingRoom.updatedAt)) {
+        visibleRooms[existingIndex] = room
+      }
+
+      return visibleRooms
+    }, [])
     .sort((left, right) => {
       if (left.isPublic && right.isPublic) {
         return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
@@ -1735,11 +1783,16 @@ function App() {
       setLocalError(null)
 
       if (targetSessions.length === 0) {
-        suppressNextPrivateRoomAutoOpenRef.current = true
-        requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
-        window.setTimeout(() => {
-          suppressNextPrivateRoomAutoOpenRef.current = false
-        }, 10_000)
+        const existingPrivateRoom = findExistingPrivateRoomForDevice(deviceId)
+        if (existingPrivateRoom) {
+          requestConnect(deviceId, { reason: 'manual' })
+        } else {
+          suppressNextPrivateRoomAutoOpenRef.current = true
+          requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
+          window.setTimeout(() => {
+            suppressNextPrivateRoomAutoOpenRef.current = false
+          }, 10_000)
+        }
       }
 
       const created = createTransferItems(
@@ -2027,6 +2080,19 @@ function App() {
   const handleStartPrivateChat = (deviceId: string) => {
     setSelectedPeerId(deviceId)
     setLocalError(null)
+    const existingPrivateRoom = findExistingPrivateRoomForDevice(deviceId)
+
+    if (existingPrivateRoom) {
+      requestConnect(deviceId, { reason: 'manual' })
+      handleOpenRoomConversation(existingPrivateRoom.roomId)
+      setAutoOpenRoomId(existingPrivateRoom.roomId)
+
+      if (activeView !== 'text') {
+        navigate(pathForView('text'))
+      }
+      return
+    }
+
     requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
   }
 
