@@ -5016,6 +5016,160 @@ export function SnapLinkStage({
     </section>
   )
 
+  const renderWorkbenchDevicesPage = () => {
+    const activeDevice = selectedWorkbenchDevice
+    const normalizedDeviceQuery = conversationSearchQuery.trim().toLowerCase()
+    const filteredDeviceItems = onlineDeviceItems.filter((device) => {
+      if (!normalizedDeviceQuery) {
+        return true
+      }
+
+      return [
+        device.deviceName,
+        device.platform,
+        device.scopeLabel,
+        device.shortCode,
+      ].filter(Boolean).join(' ').toLowerCase().includes(normalizedDeviceQuery)
+    })
+
+    return (
+      <section className="dd-snaplink__devices-shell" aria-label="设备工作台">
+        <aside className="dd-snaplink__conversation-side" aria-label="设备列表">
+          <div className="dd-snaplink__conversation-side-head">
+            <span>
+              <strong>设备</strong>
+              <small>同一局域网 / 账号下发现 {workbenchOnlineDeviceCount.toString()} 台设备</small>
+            </span>
+            <button type="button" onClick={handleWorkbenchRescan}>
+              扫描
+            </button>
+          </div>
+          <label className="dd-snaplink__conversation-side-search">
+            <span className="sr-only">搜索设备</span>
+            <input
+              value={conversationSearchQuery}
+              placeholder="搜索设备"
+              onChange={(event) => setConversationSearchQuery(event.target.value)}
+            />
+            {conversationSearchQuery ? (
+              <button
+                type="button"
+                aria-label="清空设备搜索"
+                onClick={() => setConversationSearchQuery('')}
+              >
+                ×
+              </button>
+            ) : null}
+          </label>
+          <div className={`dd-snaplink__conversation-side-list${isWorkbenchScanning ? ' is-scanning' : ''}`}>
+            {filteredDeviceItems
+              .map((device) => {
+                const isActive = activeDevice?.deviceId === device.deviceId
+
+                return (
+                  <button
+                    key={device.deviceId}
+                    type="button"
+                    className={[
+                      'dd-snaplink__conversation-row',
+                      'is-device',
+                      isActive ? 'is-active' : '',
+                    ].filter(Boolean).join(' ')}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => setSelectedWorkbenchDeviceId(device.deviceId)}
+                    title={`查看 ${device.deviceName}`}
+                  >
+                    <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
+                      {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
+                      <i className="is-online" />
+                    </span>
+                    <span className="dd-snaplink__conversation-main">
+                      <span className="dd-snaplink__conversation-title">
+                        <strong>{device.deviceName}</strong>
+                        <em>{device.platform || '设备'}</em>
+                      </span>
+                      <small>{device.scopeLabel || '附近设备'} · {device.lastSeenLabel || '在线'}</small>
+                    </span>
+                    <span className="dd-snaplink__conversation-side-meta">
+                      <small>在线</small>
+                      <em>{device.shortCode || '直连'}</em>
+                    </span>
+                  </button>
+                )
+              })}
+            {onlineDeviceItems.length === 0 ? (
+              <div className="dd-snaplink__conversation-empty">
+                暂无附近设备
+              </div>
+            ) : filteredDeviceItems.length === 0 ? (
+              <div className="dd-snaplink__conversation-empty">
+                没有找到相关设备
+              </div>
+            ) : null}
+          </div>
+        </aside>
+
+        <div className="dd-snaplink__devices-detail" aria-label="设备详情">
+          {activeDevice ? (
+            <section className="dd-snaplink__device-detail-card">
+              <span className={`dd-snaplink__device-detail-icon is-${resolveSnapLinkDeviceKind(activeDevice.platform)}`} aria-hidden="true">
+                {renderWorkbenchDeviceIcon(activeDevice)}
+              </span>
+              <span className="dd-snaplink__device-detail-copy">
+                <strong>{activeDevice.deviceName}</strong>
+                <small>{activeDevice.scopeLabel || '附近设备'} · {activeDevice.lastSeenLabel || '在线'}</small>
+              </span>
+              <dl className="dd-snaplink__device-detail-meta">
+                <div>
+                  <dt>平台</dt>
+                  <dd>{activeDevice.platform || '未知'}</dd>
+                </div>
+                <div>
+                  <dt>短码</dt>
+                  <dd>{activeDevice.shortCode || '未公开'}</dd>
+                </div>
+                <div>
+                  <dt>连接</dt>
+                  <dd>{resolveSnapLinkTransportMode(activeDevice).label}</dd>
+                </div>
+                <div>
+                  <dt>信任</dt>
+                  <dd>{resolveSnapLinkTrustLabel(activeDevice, trustedDeviceIds.has(activeDevice.deviceId))}</dd>
+                </div>
+              </dl>
+              <div className="dd-snaplink__device-detail-actions">
+                <button type="button" className="is-primary" onClick={() => handleWorkbenchDeviceSendText(activeDevice.deviceId)}>
+                  发消息
+                </button>
+                <button type="button" onClick={() => handleWorkbenchDeviceSendFile(activeDevice.deviceId)}>
+                  发文件
+                </button>
+                <button type="button" onClick={() => handleWorkbenchDeviceTrust(activeDevice.deviceId)}>
+                  校验设备
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="dd-snaplink__device-detail-card is-empty">
+              <span className="dd-snaplink__device-detail-icon is-empty" aria-hidden="true">
+                <Monitor size={24} strokeWidth={1.8} />
+              </span>
+              <span className="dd-snaplink__device-detail-copy">
+                <strong>等待附近设备</strong>
+                <small>让另一台设备打开 DD直连，并连接到同一局域网或同一账号。</small>
+              </span>
+              <div className="dd-snaplink__device-detail-actions">
+                <button type="button" className="is-primary" onClick={handleWorkbenchRescan}>
+                  重新扫描
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      </section>
+    )
+  }
+
   const renderWorkbenchRoomsSection = (variant: 'compact' | 'full' = 'compact') => (
     <RoomsPage
       variant={variant}
@@ -5537,6 +5691,10 @@ export function SnapLinkStage({
       return renderWorkbenchMessagesPage()
     }
 
+    if (workbenchMode === 'nearby') {
+      return renderWorkbenchDevicesPage()
+    }
+
     if (workbenchMode === 'files') {
       return renderWorkbenchFileSendPage()
     }
@@ -5711,7 +5869,7 @@ export function SnapLinkStage({
               </button>
             </div>
           ) : null}
-          {workbenchMode === 'rooms' ? null : renderWorkbenchModeOverview()}
+          {workbenchMode === 'rooms' || workbenchMode === 'nearby' ? null : renderWorkbenchModeOverview()}
           {renderWorkbenchModeContent()}
         </main>
       </div>

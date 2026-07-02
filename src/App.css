@@ -9397,7 +9397,8 @@
   overflow-y: auto;
 }
 
-.dd-snaplink__workbench-content.is-rooms {
+.dd-snaplink__workbench-content.is-rooms,
+.dd-snaplink__workbench-content.is-nearby {
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -22120,7 +22121,8 @@
   min-height: 0;
 }
 
-.dd-snaplink__messages-shell {
+.dd-snaplink__messages-shell,
+.dd-snaplink__devices-shell {
   display: grid;
   grid-template-columns: 304px minmax(0, 1fr);
   width: 100%;
@@ -22131,13 +22133,15 @@
   background: #f5f5f5;
 }
 
-.dd-snaplink__messages-shell > .dd-snaplink__conversation-side {
+.dd-snaplink__messages-shell > .dd-snaplink__conversation-side,
+.dd-snaplink__devices-shell > .dd-snaplink__conversation-side {
   grid-column: auto;
   grid-row: auto;
   border-right: 1px solid var(--snap-border);
 }
 
-.dd-snaplink__messages-detail {
+.dd-snaplink__messages-detail,
+.dd-snaplink__devices-detail {
   display: grid;
   align-content: center;
   gap: 14px;
@@ -22149,6 +22153,11 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(245, 245, 245, 0.92)),
     #f5f5f5;
+}
+
+.dd-snaplink__devices-detail {
+  align-content: start;
+  padding-top: 72px;
 }
 
 .dd-snaplink__messages-hero,
@@ -22272,6 +22281,158 @@
   font-size: 16px;
 }
 
+.dd-snaplink__conversation-side-list.is-scanning::before {
+  content: '正在扫描附近设备…';
+  margin: 4px 8px 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--snap-green) 9%, var(--snap-surface));
+  color: var(--snap-green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dd-snaplink__device-detail-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid var(--snap-border);
+  border-radius: 12px;
+  background: var(--snap-surface);
+}
+
+.dd-snaplink__device-detail-card.is-empty {
+  align-content: center;
+  min-height: 260px;
+}
+
+.dd-snaplink__device-detail-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #eef1f5;
+  color: #576b95;
+}
+
+.dd-snaplink__device-detail-icon.is-phone,
+.dd-snaplink__device-detail-icon.is-tablet {
+  background: color-mix(in srgb, var(--snap-green) 11%, #ffffff);
+  color: var(--snap-green);
+}
+
+.dd-snaplink__device-detail-icon.is-empty {
+  background: #f2f2f2;
+  color: var(--snap-muted);
+}
+
+.dd-snaplink__device-detail-copy {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dd-snaplink__device-detail-copy strong {
+  overflow: hidden;
+  color: var(--snap-ink);
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__device-detail-copy small {
+  color: var(--snap-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dd-snaplink__device-detail-meta {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 2px 0 0;
+}
+
+.dd-snaplink__device-detail-meta div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--snap-border-soft);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.dd-snaplink__device-detail-meta dt,
+.dd-snaplink__device-detail-meta dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.dd-snaplink__device-detail-meta dt {
+  color: var(--snap-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dd-snaplink__device-detail-meta dd {
+  overflow: hidden;
+  color: var(--snap-ink);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__device-detail-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.dd-snaplink__device-detail-actions button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--snap-border);
+  border-radius: 8px;
+  background: var(--snap-surface);
+  color: var(--snap-ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.dd-snaplink__device-detail-actions button.is-primary {
+  border-color: color-mix(in srgb, var(--snap-green) 42%, var(--snap-border));
+  background: var(--snap-green);
+  color: #ffffff;
+}
+
+.dd-snaplink__device-detail-actions button:hover,
+.dd-snaplink__device-detail-actions button:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--snap-green) 36%, var(--snap-border));
+  color: var(--snap-green);
+}
+
+.dd-snaplink__device-detail-actions button.is-primary:hover,
+.dd-snaplink__device-detail-actions button.is-primary:focus-visible {
+  background: color-mix(in srgb, var(--snap-green) 88%, #000000);
+  color: #ffffff;
+}
+
 @media (max-width: 760px) {
   .dd-snaplink__room-workbench .dd-snaplink__room-workbench-main {
     display: flex;
@@ -22292,17 +22453,20 @@
     min-height: 0;
   }
 
-  .dd-snaplink__messages-shell {
+  .dd-snaplink__messages-shell,
+  .dd-snaplink__devices-shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .dd-snaplink__messages-shell > .dd-snaplink__conversation-side {
+  .dd-snaplink__messages-shell > .dd-snaplink__conversation-side,
+  .dd-snaplink__devices-shell > .dd-snaplink__conversation-side {
     display: grid;
     border-right: 0;
   }
 
-  .dd-snaplink__messages-detail {
+  .dd-snaplink__messages-detail,
+  .dd-snaplink__devices-detail {
     display: none;
   }
 }
