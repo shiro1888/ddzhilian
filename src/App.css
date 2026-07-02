@@ -20239,7 +20239,7 @@
   }
 
   .dd-snaplink__room-workbench > .dd-snaplink__queue {
-    bottom: calc(12px + var(--snap-bottom-safe)) !important;
+    bottom: calc(76px + var(--snap-bottom-safe)) !important;
   }
 
   .dd-snaplink__room-workbench > .dd-snaplink__queue.is-mobile-open {
@@ -22382,7 +22382,7 @@
   .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em)) {
     position: fixed;
     right: 18px;
-    bottom: 18px;
+    bottom: 84px;
     z-index: 30;
     width: 54px;
     height: 54px;
