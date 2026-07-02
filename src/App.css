@@ -22295,6 +22295,32 @@
   }
 }
 
+/* 微信式移动端：没有传输/接收任务时，不让空队列常驻占住聊天底部 */
+@media (max-width: 760px) {
+  .dd-snaplink__workbench.has-empty-transfer-queue > .dd-snaplink__queue,
+  .dd-snaplink__room-workbench.has-empty-transfer-queue > .dd-snaplink__queue {
+    display: none;
+  }
+
+  .dd-snaplink__room-workbench.has-empty-transfer-queue .dd-snaplink__room-workbench-main {
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+  }
+
+  .dd-snaplink.is-workbench-shell
+    .dd-snaplink__workbench.has-no-mobile-actions.has-empty-transfer-queue
+    .dd-snaplink__workbench-main {
+    scroll-padding-bottom: calc(22px + var(--snap-bottom-safe));
+  }
+
+  .dd-snaplink.is-workbench-shell
+    .dd-snaplink__workbench.has-no-mobile-actions.has-empty-transfer-queue
+    .dd-snaplink__workbench-content {
+    padding-bottom: calc(22px + var(--snap-bottom-safe));
+  }
+}
+
 @media (min-width: 761px) {
   .dd-snaplink__rail-logo {
     width: 40px;
