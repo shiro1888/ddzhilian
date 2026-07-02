@@ -5869,7 +5869,10 @@ export function SnapLinkStage({
               </button>
             </div>
           ) : null}
-          {workbenchMode === 'rooms' || workbenchMode === 'nearby' || workbenchMode === 'settings'
+          {workbenchMode === 'rooms' ||
+          workbenchMode === 'nearby' ||
+          workbenchMode === 'transfers' ||
+          workbenchMode === 'settings'
             ? null
             : renderWorkbenchModeOverview()}
           {renderWorkbenchModeContent()}
