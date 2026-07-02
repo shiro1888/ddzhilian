@@ -5604,88 +5604,6 @@ export function SnapLinkStage({
     )
   }
 
-  const renderWorkbenchModeOverview = () => {
-    const overview = (() => {
-      switch (workbenchMode) {
-        case 'rooms':
-          return {
-            title: '消息',
-            description: '世界对话、房间和最近会话都在这里，点进去即可聊天或传文件。',
-            accent: '消息',
-            actionLabel: '创建房间',
-            onAction: handleCreatePublicRoom,
-          }
-        case 'files':
-          return {
-            title: '发送',
-            description: '文件、图片、文本统一发给设备或房间，主流程保持在一个页面。',
-            accent: '发送',
-            actionLabel: '选择文件',
-            onAction: handleWorkbenchFilePick,
-          }
-        case 'transfers':
-          return {
-            title: '传输',
-            description: '查看进行中、完成、失败和历史记录，进度只按真实确认字节显示。',
-            accent: '传输',
-            actionLabel: '去发送',
-            onAction: handleShowWorkbenchFiles,
-          }
-        case 'text':
-          return {
-            title: '发送文本',
-            description: '把文本、链接或文件说明快速发送给当前设备/房间。',
-            accent: '文本',
-            actionLabel: '选择目标',
-            onAction: handleShowWorkbenchNearby,
-          }
-        case 'history':
-          return {
-            title: '历史记录',
-            description: '集中查看当前会话里的文件、媒体、链接和文本。',
-            accent: '历史',
-            actionLabel: '发送文件',
-            onAction: handleShowWorkbenchFiles,
-          }
-        case 'settings':
-          return {
-            title: '我的',
-            description: '工具中心、历史记录和基础设置都收在这里。',
-            accent: '我的',
-            actionLabel: '历史记录',
-            onAction: handleShowWorkbenchHistory,
-          }
-        case 'nearby':
-        default:
-          return {
-            title: '设备',
-            description: '发现同一局域网内的设备，点击设备进入会话，更多操作放在菜单里。',
-            accent: '设备',
-            actionLabel: '重新扫描',
-            onAction: handleWorkbenchRescan,
-          }
-      }
-    })()
-
-    return (
-      <section className={`dd-snaplink__mode-overview is-${workbenchMode}`} aria-label="当前工作区">
-        <span className="dd-snaplink__mode-overview-mark">{overview.accent}</span>
-        <span className="dd-snaplink__mode-overview-copy">
-          <strong>{overview.title}</strong>
-          <small>{overview.description}</small>
-        </span>
-        <span className="dd-snaplink__mode-overview-stats" aria-label="工作区状态">
-          <em>{workbenchOnlineDeviceCount.toString()} 台在线</em>
-          <em>{workbenchTransferEntries.length.toString()} 个传输</em>
-          <em>{workbenchRoomListItems.length.toString()} 个房间</em>
-        </span>
-        <button type="button" onClick={overview.onAction}>
-          {overview.actionLabel}
-        </button>
-      </section>
-    )
-  }
-
   const renderWorkbenchModeContent = () => {
     if (workbenchMode === 'rooms') {
       return renderWorkbenchMessagesPage()
@@ -5869,7 +5787,6 @@ export function SnapLinkStage({
               </button>
             </div>
           ) : null}
-          {workbenchMode === 'history' ? renderWorkbenchModeOverview() : null}
           {renderWorkbenchModeContent()}
         </main>
       </div>
