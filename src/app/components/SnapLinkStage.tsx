@@ -3168,6 +3168,15 @@ export function SnapLinkStage({
     setSelectedWorkbenchDeviceId(deviceId)
   }
 
+  const handleWorkbenchDeviceListClick = (deviceId: string) => {
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      handleWorkbenchDeviceSendText(deviceId)
+      return
+    }
+
+    setSelectedWorkbenchDeviceId(deviceId)
+  }
+
   const handleWorkbenchDeviceSendFile = (deviceId: string) => {
     requestTrustedWorkbenchDeviceAction(deviceId, 'file')
   }
@@ -5046,8 +5055,8 @@ export function SnapLinkStage({
                       isActive ? 'is-active' : '',
                     ].filter(Boolean).join(' ')}
                     aria-current={isActive ? 'page' : undefined}
-                    onClick={() => setSelectedWorkbenchDeviceId(device.deviceId)}
-                    title={`查看 ${device.deviceName}`}
+                    onClick={() => handleWorkbenchDeviceListClick(device.deviceId)}
+                    title={`打开 ${device.deviceName}`}
                   >
                     <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
                       {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
