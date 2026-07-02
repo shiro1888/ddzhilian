@@ -34,8 +34,8 @@ export function SidebarNav({
 }: SidebarNavProps) {
   const isMessagesActive = activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files'
   const isDevicesActive = activeMode === 'nearby'
-  const isTransfersActive = activeMode === 'transfers' || activeMode === 'history'
-  const isMeActive = activeMode === 'settings' || Boolean(activeTool)
+  const isTransfersActive = activeMode === 'transfers'
+  const isMeActive = activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool)
 
   return (
     <aside className="dd-snaplink__rail" aria-label="主导航">

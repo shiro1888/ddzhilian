@@ -49,6 +49,7 @@ export function TransferQueuePage({
   onShowFiles,
 }: TransferQueuePageProps) {
   const isHistoryTab = activeTab === 'history'
+  const hasHistoryTab = tabs.some((tab) => tab.id === 'history')
 
   return (
     <section className="dd-snaplink__workbench-transfer-board dd-snaplink__workbench-page is-transfers" aria-label="传输队列">
@@ -56,7 +57,8 @@ export function TransferQueuePage({
         <span>
           <strong>传输</strong>
           <small>
-            {activeCount.toString()} 进行中 · {completedCount.toString()} 已完成 · {failedCount.toString()} 失败 · {historyCount.toString()} 历史
+            {activeCount.toString()} 进行中 · {completedCount.toString()} 已完成 · {failedCount.toString()} 失败
+            {hasHistoryTab ? ` · ${historyCount.toString()} 历史` : ''}
           </small>
         </span>
       </div>

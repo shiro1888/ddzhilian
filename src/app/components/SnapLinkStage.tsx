@@ -2991,12 +2991,7 @@ export function SnapLinkStage({
 
   const handleShowWorkbenchQueue = () => {
     handleBackToLobby()
-    setWorkbenchMode('transfers')
-  }
-
-  const handleShowWorkbenchTransferTab = (tab: SnapLinkWorkbenchTransferTab) => {
-    handleBackToLobby()
-    setWorkbenchTransferTab(tab)
+    setWorkbenchTransferTab((current) => (current === 'history' ? 'active' : current))
     setWorkbenchMode('transfers')
   }
 
@@ -3023,7 +3018,8 @@ export function SnapLinkStage({
   }, [onOpenRoomHome, workbenchTextRequestId])
 
   const handleShowWorkbenchHistory = () => {
-    handleShowWorkbenchTransferTab('history')
+    handleBackToLobby()
+    setWorkbenchMode('history')
   }
 
   const handleShowWorkbenchSettings = () => {
@@ -5532,6 +5528,7 @@ export function SnapLinkStage({
   )
 
   const renderWorkbenchTransferBoard = () => {
+    const visibleTransferTab = workbenchTransferTab === 'history' ? 'active' : workbenchTransferTab
     const activeEntries = workbenchTransferEntries.filter((file) =>
       isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
     )
@@ -5545,42 +5542,41 @@ export function SnapLinkStage({
       { id: 'active', label: '进行中', count: activeEntries.length },
       { id: 'completed', label: '已完成', count: completedEntries.length },
       { id: 'failed', label: '失败', count: failedEntries.length },
-      { id: 'history', label: '历史', count: workbenchHistoryCount },
     ]
-    const tabEntries = workbenchTransferTab === 'completed'
+    const tabEntries = visibleTransferTab === 'completed'
       ? completedEntries
-      : workbenchTransferTab === 'failed'
+      : visibleTransferTab === 'failed'
         ? failedEntries
         : activeEntries
-    const groupedSections = workbenchTransferTab === 'history'
-      ? []
-      : [
-          {
-            id: workbenchTransferTab,
-            label:
-              workbenchTransferTab === 'completed'
-                ? '已完成'
-                : workbenchTransferTab === 'failed'
-                  ? '失败'
-                  : '进行中',
-            entries: tabEntries,
-          },
-        ]
+    const groupedSections = [
+      {
+        id: visibleTransferTab,
+        label:
+          visibleTransferTab === 'completed'
+            ? '已完成'
+            : visibleTransferTab === 'failed'
+              ? '失败'
+              : '进行中',
+        entries: tabEntries,
+      },
+    ]
 
     return (
       <TransferQueuePage
         sections={groupedSections}
         tabs={transferTabs}
-        activeTab={workbenchTransferTab}
+        activeTab={visibleTransferTab}
         totalCount={tabEntries.length}
         activeCount={workbenchActiveTransferCount}
         completedCount={workbenchCompletedTransferCount}
         failedCount={workbenchFailedTransferCount}
-        historyCount={workbenchHistoryCount}
-        historyContent={workbenchHistoryCount > 0 ? renderWorkbenchHistoryPage(true) : undefined}
         incomingNotice={renderIncomingReceiveNotice('full')}
         renderTaskCard={renderWorkbenchTransferCard}
-        onTabChange={setWorkbenchTransferTab}
+        onTabChange={(tab) => {
+          if (tab !== 'history') {
+            setWorkbenchTransferTab(tab)
+          }
+        }}
         onShowNearby={handleShowWorkbenchNearby}
         onShowFiles={handleShowWorkbenchFiles}
       />
