@@ -1315,15 +1315,25 @@ function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) 
     return fallbackName
   }
 
-  if (room.status === 'connected') {
-    return `${room.title} · 已连接`
+  if (room.isAssistant) {
+    return 'AI 助手 · 随时可用'
   }
 
-  if (room.onlineCount > 0) {
-    return `${room.title} · ${room.onlineCount} 在线`
+  const visibleOnlineCount = Math.min(room.memberCount, Math.max(room.onlineCount, 0) + 1)
+
+  if (room.isPublic) {
+    return `${visibleOnlineCount.toString()} 台设备在线`
   }
 
-  return `${room.title} · 等待连接`
+  if (room.memberCount > 2) {
+    return `${visibleOnlineCount.toString()} 位成员在线`
+  }
+
+  if (room.status === 'connected' || room.onlineCount > 0) {
+    return '对方在线 · 直连中'
+  }
+
+  return '对方离线'
 }
 
 function getAiModelOptionValue(option: AiModelOption) {
@@ -2142,7 +2152,7 @@ export function SnapLinkStage({
   const plainDraft = normalizePlainComposerDraft(chatDraft)
   const effectiveActiveSharedTab = hasActiveRoom ? activeSharedTab : null
   const sharedTabItems: Array<{ id: SnapLinkSharedTab; label: string; count: number }> = [
-    { id: 'files', label: '历史文件', count: sharedFileEntries.length },
+    { id: 'files', label: '文件', count: sharedFileEntries.length },
     { id: 'media', label: '媒体', count: sharedMediaEntries.length },
     { id: 'links', label: '链接', count: sharedLinkEntries.length },
   ]
@@ -2163,6 +2173,94 @@ export function SnapLinkStage({
     url.searchParams.set('room', selectedRoomId)
     return url.toString()
   }, [selectedRoomId])
+  const isSelectedRoomPublic = Boolean(selectedRoom?.isPublic)
+  const isSelectedRoomAssistant = Boolean(selectedRoom?.isAssistant)
+  const isSelectedGroupRoom =
+    Boolean(selectedRoom) && !isSelectedRoomPublic && !isSelectedRoomAssistant && (selectedRoom?.memberCount ?? 0) > 2
+  const selectedRoomShareSubtitle = selectedRoomId
+    ? isSelectedRoomPublic
+      ? `房间码 ${selectedRoomId}`
+      : '分享链接'
+    : undefined
+  const selectedRoomCopyLabel = isSelectedRoomPublic ? '复制房间码' : '复制链接'
+  const selectedRoomCopiedLabel = isSelectedRoomPublic ? '已复制房间码' : '已复制链接'
+  const selectedRoomMoreDetails = isSelectedRoomAssistant
+    ? [
+        {
+          id: 'assistant',
+          label: '助手',
+          value: '随时可用',
+          tone: 'safe' as const,
+        },
+        {
+          id: 'model',
+          label: '模型',
+          value: selectedAiModelLabel || '默认模型',
+        },
+        {
+          id: 'search',
+          label: '联网搜索',
+          value: '按需开启',
+        },
+      ]
+    : isSelectedRoomPublic
+      ? [
+          {
+            id: 'online',
+            label: '在线设备',
+            value: `${selectedRoomOnlineCount.toString()} 台`,
+            tone: 'safe' as const,
+          },
+          {
+            id: 'scope',
+            label: '谁能看到',
+            value: '同一网络内的设备',
+          },
+          {
+            id: 'retention',
+            label: '内容保留',
+            value: '24 小时',
+          },
+        ]
+      : isSelectedGroupRoom
+        ? [
+            {
+              id: 'members',
+              label: '成员',
+              value: `${selectedRoomOnlineCount.toString()} / ${(selectedRoom?.memberCount ?? 1).toString()} 在线`,
+              tone: selectedRoomOnlineCount > 1 ? 'safe' as const : 'default' as const,
+            },
+            {
+              id: 'connection',
+              label: '连接',
+              value: selectedRoomOnlineCount > 1 ? '直连中' : '等待成员上线',
+              tone: selectedRoomOnlineCount > 1 ? 'safe' as const : 'warning' as const,
+            },
+            {
+              id: 'join',
+              label: '进入方式',
+              value: '扫码或输入房间码',
+            },
+          ]
+        : [
+            {
+              id: 'connection',
+              label: '连接',
+              value: selectedRoomOnlineCount > 1 || selectedRoom?.status === 'connected' ? '直连中' : '对方离线',
+              tone: selectedRoomOnlineCount > 1 || selectedRoom?.status === 'connected' ? 'safe' as const : 'warning' as const,
+            },
+            {
+              id: 'network',
+              label: '网络',
+              value: '同一网络或远程可用',
+            },
+            {
+              id: 'trust',
+              label: '信任',
+              value: '首次发送需确认',
+              tone: 'warning' as const,
+            },
+          ]
   const isBotDraft = startsWithBotMention(plainDraft)
   const shouldShowAiThinking = hasActiveRoom && isAiGenerating && aiGeneratingRoomId === selectedRoomId
   const themeStyle = useMemo<SnapLinkThemeStyle>(() => ({
@@ -3444,11 +3542,12 @@ export function SnapLinkStage({
       return
     }
 
+    const copyValue = isSelectedRoomPublic ? selectedRoomId : selectedRoomShareValue ?? selectedRoomId
     setCopiedRoomId(selectedRoomId)
     if (navigator.clipboard) {
-      void navigator.clipboard.writeText(selectedRoomId)
+      void navigator.clipboard.writeText(copyValue)
     }
-    window.setTimeout(() => setCopiedRoomId(null), 1000)
+    window.setTimeout(() => setCopiedRoomId(null), 1600)
   }
 
   const armOutgoingEntryAnimation = () => {
@@ -6607,64 +6706,12 @@ export function SnapLinkStage({
                     roomCodeLabel={copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
                     roomCodeValue={selectedRoomId ?? undefined}
                     roomShareValue={selectedRoomShareValue}
+                    shareSubtitle={selectedRoomShareSubtitle}
+                    copyLabel={selectedRoomCopyLabel}
+                    copiedLabel={selectedRoomCopiedLabel}
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
-                    stats={[
-                      {
-                        id: 'members',
-                        label: '成员',
-                        value: selectedRoom ? selectedRoom.memberCount.toString() : '1',
-                      },
-                      {
-                        id: 'online',
-                        label: '在线',
-                        value: selectedRoomOnlineCount.toString(),
-                        tone: 'online',
-                      },
-                      {
-                        id: 'messages',
-                        label: '消息',
-                        value: visibleConversationEntries.length.toString(),
-                      },
-                      {
-                        id: 'shared',
-                        label: '共享内容',
-                        value: sharedContentCount.toString(),
-                      },
-                      {
-                        id: 'transfers',
-                        label: '传输中',
-                        value: workbenchActiveTransferCount.toString(),
-                        tone: workbenchActiveTransferCount > 0 ? 'transfer' : 'default',
-                      },
-                    ]}
-                    connectionDetails={[
-                      {
-                        id: 'room-code',
-                        label: '房间',
-                        value: copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId ?? '当前',
-                      },
-                      {
-                        id: 'transport',
-                        label: '连接',
-                        value: '直连中',
-                        tone: 'safe',
-                      },
-                      {
-                        id: 'serverless',
-                        label: '文件路径',
-                        value: '不经过服务器',
-                        tone: 'safe',
-                      },
-                      {
-                        id: 'active-transfer',
-                        label: '传输状态',
-                        value: workbenchActiveTransferCount > 0
-                          ? `${workbenchActiveTransferCount.toString()} 个进行中`
-                          : '空闲',
-                        tone: workbenchActiveTransferCount > 0 ? 'warning' : 'default',
-                      },
-                    ]}
+                    connectionDetails={selectedRoomMoreDetails}
                     sharedContentCount={sharedContentCount}
                     isSharedContentOpen={Boolean(effectiveActiveSharedTab)}
                     onCopyRoomId={handleCopyRoomId}
@@ -6717,7 +6764,7 @@ export function SnapLinkStage({
                       传输记录 {sharedContentCount.toString()}
                     </button>
                     <button type="button" onClick={handleCopyRoomId}>
-                      {copiedRoomId === selectedRoomId ? '已复制房间码' : '复制房间码'}
+                      {copiedRoomId === selectedRoomId ? selectedRoomCopiedLabel : selectedRoomCopyLabel}
                     </button>
                     <button
                       type="button"

@@ -30,6 +30,9 @@ type RoomHeaderProps = {
   roomCodeLabel: ReactNode
   roomCodeValue?: string
   roomShareValue?: string
+  shareSubtitle?: string
+  copyLabel?: string
+  copiedLabel?: string
   peerLabel: string
   peerTitle: string
   stats?: RoomHeaderStat[]
@@ -49,9 +52,11 @@ export function RoomHeader({
   roomCodeLabel,
   roomCodeValue,
   roomShareValue,
+  shareSubtitle,
+  copyLabel = '复制房间码',
+  copiedLabel = '已复制',
   peerLabel,
   peerTitle,
-  stats = [],
   connectionDetails = [],
   sharedContentCount,
   isSharedContentOpen,
@@ -69,6 +74,8 @@ export function RoomHeader({
   const displayRoomCode =
     roomCodeValue || (typeof roomCodeLabel === 'string' ? roomCodeLabel : '')
   const qrPayload = roomShareValue || displayRoomCode
+  const isCopied = roomCodeLabel === '已复制'
+  const detailRows = connectionDetails.slice(0, 3)
 
   useEffect(() => {
     if (!isMoreOpen) {
@@ -211,27 +218,14 @@ export function RoomHeader({
                   </span>
                   <span>
                     <strong>{peerTitle || peerLabel}</strong>
-                    <small>{displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel}</small>
+                    <small>{shareSubtitle ?? (displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel)}</small>
                   </span>
                 </div>
-                {stats.length > 0 ? (
-                  <div className="dd-snaplink__room-more-stats" aria-label="房间状态">
-                    {stats.map((item) => (
-                      <span
-                        key={item.id}
-                        className={item.tone ? `is-${item.tone}` : undefined}
-                      >
-                        <small>{item.label}</small>
-                        <strong>{item.value}</strong>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {connectionDetails.length > 0 ? (
+                {detailRows.length > 0 ? (
                   <div className="dd-snaplink__room-more-security" aria-label="连接与安全">
                     <strong>详情</strong>
                     <div>
-                      {connectionDetails.map((item) => (
+                      {detailRows.map((item) => (
                         <span
                           key={item.id}
                           className={item.tone ? `is-${item.tone}` : undefined}
@@ -247,7 +241,7 @@ export function RoomHeader({
                 <div className="dd-snaplink__room-more-actions">
                   <button type="button" className="is-primary" onClick={() => handleMenuAction(onCopyRoomId)}>
                     <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
-                    {roomCodeLabel === '已复制' ? '房间码已复制' : '复制房间码'}
+                    {isCopied ? copiedLabel : copyLabel}
                   </button>
                   <button
                     type="button"
