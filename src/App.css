@@ -9022,7 +9022,7 @@
 
 .dd-snaplink__room-workbench-main {
   display: grid;
-  grid-template-rows: 58px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -21686,16 +21686,12 @@
 /* 桌面会话详情：补齐微信式“三栏”结构（窄栏 / 消息列表 / 对话） */
 .dd-snaplink__room-workbench .dd-snaplink__room-workbench-main {
   grid-template-columns: 304px minmax(0, 1fr);
-  grid-template-rows: 58px minmax(0, 1fr);
-}
-
-.dd-snaplink__room-workbench .dd-snaplink__room-status {
-  grid-column: 1 / -1;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .dd-snaplink__conversation-side {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
@@ -21920,7 +21916,7 @@
 
 .dd-snaplink__room-detail-pane {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   display: grid;
   min-width: 0;
   min-height: 0;

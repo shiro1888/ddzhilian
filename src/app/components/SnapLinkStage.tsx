@@ -6135,43 +6135,6 @@ export function SnapLinkStage({
     </div>
   )
 
-  const renderRoomConnectionStatus = () => (
-    <div className="dd-snaplink__status-actions">
-      <StatusPillsCollapsible
-        online
-        summary={`${selectedRoomOnlineCount.toString()} 在线`}
-        details={[
-          { id: 'room-code', label: `房间 ${selectedRoomId ?? '当前'}` },
-          { id: 'room-transport', label: '直连中' },
-          { id: 'room-shared', label: `${sharedContentCount.toString()} 项传输记录` },
-          { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个正在传` },
-        ]}
-        ariaLabel="房间连接状态"
-      />
-      <button
-        type="button"
-        className="dd-snaplink__status-command"
-        aria-label="打开快捷操作面板"
-        title="打开快捷操作面板 Ctrl / ⌘ + K"
-        onClick={() => setIsCommandPaletteOpen(true)}
-      >
-        快捷 <kbd>⌘K</kbd>
-      </button>
-      <button
-        type="button"
-        className="dd-snaplink__status-icon"
-        aria-label={resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-        onClick={toggleResolvedThemeMode}
-      >
-        {resolvedThemeMode === 'dark' ? (
-          <SunMedium size={15} strokeWidth={2} aria-hidden="true" />
-        ) : (
-          <MoonStar size={15} strokeWidth={2} aria-hidden="true" />
-        )}
-      </button>
-    </div>
-  )
-
   const renderWorkbenchView = () => {
     return (
     <section
@@ -6666,19 +6629,6 @@ export function SnapLinkStage({
               />
 
               <div className="dd-snaplink__room-workbench-main">
-                <TopStatusBar
-                  className="dd-snaplink__room-status"
-                  title={selectedConversationName}
-                  subtitle={activeTransferLabel}
-                  icon={selectedRoom?.isAssistant ? (
-                    <Bot size={17} strokeWidth={1.8} aria-hidden="true" />
-                  ) : (
-                    <Users size={17} strokeWidth={1.8} aria-hidden="true" />
-                  )}
-                  pillAriaLabel="房间连接状态"
-                  statusContent={renderRoomConnectionStatus()}
-                />
-
                 {renderDesktopConversationSideList()}
 
                 <div className="dd-snaplink__room-detail-pane">
