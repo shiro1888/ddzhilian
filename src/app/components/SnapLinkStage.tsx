@@ -5980,14 +5980,6 @@ export function SnapLinkStage({
     return workbenchOnlineDeviceCount > 0 ? `${workbenchOnlineDeviceCount.toString()} 台设备` : '无设备'
   }
 
-  const getWorkbenchStatusSubtitle = () => {
-    if (deviceSettings.discoverable === false) {
-      return '发现已关闭 · 无设备'
-    }
-
-    return `局域网在线 · ${getWorkbenchConnectionSummary()} · 直连`
-  }
-
   const commandPaletteItems: CommandPaletteItem[] = [
     {
       id: 'web-command',
@@ -6054,47 +6046,6 @@ export function SnapLinkStage({
       },
     },
   ]
-
-  const renderWorkbenchConnectionStatus = () => (
-    <div className="dd-snaplink__status-actions">
-      <StatusPillsCollapsible
-        online={deviceSettings.discoverable !== false}
-        summary={getWorkbenchConnectionSummary()}
-        details={[
-          {
-            id: 'lan',
-            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '同一网络可发现'}</>,
-          },
-          { id: 'webrtc', label: '直连中' },
-          {
-            id: 'serverless',
-            label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
-          },
-        ]}
-      />
-      <button
-        type="button"
-        className="dd-snaplink__status-command"
-        aria-label="打开快捷操作面板"
-        title="打开快捷操作面板 Ctrl / ⌘ + K"
-        onClick={() => setIsCommandPaletteOpen(true)}
-      >
-        快捷 <kbd>⌘K</kbd>
-      </button>
-      <button
-        type="button"
-        className="dd-snaplink__status-icon"
-        aria-label={resolvedThemeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-        onClick={toggleResolvedThemeMode}
-      >
-        {resolvedThemeMode === 'dark' ? (
-          <SunMedium size={15} strokeWidth={2} aria-hidden="true" />
-        ) : (
-          <MoonStar size={15} strokeWidth={2} aria-hidden="true" />
-        )}
-      </button>
-    </div>
-  )
 
   const renderToolConnectionStatus = () => (
     <div className="dd-snaplink__status-actions">
@@ -6180,14 +6131,6 @@ export function SnapLinkStage({
       />
 
       <div className="dd-snaplink__workbench-main">
-        <TopStatusBar
-          title={deviceName}
-          subtitle={getWorkbenchStatusSubtitle()}
-          icon={<Monitor size={17} strokeWidth={1.8} aria-hidden="true" />}
-          pillAriaLabel="连接状态"
-          statusContent={renderWorkbenchConnectionStatus()}
-        />
-
         <MobileWorkbenchNav
           activeMode={workbenchMode}
           ariaLabel="移动端功能导航"
