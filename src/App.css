@@ -23789,16 +23789,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 34px;
-  padding: 0 16px;
+  gap: 10px;
+  min-height: 28px;
+  padding: 0 12px;
   border: 0;
   border-bottom: 1px solid #d9f3e4;
   background: #effbf5;
   color: #109257;
   font: inherit;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11.5px;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
 }
@@ -23806,7 +23806,7 @@
 .dd-snaplink__transfer-mini-banner span {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -23814,11 +23814,11 @@
 }
 
 .dd-snaplink__transfer-mini-banner i {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: #10c46b;
-  box-shadow: 0 0 0 4px rgba(16, 196, 107, 0.14);
+  box-shadow: 0 0 0 3px rgba(16, 196, 107, 0.14);
 }
 
 .dd-snaplink__transfer-mini-banner em {
@@ -23958,7 +23958,7 @@
   }
 
   .dd-snaplink__transfer-mini-banner {
-    min-height: 32px;
-    padding-inline: 12px;
+    min-height: 28px;
+    padding-inline: 10px;
   }
 }
