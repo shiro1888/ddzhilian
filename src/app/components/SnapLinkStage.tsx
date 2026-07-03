@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -62,8 +62,13 @@ import type { CommandPaletteItem } from './CommandPalette'
 import { ConfirmReceiveDialog } from './ConfirmReceiveDialog'
 import { DeviceRadar } from './DeviceRadar'
 import { DeviceCard } from './DeviceCard'
-import { DocumentPreviewDialog } from './DocumentPreviewDialog'
 import type { DocumentPreviewDialogState } from './DocumentPreviewDialog'
+
+const DocumentPreviewDialog = lazy(() =>
+  import('./DocumentPreviewDialog').then((module) => ({
+    default: module.DocumentPreviewDialog,
+  })),
+)
 import { DropZone } from './DropZone'
 import { FileSendPage } from './FileSendPage'
 import { FileMessageCard } from './FileMessageCard'
@@ -7125,10 +7130,12 @@ export function SnapLinkStage({
         document.body,
       )}
       {documentPreview && createPortal(
-        <DocumentPreviewDialog
-          preview={documentPreview}
-          onClose={closeDocumentPreview}
-        />,
+        <Suspense fallback={null}>
+          <DocumentPreviewDialog
+            preview={documentPreview}
+            onClose={closeDocumentPreview}
+          />
+        </Suspense>,
         document.body,
       )}
       {imagePreview && createPortal(

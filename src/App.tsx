@@ -1,12 +1,21 @@
-import { startTransition, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, startTransition, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminStage } from './app/components/AdminStage'
 import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
-import { ImageGenerationStage } from './app/components/ImageGenerationStage'
 import { SnapLinkStage } from './app/components/SnapLinkStage'
-import { WebCommandStage } from './app/components/WebCommandStage'
+
+const ImageGenerationStage = lazy(() =>
+  import('./app/components/ImageGenerationStage').then((module) => ({
+    default: module.ImageGenerationStage,
+  })),
+)
+const WebCommandStage = lazy(() =>
+  import('./app/components/WebCommandStage').then((module) => ({
+    default: module.WebCommandStage,
+  })),
+)
 import { selectComposerAttachmentFiles, selectComposerImagePasteFiles } from './app/composer-image-paste'
 import { pathForView, resolveViewFromPathname } from './app/routes'
 import type {
@@ -2198,22 +2207,26 @@ function App() {
   )
 
   const imageGenerationElement = imageAccount.isAuthenticated ? (
-    <ImageGenerationStage
-      isReady={!imageAccount.isLoading}
-      userEmail={imageAccount.user?.email ?? ''}
-      onGenerateImage={generateImage}
-      onGetImageQuota={getImageQuota}
-      onListImageHistory={listImageHistory}
-      onLogout={imageAccount.logout}
-    />
+    <Suspense fallback={null}>
+      <ImageGenerationStage
+        isReady={!imageAccount.isLoading}
+        userEmail={imageAccount.user?.email ?? ''}
+        onGenerateImage={generateImage}
+        onGetImageQuota={getImageQuota}
+        onListImageHistory={listImageHistory}
+        onLogout={imageAccount.logout}
+      />
+    </Suspense>
   ) : imageAuthGateElement
 
   const webCommandElement = (
-    <WebCommandStage
-      historyAuthToken={self?.historyAuthToken}
-      onResultTextChange={setCommandResultText}
-      onShareResult={handleShareCommandResult}
-    />
+    <Suspense fallback={null}>
+      <WebCommandStage
+        historyAuthToken={self?.historyAuthToken}
+        onResultTextChange={setCommandResultText}
+        onShareResult={handleShareCommandResult}
+      />
+    </Suspense>
   )
 
   const snapLinkStageElement = (
