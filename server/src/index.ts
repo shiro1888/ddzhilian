@@ -436,6 +436,8 @@ const accountAuthConfirmDefaultPath = '/image';
 const accountAuthConfirmErrorPath = '/auth/confirm';
 const openRouterFallbackModelIds = [
   'openai/gpt-oss-20b:free',
+  'openrouter/free',
+  'liquid/lfm-2.5-1.2b-instruct:free',
 ];
 const openAiCompatibleModelRefreshIntervalMs = 60 * 60 * 1000;
 const openAiCompatibleModelListTimeoutMs = 12_000;
@@ -2117,6 +2119,12 @@ function buildOpenAiCompatibleEndpoint(baseUrl: string, wireApi: OpenAiCompatibl
   return new URL(`${baseUrl}${path}`);
 }
 
+function normalizeOpenRouterHeaderValue(value: string) {
+  return value
+    .replace(/[^\x20-\x7E]+/g, '')
+    .trim();
+}
+
 function formatOpenRouterError(payload: OpenRouterChatResponse | null) {
   return payload?.error?.message?.trim();
 }
@@ -2143,8 +2151,9 @@ function buildOpenAiCompatibleHeaders(options: Pick<OpenAiCompatibleClientOption
   if (options.siteUrl) {
     headers['HTTP-Referer'] = options.siteUrl;
   }
-  if (options.siteName) {
-    headers['X-OpenRouter-Title'] = options.siteName;
+  const safeSiteName = normalizeOpenRouterHeaderValue(options.siteName ?? '');
+  if (safeSiteName) {
+    headers['X-OpenRouter-Title'] = safeSiteName;
   }
 
   return headers;
@@ -2154,15 +2163,26 @@ function getOpenAiCompatibleChatCandidates(
   primaryModel: string,
   providerConfig: OpenAiCompatibleProviderConfig,
 ) {
+  const configuredModels = providerConfig.models
+    .filter((model) => model.enabled !== false)
+    .map((model) => model.id);
+  const fallbackModels = isOpenRouterBaseUrl(providerConfig.baseUrl)
+    ? openRouterFallbackModelIds
+    : [];
   const candidates = [
     primaryModel,
     providerConfig.model,
-    ...openRouterFallbackModelIds,
+    ...configuredModels,
+    ...fallbackModels,
   ];
   const seen = new Set<string>();
 
   return candidates.filter((modelId) => {
-    if (!modelId || seen.has(modelId)) {
+    if (
+      !modelId ||
+      seen.has(modelId) ||
+      openAiCompatibleNonChatModelPattern.test(modelId)
+    ) {
       return false;
     }
 
@@ -6289,7 +6309,10 @@ async function handleAiChatRequest(
           model: lastFailure?.model ?? model,
           message: lastFailure?.message,
         });
-        writeJson(response, 502, { error: 'OpenAI-compatible API request failed.' });
+        const unavailableMessage = isOpenRouterBaseUrl(activeAi.openai.baseUrl)
+          ? 'AI 模型暂时不可用，已尝试 OpenRouter 备用免费模型但仍失败，请稍后再试或切换模型。'
+          : 'AI 模型暂时不可用，已尝试备用模型但仍失败，请稍后再试。';
+        writeJson(response, 502, { error: unavailableMessage });
         return;
       }
     } else if (activeAi.kind === 'anthropic' && activeAi.anthropic) {
