@@ -19697,14 +19697,21 @@
 }
 
 .dd-snaplink__tool-content .dd-web-command__output:not(.is-plantuml) {
-  grid-template-rows: auto minmax(190px, 0.9fr) auto minmax(200px, 0.82fr);
+  grid-template-rows: auto minmax(160px, 0.72fr) auto minmax(220px, 1fr);
 }
 
 .dd-snaplink__tool-content .dd-web-command__terminal {
-  min-height: 240px;
+  min-height: 180px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42px),
     #111614;
+}
+
+.dd-snaplink__tool-content .dd-web-command__result-head {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--snap-border);
+  background: var(--snap-surface);
 }
 
 .dd-snaplink__tool-content .dd-web-command__result-area,
