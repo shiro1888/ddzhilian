@@ -22425,6 +22425,15 @@
     font-size: 12px;
     letter-spacing: 0;
   }
+
+  .dd-snaplink__workbench:has(.dd-snaplink__emoji-picker)
+    > .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em)),
+  .dd-snaplink__room-workbench:has(.dd-snaplink__emoji-picker)
+    > .dd-snaplink__queue.is-desktop-collapsed:not(:has(.dd-snaplink__queue-collapsed-rail em)) {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+  }
 }
 
 @media (min-width: 761px) and (max-width: 1180px) {
@@ -23323,7 +23332,8 @@
   height: 36px;
   border-radius: 9px;
   color: #111827;
-  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Twemoji Mozilla', sans-serif;
+  font-variant-emoji: emoji;
   font-size: 25px;
   line-height: 1;
   transition: background 140ms ease, transform 140ms ease;
