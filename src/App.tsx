@@ -810,7 +810,7 @@ function App() {
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const activeTransferLabel =
     isSelectedBotRoom
-      ? 'AI 助手'
+      ? 'DD助手'
       : selectedRoom
       ? selectedRoom.isPublic
         ? `${selectedRoomConnectedTargets.length} 台设备在线`

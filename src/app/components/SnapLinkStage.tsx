@@ -1375,8 +1375,8 @@ function resolveActorIdentity(
     return {
       displayName: 'DD直连小助手',
       title: 'DD直连小助手',
-      badgeLabel: 'AI',
-      avatarLabel: 'AI',
+      badgeLabel: '助手',
+      avatarLabel: '助',
     }
   }
 
@@ -6431,7 +6431,7 @@ export function SnapLinkStage({
               onChange={(event) => handleRoomSelection(event.target.value)}
             >
               <option value="">附近设备</option>
-              <option value={snapLinkAiChatSelectionValue}>AI</option>
+              <option value={snapLinkAiChatSelectionValue}>DD助手</option>
               <option value={snapLinkImageSelectionValue}>图片</option>
               <option value={snapLinkCommandSelectionValue}>命令行</option>
               {roomListItems.map((room) => (
@@ -6824,14 +6824,14 @@ export function SnapLinkStage({
                     <div className="dd-snaplink__entry">
                       <div className="dd-snaplink__row is-peer is-bot is-thinking">
                         <span className="dd-snaplink__avatar" aria-hidden="true">
-                          AI
+                          助
                         </span>
                         <div className="dd-snaplink__message-main">
                           <div className="dd-snaplink__sender-meta">
                             <span className="dd-snaplink__sender-name" title="DD直连小助手">
                               DD直连小助手
                             </span>
-                            <span className="dd-snaplink__sender-badge is-ai">AI</span>
+                            <span className="dd-snaplink__sender-badge is-ai">助手</span>
                           </div>
                           <div className="dd-snaplink__bubble dd-snaplink__thinking" role="status" aria-live="polite">
                             <TextThinkingMatrixLoader />
