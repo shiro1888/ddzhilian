@@ -1,13 +1,35 @@
 import { randomUUID } from 'node:crypto';
-import { createReadStream, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer } from 'ws';
 
-import { runJavaInDockerSandbox } from './code-runner/java-docker-runner.js';
-import { runPlantUmlInDockerSandbox } from './code-runner/plantuml-docker-runner.js';
+import {
+  RequestBodyTooLargeError,
+  decodeHeaderValue,
+  firstHeaderValue,
+  isLoopbackOrigin,
+  isObjectRecord,
+  isSameHostOrigin,
+  parseContentDisposition,
+  parseCookies,
+  parseMultipartHeaders,
+  pipeStorageFileResponse,
+  readBearerToken,
+  readHeaderString,
+  readMultipartBoundary,
+  readRequestBuffer,
+  resolveRequestBaseUrl,
+  shouldServeHistoryFileInline,
+  writeJson,
+  writeRedirect,
+} from './http/utils.js';
+import {
+  handleWebCommandJavaRunRequest,
+  handleWebCommandPlantUmlRunRequest,
+} from './web-command/handlers.js';
 import {
   loadConfig,
   type AnthropicProviderConfig,
@@ -447,44 +469,9 @@ const openAiCompatibleModelProbeConcurrency = 3;
 const openAiCompatibleNonChatModelPattern =
   /\b(audio|clip|dall-e|embedding|image|moderation|ocr|realtime|speech|tts|transcribe|translation|whisper)\b/i;
 
-class RequestBodyTooLargeError extends Error {
-  constructor() {
-    super('Request body is too large.');
-  }
-}
-
 class OcrProxyError extends Error {
   constructor(message: string, readonly statusCode = 503) {
     super(message);
-  }
-}
-
-function isLoopbackOrigin(origin: string) {
-  try {
-    const url = new URL(origin);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isSameHostOrigin(origin: string, host: string | string[] | undefined) {
-  const normalizedHost = firstHeaderValue(host)?.trim().toLowerCase();
-  if (!normalizedHost) {
-    return false;
-  }
-
-  try {
-    const url = new URL(origin);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      url.host.toLowerCase() === normalizedHost
-    );
-  } catch {
-    return false;
   }
 }
 
@@ -531,101 +518,7 @@ function setCorsHeaders(
   return true;
 }
 
-async function readRequestBuffer(
-  request: AsyncIterable<Buffer | string>,
-  options?: { maxBytes?: number },
-) {
-  const chunks: Buffer[] = [];
-  let receivedBytes = 0;
-
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    receivedBytes += buffer.byteLength;
-
-    if (options?.maxBytes && receivedBytes > options.maxBytes) {
-      throw new RequestBodyTooLargeError();
-    }
-
-    chunks.push(buffer);
-  }
-
-  return Buffer.concat(chunks);
-}
-
-function decodeHeaderValue(value: string | string[] | undefined) {
-  const headerValue = Array.isArray(value) ? value[0] : value;
-  if (!headerValue) {
-    return undefined;
-  }
-
-  try {
-    return decodeURIComponent(headerValue);
-  } catch {
-    return headerValue;
-  }
-}
-
-function writeJson(
-  response: {
-    writeHead(
-      statusCode: number,
-      headers?: Record<string, string>,
-    ): unknown;
-    end(body?: string): void;
-  },
-  statusCode: number,
-  payload: Record<string, unknown>,
-) {
-  response.writeHead(statusCode, { 'content-type': 'application/json' });
-  response.end(JSON.stringify(payload));
-}
-
-function pipeStorageFileResponse(
-  response: ServerResponse,
-  storagePath: string,
-  options?: {
-    start?: number;
-    end?: number;
-    context?: Record<string, unknown>;
-  },
-) {
-  const hasRange = options?.start !== undefined || options?.end !== undefined;
-  const stream = hasRange
-    ? createReadStream(storagePath, {
-        start: options?.start,
-        end: options?.end,
-      })
-    : createReadStream(storagePath);
-
-  stream.on('error', (error) => {
-    console.warn('Storage file stream failed', {
-      ...options?.context,
-      storagePath,
-      message: error instanceof Error ? error.message : String(error),
-    });
-
-    if (!response.headersSent) {
-      writeJson(response, 404, { error: 'File not found.' });
-      return;
-    }
-
-    if (!response.destroyed) {
-      response.destroy(error instanceof Error ? error : undefined);
-    }
-  });
-
-  stream.pipe(response);
-}
-
-function shouldServeHistoryFileInline(record: { mimeType?: string; fileName: string }) {
-  return record.mimeType?.toLowerCase() === 'application/pdf' || record.fileName.toLowerCase().endsWith('.pdf');
-}
-
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/;
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function normalizeThemeSubmissionColor(value: unknown) {
   if (typeof value !== 'string') {
@@ -669,208 +562,6 @@ function parseThemeSubmissionInput(payload: unknown): ThemeSubmissionInput | nul
   };
 }
 
-async function handleWebCommandJavaRunRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-) {
-  if (!config.javaDockerSandbox.enabled) {
-    writeJson(response, 503, {
-      error: 'Java Docker 沙箱未启用。生产环境需要显式设置 JAVA_DOCKER_SANDBOX_ENABLED=true。',
-    });
-    return;
-  }
-
-  const authResult = authenticateHistoryRequest(request);
-  if (!authResult.ok) {
-    writeJson(response, authResult.statusCode, { error: authResult.message });
-    return;
-  }
-
-  const maxPayloadBytes =
-    config.javaDockerSandbox.maxSourceBytes +
-    config.javaDockerSandbox.maxStdinBytes +
-    4096;
-  let payload: unknown;
-
-  try {
-    const buffer = await readRequestBuffer(request, { maxBytes: maxPayloadBytes });
-    payload = JSON.parse(buffer.toString('utf8')) as unknown;
-  } catch (error) {
-    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
-      error: error instanceof RequestBodyTooLargeError
-        ? 'Java 运行请求超过大小限制。'
-        : 'Invalid Java run JSON.',
-    });
-    return;
-  }
-
-  if (!isObjectRecord(payload)) {
-    writeJson(response, 400, { error: 'Invalid Java run payload.' });
-    return;
-  }
-
-  const source = payload.source;
-  const stdin = payload.stdin;
-
-  if (typeof source !== 'string' || !source.trim()) {
-    writeJson(response, 400, { error: 'Java 源码不能为空。' });
-    return;
-  }
-
-  if (stdin !== undefined && typeof stdin !== 'string') {
-    writeJson(response, 400, { error: 'Java stdin 必须是字符串。' });
-    return;
-  }
-
-  if (Buffer.byteLength(source, 'utf8') > config.javaDockerSandbox.maxSourceBytes) {
-    writeJson(response, 413, {
-      error: `Java 源码不能超过 ${config.javaDockerSandbox.maxSourceBytes.toString()} bytes。`,
-    });
-    return;
-  }
-
-  const normalizedStdin = stdin ?? '';
-  if (Buffer.byteLength(normalizedStdin, 'utf8') > config.javaDockerSandbox.maxStdinBytes) {
-    writeJson(response, 413, {
-      error: `Java 标准输入不能超过 ${config.javaDockerSandbox.maxStdinBytes.toString()} bytes。`,
-    });
-    return;
-  }
-
-  const result = await runJavaInDockerSandbox({
-    source,
-    stdin: normalizedStdin,
-    config: config.javaDockerSandbox,
-  });
-
-  writeJson(response, 200, result as unknown as Record<string, unknown>);
-}
-
-async function handleWebCommandPlantUmlRunRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-) {
-  if (!config.plantUmlDockerSandbox.enabled) {
-    writeJson(response, 503, {
-      error: 'PlantUML Docker 沙箱未启用。生产环境需要显式设置 PLANTUML_DOCKER_SANDBOX_ENABLED=true。',
-    });
-    return;
-  }
-
-  const authResult = authenticateHistoryRequest(request);
-  if (!authResult.ok) {
-    writeJson(response, authResult.statusCode, { error: authResult.message });
-    return;
-  }
-
-  let payload: unknown;
-
-  try {
-    const buffer = await readRequestBuffer(request, {
-      maxBytes: config.plantUmlDockerSandbox.maxSourceBytes + 1024,
-    });
-    payload = JSON.parse(buffer.toString('utf8')) as unknown;
-  } catch (error) {
-    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
-      error: error instanceof RequestBodyTooLargeError
-        ? 'PlantUML 渲染请求超过大小限制。'
-        : 'Invalid PlantUML render JSON.',
-    });
-    return;
-  }
-
-  if (!isObjectRecord(payload)) {
-    writeJson(response, 400, { error: 'Invalid PlantUML render payload.' });
-    return;
-  }
-
-  const source = payload.source;
-  if (typeof source !== 'string' || !source.trim()) {
-    writeJson(response, 400, { error: 'PlantUML 源码不能为空。' });
-    return;
-  }
-
-  if (Buffer.byteLength(source, 'utf8') > config.plantUmlDockerSandbox.maxSourceBytes) {
-    writeJson(response, 413, {
-      error: `PlantUML 源码不能超过 ${config.plantUmlDockerSandbox.maxSourceBytes.toString()} bytes。`,
-    });
-    return;
-  }
-
-  const result = await runPlantUmlInDockerSandbox({
-    source,
-    config: config.plantUmlDockerSandbox,
-  });
-
-  writeJson(response, 200, result as unknown as Record<string, unknown>);
-}
-
-function firstHeaderValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function writeRedirect(
-  response: ServerResponse,
-  location: string,
-  statusCode = 303,
-) {
-  response.writeHead(statusCode, {
-    location,
-    'cache-control': 'no-store',
-  });
-  response.end();
-}
-
-function readBearerToken(value: string | string[] | undefined) {
-  const headerValue = Array.isArray(value) ? value[0] : value;
-  const trimmedValue = headerValue?.trim();
-
-  if (!trimmedValue) {
-    return undefined;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(trimmedValue);
-  return match?.[1]?.trim();
-}
-
-function parseCookies(value: string | string[] | undefined) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (!raw) {
-    return new Map<string, string>();
-  }
-
-  return new Map(
-    raw
-      .split(';')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .map((entry) => {
-        const index = entry.indexOf('=');
-        if (index <= 0) {
-          return [entry, ''] as const;
-        }
-
-        return [entry.slice(0, index), decodeURIComponent(entry.slice(index + 1))] as const;
-      }),
-  );
-}
-
-function readHeaderString(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function resolveRequestBaseUrl(request: IncomingMessage) {
-  const forwardedProto = readHeaderString(request.headers['x-forwarded-proto'])
-    ?.split(',')[0]
-    ?.trim();
-  const protocol = forwardedProto || 'http';
-  const host = readHeaderString(request.headers['x-forwarded-host'])
-    ?.split(',')[0]
-    ?.trim() || readHeaderString(request.headers.host)?.trim();
-
-  return host ? `${protocol}://${host}` : '';
-}
-
 function normalizeLocalRedirectTarget(
   value: string | null | undefined,
   request: IncomingMessage,
@@ -907,61 +598,6 @@ function buildAccountConfirmErrorRedirect(message: string) {
   const url = new URL(accountAuthConfirmErrorPath, 'http://localhost');
   url.searchParams.set('error_description', message);
   return `${url.pathname}${url.search}`;
-}
-
-function readMultipartBoundary(contentType: string | undefined) {
-  const match = /(?:^|;)\s*boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType ?? '');
-  return (match?.[1] ?? match?.[2])?.trim();
-}
-
-function parseContentDisposition(value: string | undefined) {
-  if (!value) {
-    return {};
-  }
-
-  const result: {
-    name?: string;
-    filename?: string;
-  } = {};
-
-  for (const part of value.split(';').map((entry) => entry.trim())) {
-    const [rawKey, ...rawValueParts] = part.split('=');
-    const key = rawKey?.trim().toLowerCase();
-    if (!key || rawValueParts.length === 0) {
-      continue;
-    }
-
-    const rawValue = rawValueParts.join('=').trim();
-    const valueText = rawValue.startsWith('"') && rawValue.endsWith('"')
-      ? rawValue.slice(1, -1)
-      : rawValue;
-
-    if (key === 'name') {
-      result.name = valueText;
-    } else if (key === 'filename') {
-      result.filename = valueText;
-    }
-  }
-
-  return result;
-}
-
-function parseMultipartHeaders(rawHeaders: string) {
-  const headers = new Map<string, string>();
-
-  for (const line of rawHeaders.split('\r\n')) {
-    const index = line.indexOf(':');
-    if (index <= 0) {
-      continue;
-    }
-
-    headers.set(
-      line.slice(0, index).trim().toLowerCase(),
-      line.slice(index + 1).trim(),
-    );
-  }
-
-  return headers;
 }
 
 function sanitizeUploadedImageFilename(value: string | undefined, index: number) {
@@ -7107,12 +6743,18 @@ const httpServer = createServer((request, response) => {
   }
 
   if (url.pathname === '/api/web-command/java' && request.method === 'POST') {
-    void handleWebCommandJavaRunRequest(request, response);
+    void handleWebCommandJavaRunRequest(request, response, {
+      config,
+      authenticateHistoryRequest,
+    });
     return;
   }
 
   if (url.pathname === '/api/web-command/plantuml' && request.method === 'POST') {
-    void handleWebCommandPlantUmlRunRequest(request, response);
+    void handleWebCommandPlantUmlRunRequest(request, response, {
+      config,
+      authenticateHistoryRequest,
+    });
     return;
   }
 
