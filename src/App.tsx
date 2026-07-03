@@ -1487,14 +1487,15 @@ function App() {
   const roomListItems: RoomListItem[] = rooms
     .map((room) => {
       const latestSession = latestSessionByRoomId.get(room.roomId)
+      const isAssistantRoom = isBotChatRoom(room)
       const memberNames = room.members
         .filter((member) => member.deviceId !== self?.deviceId)
         .map((member) => deviceNameById.get(member.deviceId) ?? member.deviceName)
       const hasLoadedHistoryTexts = loadedHistoryTextRoomIds.has(room.roomId)
       const publicRoomTitle = room.isPublic ? resolvePublicRoomTitle(room.publicIndex) : ''
       const title =
-        isBotChatRoom(room)
-          ? 'DD直连小助手'
+        isAssistantRoom
+          ? 'DD助手'
           : room.isPublic
           ? publicRoomTitle
           : memberNames.length === 0
@@ -1518,7 +1519,7 @@ function App() {
       const updatedAt = latestEvent?.createdAt ?? latestSession?.updatedAt ?? room.updatedAt
       const previewText =
         latestEvent?.previewText ??
-        (isBotChatRoom(room)
+        (isAssistantRoom
           ? 'DD直连小助手'
           : room.isPublic
             ? `${publicRoomTitle}，可通过链接加入`
@@ -1560,9 +1561,9 @@ function App() {
           isSelf: member.deviceId === self?.deviceId,
         })),
         status,
-        pinned: roomState?.pinned ?? false,
+        pinned: isAssistantRoom || (roomState?.pinned ?? false),
         unreadCount,
-        isAssistant: isBotChatRoom(room),
+        isAssistant: isAssistantRoom,
       }
     })
     .reduce<RoomListItem[]>((visibleRooms, room) => {
@@ -1586,6 +1587,10 @@ function App() {
       return visibleRooms
     }, [])
     .sort((left, right) => {
+      if (left.isAssistant !== right.isAssistant) {
+        return left.isAssistant ? -1 : 1
+      }
+
       if (left.isPublic && right.isPublic) {
         return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
       }
