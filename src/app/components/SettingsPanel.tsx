@@ -358,8 +358,8 @@ export function SettingsPanel({
                   onChange={onAllowShortCodeChange}
                 />
                 <SettingsSwitch
-                  label="自动连接同账号设备"
-                  description="同账号设备上线后自动尝试直连"
+                  label="自动连接同一账号设备"
+                  description="同一账号设备上线后自动尝试连接"
                   checked={autoConnect}
                   onChange={onAutoConnectChange}
                 />

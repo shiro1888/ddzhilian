@@ -658,7 +658,7 @@ function App() {
         })
         .map((peer) => {
           const relationLabels = [
-            peer.relation.sameAccount ? '同账号' : '',
+            peer.relation.sameAccount ? '同一账号' : '',
             peer.relation.sameLan ? '同一网络' : '',
           ].filter(Boolean)
 

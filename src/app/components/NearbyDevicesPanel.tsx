@@ -33,7 +33,7 @@ export function NearbyDevicesPanel({
           onClick={onRescan}
         >
           <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
-          {isScanning ? '扫描中' : '重新扫描'}
+          {isScanning ? '查找中' : '重新查找'}
         </button>
       </div>
       {devices.length > 0 ? (
@@ -41,7 +41,7 @@ export function NearbyDevicesPanel({
           {devices.map(renderDeviceCard)}
         </div>
       ) : isScanning ? (
-        <SkeletonRows label="正在扫描附近设备" />
+        <SkeletonRows label="正在查找附近设备" />
       ) : (
         <EmptyState
           className="dd-snaplink__nearby-empty"

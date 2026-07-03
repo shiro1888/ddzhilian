@@ -812,21 +812,21 @@ function resolveSnapLinkTransportMode(device: OnlineDeviceListItem) {
     } as const
   }
 
-  if (device.scopeLabel.includes('同账号')) {
+  if (device.scopeLabel.includes('同一账号')) {
     return {
-      label: '远程直连',
+      label: '同一账号',
       tone: 'remote',
     } as const
   }
 
   return {
-    label: '可发现',
+    label: '可互传',
     tone: 'discoverable',
   } as const
 }
 
 function resolveSnapLinkTrustLabel(device: OnlineDeviceListItem, isLocallyTrusted: boolean) {
-  if (isLocallyTrusted || device.scopeLabel.includes('同账号')) {
+  if (isLocallyTrusted || device.scopeLabel.includes('同一账号')) {
     return '已信任'
   }
 
@@ -834,7 +834,7 @@ function resolveSnapLinkTrustLabel(device: OnlineDeviceListItem, isLocallyTruste
 }
 
 function isSnapLinkDeviceTrusted(device: OnlineDeviceListItem, trustedDeviceIds: Set<string>) {
-  return trustedDeviceIds.has(device.deviceId) || device.scopeLabel.includes('同账号')
+  return trustedDeviceIds.has(device.deviceId) || device.scopeLabel.includes('同一账号')
 }
 
 function formatSnapLinkDeviceFingerprint(device: OnlineDeviceListItem) {
@@ -5358,7 +5358,7 @@ export function SnapLinkStage({
               <small>{workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传</small>
             </span>
             <button type="button" onClick={handleWorkbenchRescan}>
-              扫描
+              查找
             </button>
           </div>
           <label className="dd-snaplink__conversation-side-search">
@@ -5484,7 +5484,7 @@ export function SnapLinkStage({
               </span>
               <div className="dd-snaplink__device-detail-actions">
                 <button type="button" className="is-primary" onClick={handleWorkbenchRescan}>
-                  重新扫描
+                  重新查找
                 </button>
               </div>
             </section>
@@ -5974,7 +5974,7 @@ export function SnapLinkStage({
 
   const getWorkbenchConnectionSummary = () => {
     if (deviceSettings.discoverable === false) {
-      return '发现已关'
+      return '对外不可见'
     }
 
     return workbenchOnlineDeviceCount > 0 ? `${workbenchOnlineDeviceCount.toString()} 台设备` : '无设备'
@@ -6055,7 +6055,7 @@ export function SnapLinkStage({
         details={[
           {
             id: 'lan-workbench',
-            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />同一网络可发现</>,
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />同一网络可见</>,
           },
           { id: 'webrtc', label: '直连中' },
           {
