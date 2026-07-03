@@ -23573,8 +23573,8 @@
 .dd-snaplink__room-title-block strong {
   overflow: hidden;
   color: #111827;
-  font-size: 15px;
-  font-weight: 850;
+  font-size: 15.5px;
+  font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -23588,7 +23588,7 @@
   overflow: hidden;
   color: #7b8794;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -23712,8 +23712,8 @@
 .dd-snaplink__room-workbench .dd-snaplink__room-more-security p {
   margin: 2px 0 0;
   color: #8b949e;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 10.5px;
+  font-weight: 500;
   line-height: 1.45;
 }
 
@@ -23917,7 +23917,7 @@
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-title-block strong {
-    font-size: 15px;
+    font-size: 15.5px;
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-title-block small {
