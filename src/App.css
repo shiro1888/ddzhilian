@@ -23665,7 +23665,7 @@
   align-content: center;
   width: 76px;
   height: 76px;
-  padding: 6px;
+  padding: 0;
   border: 1px solid #dcefe6;
   border-radius: 14px;
   background: #f4fff8;
@@ -23674,8 +23674,8 @@
 
 .dd-snaplink__room-more-code-card img {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
   border-radius: 8px;
   image-rendering: crisp-edges;
 }
@@ -23912,8 +23912,14 @@
 
   .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
     display: grid;
+    position: relative;
+    z-index: 28;
     min-height: 58px;
     padding: 10px 12px 10px 52px;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__messages {
+    padding-top: 70px;
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-title-block strong {
