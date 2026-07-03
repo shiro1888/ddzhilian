@@ -2027,8 +2027,8 @@ export function SnapLinkStage({
     : null
   const workbenchOnlineDeviceCount = onlineDeviceItems.length
   const workbenchDiscoveryHint = workbenchOnlineDeviceCount > 0
-    ? `在同一局域网/账号下发现 ${workbenchOnlineDeviceCount.toString()} 台设备`
-    : '等待同一 Wi-Fi / 局域网内的设备出现'
+    ? `${workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传`
+    : '等待另一台设备打开 DD直连'
   const workbenchDropSubtitle = selectedWorkbenchDevice
     ? `已预选 ${selectedWorkbenchDevice.deviceName}，选择文件后会建立直连并发送`
     : activeTransferLabel || '选择附近设备后开始传输'
@@ -5355,7 +5355,7 @@ export function SnapLinkStage({
           <div className="dd-snaplink__conversation-side-head">
             <span>
               <strong>设备</strong>
-              <small>同一局域网 / 账号下发现 {workbenchOnlineDeviceCount.toString()} 台设备</small>
+              <small>{workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传</small>
             </span>
             <button type="button" onClick={handleWorkbenchRescan}>
               扫描
@@ -5480,7 +5480,7 @@ export function SnapLinkStage({
               </span>
               <span className="dd-snaplink__device-detail-copy">
                 <strong>等待附近设备</strong>
-                <small>让另一台设备打开 DD直连，并连接到同一局域网或同一账号。</small>
+                <small>让另一台设备打开 DD直连，保持在同一网络或登录同一账号。</small>
               </span>
               <div className="dd-snaplink__device-detail-actions">
                 <button type="button" className="is-primary" onClick={handleWorkbenchRescan}>
@@ -6014,7 +6014,7 @@ export function SnapLinkStage({
     {
       id: 'device-radar',
       label: '打开设备雷达',
-      description: '查看同一局域网 / 账号下发现的设备',
+      description: '查看当前可互传的设备',
       icon: <Radio size={16} strokeWidth={2} />,
       action: handleShowWorkbenchNearby,
     },
