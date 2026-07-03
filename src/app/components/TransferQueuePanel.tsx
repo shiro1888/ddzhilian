@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react'
-import { FolderOpen } from 'lucide-react'
 import type { FileConversationEntry } from '../types'
-import { EmptyState } from './EmptyState'
 
 type TransferQueuePanelProps = {
   entries: FileConversationEntry[]
@@ -27,6 +25,11 @@ export function TransferQueuePanel({
   onToggleDesktopCollapsed,
 }: TransferQueuePanelProps) {
   const desktopToggleLabel = isDesktopCollapsed ? '展开传输队列' : '收起传输队列'
+  const hasIncomingNotice = Boolean(incomingNotice)
+
+  if (entries.length === 0 && !hasIncomingNotice) {
+    return null
+  }
 
   return (
     <aside
@@ -77,16 +80,7 @@ export function TransferQueuePanel({
       </div>
       {incomingNotice}
       <div className="dd-snaplink__queue-list">
-        {entries.length > 0 ? (
-          entries.map(renderTaskCard)
-        ) : (
-          <EmptyState
-            className="dd-snaplink__queue-empty"
-            icon={<FolderOpen size={24} strokeWidth={1.8} aria-hidden="true" />}
-            title="还没有传输任务"
-            description={<span>选择一个设备并发送文件，任务会出现在这里。</span>}
-          />
-        )}
+        {entries.length > 0 ? entries.map(renderTaskCard) : null}
       </div>
     </aside>
   )

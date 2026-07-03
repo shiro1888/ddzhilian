@@ -23485,3 +23485,283 @@
     font-size: 23px;
   }
 }
+
+/* 微信版 v3：会话页进一步减重，只把房间码、技术信息和工具入口放进「更多」 */
+.dd-snaplink__room-workbench .dd-snaplink__room-head {
+  min-height: 58px;
+  padding: 10px 16px;
+  border-bottom-color: #e9edf0;
+  background: #ffffff;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-left {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.dd-snaplink__room-title-block {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dd-snaplink__room-title-block strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-title-block small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: #7b8794;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  min-width: 38px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #6b7280;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-trigger:hover,
+.dd-snaplink__room-workbench .dd-snaplink__room-more-trigger:focus-visible,
+.dd-snaplink__room-workbench .dd-snaplink__room-more-trigger.is-active {
+  outline: none;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-panel {
+  gap: 12px;
+  width: min(292px, calc(100vw - 28px));
+  padding: 14px;
+  border-color: #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+
+.dd-snaplink__room-more-hero {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dd-snaplink__room-more-hero > span:last-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dd-snaplink__room-more-hero strong,
+.dd-snaplink__room-more-hero small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-more-hero strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dd-snaplink__room-more-hero small {
+  color: #7b8794;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dd-snaplink__room-more-code-card {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  width: 76px;
+  height: 76px;
+  border: 1px solid #dcefe6;
+  border-radius: 14px;
+  background: #f4fff8;
+  color: #0aa65b;
+}
+
+.dd-snaplink__room-more-code-card small {
+  color: #72927f;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.dd-snaplink__room-more-code-card strong {
+  max-width: 64px;
+  overflow: hidden;
+  color: #075f36;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-stats span {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-height: 46px;
+  padding: 6px 4px;
+  border-color: #edf1f3;
+  background: #f8faf9;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-stats span:nth-child(n + 5) {
+  display: none;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-security {
+  gap: 8px;
+  padding: 10px;
+  border-color: #e6f4ed;
+  border-radius: 12px;
+  background: #f6fffa;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-security > strong {
+  font-size: 12px;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-security p {
+  margin: 2px 0 0;
+  color: #8b949e;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-actions {
+  grid-template-columns: 1fr;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-color: #eef0f2;
+  background: #ffffff;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-primary {
+  border-color: #bcebd3;
+  background: #effbf5;
+  color: #08a958;
+}
+
+.dd-snaplink__room-more-tools {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dd-snaplink__room-more-tools button {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-height: 58px;
+  padding: 8px 4px;
+  border: 1px solid #eef0f2;
+  border-radius: 12px;
+  background: #fbfbfb;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dd-snaplink__room-more-tools button:hover,
+.dd-snaplink__room-more-tools button:focus-visible {
+  outline: none;
+  border-color: #bcebd3;
+  background: #f0fbf5;
+  color: #08a958;
+}
+
+.dd-snaplink__transfer-mini-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid #d9f3e4;
+  background: #effbf5;
+  color: #109257;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-snaplink__transfer-mini-banner span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-snaplink__transfer-mini-banner i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #10c46b;
+  box-shadow: 0 0 0 4px rgba(16, 196, 107, 0.14);
+}
+
+.dd-snaplink__transfer-mini-banner em {
+  flex: none;
+  color: #047946;
+  font-style: normal;
+}
+
+@media (min-width: 1181px) {
+  .dd-snaplink__workbench.has-empty-transfer-queue,
+  .dd-snaplink__room-workbench.has-empty-transfer-queue {
+    grid-template-columns: 64px minmax(0, 1fr) 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .dd-snaplink__transfer-mini-banner {
+    min-height: 32px;
+    padding-inline: 12px;
+  }
+}

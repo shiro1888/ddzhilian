@@ -201,7 +201,7 @@ export function RoomComposer({
                 >
                   <Paperclip size={17} strokeWidth={2} aria-hidden="true" />
                   <span>
-                    <strong>发送文件</strong>
+                    <strong>文件</strong>
                     <small>文件、图片或压缩包</small>
                   </span>
                 </button>
@@ -252,7 +252,7 @@ export function RoomComposer({
                 >
                   <ScanText size={17} strokeWidth={2} aria-hidden="true" />
                   <span>
-                    <strong>识别图片文字</strong>
+                    <strong>提取文字</strong>
                     <small>从图片提取文本再发送</small>
                   </span>
                 </button>
@@ -295,7 +295,7 @@ export function RoomComposer({
                   >
                     <Command size={17} strokeWidth={2} aria-hidden="true" />
                     <span>
-                      <strong>Web 命令行</strong>
+                      <strong>命令行</strong>
                       <small>运行命令并发送结果</small>
                     </span>
                   </button>
@@ -372,7 +372,7 @@ export function RoomComposer({
           <textarea
             ref={inputRef}
             defaultValue={defaultDraft}
-            placeholder={targetName ? `发送给 ${targetName} · 或直接把文件拖进窗口` : '输入消息...'}
+            placeholder={targetName ? `发送给 ${targetName} · 拖文件到这里也能发送` : '输入消息...'}
             autoComplete="off"
             rows={1}
             onChange={onDraftChange}

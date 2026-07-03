@@ -1986,6 +1986,9 @@ export function SnapLinkStage({
   const workbenchActiveTransferCount = workbenchTransferEntries.filter((file) =>
     isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
   ).length
+  const activeTransferSpeedLabel = workbenchTransferEntries.find((file) =>
+    isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)) && file.transferSpeedLabel,
+  )?.transferSpeedLabel
   const workbenchCompletedTransferCount = workbenchTransferEntries.filter(
     (file) => resolveSnapLinkTransferStatus(file) === 'completed',
   ).length
@@ -6590,7 +6593,7 @@ export function SnapLinkStage({
                   <RoomHeader
                     roomCodeLabel={copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
                     peerLabel={roomStatusLabel || selectedConversationName}
-                    peerTitle={activeTransferLabel}
+                    peerTitle={selectedConversationName}
                     stats={[
                       {
                         id: 'members',
@@ -6655,7 +6658,30 @@ export function SnapLinkStage({
                       setActiveSharedTab(null)
                       setIsLobbyOpen(true)
                     }}
+                    onOpenAssistant={handleOpenAiChat}
+                    onOpenImageTool={handleOpenImage}
+                    onOpenOcr={handleOcrTriggerClick}
+                    onOpenCommandTool={handleOpenCommand}
                   />
+
+              {workbenchActiveTransferCount > 0 ? (
+                <button
+                  type="button"
+                  className="dd-snaplink__transfer-mini-banner"
+                  aria-label="查看正在传输的文件"
+                  onClick={() => {
+                    setIsMobileQueueOpen(true)
+                    setIsDesktopQueueCollapsed(false)
+                  }}
+                >
+                  <span>
+                    <i aria-hidden="true" />
+                    正在传 {workbenchActiveTransferCount.toString()} 个文件
+                    {activeTransferSpeedLabel ? ` · ${activeTransferSpeedLabel}` : ''}
+                  </span>
+                  <em>查看</em>
+                </button>
+              ) : null}
 
               {isMobileRoomMembersOpen ? (
                 <aside className="dd-snaplink__room-member-panel" aria-label="房间成员">
