@@ -1640,6 +1640,9 @@ function App() {
     for (const [sessionId, state] of Object.entries(connectionStates)) {
       const previousStatus = previousConnectionStatusesRef.current[sessionId]
       const currentStatus = state.status
+      const roomId = sessionRoomIdById.get(sessionId)
+      const room = roomId ? roomById.get(roomId) : undefined
+      const isPrivateDeviceRoom = Boolean(room && !room.isPublic && !isBotChatRoom(room))
 
       if (previousStatus !== 'connected' && currentStatus === 'connected') {
         nextNotices.push({
@@ -1647,7 +1650,7 @@ function App() {
           sessionId,
           deviceId: state.peerId,
           createdAt: new Date().toISOString(),
-          text: `${state.peerName} 加入对话`,
+          text: isPrivateDeviceRoom ? '已连接 · 可以开始发消息或文件' : `${state.peerName} 加入对话`,
         })
       }
 
@@ -1657,7 +1660,7 @@ function App() {
           sessionId,
           deviceId: state.peerId,
           createdAt: new Date().toISOString(),
-          text: `${state.peerName} 退出对话`,
+          text: isPrivateDeviceRoom ? '对方离线 · 发送的内容会在对方上线后送达' : `${state.peerName} 退出对话`,
         })
       }
     }
@@ -1669,7 +1672,7 @@ function App() {
     }
 
     previousConnectionStatusesRef.current = currentStatuses
-  }, [connectionStates])
+  }, [connectionStates, roomById, sessionRoomIdById])
 
   const handleViewChange = (view: NavView) => {
     startTransition(() => {
