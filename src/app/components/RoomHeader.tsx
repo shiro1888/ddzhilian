@@ -216,7 +216,7 @@ export function RoomHeader({
                   </span>
                 </div>
                 <div className="dd-snaplink__room-more-primary">
-                  <button type="button" className="is-primary" onClick={() => handleMenuAction(onCopyRoomId)}>
+                  <button type="button" className="is-primary" onClick={onCopyRoomId}>
                     <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
                     {isCopied ? copiedLabel : copyLabel}
                   </button>
