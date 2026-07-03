@@ -818,7 +818,7 @@ function App() {
       : selectedDevicePeer
         ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
       : onlinePeers.length > 0 && connectingTargetCount > 0
-        ? '发现在线设备 · 正在连接'
+        ? `${onlinePeers.length} 台设备在线 · 正在连接`
       : onlinePeers.length > 0
         ? '选择设备后开始发送'
         : '暂无可发送设备'

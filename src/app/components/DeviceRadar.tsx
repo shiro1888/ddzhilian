@@ -56,7 +56,7 @@ export function DeviceRadar({
     <section className="dd-snaplink__device-radar-card" aria-label="设备雷达">
       <div className="dd-snaplink__device-radar-head">
         <strong>设备雷达</strong>
-        <small>发现 {devices.length.toString()} 台在线设备</small>
+        <small>{devices.length.toString()} 台设备在线</small>
       </div>
       <div className="dd-snaplink__device-radar" role="list">
         <span className="dd-snaplink__device-radar-sweep" aria-hidden="true" />
