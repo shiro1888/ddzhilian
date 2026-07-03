@@ -3,9 +3,7 @@ import QRCode from 'qrcode'
 import {
   Bot,
   Copy,
-  FileClock,
   Image as ImageIcon,
-  LogOut,
   MoreHorizontal,
   QrCode,
   ScanText,
@@ -30,11 +28,7 @@ type RoomHeaderProps = {
   peerLabel: string
   peerTitle: string
   connectionDetails?: RoomHeaderConnectionDetail[]
-  sharedContentCount: number
-  isSharedContentOpen: boolean
   onCopyRoomId: () => void
-  onToggleSharedContent: () => void
-  onLeave: () => void
   onOpenAssistant?: () => void
   onOpenImageTool?: () => void
   onOpenOcr?: () => void
@@ -52,11 +46,7 @@ export function RoomHeader({
   peerLabel,
   peerTitle,
   connectionDetails = [],
-  sharedContentCount,
-  isSharedContentOpen,
   onCopyRoomId,
-  onToggleSharedContent,
-  onLeave,
   onOpenAssistant,
   onOpenImageTool,
   onOpenOcr,
@@ -193,7 +183,7 @@ export function RoomHeader({
           <div ref={moreRef} className="dd-snaplink__room-more">
             <button
               type="button"
-              className={`dd-snaplink__room-more-trigger${isMoreOpen || isSharedContentOpen ? ' is-active' : ''}`}
+              className={`dd-snaplink__room-more-trigger${isMoreOpen ? ' is-active' : ''}`}
               aria-expanded={isMoreOpen}
               aria-label="查看更多功能"
               onClick={() => setIsMoreOpen((current) => !current)}
@@ -238,21 +228,6 @@ export function RoomHeader({
                     <p>{technicalNote}</p>
                   </div>
                 ) : null}
-                <div className="dd-snaplink__room-more-actions">
-                  <button
-                    type="button"
-                    className={`is-secondary${isSharedContentOpen ? ' is-active' : ''}`}
-                    onClick={() => handleMenuAction(onToggleSharedContent)}
-                  >
-                    <FileClock size={16} strokeWidth={2.2} aria-hidden="true" />
-                    传输记录
-                    {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
-                  </button>
-                  <button type="button" className="is-secondary" onClick={() => handleMenuAction(onLeave)}>
-                    <LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
-                    回到列表
-                  </button>
-                </div>
                 {toolItems.length > 0 ? (
                   <div className="dd-snaplink__room-more-tools" aria-label="常用工具">
                     {toolItems.map((item) => (

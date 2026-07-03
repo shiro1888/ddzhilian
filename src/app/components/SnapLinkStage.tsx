@@ -6628,14 +6628,7 @@ export function SnapLinkStage({
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}
-                    sharedContentCount={sharedContentCount}
-                    isSharedContentOpen={Boolean(effectiveActiveSharedTab)}
                     onCopyRoomId={handleCopyRoomId}
-                    onToggleSharedContent={() => setActiveSharedTab((current) => (current ? null : 'files'))}
-                    onLeave={() => {
-                      setActiveSharedTab(null)
-                      setIsLobbyOpen(true)
-                    }}
                     onOpenAssistant={handleOpenAiChat}
                     onOpenImageTool={handleOpenImage}
                     onOpenOcr={handleOcrTriggerClick}
