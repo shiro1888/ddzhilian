@@ -38,11 +38,11 @@ export function HistoryPage({
   onShowRooms,
 }: HistoryPageProps) {
   return (
-    <section className={`dd-snaplink__workbench-page is-history${embedded ? ' is-embedded' : ''}`} aria-label="历史记录">
+    <section className={`dd-snaplink__workbench-page is-history${embedded ? ' is-embedded' : ''}`} aria-label="传输记录">
       {header ? header : null}
       <label className="dd-snaplink__history-search">
         <Search size={15} strokeWidth={2} aria-hidden="true" />
-        <span>搜索历史</span>
+        <span>搜索记录</span>
         <input
           value={searchQuery}
           placeholder="搜索文件名、文本、链接或设备"
@@ -70,11 +70,11 @@ export function HistoryPage({
       </div>
       {totalCount > 0 ? (
         <div className="dd-snaplink__history-grid">
-          <section className="dd-snaplink__history-panel" aria-label="历史文件">
+          <section className="dd-snaplink__history-panel" aria-label="文件记录">
             <div className="dd-snaplink__section-head">
               <span>
                 <strong>文件与媒体</strong>
-                <small>可预览、下载或撤回的历史文件</small>
+                <small>可预览、下载或撤回的文件</small>
               </span>
             </div>
             {filePanelContent}
@@ -93,10 +93,10 @@ export function HistoryPage({
         <EmptyState
           className="dd-snaplink__workbench-room-empty is-large"
           icon={<History size={25} strokeWidth={1.8} aria-hidden="true" />}
-          title="没有匹配的历史"
-          description={<span>换一个关键词，或清空搜索后查看全部历史。</span>}
+          title="没有匹配的记录"
+          description={<span>换一个关键词，或清空搜索后查看全部记录。</span>}
           actions={(
-            <div className="dd-snaplink__empty-actions" aria-label="历史搜索快捷操作">
+            <div className="dd-snaplink__empty-actions" aria-label="记录搜索操作">
               <button type="button" onClick={onClearSearch}>
                 清空搜索
               </button>
@@ -107,10 +107,10 @@ export function HistoryPage({
         <EmptyState
           className="dd-snaplink__workbench-room-empty is-large"
           icon={<History size={25} strokeWidth={1.8} aria-hidden="true" />}
-          title="暂无历史记录"
-          description={<span>发送或接收文件、文本后，历史会集中显示在这里。</span>}
+          title="暂无传输记录"
+          description={<span>发送或接收文件、文本后，记录会集中显示在这里。</span>}
           actions={(
-            <div className="dd-snaplink__empty-actions" aria-label="历史记录快捷操作">
+            <div className="dd-snaplink__empty-actions" aria-label="传输记录操作">
               <button type="button" onClick={onShowFiles}>
                 发送文件
               </button>

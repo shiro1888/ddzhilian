@@ -253,15 +253,15 @@ export function SettingsPanel({
             <div className="dd-snaplink__settings-card-head">
               <Clock3 size={18} strokeWidth={1.8} aria-hidden="true" />
               <span>
-                <strong>历史记录</strong>
-                <small>文件、文本和链接记录集中在这里，不占主导航</small>
+                <strong>传输记录</strong>
+                <small>文件、文本和链接都在这里，不占主导航</small>
               </span>
             </div>
             <div className="dd-snaplink__settings-menu-list">
               <button type="button" onClick={onShowHistory}>
                 <Clock3 size={17} strokeWidth={1.9} aria-hidden="true" />
                 <span>
-                  <strong>查看历史记录</strong>
+                  <strong>查看传输记录</strong>
                   <small>下载文件、复制文本或复用链接</small>
                 </span>
               </button>

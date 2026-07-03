@@ -2113,7 +2113,7 @@ export function SnapLinkStage({
     }
 
     return [
-      '请基于下面这些 DD直连传输/历史文件，帮我生成一份简洁的文件说明和接收方注意事项。',
+      '请基于下面这些 DD直连传输文件，帮我生成一份简洁的文件说明和接收方注意事项。',
       '',
       '文件列表：',
       ...aiTransferContextFiles.map((file, index) => {
@@ -4704,7 +4704,7 @@ export function SnapLinkStage({
       return sharedFileEntries.length > 0 ? (
         sharedFileEntries.map((file) => renderSharedFileRow(file, 'file'))
       ) : (
-        <div className="dd-snaplink__shared-empty">暂无历史文件</div>
+        <div className="dd-snaplink__shared-empty">暂无文件记录</div>
       )
     }
 
@@ -5721,7 +5721,7 @@ export function SnapLinkStage({
       )
     }
 
-    return <div className="dd-snaplink__shared-empty">暂无历史文件</div>
+    return <div className="dd-snaplink__shared-empty">暂无文件记录</div>
   }
 
   const renderWorkbenchHistoryTextPanelContent = () => (
@@ -5770,8 +5770,8 @@ export function SnapLinkStage({
         embedded
           ? undefined
           : renderWorkbenchPageHeader(
-              '历史记录',
-              '集中查看文件、文本和链接历史，可下载、复制或复用。',
+              '传输记录',
+              '集中查看文件、文本和链接，可下载、复制或复用。',
             )
       }
       searchQuery={historySearchQuery}
@@ -6187,7 +6187,7 @@ export function SnapLinkStage({
     const toolSideNote = isAiTool
       ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
       : isImageTool
-        ? '图片生成与历史记录独立保存，传输文件仍通过 DD直连传输记录管理。'
+        ? '图片生成记录独立保存，传输文件仍通过 DD直连传输记录管理。'
         : '命令运行在浏览器或沙箱环境中，输出可复制后继续发送给附近设备。'
     const hasCommandResultText = commandResultText.trim().length > 0
     const toolSideActions: ToolContextPanelAction[] = isAiTool
@@ -6197,7 +6197,7 @@ export function SnapLinkStage({
             action: () => onPrepareAiDraft?.(buildAiTransferAnalysisPrompt(), buildAiTransferAnalysisContext()),
             title:
               aiTransferContextFiles.length > 0
-                ? '把最近传输/历史文件整理成 AI 分析草稿'
+                ? '把最近传输文件整理成 AI 分析草稿'
                 : '生成一段用于文件传输说明的 AI 草稿',
           },
           { label: '发送文本', action: handleShowWorkbenchText },

@@ -1066,7 +1066,7 @@ function App() {
           delete next[file.historyId]
           return next
         })
-        setLocalError(error instanceof Error ? error.message : '历史文件下载失败。')
+        setLocalError(error instanceof Error ? error.message : '文件记录下载失败。')
       },
     )
   }
@@ -1178,7 +1178,7 @@ function App() {
             : deviceNameById.get(file.sourceDeviceId) ?? file.sourceDeviceName,
         detail: downloadProgress
           ? `${formatFileSize(downloadProgress.receivedBytes)} / ${formatFileSize(downloadProgress.totalBytes)}`
-          : `${formatFileSize(file.size)} · 历史文件`,
+          : `${formatFileSize(file.size)} · 文件记录`,
         statusLabel: downloadProgress ? '下载中' : '可回放',
         transferStatus: downloadProgress ? ('transferring' as const) : ('completed' as const),
         tone: downloadProgress ? ('active' as const) : ('completed' as const),

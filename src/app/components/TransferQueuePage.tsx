@@ -112,7 +112,7 @@ export function TransferQueuePage({
             <EmptyState
               className="dd-snaplink__workbench-room-empty is-transfer-empty"
               icon={<FolderOpen size={24} strokeWidth={1.8} aria-hidden="true" />}
-              title="暂无历史记录"
+              title="暂无传输记录"
               description={<span>完成的文件、文本和链接会出现在这里。</span>}
               actions={(
                 <div className="dd-snaplink__transfer-empty-actions">
