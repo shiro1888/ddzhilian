@@ -237,14 +237,14 @@ export function RoomHeader({
                   </button>
                   <button
                     type="button"
-                    className={isSharedContentOpen ? 'is-active' : ''}
+                    className={`is-secondary${isSharedContentOpen ? ' is-active' : ''}`}
                     onClick={() => handleMenuAction(onToggleSharedContent)}
                   >
                     <FileClock size={16} strokeWidth={2.2} aria-hidden="true" />
                     传输记录
                     {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
                   </button>
-                  <button type="button" onClick={() => handleMenuAction(onLeave)}>
+                  <button type="button" className="is-secondary is-danger" onClick={() => handleMenuAction(onLeave)}>
                     <LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
                     离开房间
                   </button>
