@@ -2005,6 +2005,9 @@ export function SnapLinkStage({
   const workbenchFailedTransferCount = workbenchTransferEntries.filter(
     (file) => resolveSnapLinkTransferStatus(file) === 'failed',
   ).length
+  const workbenchVisibleTransferQueueCount = workbenchTransferEntries.filter(
+    (file) => file.tone !== 'completed',
+  ).length
   const activeIncomingReceiveEntries = workbenchTransferEntries.filter((file) =>
     !file.fromSelf && isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
   )
@@ -2609,10 +2612,10 @@ export function SnapLinkStage({
       return
     }
 
-    if (workbenchTransferEntries.length === 0) {
+    if (workbenchVisibleTransferQueueCount === 0) {
       setIsDesktopQueueCollapsed(true)
     }
-  }, [shouldAutoExpandDesktopQueue, workbenchTransferEntries.length])
+  }, [shouldAutoExpandDesktopQueue, workbenchVisibleTransferQueueCount])
 
   useEffect(() => {
     const messages = messagesRef.current
@@ -6143,7 +6146,7 @@ export function SnapLinkStage({
         'has-no-mobile-actions',
         isZenMode ? 'is-zen' : '',
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
-        workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
+        workbenchVisibleTransferQueueCount === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
       aria-label="DD直连局域网文件互传工作台"
     >
@@ -6612,7 +6615,7 @@ export function SnapLinkStage({
                 'dd-snaplink__room-workbench',
                 isZenMode ? 'is-zen' : '',
                 isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
-                workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
+                workbenchVisibleTransferQueueCount === 0 ? 'has-empty-transfer-queue' : '',
               ].filter(Boolean).join(' ')}
               aria-label="DD直连房间会话工作台"
             >
