@@ -14027,11 +14027,13 @@
   color: var(--snap-warning);
 }
 
+.dd-snaplink__room-more-primary,
 .dd-snaplink__room-more-actions {
   display: grid;
   gap: 6px;
 }
 
+.dd-snaplink__room-more-primary button,
 .dd-snaplink__room-more-actions button {
   justify-content: flex-start;
   width: 100%;
@@ -14044,6 +14046,8 @@
   text-align: left;
 }
 
+.dd-snaplink__room-more-primary button:hover,
+.dd-snaplink__room-more-primary button:focus-visible,
 .dd-snaplink__room-more-actions button:hover,
 .dd-snaplink__room-more-actions button:focus-visible,
 .dd-snaplink__room-more-actions button.is-active {
@@ -23717,6 +23721,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dd-snaplink__room-workbench .dd-snaplink__room-more-primary button,
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button {
   display: flex;
   align-items: center;
@@ -23726,6 +23731,7 @@
   background: #ffffff;
 }
 
+.dd-snaplink__room-workbench .dd-snaplink__room-more-primary button.is-primary,
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-primary {
   grid-column: 1 / -1;
   justify-content: center;

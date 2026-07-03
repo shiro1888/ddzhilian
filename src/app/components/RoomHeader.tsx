@@ -215,6 +215,12 @@ export function RoomHeader({
                     <small>{shareSubtitle ?? (displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel)}</small>
                   </span>
                 </div>
+                <div className="dd-snaplink__room-more-primary">
+                  <button type="button" className="is-primary" onClick={() => handleMenuAction(onCopyRoomId)}>
+                    <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
+                    {isCopied ? copiedLabel : copyLabel}
+                  </button>
+                </div>
                 {detailRows.length > 0 ? (
                   <div className="dd-snaplink__room-more-security" aria-label="连接与安全">
                     <strong>详情</strong>
@@ -233,10 +239,6 @@ export function RoomHeader({
                   </div>
                 ) : null}
                 <div className="dd-snaplink__room-more-actions">
-                  <button type="button" className="is-primary" onClick={() => handleMenuAction(onCopyRoomId)}>
-                    <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
-                    {isCopied ? copiedLabel : copyLabel}
-                  </button>
                   <button
                     type="button"
                     className={`is-secondary${isSharedContentOpen ? ' is-active' : ''}`}
