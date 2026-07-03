@@ -5140,6 +5140,15 @@ export function SnapLinkStage({
       normalizedQuery.length === 0 ||
       'dd助手 ai 辅助 总结 传输 说明'.includes(normalizedQuery)
     const visibleLobbyRooms = lobbyRoomListItems.filter((room) => !room.isAssistant)
+    const privateConversationPeerIds = new Set(
+      visibleLobbyRooms
+        .filter((room) => !room.isPublic)
+        .flatMap((room) =>
+          room.members
+            .filter((member) => !member.isSelf)
+            .map((member) => member.deviceId),
+        ),
+    )
     const filteredRooms = normalizedQuery.length === 0
       ? visibleLobbyRooms
       : visibleLobbyRooms.filter((room) => {
@@ -5152,9 +5161,12 @@ export function SnapLinkStage({
 
           return searchableText.includes(normalizedQuery)
         })
+    const firstContactDevices = onlineDeviceItems.filter(
+      (device) => !privateConversationPeerIds.has(device.deviceId),
+    )
     const filteredDevices = normalizedQuery.length === 0
-      ? onlineDeviceItems
-      : onlineDeviceItems.filter((device) => {
+      ? firstContactDevices
+      : firstContactDevices.filter((device) => {
           const searchableText = [
             device.deviceName,
             device.platform,
