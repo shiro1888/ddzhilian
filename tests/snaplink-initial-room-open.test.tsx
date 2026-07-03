@@ -122,14 +122,17 @@ describe('SnapLinkStage initial room opening', () => {
       expect(screen.getByRole('button', { name: /世界对话 1/ })).toBeInTheDocument()
     })
 
-    expect(screen.queryByText('历史内容')).not.toBeInTheDocument()
+    expect(screen.queryByText(/历史内容/)).not.toBeInTheDocument()
     expect(onOpenRoomConversation).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
 
     expect(onOpenRoomConversation).toHaveBeenCalledWith('ROOM123')
-    expect(screen.queryByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).not.toBeInTheDocument()
-    expect(screen.getByText('历史内容')).toBeInTheDocument()
-    expect(screen.getByText('你好，房间已经打开了')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).not.toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'DD直连房间会话工作台' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '查看房间详情和更多操作' })).toBeInTheDocument()
+      expect(screen.getByText('你好，房间已经打开了')).toBeInTheDocument()
+    })
   })
 })

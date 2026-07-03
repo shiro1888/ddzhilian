@@ -76,11 +76,11 @@ describe('SnapLinkStage lobby workbench', () => {
     cleanup()
   })
 
-  it('renders the default nearby workbench with an accessible region and title', () => {
+  it('renders the default messages workbench with an accessible region and title', () => {
     render(<SnapLinkStage {...createBaseProps()} />)
 
     expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: '附近设备' })).toBeInTheDocument()
-    expect(screen.getByText('等待同一 Wi-Fi / 局域网内的设备出现')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '消息工作台' })).toBeInTheDocument()
+    expect(screen.getByText('选择一个会话')).toBeInTheDocument()
   })
 })

@@ -17,6 +17,7 @@ export type OcrJobResult = {
 
 export type OcrJobRecord = {
   jobId: string;
+  ownerKey?: string;
   status: OcrJobStatus;
   fileName: string;
   mimeType: string;
@@ -34,6 +35,7 @@ type OcrJobStore = {
 
 type OcrJobCreateInput = {
   jobId: string;
+  ownerKey: string;
   fileName: string;
   mimeType: string;
   byteSize: number;
@@ -68,6 +70,7 @@ export class OcrJobRegistry {
     ).toISOString();
     const job: OcrJobRecord = {
       jobId: input.jobId,
+      ownerKey: input.ownerKey,
       status: 'queued',
       fileName: input.fileName,
       mimeType: input.mimeType,
@@ -83,14 +86,24 @@ export class OcrJobRegistry {
     return job;
   }
 
-  get(jobId: string) {
+  get(jobId: string, ownerKey?: string) {
     this.pruneExpired();
-    return this.jobs.get(jobId);
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return undefined;
+    }
+
+    if (ownerKey !== undefined && job.ownerKey !== ownerKey) {
+      return undefined;
+    }
+
+    return job;
   }
 
-  list(limit = 20) {
+  list(limit = 20, ownerKey?: string) {
     this.pruneExpired();
     return [...this.jobs.values()]
+      .filter((job) => ownerKey === undefined || job.ownerKey === ownerKey)
       .filter((job) => job.status === 'complete' || job.status === 'failed')
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       .slice(0, Math.max(1, limit));
@@ -147,7 +160,11 @@ export class OcrJobRegistry {
     return nextJob;
   }
 
-  delete(jobId: string) {
+  delete(jobId: string, ownerKey?: string) {
+    if (ownerKey !== undefined && this.jobs.get(jobId)?.ownerKey !== ownerKey) {
+      return false;
+    }
+
     const deleted = this.jobs.delete(jobId);
     if (deleted) {
       this.enqueueSave();
@@ -252,6 +269,7 @@ function isValidJobRecord(value: unknown): value is OcrJobRecord {
   return (
     typeof record.jobId === 'string' &&
     typeof record.fileName === 'string' &&
+    (record.ownerKey === undefined || typeof record.ownerKey === 'string') &&
     typeof record.mimeType === 'string' &&
     typeof record.byteSize === 'number' &&
     typeof record.createdAt === 'string' &&

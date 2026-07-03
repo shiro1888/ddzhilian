@@ -37,6 +37,7 @@ describe('OcrJobRegistry', () => {
 
     registry.create({
       jobId: 'expired-job',
+      ownerKey: 'device:alpha',
       fileName: 'expired.png',
       mimeType: 'image/png',
       byteSize: 12,
@@ -45,6 +46,7 @@ describe('OcrJobRegistry', () => {
     })
     registry.create({
       jobId: 'active-job',
+      ownerKey: 'device:alpha',
       fileName: 'active.png',
       mimeType: 'image/png',
       byteSize: 24,
@@ -85,6 +87,7 @@ describe('OcrJobRegistry', () => {
     for (let index = 0; index < 3; index += 1) {
       registry.create({
         jobId: `job-${index.toString()}`,
+        ownerKey: 'device:alpha',
         fileName: `image-${index.toString()}.png`,
         mimeType: 'image/png',
         byteSize: 10 + index,
@@ -95,5 +98,47 @@ describe('OcrJobRegistry', () => {
     expect(registry.get('job-0')).toBeUndefined()
     expect(registry.get('job-1')).toEqual(expect.objectContaining({ jobId: 'job-1' }))
     expect(registry.get('job-2')).toEqual(expect.objectContaining({ jobId: 'job-2' }))
+  })
+
+  it('scopes job lookup, listing, and deletion by owner key', async () => {
+    const registry = await createTempRegistry()
+    const createdAt = new Date().toISOString()
+
+    registry.create({
+      jobId: 'alpha-job',
+      ownerKey: 'device:alpha',
+      fileName: 'alpha.png',
+      mimeType: 'image/png',
+      byteSize: 12,
+      createdAt,
+    })
+    registry.create({
+      jobId: 'beta-job',
+      ownerKey: 'device:beta',
+      fileName: 'beta.png',
+      mimeType: 'image/png',
+      byteSize: 24,
+      createdAt,
+    })
+    registry.complete('alpha-job', {
+      text: 'alpha',
+      lines: [{ text: 'alpha' }],
+      raw: { ok: true },
+    })
+    registry.complete('beta-job', {
+      text: 'beta',
+      lines: [{ text: 'beta' }],
+      raw: { ok: true },
+    })
+
+    expect(registry.get('alpha-job', 'device:alpha')).toEqual(expect.objectContaining({ jobId: 'alpha-job' }))
+    expect(registry.get('alpha-job', 'device:beta')).toBeUndefined()
+    expect(registry.list(20, 'device:alpha')).toEqual([
+      expect.objectContaining({ jobId: 'alpha-job' }),
+    ])
+    expect(registry.delete('alpha-job', 'device:beta')).toBe(false)
+    expect(registry.get('alpha-job', 'device:alpha')).toBeDefined()
+    expect(registry.delete('alpha-job', 'device:alpha')).toBe(true)
+    expect(registry.get('alpha-job', 'device:alpha')).toBeUndefined()
   })
 })

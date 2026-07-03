@@ -79,7 +79,7 @@ describe('WebCommandStage PlantUML auto render', () => {
 
   it('renders PlantUML automatically after five idle seconds', async () => {
     const fetchMock = mockPlantUmlFetch()
-    render(<WebCommandStage />)
+    render(<WebCommandStage historyAuthToken="test-history-token" />)
 
     switchToPlantUml()
     editSource('@startuml\nAlice -> Bob: hi\n@enduml')
@@ -100,13 +100,16 @@ describe('WebCommandStage PlantUML auto render', () => {
       'http://localhost:8787/api/web-command/plantuml',
       expect.objectContaining({
         body: JSON.stringify({ source: '@startuml\nAlice -> Bob: hi\n@enduml' }),
+        headers: expect.objectContaining({
+          authorization: 'Bearer test-history-token',
+        }),
       }),
     )
   })
 
   it('does not auto-render the same PlantUML source again after manual run', async () => {
     const fetchMock = mockPlantUmlFetch()
-    render(<WebCommandStage />)
+    render(<WebCommandStage historyAuthToken="test-history-token" />)
 
     switchToPlantUml()
     editSource('@startuml\nAlice -> Bob: manual\n@enduml')

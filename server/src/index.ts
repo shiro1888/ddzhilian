@@ -1529,6 +1529,12 @@ async function handleOcrCreateRequest(
     return;
   }
 
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
   if (ocrJobs.countActive() >= ocrMaxActiveJobs) {
     writeJson(response, 429, { error: 'OCR 任务较多，请稍后重试。' });
     return;
@@ -1564,6 +1570,7 @@ async function handleOcrCreateRequest(
   const createdAt = new Date().toISOString();
   const job = ocrJobs.create({
     jobId: randomUUID(),
+    ownerKey: getAiChatConversationScope(authResult.device),
     fileName: image.filename,
     mimeType: image.mimeType,
     byteSize: image.buffer.byteLength,
@@ -1579,16 +1586,23 @@ async function handleOcrCreateRequest(
 }
 
 function handleOcrJobRequest(
+  request: IncomingMessage,
   response: ServerResponse,
   jobId: string,
 ) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
   const normalizedJobId = jobId.trim();
   if (!normalizedJobId) {
     writeJson(response, 400, { error: 'Missing OCR job id.' });
     return;
   }
 
-  const job = ocrJobs.get(normalizedJobId);
+  const job = ocrJobs.get(normalizedJobId, getAiChatConversationScope(authResult.device));
   if (!job) {
     writeJson(response, 404, { error: 'OCR 任务不存在或已过期。' });
     return;
@@ -1597,17 +1611,35 @@ function handleOcrJobRequest(
   writeJson(response, 200, toOcrJobPayload(job));
 }
 
-function handleOcrHistoryRequest(response: ServerResponse) {
+function handleOcrHistoryRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
   writeJson(response, 200, {
-    items: ocrJobs.list(ocrHistoryListLimit).map(toOcrJobPayload),
+    items: ocrJobs
+      .list(ocrHistoryListLimit, getAiChatConversationScope(authResult.device))
+      .map(toOcrJobPayload),
   });
 }
 
 function handleOcrHistoryDeleteRequest(
+  request: IncomingMessage,
   response: ServerResponse,
   jobId: string,
 ) {
-  const deleted = ocrJobs.delete(jobId.trim());
+  const authResult = authenticateHistoryRequest(request);
+  if (!authResult.ok) {
+    writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  const deleted = ocrJobs.delete(jobId.trim(), getAiChatConversationScope(authResult.device));
   if (!deleted) {
     writeJson(response, 404, { error: 'OCR 记录不存在或已过期。' });
     return;
@@ -7172,18 +7204,18 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname.startsWith('/api/ocr/jobs/') && request.method === 'GET') {
     const jobId = decodeURIComponent(url.pathname.slice('/api/ocr/jobs/'.length));
-    handleOcrJobRequest(response, jobId);
+    handleOcrJobRequest(request, response, jobId);
     return;
   }
 
   if (url.pathname === '/api/ocr/history' && request.method === 'GET') {
-    handleOcrHistoryRequest(response);
+    handleOcrHistoryRequest(request, response);
     return;
   }
 
   if (url.pathname.startsWith('/api/ocr/history/') && request.method === 'DELETE') {
     const jobId = decodeURIComponent(url.pathname.slice('/api/ocr/history/'.length));
-    handleOcrHistoryDeleteRequest(response, jobId);
+    handleOcrHistoryDeleteRequest(request, response, jobId);
     return;
   }
 
