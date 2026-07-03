@@ -2189,14 +2189,11 @@ export function SnapLinkStage({
     : undefined
   const selectedRoomCopyLabel = isSelectedRoomPublic ? '复制房间码' : '复制链接'
   const selectedRoomCopiedLabel = isSelectedRoomPublic ? '已复制房间码' : '已复制链接'
+  const selectedRoomTechnicalNote = isSelectedRoomAssistant
+    ? '技术信息：模型由后端代理调用 · 只读取你发送的内容'
+    : '技术信息：WebRTC 端到端直连 · 文件不经过服务器'
   const selectedRoomMoreDetails = isSelectedRoomAssistant
     ? [
-        {
-          id: 'assistant',
-          label: '助手',
-          value: '随时可用',
-          tone: 'safe' as const,
-        },
         {
           id: 'model',
           label: '模型',
@@ -2204,8 +2201,14 @@ export function SnapLinkStage({
         },
         {
           id: 'search',
-          label: '联网搜索',
+          label: '联网',
           value: '按需开启',
+        },
+        {
+          id: 'record',
+          label: '记录',
+          value: '本机保留',
+          tone: 'safe' as const,
         },
       ]
     : isSelectedRoomPublic
@@ -6609,6 +6612,7 @@ export function SnapLinkStage({
                     shareSubtitle={selectedRoomShareSubtitle}
                     copyLabel={selectedRoomCopyLabel}
                     copiedLabel={selectedRoomCopiedLabel}
+                    technicalNote={selectedRoomTechnicalNote}
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}

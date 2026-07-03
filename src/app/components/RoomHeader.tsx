@@ -26,6 +26,7 @@ type RoomHeaderProps = {
   shareSubtitle?: string
   copyLabel?: string
   copiedLabel?: string
+  technicalNote?: string
   peerLabel: string
   peerTitle: string
   connectionDetails?: RoomHeaderConnectionDetail[]
@@ -47,6 +48,7 @@ export function RoomHeader({
   shareSubtitle,
   copyLabel = '复制房间码',
   copiedLabel = '已复制',
+  technicalNote = '技术信息：WebRTC 端到端直连 · 文件不经过服务器',
   peerLabel,
   peerTitle,
   connectionDetails = [],
@@ -227,7 +229,7 @@ export function RoomHeader({
                         </span>
                       ))}
                     </div>
-                    <p>技术信息：WebRTC 端到端直连 · 文件不经过服务器</p>
+                    <p>{technicalNote}</p>
                   </div>
                 ) : null}
                 <div className="dd-snaplink__room-more-actions">
