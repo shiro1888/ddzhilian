@@ -2012,6 +2012,7 @@ export function SnapLinkStage({
   const latestIncomingFileOffer = pendingIncomingFileOffers[0] ?? null
   const shouldAutoExpandDesktopQueue =
     workbenchActiveTransferCount > 0 ||
+    workbenchFailedTransferCount > 0 ||
     activeIncomingReceiveEntries.length > 0 ||
     pendingIncomingFileOffers.length > 0
   const selectedWorkbenchDevice =
@@ -6254,6 +6255,7 @@ export function SnapLinkStage({
         renderTaskCard={renderWorkbenchTransferCard}
         onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
         onToggleDesktopCollapsed={() => setIsDesktopQueueCollapsed((current) => !current)}
+        onShowAllTransfers={handleShowWorkbenchQueue}
       />
     </section>
     )
@@ -6395,6 +6397,7 @@ export function SnapLinkStage({
               incomingNotice={renderIncomingReceiveNotice('compact')}
               renderTaskCard={renderWorkbenchTransferCard}
               onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
+              onShowAllTransfers={handleShowWorkbenchQueue}
             />
           </div>
 
@@ -7019,6 +7022,7 @@ export function SnapLinkStage({
                 renderTaskCard={renderWorkbenchTransferCard}
                 onToggleMobileOpen={() => setIsMobileQueueOpen((current) => !current)}
                 onToggleDesktopCollapsed={() => setIsDesktopQueueCollapsed((current) => !current)}
+                onShowAllTransfers={handleShowWorkbenchQueue}
               />
             </section>
           )}

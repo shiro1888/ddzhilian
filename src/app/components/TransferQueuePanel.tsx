@@ -11,6 +11,7 @@ type TransferQueuePanelProps = {
   renderTaskCard: (file: FileConversationEntry) => ReactNode
   onToggleMobileOpen: () => void
   onToggleDesktopCollapsed?: () => void
+  onShowAllTransfers?: () => void
 }
 
 export function TransferQueuePanel({
@@ -23,11 +24,13 @@ export function TransferQueuePanel({
   renderTaskCard,
   onToggleMobileOpen,
   onToggleDesktopCollapsed,
+  onShowAllTransfers,
 }: TransferQueuePanelProps) {
+  const visibleEntries = entries.filter((entry) => entry.tone !== 'completed')
   const desktopToggleLabel = isDesktopCollapsed ? '展开传输' : '收起传输'
   const hasIncomingNotice = Boolean(incomingNotice)
 
-  if (entries.length === 0 && !hasIncomingNotice) {
+  if (visibleEntries.length === 0 && !hasIncomingNotice) {
     return null
   }
 
@@ -50,13 +53,13 @@ export function TransferQueuePanel({
           onClick={onToggleDesktopCollapsed}
         >
           <span>传输</span>
-          {entries.length > 0 ? <em>{entries.length.toString()}</em> : null}
+          {visibleEntries.length > 0 ? <em>{visibleEntries.length.toString()}</em> : null}
         </button>
       ) : null}
       <div className="dd-snaplink__queue-head">
         <span>
           <strong>正在传输</strong>
-          <em>{entries.length.toString()}</em>
+          <em>{visibleEntries.length.toString()}</em>
         </span>
         <small>{activeCount.toString()} 进行中 · {completedCount.toString()} 已完成</small>
         {onToggleDesktopCollapsed ? (
@@ -80,8 +83,13 @@ export function TransferQueuePanel({
       </div>
       {incomingNotice}
       <div className="dd-snaplink__queue-list">
-        {entries.length > 0 ? entries.map(renderTaskCard) : null}
+        {visibleEntries.length > 0 ? visibleEntries.map(renderTaskCard) : null}
       </div>
+      {onShowAllTransfers ? (
+        <button type="button" className="dd-snaplink__queue-all" onClick={onShowAllTransfers}>
+          查看全部传输记录
+        </button>
+      ) : null}
     </aside>
   )
 }
