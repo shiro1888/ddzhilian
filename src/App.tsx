@@ -659,7 +659,7 @@ function App() {
         .map((peer) => {
           const relationLabels = [
             peer.relation.sameAccount ? '同账号' : '',
-            peer.relation.sameLan ? '局域网' : '',
+            peer.relation.sameLan ? '同一网络' : '',
           ].filter(Boolean)
 
           return {

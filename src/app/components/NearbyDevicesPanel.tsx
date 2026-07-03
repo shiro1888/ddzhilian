@@ -51,7 +51,7 @@ export function NearbyDevicesPanel({
             </span>
           )}
           title="暂无附近设备"
-          description={<p>请确认设备连接到同一 Wi-Fi / 局域网，并在对方设备上打开 DD直连。</p>}
+          description={<p>请让另一台设备打开 DD直连，并保持在同一网络或登录同一账号。</p>}
         />
       )}
     </section>

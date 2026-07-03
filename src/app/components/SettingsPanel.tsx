@@ -341,13 +341,13 @@ export function SettingsPanel({
                 <Wifi size={18} strokeWidth={1.8} aria-hidden="true" />
                 <span>
                   <strong>连接与发现</strong>
-                  <small>这些设置会同步到后端发现服务</small>
+                  <small>管理别人能不能看到这台设备</small>
                 </span>
               </div>
               <div className="dd-snaplink__settings-switch-list">
                 <SettingsSwitch
                   label="允许被发现"
-                  description="同一局域网内的设备可以看到这台设备"
+                  description="同一网络内的设备可以看到这台设备"
                   checked={discoverable}
                   onChange={onDiscoverableChange}
                 />

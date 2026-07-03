@@ -805,9 +805,9 @@ function resolveSnapLinkDeviceKind(platform: string) {
 }
 
 function resolveSnapLinkTransportMode(device: OnlineDeviceListItem) {
-  if (device.scopeLabel.includes('局域网')) {
+  if (device.scopeLabel.includes('同一网络')) {
     return {
-      label: '局域网直传',
+      label: '同一网络',
       tone: 'lan',
     } as const
   }
@@ -6099,7 +6099,7 @@ export function SnapLinkStage({
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
         workbenchVisibleTransferQueueCount === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
-      aria-label="DD直连局域网文件互传工作台"
+      aria-label="DD直连文件互传工作台"
     >
       <input
         ref={workbenchFileInputRef}
@@ -6373,7 +6373,7 @@ export function SnapLinkStage({
           <div className="dd-snaplink__brand">
             <i aria-hidden="true" />
             <span>DD直连</span>
-            <em>局域网文件互传</em>
+            <em>文件互传</em>
           </div>
           {isRenamingDevice ? (
             <form
