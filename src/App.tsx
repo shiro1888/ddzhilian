@@ -668,7 +668,7 @@ function App() {
             platform: peer.platform,
             shortCode: peer.shortCode,
             pairToken: peer.pairToken,
-            scopeLabel: relationLabels.join(' · ') || '可发现设备',
+            scopeLabel: relationLabels.join(' · ') || '可互传',
             lastSeenLabel: formatRelativeTime(peer.lastSeenAt),
           }
         }),

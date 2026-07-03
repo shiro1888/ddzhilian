@@ -6013,7 +6013,7 @@ export function SnapLinkStage({
     },
     {
       id: 'device-radar',
-      label: '打开设备雷达',
+      label: '查看附近设备',
       description: '查看当前可互传的设备',
       icon: <Radio size={16} strokeWidth={2} />,
       action: handleShowWorkbenchNearby,

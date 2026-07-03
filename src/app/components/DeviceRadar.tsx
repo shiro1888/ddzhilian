@@ -53,9 +53,9 @@ export function DeviceRadar({
   const visibleDevices = devices.slice(0, 8)
 
   return (
-    <section className="dd-snaplink__device-radar-card" aria-label="设备雷达">
+    <section className="dd-snaplink__device-radar-card" aria-label="附近设备">
       <div className="dd-snaplink__device-radar-head">
-        <strong>设备雷达</strong>
+        <strong>附近设备</strong>
         <small>{devices.length.toString()} 台设备在线</small>
       </div>
       <div className="dd-snaplink__device-radar" role="list">
@@ -97,7 +97,7 @@ export function DeviceRadar({
         })}
       </div>
       <p className="dd-snaplink__device-radar-note">
-        点选设备查看详情，双击直接进入会话。
+        点选设备查看详情，双击进入会话。
       </p>
     </section>
   )
