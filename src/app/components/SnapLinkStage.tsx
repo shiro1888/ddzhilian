@@ -1316,7 +1316,7 @@ function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) 
   }
 
   if (room.isAssistant) {
-    return 'AI 助手 · 随时可用'
+    return 'DD助手 · 随时可用'
   }
 
   const visibleOnlineCount = Math.min(room.memberCount, Math.max(room.onlineCount, 0) + 1)
@@ -6173,7 +6173,7 @@ export function SnapLinkStage({
   const renderToolWorkbenchView = (content: ReactNode, tool: 'ai-chat' | 'image' | 'command') => {
     const isAiTool = tool === 'ai-chat'
     const isImageTool = tool === 'image'
-    const toolTitle = isAiTool ? 'DD助手' : isImageTool ? 'AI 图片' : '命令行'
+    const toolTitle = isAiTool ? 'DD助手' : isImageTool ? '图片工具' : '命令行'
     const toolSubtitle = isAiTool
       ? '本地优先 · 上下文不外传'
       : isImageTool
@@ -6182,7 +6182,7 @@ export function SnapLinkStage({
     const toolLabel = isAiTool
       ? 'DD直连 DD助手会话'
       : isImageTool
-        ? 'DD直连 AI 图片工作台'
+        ? 'DD直连图片工具'
         : 'DD直连 命令行工作台'
     const toolSideNote = isAiTool
       ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
@@ -6197,8 +6197,8 @@ export function SnapLinkStage({
             action: () => onPrepareAiDraft?.(buildAiTransferAnalysisPrompt(), buildAiTransferAnalysisContext()),
             title:
               aiTransferContextFiles.length > 0
-                ? '把最近传输文件整理成 AI 分析草稿'
-                : '生成一段用于文件传输说明的 AI 草稿',
+                ? '把最近传输文件整理成分析草稿'
+                : '生成一段用于文件传输说明的草稿',
           },
           { label: '发送文本', action: handleShowWorkbenchText },
           { label: '查看附近设备', action: handleShowWorkbenchNearby },
@@ -6481,7 +6481,7 @@ export function SnapLinkStage({
                 <div className="dd-snaplink__theme-fields">
                   {renderThemeColorField('self', '发送的信息框', '自己发送的消息气泡')}
                   {renderThemeColorField('peer', '接收的信息框', '其他成员发送的消息气泡')}
-                  {renderThemeColorField('ai', 'AI 的信息框', 'DD直连小助手回复气泡')}
+                  {renderThemeColorField('ai', '助手的信息框', 'DD直连小助手回复气泡')}
                 </div>
                 <div className="dd-snaplink__theme-presets" aria-label="主题预设">
                   {snapLinkThemeColorOptions.map((option) => (

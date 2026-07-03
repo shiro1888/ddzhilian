@@ -275,7 +275,7 @@ export function SettingsPanel({
               <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
               <span>
                 <strong>工具中心</strong>
-                <small>AI、图片和命令行收在这里，主界面保持简洁</small>
+                <small>DD助手、图片和命令行收在这里，主界面保持简洁</small>
               </span>
             </div>
             <div className="dd-snaplink__settings-menu-list">
@@ -292,7 +292,7 @@ export function SettingsPanel({
                 <button type="button" onClick={onOpenAiChat}>
                   <SlidersHorizontal size={17} strokeWidth={1.9} aria-hidden="true" />
                   <span>
-                    <strong>AI 设置</strong>
+                    <strong>DD助手设置</strong>
                     <small>模型、联网搜索和额度在 DD助手里调整</small>
                   </span>
                 </button>
@@ -440,7 +440,7 @@ export function SettingsPanel({
                 />
                 <ThemeColorField
                   target="ai"
-                  label="AI 的信息框"
+                  label="助手的信息框"
                   description="DD直连小助手回复气泡"
                   value={themeColors.ai}
                   onChange={onThemeColorChange}
