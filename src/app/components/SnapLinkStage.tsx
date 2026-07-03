@@ -1923,7 +1923,7 @@ export function SnapLinkStage({
           file.fileName,
           file.sourceDeviceName,
           file.mimeType ?? '',
-          file.isPublic ? '公共房间' : '私密会话',
+          file.isPublic ? '公共房间' : '私聊',
         ].join(' ').toLowerCase().includes(normalizedHistorySearchQuery),
       )
     },
@@ -2094,7 +2094,7 @@ export function SnapLinkStage({
         size: file.size,
         mimeType: file.mimeType,
         source: file.sourceDeviceName,
-        status: file.isPublic ? '公共房间历史' : '私密会话历史',
+        status: file.isPublic ? '公共房间记录' : '私聊记录',
         createdAt: file.createdAt,
       })
     }
@@ -5643,7 +5643,7 @@ export function SnapLinkStage({
           <small>{file.sourceDeviceName} · {formatMessageClock(file.createdAt)}</small>
         </span>
         <p>
-          {formatFileSize(file.size)} · {file.isPublic ? '公共房间' : '私密会话'}
+          {formatFileSize(file.size)} · {file.isPublic ? '公共房间' : '私聊'}
         </p>
         <div className="dd-snaplink__text-history-actions">
           <button type="button" onClick={() => onDownloadHistoryFile(file)}>
@@ -6194,17 +6194,17 @@ export function SnapLinkStage({
       ? '本地优先 · 上下文不外传'
       : isImageTool
         ? '提示词生成 · 历史与额度同步'
-        : '浏览器 / Docker 沙箱 · 本页运行'
+        : '本页运行 · 结果可发送'
     const toolLabel = isAiTool
       ? 'DD直连 DD助手会话'
       : isImageTool
         ? 'DD直连图片工具'
-        : 'DD直连 命令行工作台'
+        : 'DD直连 命令行'
     const toolSideNote = isAiTool
       ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
       : isImageTool
         ? '图片生成记录独立保存，传输文件仍通过 DD直连传输记录管理。'
-        : '命令运行在浏览器或沙箱环境中，输出可复制后继续发送给附近设备。'
+        : '运行结果可复制，也可以继续发送给设备。'
     const hasCommandResultText = commandResultText.trim().length > 0
     const toolSideActions: ToolContextPanelAction[] = isAiTool
       ? [
@@ -6251,7 +6251,7 @@ export function SnapLinkStage({
             { label: '参考图', value: `${composerImageDrafts.length.toString()} 项` },
           ]
         : [
-            { label: '运行环境', value: '浏览器 / Docker 沙箱' },
+            { label: '运行方式', value: '本页运行' },
             { label: '输出状态', value: hasCommandResultText ? '有可发送结果' : '等待运行' },
             { label: '传输联动', value: hasCommandResultText ? '可填入文本发送' : '复制后也可发送' },
           ]
