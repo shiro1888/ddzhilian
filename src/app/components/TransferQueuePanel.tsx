@@ -24,7 +24,7 @@ export function TransferQueuePanel({
   onToggleMobileOpen,
   onToggleDesktopCollapsed,
 }: TransferQueuePanelProps) {
-  const desktopToggleLabel = isDesktopCollapsed ? '展开传输队列' : '收起传输队列'
+  const desktopToggleLabel = isDesktopCollapsed ? '展开传输' : '收起传输'
   const hasIncomingNotice = Boolean(incomingNotice)
 
   if (entries.length === 0 && !hasIncomingNotice) {
@@ -38,7 +38,7 @@ export function TransferQueuePanel({
         isMobileOpen ? 'is-mobile-open' : '',
         isDesktopCollapsed ? 'is-desktop-collapsed' : '',
       ].filter(Boolean).join(' ')}
-      aria-label="传输队列"
+      aria-label="正在传输"
     >
       {onToggleDesktopCollapsed ? (
         <button
@@ -55,7 +55,7 @@ export function TransferQueuePanel({
       ) : null}
       <div className="dd-snaplink__queue-head">
         <span>
-          <strong>传输队列</strong>
+          <strong>正在传输</strong>
           <em>{entries.length.toString()}</em>
         </span>
         <small>{activeCount.toString()} 进行中 · {completedCount.toString()} 已完成</small>

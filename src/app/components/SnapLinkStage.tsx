@@ -6082,7 +6082,7 @@ export function SnapLinkStage({
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
         workbenchTransferEntries.length === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
-      aria-label="DD直连 P2P 局域网文件共享工作台"
+      aria-label="DD直连局域网文件互传工作台"
     >
       <input
         ref={workbenchFileInputRef}
@@ -6177,7 +6177,7 @@ export function SnapLinkStage({
     const toolSideNote = isAiTool
       ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
       : isImageTool
-        ? '图片生成与历史记录独立保存，传输文件仍通过 DD直连队列管理。'
+        ? '图片生成与历史记录独立保存，传输文件仍通过 DD直连传输记录管理。'
         : '命令运行在浏览器或沙箱环境中，输出可复制后继续发送给附近设备。'
     const hasCommandResultText = commandResultText.trim().length > 0
     const toolSideActions: ToolContextPanelAction[] = isAiTool
@@ -6714,7 +6714,7 @@ export function SnapLinkStage({
                         setActiveSharedTab('files')
                       }}
                     >
-                      历史内容 {sharedContentCount.toString()}
+                      传输记录 {sharedContentCount.toString()}
                     </button>
                     <button type="button" onClick={handleCopyRoomId}>
                       {copiedRoomId === selectedRoomId ? '已复制房间码' : '复制房间码'}

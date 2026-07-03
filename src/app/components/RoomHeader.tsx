@@ -255,7 +255,7 @@ export function RoomHeader({
                     onClick={() => handleMenuAction(onToggleSharedContent)}
                   >
                     <FileClock size={16} strokeWidth={2.2} aria-hidden="true" />
-                    历史内容
+                    传输记录
                     {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
                   </button>
                   <button type="button" onClick={() => handleMenuAction(onLeave)}>

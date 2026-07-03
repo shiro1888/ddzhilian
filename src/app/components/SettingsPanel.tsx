@@ -365,7 +365,7 @@ export function SettingsPanel({
                 />
               </div>
               <div className="dd-snaplink__settings-status-list">
-                <span>WebRTC 直连</span>
+            <span>直连传输</span>
                 <span>文件不经过服务器</span>
               </div>
             </div>

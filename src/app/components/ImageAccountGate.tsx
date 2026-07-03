@@ -18,7 +18,7 @@ type AccountMode = 'login' | 'register'
 const imageAuthHighlights = [
   '历史与额度同步',
   '参考图按需上传',
-  '传输仍走 DD直连队列',
+    '传输仍走 DD直连记录',
 ] as const
 
 const imageAuthSteps = [
@@ -32,7 +32,7 @@ const imageAuthSteps = [
   },
   {
     title: '直连分享',
-    description: '通过附近设备或房间发送，传输状态进入 DD直连队列。',
+    description: '通过附近设备或房间发送，传输状态进入 DD直连记录。',
   },
 ] as const
 
@@ -111,7 +111,7 @@ export function ImageAccountGate({
             </div>
             <h2>{mode === 'login' ? '登录后同步生图历史' : '创建图片账号'}</h2>
             <p>
-              图片账号只同步生成额度和历史记录；图片文件的发送、接收和进度，仍由 DD直连的附近设备队列管理。
+            图片账号只同步生成额度和历史记录；图片文件的发送、接收和进度，仍由 DD直连的传输记录管理。
             </p>
 
             <div className="dd-image-auth-facts" aria-label="图片工具说明">
@@ -224,7 +224,7 @@ export function ImageAccountGate({
             {localNotice ? <p className="dd-success-note">{localNotice}</p> : null}
             {localError || error ? <p className="dd-error-note">{localError ?? error}</p> : null}
             <p className="dd-image-auth-safe-note">
-              图片生成需要账号；附近设备发现、文件直传和传输队列不依赖图片账号。
+          图片生成需要账号；附近设备发现、文件直传和传输记录不依赖图片账号。
             </p>
           </div>
         </div>

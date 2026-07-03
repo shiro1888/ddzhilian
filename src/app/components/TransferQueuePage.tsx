@@ -52,7 +52,7 @@ export function TransferQueuePage({
   const hasHistoryTab = tabs.some((tab) => tab.id === 'history')
 
   return (
-    <section className="dd-snaplink__workbench-transfer-board dd-snaplink__workbench-page is-transfers" aria-label="传输队列">
+    <section className="dd-snaplink__workbench-transfer-board dd-snaplink__workbench-page is-transfers" aria-label="传输记录">
       <div className="dd-snaplink__section-head">
         <span>
           <strong>传输</strong>

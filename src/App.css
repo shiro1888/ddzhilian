@@ -22899,7 +22899,7 @@
   inset: 0;
   z-index: 0;
   border: 0;
-  background: rgba(15, 23, 42, 0.42);
+  background: rgba(0, 0, 0, 0.32);
   cursor: default;
 }
 
@@ -22922,10 +22922,15 @@
   border: 1px solid var(--dd-command-border);
   border-radius: 14px;
   background: var(--dd-command-bg);
+  background-color: #ffffff;
   color: var(--dd-command-ink);
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.32);
   animation: ddRise 180ms ease both;
   isolation: isolate;
+  opacity: 1;
+  filter: none;
+  backdrop-filter: none;
+  color-scheme: light;
 }
 
 .dd-command-palette__search {

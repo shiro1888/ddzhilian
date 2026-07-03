@@ -45,7 +45,7 @@ export function FileSendPage({
             className="dd-snaplink__workbench-room-empty"
             icon={<FolderOpen size={23} strokeWidth={1.8} aria-hidden="true" />}
             title="暂无最近发送"
-            description={<span>选择文件、拍照或发送文本后，任务会进入传输队列。</span>}
+            description={<span>选择文件、拍照或发送文本后，任务会进入传输记录。</span>}
           />
         )}
       </div>

@@ -39,7 +39,7 @@ export function ToolContextPanel({
   transferCards,
 }: ToolContextPanelProps) {
   return (
-    <aside className="dd-snaplink__tool-side" aria-label="工具上下文与传输队列">
+    <aside className="dd-snaplink__tool-side" aria-label="工具上下文与传输记录">
       <section className="dd-snaplink__tool-side-section">
         <div className="dd-snaplink__tool-side-head">
           <strong>当前上下文</strong>
@@ -71,7 +71,7 @@ export function ToolContextPanel({
 
       <section className="dd-snaplink__tool-side-section is-transfer">
         <div className="dd-snaplink__tool-side-head">
-          <strong>传输队列</strong>
+          <strong>传输记录</strong>
           <span>{transferCount.toString()}</span>
         </div>
         <div className="dd-snaplink__tool-side-summary">
