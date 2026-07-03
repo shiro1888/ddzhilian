@@ -2093,7 +2093,7 @@ export function SnapLinkStage({
       return [
         '请帮我为 DD直连文件传输生成一份简短说明。',
         '',
-        '场景：我准备通过局域网 P2P 发送文件给附近设备。',
+        '场景：我准备把文件直接发送给附近设备。',
         '请按“发送前检查 / 接收方需要做什么 / 注意事项 / 推荐文案”输出。',
       ].join('\n')
     }
@@ -2150,6 +2150,19 @@ export function SnapLinkStage({
   const activeSharedTabItem = sharedTabItems.find((item) => item.id === effectiveActiveSharedTab)
 
   const roomStatusLabel = resolveRoomLabel(selectedRoom, activeTransferLabel)
+  const selectedRoomShareValue = useMemo(() => {
+    if (!selectedRoomId) {
+      return undefined
+    }
+
+    if (typeof window === 'undefined') {
+      return selectedRoomId
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('room', selectedRoomId)
+    return url.toString()
+  }, [selectedRoomId])
   const isBotDraft = startsWithBotMention(plainDraft)
   const shouldShowAiThinking = hasActiveRoom && isAiGenerating && aiGeneratingRoomId === selectedRoomId
   const themeStyle = useMemo<SnapLinkThemeStyle>(() => ({
@@ -4711,7 +4724,7 @@ export function SnapLinkStage({
         </span>
         <strong>这里还没有消息</strong>
         <p>{fileConversationEmptyState}</p>
-        <small>发送第一条文本，或把文件拖到对话区开始协作。传输状态会显示在右侧队列。</small>
+        <small>发送第一条文本，或把文件拖到对话区开始协作。进度会显示在传输记录里。</small>
         <div className="dd-snaplink__room-empty-actions">
           <button type="button" onClick={() => inputRef.current?.focus()}>
             发送文本
@@ -4895,7 +4908,7 @@ export function SnapLinkStage({
           </small>
         </span>
         <span className="dd-snaplink__receive-notice-actions">
-          <button type="button" onClick={() => handleShowWorkbenchQueue()}>查看队列</button>
+          <button type="button" onClick={() => handleShowWorkbenchQueue()}>查看传输</button>
           <button type="button" onClick={handleShowWorkbenchSettings}>设置</button>
         </span>
       </section>
@@ -5420,7 +5433,7 @@ export function SnapLinkStage({
     <FileSendPage
       header={renderWorkbenchPageHeader(
         '发送',
-        '文件、图片、文本统一发给设备或房间，传输任务会进入右侧队列。',
+        '文件、图片、文本统一发给设备或房间，进度会显示在传输记录里。',
         <button type="button" onClick={handleWorkbenchFilePick}>
           <Upload size={14} strokeWidth={2} aria-hidden="true" />
           选择文件
@@ -5883,7 +5896,7 @@ export function SnapLinkStage({
     {
       id: 'send-file',
       label: '发送文件到当前会话',
-      description: '打开文件选择器，走现有 P2P 发送流程',
+      description: '打开文件选择器，发送到当前会话',
       icon: <FileUp size={16} strokeWidth={2} />,
       action: openCurrentFilePicker,
     },
@@ -5912,7 +5925,7 @@ export function SnapLinkStage({
     },
     {
       id: 'transfer-queue',
-      label: '查看传输队列',
+      label: '查看传输记录',
       description: `${workbenchActiveTransferCount.toString()} 个进行中，${workbenchCompletedTransferCount.toString()} 个已完成`,
       icon: <Upload size={16} strokeWidth={2} />,
       action: handleShowWorkbenchQueue,
@@ -5947,9 +5960,9 @@ export function SnapLinkStage({
         details={[
           {
             id: 'lan',
-            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '局域网可发现'}</>,
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />{deviceSettings.discoverable === false ? '发现已关闭' : '同一网络可发现'}</>,
           },
-          { id: 'webrtc', label: 'WebRTC 直连' },
+          { id: 'webrtc', label: '直连中' },
           {
             id: 'serverless',
             label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
@@ -5988,9 +6001,9 @@ export function SnapLinkStage({
         details={[
           {
             id: 'lan-workbench',
-            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />局域网工作台</>,
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />同一网络可发现</>,
           },
-          { id: 'webrtc', label: 'WebRTC 直连' },
+          { id: 'webrtc', label: '直连中' },
           {
             id: 'serverless',
             label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
@@ -6029,9 +6042,9 @@ export function SnapLinkStage({
         summary={`${selectedRoomOnlineCount.toString()} 在线`}
         details={[
           { id: 'room-code', label: `房间 ${selectedRoomId ?? '当前'}` },
-          { id: 'room-transport', label: 'WebRTC 直连' },
-          { id: 'room-shared', label: `${sharedContentCount.toString()} 项历史内容` },
-          { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个传输中` },
+          { id: 'room-transport', label: '直连中' },
+          { id: 'room-shared', label: `${sharedContentCount.toString()} 项传输记录` },
+          { id: 'room-transfers', label: `${workbenchActiveTransferCount.toString()} 个正在传` },
         ]}
         ariaLabel="房间连接状态"
       />
@@ -6183,7 +6196,7 @@ export function SnapLinkStage({
       : isImageTool
         ? [
             { label: '发送图片文件', action: handleShowWorkbenchFiles },
-            { label: '查看传输队列', action: handleShowWorkbenchQueue },
+            { label: '查看传输记录', action: handleShowWorkbenchQueue },
             { label: '附近设备', action: handleShowWorkbenchNearby },
           ]
         : [
@@ -6196,7 +6209,7 @@ export function SnapLinkStage({
               disabled: !hasCommandResultText,
               title: hasCommandResultText ? '把当前运行输出填入文本发送页' : '先运行命令生成输出结果',
             },
-            { label: '查看传输队列', action: handleShowWorkbenchQueue },
+            { label: '查看传输记录', action: handleShowWorkbenchQueue },
             { label: '附近设备', action: handleShowWorkbenchNearby },
           ]
     const toolContextRows = isAiTool
@@ -6349,7 +6362,7 @@ export function SnapLinkStage({
           <div className="dd-snaplink__brand">
             <i aria-hidden="true" />
             <span>DD直连</span>
-            <em>P2P 局域网工作台</em>
+            <em>局域网文件互传</em>
           </div>
           {isRenamingDevice ? (
             <form
@@ -6592,6 +6605,8 @@ export function SnapLinkStage({
                 <section className="dd-snaplink__room" aria-label="ddzhilian 对话">
                   <RoomHeader
                     roomCodeLabel={copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
+                    roomCodeValue={selectedRoomId ?? undefined}
+                    roomShareValue={selectedRoomShareValue}
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
                     stats={[
@@ -6631,8 +6646,8 @@ export function SnapLinkStage({
                       },
                       {
                         id: 'transport',
-                        label: '传输通道',
-                        value: 'WebRTC 直连',
+                        label: '连接',
+                        value: '直连中',
                         tone: 'safe',
                       },
                       {

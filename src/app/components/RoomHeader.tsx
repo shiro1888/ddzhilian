@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import QRCode from 'qrcode'
 import {
   Bot,
   Copy,
@@ -27,6 +28,8 @@ type RoomHeaderConnectionDetail = {
 
 type RoomHeaderProps = {
   roomCodeLabel: ReactNode
+  roomCodeValue?: string
+  roomShareValue?: string
   peerLabel: string
   peerTitle: string
   stats?: RoomHeaderStat[]
@@ -44,6 +47,8 @@ type RoomHeaderProps = {
 
 export function RoomHeader({
   roomCodeLabel,
+  roomCodeValue,
+  roomShareValue,
   peerLabel,
   peerTitle,
   stats = [],
@@ -59,7 +64,11 @@ export function RoomHeader({
   onOpenCommandTool,
 }: RoomHeaderProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const moreRef = useRef<HTMLDivElement | null>(null)
+  const displayRoomCode =
+    roomCodeValue || (typeof roomCodeLabel === 'string' ? roomCodeLabel : '')
+  const qrPayload = roomShareValue || displayRoomCode
 
   useEffect(() => {
     if (!isMoreOpen) {
@@ -88,6 +97,39 @@ export function RoomHeader({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [isMoreOpen])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    if (!qrPayload) {
+      return () => {
+        isCancelled = true
+      }
+    }
+
+    QRCode.toDataURL(qrPayload, {
+      width: 152,
+      margin: 1,
+      color: {
+        dark: '#111827',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => {
+        if (!isCancelled) {
+          setQrDataUrl(url)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setQrDataUrl(null)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [qrPayload])
 
   const handleMenuAction = (action: () => void) => {
     setIsMoreOpen(false)
@@ -161,13 +203,15 @@ export function RoomHeader({
               <div className="dd-snaplink__room-more-panel" role="dialog" aria-label="房间详情">
                 <div className="dd-snaplink__room-more-hero">
                   <span className="dd-snaplink__room-more-code-card">
-                    <QrCode size={22} strokeWidth={2.2} aria-hidden="true" />
-                    <small>房间码</small>
-                    <strong>{roomCodeLabel}</strong>
+                    {qrPayload && qrDataUrl ? (
+                      <img src={qrDataUrl} alt={`房间码 ${displayRoomCode || '当前会话'} 的二维码`} />
+                    ) : (
+                      <QrCode size={22} strokeWidth={2.2} aria-hidden="true" />
+                    )}
                   </span>
                   <span>
                     <strong>{peerTitle || peerLabel}</strong>
-                    <small>{peerLabel}</small>
+                    <small>{displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel}</small>
                   </span>
                 </div>
                 {stats.length > 0 ? (

@@ -23598,13 +23598,21 @@
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 3px;
   width: 76px;
   height: 76px;
+  padding: 6px;
   border: 1px solid #dcefe6;
   border-radius: 14px;
   background: #f4fff8;
   color: #0aa65b;
+}
+
+.dd-snaplink__room-more-code-card img {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  image-rendering: crisp-edges;
 }
 
 .dd-snaplink__room-more-code-card small {
@@ -23760,6 +23768,57 @@
 }
 
 @media (max-width: 760px) {
+  .dd-snaplink__room-workbench .dd-snaplink__room-status {
+    display: none;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
+    display: grid;
+    min-height: 58px;
+    padding: 10px 12px 10px 52px;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-title-block strong {
+    font-size: 15px;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-title-block small {
+    font-size: 12px;
+  }
+
+  .dd-snaplink__room-mobile-actions {
+    top: 0;
+    left: 8px;
+    right: auto;
+    z-index: 18;
+    display: flex;
+    width: 42px;
+    height: 58px;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .dd-snaplink__room-mobile-actions button:not(.dd-snaplink__room-mobile-back) {
+    display: none;
+  }
+
+  .dd-snaplink__room-mobile-actions .dd-snaplink__room-mobile-back {
+    pointer-events: auto;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-more-panel {
+    position: fixed;
+    right: 12px;
+    bottom: calc(72px + var(--snap-bottom-safe));
+    left: 12px;
+    top: auto;
+    width: auto;
+    max-height: min(45vh, 420px);
+    overflow-y: auto;
+    border-radius: 18px;
+  }
+
   .dd-snaplink__transfer-mini-banner {
     min-height: 32px;
     padding-inline: 12px;
