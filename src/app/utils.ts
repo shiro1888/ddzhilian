@@ -17,13 +17,13 @@ export function transferStatusLabel(
     case 'waiting_for_target':
       return '等待设备'
     case 'connecting':
-      return '正在建立直连'
+      return '正在连接'
     case 'ready':
-      return '等待对方确认'
+      return '等待接收'
     case 'transferring':
       return '正在发送'
     case 'completed':
-      return '发送成功'
+      return '发送完成'
     case 'failed':
       return '发送失败'
     case 'cancelled':

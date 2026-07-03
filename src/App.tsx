@@ -1146,7 +1146,7 @@ function App() {
         detail: file.completed
           ? `${formatFileSize(file.size)} · 已可下载`
           : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
-        statusLabel: file.completed ? '已接收' : '接收中',
+        statusLabel: file.completed ? '接收完成' : '正在接收',
         transferStatus: file.completed ? ('completed' as const) : ('transferring' as const),
         tone: file.completed ? ('completed' as const) : ('active' as const),
         progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
@@ -1279,7 +1279,7 @@ function App() {
         detail: file.completed
           ? `${formatFileSize(file.size)} · 已可下载`
           : `${formatFileSize(file.receivedBytes)} / ${formatFileSize(file.size)}`,
-        statusLabel: file.completed ? '已接收' : '接收中',
+        statusLabel: file.completed ? '接收完成' : '正在接收',
         transferStatus: file.completed ? ('completed' as const) : ('transferring' as const),
         tone: file.completed ? ('completed' as const) : ('active' as const),
         progress: file.size > 0 ? Math.min(file.receivedBytes / file.size, 1) : 0,
