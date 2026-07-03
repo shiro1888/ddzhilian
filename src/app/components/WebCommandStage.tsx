@@ -277,6 +277,8 @@ export function WebCommandStage({
   const autoRenderTimerRef = useRef<number | null>(null)
   const lastRenderedPlantUmlSourceRef = useRef('')
   const isPlantUmlMode = language === 'plantuml'
+  const isServerSandboxLanguage = language === 'java' || language === 'plantuml'
+  const missingSandboxAuth = isServerSandboxLanguage && !historyAuthToken?.trim()
 
   useEffect(() => {
     languageRef.current = language
@@ -363,6 +365,22 @@ export function WebCommandStage({
     const currentHistoryAuthToken = historyAuthToken
     const runId = runSequenceRef.current + 1
     const started = Date.now()
+
+    if (
+      (currentLanguage === 'java' || currentLanguage === 'plantuml') &&
+      !currentHistoryAuthToken?.trim()
+    ) {
+      const nextResult = createWebCommandErrorResult({
+        language: currentLanguage,
+        started,
+        error: new Error('设备尚未在线，无法使用服务端沙箱。请先回到互传页面完成设备连接，再运行 Java / PlantUML。'),
+      })
+      setResult(nextResult)
+      writeRunResult(nextResult)
+      setMobilePane('terminal')
+      return
+    }
+
     runSequenceRef.current = runId
     if (currentLanguage === 'plantuml') {
       lastRenderedPlantUmlSourceRef.current = currentSource
@@ -616,11 +634,12 @@ export function WebCommandStage({
           <button
             type="button"
             className="dd-web-command__primary"
-            disabled={isRunning}
+            disabled={isRunning || missingSandboxAuth}
+            title={missingSandboxAuth ? '设备未在线：Java / PlantUML 需要先连接后端沙箱，请先进入在线状态' : undefined}
             onClick={executeCurrentSource}
           >
             {isRunning ? <Loader2 size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
-            {isRunning ? '运行中' : '运行'}
+            {isRunning ? '运行中' : missingSandboxAuth ? '需先在线' : '运行'}
           </button>
           <button type="button" disabled={isRunning} onClick={handleResetSource}>
             <RotateCcw size={15} aria-hidden="true" />
