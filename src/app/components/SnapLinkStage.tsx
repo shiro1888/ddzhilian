@@ -2031,8 +2031,8 @@ export function SnapLinkStage({
     ? `${workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传`
     : '等待另一台设备打开 DD直连'
   const workbenchDropSubtitle = selectedWorkbenchDevice
-    ? `已预选 ${selectedWorkbenchDevice.deviceName}，选择文件后会建立直连并发送`
-    : activeTransferLabel || '选择附近设备后开始传输'
+    ? `已选择 ${selectedWorkbenchDevice.deviceName}，选好文件后发送`
+    : activeTransferLabel || '选择设备后发送文件'
   const workbenchRawHistoryFileCount = Math.max(workbenchGlobalHistoryFiles.length, workbenchHistoryFileEntries.length)
   const workbenchRawHistoryTextCount = Math.max(workbenchGlobalHistoryTexts.length, workbenchTextEntries.length)
   const workbenchRawHistoryCount = workbenchRawHistoryFileCount + workbenchRawHistoryTextCount + sharedLinkEntries.length
@@ -4784,8 +4784,8 @@ export function SnapLinkStage({
         <small>
           {selectedWorkbenchDevice
             ? intent === 'text'
-              ? '发送文本前会先确认设备，再建立直连或进入私聊房间'
-              : '选择文件后会先确认设备，再建立直连发送'
+              ? '发送文本前会先确认设备，再进入聊天'
+              : '选好文件后发送给此设备'
             : activeTransferLabel}
         </small>
       </span>
@@ -4797,7 +4797,7 @@ export function SnapLinkStage({
           type="button"
           onClick={() => requestTrustedWorkbenchDeviceAction(selectedWorkbenchDevice.deviceId, 'connect')}
         >
-          建立直连
+          开始聊天
         </button>
       ) : null}
     </div>
@@ -5011,7 +5011,7 @@ export function SnapLinkStage({
         <span className="dd-snaplink__receive-notice-copy">
           <strong title={incomingCountLabel}>{incomingCountLabel}</strong>
           <small>
-            来自 {latestIncomingReceiveEntry.subtitle || '对方设备'} · 仅在设备之间传输，文件不经过服务器
+            来自 {latestIncomingReceiveEntry.subtitle || '对方设备'} · 确认后开始接收，文件不经过服务器
           </small>
         </span>
         <span className="dd-snaplink__receive-notice-actions">
@@ -5101,7 +5101,7 @@ export function SnapLinkStage({
       pendingTrustAction.kind === 'text'
         ? '发送文本'
         : pendingTrustAction.kind === 'connect'
-          ? '建立直连'
+          ? '开始聊天'
           : pendingTrustAction.kind === 'pick-camera'
             ? '发送图片'
           : '发送文件'

@@ -56,7 +56,7 @@ export function TrustDeviceDialog({
         <div className="dd-snaplink__trust-dialog-copy">
           <span>设备确认</span>
           <h2 id="dd-snaplink-trust-dialog-title">确认要向 {deviceName} {actionLabel}？</h2>
-          <p>这是尚未手动信任的设备。确认后才会继续当前操作，文件仍只在设备之间传输。</p>
+          <p>这是尚未手动信任的设备。确认后才会继续当前操作，文件不经过服务器。</p>
         </div>
         <div className="dd-snaplink__trust-dialog-device">
           <span className={`dd-snaplink__workbench-device-icon is-${deviceKind}`}>
