@@ -11,6 +11,7 @@ import {
   Bot,
   Camera,
   Command,
+  Delete,
   FileText,
   Image as ImageIcon,
   Paperclip,
@@ -74,10 +75,14 @@ type RoomComposerProps = {
 }
 
 const roomComposerQuickEmojis = [
-  '😀', '😄', '😁', '😂', '🤣', '😊', '🙂', '😉', '😍', '🥰', '😘', '😎',
-  '🤔', '🫠', '😴', '😭', '😡', '🥳', '🤯', '😇', '🤖', '👀', '🙌', '👏',
-  '👍', '👎', '🙏', '💪', '👋', '🤝', '🎉', '🎊', '✨', '🔥', '⭐', '🌈',
-  '☀️', '🌙', '⚡', '🍀', '🍎', '🍕', '☕', '🎵', '🎮', '🏀', '🚀', '❤️',
+  '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆',
+  '😉', '😊', '😋', '😎', '😍', '😘', '🥰', '🤫',
+  '🙂', '🤗', '🤔', '🧐', '😐', '😶', '🙄', '😏',
+  '😣', '😢', '😮', '😬', '😯', '😪', '😫', '😴',
+  '😌', '😛', '😜', '😝', '🤤', '😟', '😓', '😔',
+  '☹️', '🙃', '🤑', '😲', '🙁', '😖', '😞', '😧',
+  '😤', '😡', '😨', '😱', '😳', '🥺', '😇', '🤭',
+  '👍', '👎', '👏', '🙏', '💪', '👌', '👋', '❤️',
 ]
 
 const roomComposerBotMentionLabel = '@DD直连小助手'
@@ -397,7 +402,7 @@ export function RoomComposer({
             >
               <div className="dd-snaplink__emoji-picker-head">
                 <strong>表情</strong>
-                <small>连续点选不会关闭面板</small>
+                <small>点击输入到发送框</small>
               </div>
               <div className="dd-snaplink__emoji-grid">
                 {roomComposerQuickEmojis.map((emoji) => (
@@ -405,6 +410,7 @@ export function RoomComposer({
                     key={emoji}
                     type="button"
                     className="dd-snaplink__emoji-item"
+                    aria-label={`插入表情 ${emoji}`}
                     onClick={() => onEmojiInsert(emoji)}
                   >
                     {emoji}
@@ -412,10 +418,16 @@ export function RoomComposer({
                 ))}
               </div>
               <div className="dd-snaplink__emoji-actions">
-                <button type="button" onClick={onEmojiBackspace}>
-                  回删
+                <button
+                  type="button"
+                  className="dd-snaplink__emoji-backspace"
+                  aria-label="删除一个表情"
+                  title="删除一个表情"
+                  onClick={onEmojiBackspace}
+                >
+                  <Delete size={18} strokeWidth={2.2} aria-hidden="true" />
                 </button>
-                <button type="button" className="is-primary" onClick={onEmojiSend}>
+                <button type="button" className="is-primary" disabled={isSendDisabled} onClick={onEmojiSend}>
                   发送
                 </button>
               </div>
