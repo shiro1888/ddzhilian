@@ -85,7 +85,7 @@ const roomComposerQuickEmojis = [
   '👍', '👎', '👏', '🙏', '💪', '👌', '👋', '❤️',
 ]
 
-const roomComposerBotMentionLabel = '@DD直连小助手'
+const roomComposerBotMentionLabel = '@DD助手'
 
 export function RoomComposer({
   quoteDraft,
@@ -342,7 +342,7 @@ export function RoomComposer({
             ref={botPanelRef}
             className="dd-snaplink__bot-panel"
             role="dialog"
-            aria-label="@DD直连小助手 模型选择"
+            aria-label="@DD助手 模型选择"
           >
             <button type="button" className="dd-snaplink__bot-option" onClick={onBotMentionSelect}>
               <strong>{roomComposerBotMentionLabel}</strong>

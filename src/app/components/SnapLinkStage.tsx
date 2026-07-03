@@ -133,7 +133,7 @@ type BotMentionTriggerRange = {
   end: number
 }
 
-const AI_BOT_MENTION_LABEL = '@DD直连小助手'
+const AI_BOT_MENTION_LABEL = '@DD助手'
 const ROOM_JOIN_CODE_MAX_LENGTH = 12
 
 type SnapLinkOcrImageTarget = {
@@ -1145,7 +1145,7 @@ function normalizePlainComposerDraft(value: string) {
 }
 
 function startsWithBotMention(value: string) {
-  return /^@(?:DD直连小助手|ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
+  return /^@(?:DD助手|DD直连小助手|ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
 }
 
 function createBotMentionDraft(value: string) {
@@ -1317,7 +1317,7 @@ function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) 
   }
 
   if (room.isAssistant) {
-    return 'DD助手 · 随时可用'
+    return 'AI 助手'
   }
 
   const visibleOnlineCount = Math.min(room.memberCount, Math.max(room.onlineCount, 0) + 1)
@@ -1374,8 +1374,8 @@ function resolveActorIdentity(
 ) {
   if (isBotMessage) {
     return {
-      displayName: 'DD直连小助手',
-      title: 'DD直连小助手',
+      displayName: 'DD助手',
+      title: 'DD助手',
       badgeLabel: '助手',
       avatarLabel: '助',
     }
@@ -6875,8 +6875,8 @@ export function SnapLinkStage({
                         </span>
                         <div className="dd-snaplink__message-main">
                           <div className="dd-snaplink__sender-meta">
-                            <span className="dd-snaplink__sender-name" title="DD直连小助手">
-                              DD直连小助手
+                            <span className="dd-snaplink__sender-name" title="DD助手">
+                              DD助手
                             </span>
                             <span className="dd-snaplink__sender-badge is-ai">助手</span>
                           </div>

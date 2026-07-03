@@ -45,7 +45,7 @@ import { useAccountAuth } from './lib/use-account-auth'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
 
-const AI_BOT_MENTION_LABEL = '@DD直连小助手'
+const AI_BOT_MENTION_LABEL = '@DD助手'
 const AI_THINKING_MIN_VISIBLE_MS = 650
 
 function wait(durationMs: number) {
@@ -260,7 +260,7 @@ function resolvePublicRoomTitle(publicIndex?: number) {
 }
 
 function parseAiBotPrompt(value: string) {
-  const match = /^@(?:DD直连小助手|ai|bot)(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
+  const match = /^@(?:DD助手|DD直连小助手|ai|bot)(?:[\s:：,，]+)?([\s\S]*)$/i.exec(value.trim())
   if (!match) {
     return null
   }
@@ -1350,7 +1350,7 @@ function App() {
   const fileConversationEmptyState =
     selectedRoom
       ? isSelectedBotRoom
-        ? '这里是和 DD直连小助手的私密聊天，不会出现在世界对话。'
+        ? '这里是和 DD助手的私密聊天，不会出现在世界对话。'
         : selectedRoom.isPublic
         ? '公共房间适合多人共享文本，也可以从这里发起文件任务。'
         : selectedConnectedTarget
@@ -1520,7 +1520,7 @@ function App() {
       const previewText =
         latestEvent?.previewText ??
         (isAssistantRoom
-          ? 'DD直连小助手'
+          ? 'DD助手'
           : room.isPublic
             ? `${publicRoomTitle}，可通过链接加入`
             : '暂无消息')
