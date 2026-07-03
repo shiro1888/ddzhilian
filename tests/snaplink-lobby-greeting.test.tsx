@@ -79,7 +79,7 @@ describe('SnapLinkStage lobby workbench', () => {
   it('renders the default messages workbench with an accessible region and title', () => {
     render(<SnapLinkStage {...createBaseProps()} />)
 
-    expect(screen.getByRole('region', { name: 'DD直连 P2P 局域网文件共享工作台' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'DD直连文件互传工作台' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: '消息工作台' })).toBeInTheDocument()
     expect(screen.getByText('选择一个会话')).toBeInTheDocument()
   })

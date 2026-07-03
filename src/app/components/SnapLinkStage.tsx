@@ -5144,7 +5144,7 @@ export function SnapLinkStage({
       visibleLobbyRooms
         .filter((room) => !room.isPublic)
         .flatMap((room) =>
-          room.members
+          (room.members ?? [])
             .filter((member) => !member.isSelf)
             .map((member) => member.deviceId),
         ),

@@ -471,9 +471,27 @@ function isLoopbackOrigin(origin: string) {
   }
 }
 
+function isSameHostOrigin(origin: string, host: string | string[] | undefined) {
+  const normalizedHost = firstHeaderValue(host)?.trim().toLowerCase();
+  if (!normalizedHost) {
+    return false;
+  }
+
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.host.toLowerCase() === normalizedHost
+    );
+  } catch {
+    return false;
+  }
+}
+
 function setCorsHeaders(
   request: {
     headers: {
+      host?: string | string[];
       origin?: string | string[];
     };
   },
@@ -489,7 +507,11 @@ function setCorsHeaders(
     return true;
   }
 
-  if (!config.allowedOrigins.includes(origin) && !isLoopbackOrigin(origin)) {
+  if (
+    !config.allowedOrigins.includes(origin) &&
+    !isSameHostOrigin(origin, request.headers.host) &&
+    !(isDevelopmentRuntime && isLoopbackOrigin(origin))
+  ) {
     return false;
   }
 

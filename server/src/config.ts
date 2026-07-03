@@ -260,6 +260,18 @@ function normalizeHttpBaseUrl(value: string, fallback: string) {
   }
 }
 
+function isLoopbackHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function readHistoryRetentionMs(name: string, fallback: number) {
   const value = readNumber(name, fallback);
 
@@ -416,8 +428,9 @@ export function loadConfig(): ServerConfig {
   const host = process.env.HOST || '0.0.0.0';
   const port = readNumber('PORT', 8787);
   const publicWsUrl = process.env.PUBLIC_WS_URL || `ws://localhost:${port.toString()}/ws`;
+  const includeDevelopmentOrigins = process.env.NODE_ENV !== 'production';
   const allowedOrigins = new Set<string>([
-    ...defaultAllowedOrigins,
+    ...(includeDevelopmentOrigins ? defaultAllowedOrigins : []),
     ...readStringList('ALLOWED_ORIGINS'),
   ]);
   const publicHttpBaseUrl = derivePublicHttpBaseUrl(publicWsUrl);
@@ -441,7 +454,7 @@ export function loadConfig(): ServerConfig {
   );
   const codexImageModels = [codexImageModel];
 
-  if (publicHttpBaseUrl) {
+  if (publicHttpBaseUrl && (includeDevelopmentOrigins || !isLoopbackHttpUrl(publicHttpBaseUrl))) {
     allowedOrigins.add(publicHttpBaseUrl);
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
+import type { Config as DomPurifyConfig } from 'dompurify'
 import type { Cell, Worksheet } from 'exceljs'
 import type {
   DocumentPreviewKind,
@@ -69,6 +70,66 @@ type DocxPreviewLayout = {
   scale: number
   width: number | null
   height: number | null
+}
+
+const documentPreviewSanitizeConfig = {
+  IN_PLACE: true,
+  USE_PROFILES: {
+    html: true,
+    svg: true,
+    svgFilters: true,
+  },
+  FORBID_TAGS: [
+    'script',
+    'iframe',
+    'object',
+    'embed',
+    'base',
+    'link',
+    'meta',
+    'form',
+    'input',
+    'button',
+    'textarea',
+    'select',
+    'option',
+  ],
+  FORBID_ATTR: ['srcdoc'],
+} satisfies DomPurifyConfig & { IN_PLACE: true }
+
+function removeUnsafeGeneratedDom(container: HTMLElement | null) {
+  if (!container) {
+    return
+  }
+
+  container
+    .querySelectorAll('script, iframe, object, embed, base, link, meta')
+    .forEach((node) => node.remove())
+
+  container.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name) || attribute.name.toLowerCase() === 'srcdoc') {
+        element.removeAttribute(attribute.name)
+      }
+    }
+  })
+}
+
+async function sanitizeGeneratedDocumentPreview(...containers: Array<HTMLElement | null>) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const { default: DOMPurify } = await import('dompurify')
+  for (const container of containers) {
+    if (!container) {
+      continue
+    }
+
+    // Third-party document renderers write HTML directly into these containers.
+    // Sanitize in-place before the preview is marked ready so received files cannot inject active DOM.
+    DOMPurify.sanitize(container, documentPreviewSanitizeConfig)
+  }
 }
 
 type ExcelMergeRange = {
@@ -266,6 +327,8 @@ function DocxPreview({ source }: { source: DocumentPreviewSource }) {
           renderFootnotes: true,
           renderHeaders: true,
         })
+        await sanitizeGeneratedDocumentPreview(body)
+        removeUnsafeGeneratedDom(style)
         if (!cancelled) {
           setStatus('ready')
         }
@@ -505,6 +568,7 @@ function PptxPreview({ source }: { source: DocumentPreviewSource }) {
             batchSize: 4,
           },
         })
+        await sanitizeGeneratedDocumentPreview(container)
         if (!cancelled) {
           setStatus('ready')
         }
