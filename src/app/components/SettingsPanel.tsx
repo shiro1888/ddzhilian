@@ -310,7 +310,7 @@ export function SettingsPanel({
                 <button type="button" onClick={onOpenCommand}>
                   <Command size={17} strokeWidth={1.9} aria-hidden="true" />
                   <span>
-                    <strong>Web 命令行</strong>
+                    <strong>命令行</strong>
                     <small>运行命令并发送结果文本</small>
                   </span>
                 </button>

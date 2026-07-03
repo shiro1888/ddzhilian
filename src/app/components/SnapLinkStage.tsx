@@ -5983,7 +5983,7 @@ export function SnapLinkStage({
   const commandPaletteItems: CommandPaletteItem[] = [
     {
       id: 'web-command',
-      label: '打开 Web 命令行',
+      label: '打开命令行',
       description: '进入命令行工具，运行命令并把结果发送回当前会话',
       icon: <Command size={16} strokeWidth={2} />,
       action: handleOpenCommand,

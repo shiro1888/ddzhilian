@@ -589,7 +589,7 @@ export function WebCommandStage({
   const mobileTerminalLabel = isPlantUmlMode ? '预览' : '终端'
 
   return (
-    <section className={`dd-web-command is-${runState} is-mobile-${mobilePane}${isPlantUmlMode ? ' is-plantuml' : ''}`} aria-label="Web 命令行">
+    <section className={`dd-web-command is-${runState} is-mobile-${mobilePane}${isPlantUmlMode ? ' is-plantuml' : ''}`} aria-label="命令行">
       <header className="dd-web-command__head">
         <div>
           <span className="dd-web-command__eyebrow">
