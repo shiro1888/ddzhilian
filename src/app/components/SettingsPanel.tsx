@@ -441,7 +441,7 @@ export function SettingsPanel({
                 <ThemeColorField
                   target="ai"
                   label="助手的信息框"
-                  description="DD直连小助手回复气泡"
+                  description="DD助手回复气泡"
                   value={themeColors.ai}
                   onChange={onThemeColorChange}
                 />

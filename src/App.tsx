@@ -1372,13 +1372,13 @@ function App() {
     ? aiQuotaStatus.provider && aiQuotaStatus.provider !== 'cloudflare'
       ? (aiQuotaStatus.limitLabel ?? '外部 API 计费')
       : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
-    : 'AI 额度加载中'
+    : '助手额度加载中'
   const selectedAiModelOption = findAiModelOption(aiModelOptions, selectedAiModel)
   const selectedAiModelLabel =
     selectedAiModelOption?.label ||
     selectedAiModel ||
     aiQuotaStatus?.model ||
-    'AI 模型'
+    '助手模型'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const sessionRoomIdById = useMemo(
     () => new Map(sessions.map((session) => [session.sessionId, session.roomId] as const)),
@@ -1707,7 +1707,7 @@ function App() {
   const handlePrepareAiDraft = (text: string, context?: AiDraftContextPayload) => {
     const normalizedText = text.trim()
     if (!normalizedText) {
-      setLocalError('没有可发送给 AI 的上下文。')
+      setLocalError('没有可发送给 DD助手的上下文。')
       handleViewChange('chat')
       return
     }
@@ -1936,7 +1936,7 @@ function App() {
 
     const botRoomId = aiBotPrompt === null ? null : effectiveSelectedRoomId
     if (aiBotPrompt !== null && !botRoomId) {
-      setLocalError('当前对话尚未建立房间，无法同步 AI 回复。')
+      setLocalError('当前对话尚未建立房间，无法同步 DD助手回复。')
       return
     }
 
@@ -1996,7 +1996,7 @@ function App() {
             setAiQuotaStatus(answer.quota)
           }
         } catch (error) {
-          setLocalError(error instanceof Error ? error.message : 'AI 请求失败。')
+          setLocalError(error instanceof Error ? error.message : 'DD助手请求失败。')
         } finally {
           await keepAiThinkingVisibleSince(aiThinkingStartedAt)
           setIsAiGenerating(false)

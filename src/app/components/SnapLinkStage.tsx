@@ -2123,7 +2123,7 @@ export function SnapLinkStage({
       }),
       '',
       '请按“文件概览 / 可能用途 / 接收方需要做什么 / 注意事项 / 可直接发送的说明文案”输出。',
-      '如果需要读取正文内容，请提醒我把对应文件拖入 AI 输入框。DD助手只读取我选择的内容。',
+      '如果需要读取正文内容，请提醒我把对应文件拖入 DD助手输入框。DD助手只读取我选择的内容。',
     ].join('\n')
   }
   const buildAiTransferAnalysisContext = (): AiDraftContextPayload | undefined => {
@@ -6485,7 +6485,7 @@ export function SnapLinkStage({
                 <div className="dd-snaplink__theme-fields">
                   {renderThemeColorField('self', '发送的信息框', '自己发送的消息气泡')}
                   {renderThemeColorField('peer', '接收的信息框', '其他成员发送的消息气泡')}
-                  {renderThemeColorField('ai', '助手的信息框', 'DD直连小助手回复气泡')}
+                  {renderThemeColorField('ai', '助手的信息框', 'DD助手回复气泡')}
                 </div>
                 <div className="dd-snaplink__theme-presets" aria-label="主题预设">
                   {snapLinkThemeColorOptions.map((option) => (
