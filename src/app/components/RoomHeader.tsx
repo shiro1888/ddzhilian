@@ -244,9 +244,9 @@ export function RoomHeader({
                     传输记录
                     {sharedContentCount > 0 ? ` ${sharedContentCount.toString()}` : ''}
                   </button>
-                  <button type="button" className="is-secondary is-danger" onClick={() => handleMenuAction(onLeave)}>
+                  <button type="button" className="is-secondary" onClick={() => handleMenuAction(onLeave)}>
                     <LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
-                    离开房间
+                    回到列表
                   </button>
                 </div>
                 {toolItems.length > 0 ? (

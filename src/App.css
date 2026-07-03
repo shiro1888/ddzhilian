@@ -23710,10 +23710,6 @@
   font-size: 11.5px;
 }
 
-.dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-secondary.is-danger {
-  color: #b45309;
-}
-
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-secondary:hover,
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-secondary:focus-visible,
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-secondary.is-active {
