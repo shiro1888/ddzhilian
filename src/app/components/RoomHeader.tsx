@@ -193,13 +193,13 @@ export function RoomHeader({
               type="button"
               className={`dd-snaplink__room-more-trigger${isMoreOpen || isSharedContentOpen ? ' is-active' : ''}`}
               aria-expanded={isMoreOpen}
-              aria-label="查看房间详情和更多操作"
+              aria-label="查看更多功能"
               onClick={() => setIsMoreOpen((current) => !current)}
             >
               <MoreHorizontal size={20} strokeWidth={2.2} aria-hidden="true" />
             </button>
             {isMoreOpen ? (
-              <div className="dd-snaplink__room-more-panel" role="dialog" aria-label="房间详情">
+              <div className="dd-snaplink__room-more-panel" role="dialog" aria-label="更多功能">
                 <div className="dd-snaplink__room-more-hero">
                   <span className="dd-snaplink__room-more-code-card">
                     {qrPayload && qrDataUrl ? (

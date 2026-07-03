@@ -6645,14 +6645,14 @@ export function SnapLinkStage({
               ) : null}
 
               {isMobileRoomMembersOpen ? (
-                <aside className="dd-snaplink__room-member-panel" aria-label="房间成员">
+                <aside className="dd-snaplink__room-member-panel" aria-label="更多功能">
                   <div className="dd-snaplink__room-member-head">
-                    <strong>房间详情</strong>
+                    <strong>更多功能</strong>
                     <span>
                       {selectedRoomOnlineCount.toString()} 在线 · {(selectedRoom?.memberCount ?? 1).toString()} 成员
                     </span>
                   </div>
-                  <div className="dd-snaplink__room-member-actions" aria-label="房间操作">
+                  <div className="dd-snaplink__room-member-actions" aria-label="更多操作">
                     <button
                       type="button"
                       onClick={() => {
@@ -6673,7 +6673,7 @@ export function SnapLinkStage({
                         setIsLobbyOpen(true)
                       }}
                     >
-                      离开房间
+                      回到列表
                     </button>
                   </div>
                   <div className="dd-snaplink__room-member-list">
