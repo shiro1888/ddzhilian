@@ -242,21 +242,6 @@ export function RoomComposer({
                   </span>
                 </button>
                 <button
-                  ref={ocrTriggerRef}
-                  type="button"
-                  className={`dd-snaplink__plus-item${isOcrPanelOpen ? ' is-active' : ''}`}
-                  role="menuitem"
-                  aria-expanded={isOcrPanelOpen}
-                  aria-controls={ocrPanelId}
-                  onClick={() => runPlusAction(onOcrTriggerClick)}
-                >
-                  <ScanText size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>提取文字</strong>
-                    <small>从图片提取文本再发送</small>
-                  </span>
-                </button>
-                <button
                   ref={botTriggerRef}
                   type="button"
                   className={`dd-snaplink__plus-item${isBotDraft || isBotPanelOpen ? ' is-active' : ''}`}
@@ -286,6 +271,21 @@ export function RoomComposer({
                     </span>
                   </button>
                 ) : null}
+                <button
+                  ref={ocrTriggerRef}
+                  type="button"
+                  className={`dd-snaplink__plus-item${isOcrPanelOpen ? ' is-active' : ''}`}
+                  role="menuitem"
+                  aria-expanded={isOcrPanelOpen}
+                  aria-controls={ocrPanelId}
+                  onClick={() => runPlusAction(onOcrTriggerClick)}
+                >
+                  <ScanText size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    <strong>提取文字</strong>
+                    <small>从图片提取文本再发送</small>
+                  </span>
+                </button>
                 {onOpenCommandTool ? (
                   <button
                     type="button"
