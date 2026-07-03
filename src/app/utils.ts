@@ -148,7 +148,7 @@ export function deviceConnectionLabel(status?: PeerConnectionStatus) {
     case 'connecting':
       return '连接中'
     case 'connected':
-      return '已连接'
+      return '直连中'
     case 'failed':
       return '连接失败'
     case 'closed':

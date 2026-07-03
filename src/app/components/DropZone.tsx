@@ -47,7 +47,7 @@ export function DropZone({
           发送图片
         </button>
       </div>
-      <small>仅在设备之间传输 · 端到端</small>
+      <small>只在设备之间传输 · 文件不经过服务器</small>
     </section>
   )
 }

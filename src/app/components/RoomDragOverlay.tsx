@@ -10,7 +10,7 @@ export function RoomDragOverlay({ targetName = '当前对话' }: RoomDragOverlay
           +
         </span>
         <strong>松开，发送到 {targetName}</strong>
-        <span>端到端直连 · 文件不经过服务器</span>
+        <span>松开后直接发送 · 文件不经过服务器</span>
       </div>
     </div>
   )

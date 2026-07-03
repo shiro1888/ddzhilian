@@ -23637,25 +23637,6 @@
   white-space: nowrap;
 }
 
-.dd-snaplink__room-workbench .dd-snaplink__room-more-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.dd-snaplink__room-workbench .dd-snaplink__room-more-stats span {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  min-height: 46px;
-  padding: 6px 4px;
-  border-color: #edf1f3;
-  background: #f8faf9;
-}
-
-.dd-snaplink__room-workbench .dd-snaplink__room-more-stats span:nth-child(n + 5) {
-  display: none;
-}
-
 .dd-snaplink__room-workbench .dd-snaplink__room-more-security {
   gap: 8px;
   padding: 10px;

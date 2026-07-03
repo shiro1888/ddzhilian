@@ -810,16 +810,18 @@ function App() {
   const selectedConnectedTarget = selectedRoomConnectedTargets[0] ?? null
   const activeTransferLabel =
     isSelectedBotRoom
-      ? 'AI 助手 · 随时可用'
+      ? 'AI 助手'
       : selectedRoom
-      ? `${selectedConversationName} · ${selectedRoomConnectedTargets.length} 台已连接设备`
+      ? selectedRoom.isPublic
+        ? `${selectedRoomConnectedTargets.length} 台设备在线`
+        : `${selectedRoomConnectedTargets.length} 位成员在线`
       : selectedDevicePeer
         ? `${selectedDevicePeer.deviceName} · ${deviceConnectionLabel(selectedDeviceStatus)}`
-        : onlinePeers.length > 0 && connectingTargetCount > 0
-          ? '检测到在线设备，但尚未完成直连，正在尝试自动连接...'
-          : onlinePeers.length > 0
-            ? '当前没有可接收文件的已连接设备'
-            : '暂无已连接设备'
+      : onlinePeers.length > 0 && connectingTargetCount > 0
+        ? '发现在线设备 · 正在连接'
+      : onlinePeers.length > 0
+        ? '选择设备后开始发送'
+        : '暂无可发送设备'
 
   const visibleTransferItems = useMemo(
     () => transferItems.filter((item) => item.status !== 'cancelled'),
@@ -1352,8 +1354,8 @@ function App() {
         : selectedRoom.isPublic
         ? '公共房间适合多人共享文本，也可以从这里发起文件任务。'
         : selectedConnectedTarget
-        ? '把文件拖进对话区，或点击下方按钮加入发送队列。'
-        : `还没有与 ${selectedConversationName} 建立直连，发送文件前会先等待设备连接。`
+        ? '把文件拖进对话区，或点「＋」选择文件发送。'
+        : `还没有与 ${selectedConversationName} 直连，发送文件前会先等待对方在线。`
       : '选择一个已有对话后，消息和文件会显示在这里。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||

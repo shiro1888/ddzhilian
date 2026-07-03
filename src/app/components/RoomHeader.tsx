@@ -12,13 +12,6 @@ import {
   SquareTerminal,
 } from 'lucide-react'
 
-type RoomHeaderStat = {
-  id: string
-  label: string
-  value: ReactNode
-  tone?: 'default' | 'online' | 'transfer'
-}
-
 type RoomHeaderConnectionDetail = {
   id: string
   label: string
@@ -35,7 +28,6 @@ type RoomHeaderProps = {
   copiedLabel?: string
   peerLabel: string
   peerTitle: string
-  stats?: RoomHeaderStat[]
   connectionDetails?: RoomHeaderConnectionDetail[]
   sharedContentCount: number
   isSharedContentOpen: boolean
