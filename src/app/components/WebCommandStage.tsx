@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import {
   runWebCommandSandbox,
+  serverSandboxLanguages,
   webCommandDefaultSources,
 } from '../web-command-sandbox'
 import { copyImageDataUrlToClipboard } from '../web-command-clipboard'
@@ -20,7 +21,6 @@ const languageLabels: Record<WebCommandLanguage, string> = {
 }
 
 const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c', 'plantuml']
-const serverSandboxLanguages: ReadonlySet<WebCommandLanguage> = new Set(['java', 'plantuml'])
 const plantUmlAutoRenderDelayMs = 5000
 type WebCommandMobilePane = 'source' | 'terminal' | 'result'
 

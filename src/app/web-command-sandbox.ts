@@ -669,3 +669,5 @@ function parseStdoutJson(stdout: string): unknown | null {
     }
   }
 }
+
+export const serverSandboxLanguages: ReadonlySet<WebCommandLanguage> = new Set(['java', 'plantuml'])
