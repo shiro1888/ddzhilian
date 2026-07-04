@@ -256,3 +256,51 @@ export function parseMultipartHeaders(rawHeaders: string) {
 
   return headers;
 }
+
+export function createCorsHeaderSetter(options: {
+  allowedOrigins: readonly string[];
+  allowDevLoopback: boolean;
+}) {
+  return function setCorsHeaders(
+    request: {
+      headers: {
+        host?: string | string[];
+        origin?: string | string[];
+      };
+    },
+    response: {
+      setHeader(name: string, value: string): void;
+    },
+  ) {
+    const origin = Array.isArray(request.headers.origin)
+      ? request.headers.origin[0]
+      : request.headers.origin;
+
+    if (!origin) {
+      return true;
+    }
+
+    if (
+      !options.allowedOrigins.includes(origin) &&
+      !isSameHostOrigin(origin, request.headers.host) &&
+      !(options.allowDevLoopback && isLoopbackOrigin(origin))
+    ) {
+      return false;
+    }
+
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Vary', 'Origin');
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'Authorization,Content-Range,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
+    );
+    response.setHeader(
+      'Access-Control-Expose-Headers',
+      'Accept-Ranges,Content-Disposition,Content-Length,Content-Range',
+    );
+
+    return true;
+  };
+}

@@ -8,11 +8,10 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 import {
   RequestBodyTooLargeError,
+  createCorsHeaderSetter,
   decodeHeaderValue,
   firstHeaderValue,
-  isLoopbackOrigin,
   isObjectRecord,
-  isSameHostOrigin,
   parseContentDisposition,
   parseCookies,
   parseMultipartHeaders,
@@ -475,48 +474,10 @@ class OcrProxyError extends Error {
   }
 }
 
-function setCorsHeaders(
-  request: {
-    headers: {
-      host?: string | string[];
-      origin?: string | string[];
-    };
-  },
-  response: {
-  setHeader(name: string, value: string): void;
-  },
-) {
-  const origin = Array.isArray(request.headers.origin)
-    ? request.headers.origin[0]
-    : request.headers.origin;
-
-  if (!origin) {
-    return true;
-  }
-
-  if (
-    !config.allowedOrigins.includes(origin) &&
-    !isSameHostOrigin(origin, request.headers.host) &&
-    !(isDevelopmentRuntime && isLoopbackOrigin(origin))
-  ) {
-    return false;
-  }
-
-  response.setHeader('Access-Control-Allow-Origin', origin);
-  response.setHeader('Vary', 'Origin');
-  response.setHeader('Access-Control-Allow-Credentials', 'true');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  response.setHeader(
-    'Access-Control-Allow-Headers',
-    'Authorization,Content-Range,Content-Type,Range,X-File-Name,X-File-Created-At,X-Session-Id',
-  );
-  response.setHeader(
-    'Access-Control-Expose-Headers',
-    'Accept-Ranges,Content-Disposition,Content-Length,Content-Range',
-  );
-
-  return true;
-}
+const setCorsHeaders = createCorsHeaderSetter({
+  allowedOrigins: config.allowedOrigins,
+  allowDevLoopback: isDevelopmentRuntime,
+});
 
 const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/;
 
@@ -1590,7 +1551,7 @@ function parseContentRangeHeader(value: string | string[] | undefined) {
   };
 }
 
-function authenticateHistoryRequest(request: {
+export function authenticateHistoryRequest(request: {
   headers: {
     authorization?: string | string[];
   };

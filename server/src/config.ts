@@ -1,5 +1,7 @@
 import 'dotenv/config';
 
+import { isLoopbackOrigin } from './http/utils.js';
+
 const defaultIceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
 const defaultAllowedOrigins = [
   'http://localhost:5173',
@@ -260,18 +262,6 @@ function normalizeHttpBaseUrl(value: string, fallback: string) {
   }
 }
 
-function isLoopbackHttpUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function readHistoryRetentionMs(name: string, fallback: number) {
   const value = readNumber(name, fallback);
 
@@ -454,7 +444,7 @@ export function loadConfig(): ServerConfig {
   );
   const codexImageModels = [codexImageModel];
 
-  if (publicHttpBaseUrl && (includeDevelopmentOrigins || !isLoopbackHttpUrl(publicHttpBaseUrl))) {
+  if (publicHttpBaseUrl && (includeDevelopmentOrigins || !isLoopbackOrigin(publicHttpBaseUrl))) {
     allowedOrigins.add(publicHttpBaseUrl);
   }
 

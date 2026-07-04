@@ -12,18 +12,12 @@ import {
 type JavaSandboxConfig = Parameters<typeof runJavaInDockerSandbox>[0]['config'];
 type PlantUmlSandboxConfig = Parameters<typeof runPlantUmlInDockerSandbox>[0]['config'];
 
-type HistoryAuthResult =
-  | { ok: false; statusCode: number; message: string }
-  | { ok: true };
-
 export type WebCommandHandlerDeps = {
   config: {
     javaDockerSandbox: JavaSandboxConfig;
     plantUmlDockerSandbox: PlantUmlSandboxConfig;
   };
-  authenticateHistoryRequest: (request: {
-    headers: { authorization?: string | string[] };
-  }) => HistoryAuthResult;
+  authenticateHistoryRequest: typeof import('../index.js').authenticateHistoryRequest;
 };
 
 export async function handleWebCommandJavaRunRequest(

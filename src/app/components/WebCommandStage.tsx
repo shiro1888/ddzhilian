@@ -20,6 +20,7 @@ const languageLabels: Record<WebCommandLanguage, string> = {
 }
 
 const supportedLanguages: WebCommandLanguage[] = ['python', 'java', 'c', 'plantuml']
+const serverSandboxLanguages: ReadonlySet<WebCommandLanguage> = new Set(['java', 'plantuml'])
 const plantUmlAutoRenderDelayMs = 5000
 type WebCommandMobilePane = 'source' | 'terminal' | 'result'
 
@@ -277,7 +278,7 @@ export function WebCommandStage({
   const autoRenderTimerRef = useRef<number | null>(null)
   const lastRenderedPlantUmlSourceRef = useRef('')
   const isPlantUmlMode = language === 'plantuml'
-  const isServerSandboxLanguage = language === 'java' || language === 'plantuml'
+  const isServerSandboxLanguage = serverSandboxLanguages.has(language)
   const missingSandboxAuth = isServerSandboxLanguage && !historyAuthToken?.trim()
 
   useEffect(() => {
@@ -366,10 +367,7 @@ export function WebCommandStage({
     const runId = runSequenceRef.current + 1
     const started = Date.now()
 
-    if (
-      (currentLanguage === 'java' || currentLanguage === 'plantuml') &&
-      !currentHistoryAuthToken?.trim()
-    ) {
+    if (serverSandboxLanguages.has(currentLanguage) && !currentHistoryAuthToken?.trim()) {
       const nextResult = createWebCommandErrorResult({
         language: currentLanguage,
         started,
