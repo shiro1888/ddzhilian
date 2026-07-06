@@ -6945,7 +6945,8 @@ const httpServer = createServer((request, response) => {
     }
 
     if (contentRange) {
-      void readRequestBuffer(request)
+      const expectedChunkBytes = contentRange.end - contentRange.start + 1;
+      void readRequestBuffer(request, { maxBytes: expectedChunkBytes })
         .then((buffer) =>
           history.saveFileChunk({
             historyId,
@@ -6982,8 +6983,10 @@ const httpServer = createServer((request, response) => {
           broadcastSnapshots();
         })
         .catch((error) => {
-          writeJson(response, 500, {
-            error: error instanceof Error ? error.message : 'History chunk upload failed.',
+          writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 500, {
+            error: error instanceof RequestBodyTooLargeError
+              ? 'Chunk exceeds declared Content-Range size.'
+              : error instanceof Error ? error.message : 'History chunk upload failed.',
           });
         });
       return;

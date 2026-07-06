@@ -86,7 +86,8 @@ function normalizeAdminState(payload: Partial<AdminStateResponse> & { authentica
 }
 
 function cloneAiSettings(settings: AdminAiSettings) {
-  return structuredClone(settings)
+  // JSON 深拷贝代替 structuredClone,兼容 Chrome 98 以下;设置数据来自 JSON API,无特殊类型
+  return JSON.parse(JSON.stringify(settings)) as AdminAiSettings
 }
 
 export function AdminV2SessionProvider({

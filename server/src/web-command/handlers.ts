@@ -20,6 +20,11 @@ export type WebCommandHandlerDeps = {
   authenticateHistoryRequest: typeof import('../index.js').authenticateHistoryRequest;
 };
 
+const MAX_CONCURRENT_JAVA_SANDBOX_RUNS = 4;
+const MAX_CONCURRENT_PLANTUML_SANDBOX_RUNS = 4;
+let activeJavaSandboxRuns = 0;
+let activePlantUmlSandboxRuns = 0;
+
 export async function handleWebCommandJavaRunRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -37,6 +42,11 @@ export async function handleWebCommandJavaRunRequest(
   const authResult = authenticateHistoryRequest(request);
   if (!authResult.ok) {
     writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  if (activeJavaSandboxRuns >= MAX_CONCURRENT_JAVA_SANDBOX_RUNS) {
+    writeJson(response, 429, { error: 'Java 沙箱当前并发已达上限，请稍后重试。' });
     return;
   }
 
@@ -91,13 +101,18 @@ export async function handleWebCommandJavaRunRequest(
     return;
   }
 
-  const result = await runJavaInDockerSandbox({
-    source,
-    stdin: normalizedStdin,
-    config: config.javaDockerSandbox,
-  });
+  activeJavaSandboxRuns += 1;
+  try {
+    const result = await runJavaInDockerSandbox({
+      source,
+      stdin: normalizedStdin,
+      config: config.javaDockerSandbox,
+    });
 
-  writeJson(response, 200, result as unknown as Record<string, unknown>);
+    writeJson(response, 200, result as unknown as Record<string, unknown>);
+  } finally {
+    activeJavaSandboxRuns -= 1;
+  }
 }
 
 export async function handleWebCommandPlantUmlRunRequest(
@@ -117,6 +132,11 @@ export async function handleWebCommandPlantUmlRunRequest(
   const authResult = authenticateHistoryRequest(request);
   if (!authResult.ok) {
     writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  if (activePlantUmlSandboxRuns >= MAX_CONCURRENT_PLANTUML_SANDBOX_RUNS) {
+    writeJson(response, 429, { error: 'PlantUML 沙箱当前并发已达上限，请稍后重试。' });
     return;
   }
 
@@ -154,10 +174,15 @@ export async function handleWebCommandPlantUmlRunRequest(
     return;
   }
 
-  const result = await runPlantUmlInDockerSandbox({
-    source,
-    config: config.plantUmlDockerSandbox,
-  });
+  activePlantUmlSandboxRuns += 1;
+  try {
+    const result = await runPlantUmlInDockerSandbox({
+      source,
+      config: config.plantUmlDockerSandbox,
+    });
 
-  writeJson(response, 200, result as unknown as Record<string, unknown>);
+    writeJson(response, 200, result as unknown as Record<string, unknown>);
+  } finally {
+    activePlantUmlSandboxRuns -= 1;
+  }
 }
