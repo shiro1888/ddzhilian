@@ -412,6 +412,7 @@ const cloudflareAiQuota = new CloudflareAiQuota(
   fileURLToPath(new URL('../data/cloudflare-ai-quota.json', import.meta.url)),
 );
 const aiRequestMaxBytes = 24 * 1024 * 1024;
+const historyTextRequestMaxBytes = 2 * 1024 * 1024;
 const aiPromptMaxBytes = 32 * 1024;
 const aiResponseMaxChars = 12_000;
 const aiChatImageMaxCount = 4;
@@ -7067,7 +7068,13 @@ const httpServer = createServer((request, response) => {
   }
 
   if (url.pathname === '/api/history/text' && request.method === 'POST') {
-    void readRequestBuffer(request)
+    const authResult = authenticateHistoryRequest(request);
+    if (!authResult.ok) {
+      writeJson(response, authResult.statusCode, { error: authResult.message });
+      return;
+    }
+
+    void readRequestBuffer(request, { maxBytes: historyTextRequestMaxBytes })
       .then((buffer) => {
         const payload = JSON.parse(buffer.toString('utf8')) as {
           historyId?: string;
@@ -7081,12 +7088,6 @@ const httpServer = createServer((request, response) => {
           writeJson(response, 400, {
             error: 'Missing historyId, roomId, or text.',
           });
-          return;
-        }
-
-        const authResult = authenticateHistoryRequest(request);
-        if (!authResult.ok) {
-          writeJson(response, authResult.statusCode, { error: authResult.message });
           return;
         }
 
@@ -7127,8 +7128,10 @@ const httpServer = createServer((request, response) => {
         });
       })
       .catch((error) => {
-        writeJson(response, 500, {
-          error: error instanceof Error ? error.message : 'History text upload failed.',
+        writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 500, {
+          error: error instanceof RequestBodyTooLargeError
+            ? '历史文本内容超过大小限制。'
+            : error instanceof Error ? error.message : 'History text upload failed.',
         });
       });
     return;
