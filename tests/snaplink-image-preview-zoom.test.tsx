@@ -156,7 +156,7 @@ describe('SnapLinkStage image preview zoom', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+    fireEvent.click(screen.getByRole('link', { name: /世界对话 1/ }))
 
     const inlineImage = await screen.findByAltText('preview sample')
     const imageBubble = inlineImage.closest('.dd-snaplink__bubble')
@@ -346,7 +346,7 @@ describe('SnapLinkStage image preview zoom', () => {
         />,
       )
 
-      fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+      fireEvent.click(screen.getByRole('link', { name: /世界对话 1/ }))
 
       const inlineImage = await screen.findByAltText('receipt.png')
       fireEvent.contextMenu(inlineImage, { clientX: 160, clientY: 180 })

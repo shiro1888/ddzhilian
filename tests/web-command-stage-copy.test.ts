@@ -38,10 +38,25 @@ describe('web command result copy helpers', () => {
     expect(write).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects when image clipboard writing is unavailable', async () => {
+  it('falls back to copying the data URL as text when image clipboard writing is unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: vi.fn() },
+      value: { writeText },
+    })
+
+    await expect(copyImageDataUrlToClipboard({
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      mimeType: 'image/png',
+    })).resolves.toBeUndefined()
+
+    expect(writeText).toHaveBeenCalledWith('data:image/png;base64,iVBORw0KGgo=')
+  })
+
+  it('rejects when neither image nor text clipboard paths are available', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {},
     })
 
     await expect(copyImageDataUrlToClipboard({

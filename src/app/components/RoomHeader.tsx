@@ -17,6 +17,13 @@ type RoomHeaderConnectionDetail = {
   tone?: 'default' | 'safe' | 'warning'
 }
 
+type RoomToolItem = {
+  id: string
+  label: string
+  icon: ReactNode
+  action: () => void
+}
+
 type RoomHeaderProps = {
   roomCodeLabel: ReactNode
   roomCodeValue?: string
@@ -127,7 +134,7 @@ export function RoomHeader({
     action()
   }
 
-  const toolItems = [
+  const toolCandidates: (RoomToolItem | null)[] = [
     onOpenAssistant
       ? {
           id: 'assistant',
@@ -160,12 +167,10 @@ export function RoomHeader({
           action: onOpenCommandTool,
         }
       : null,
-  ].filter((item): item is {
-    id: string
-    label: string
-    icon: ReactNode
-    action: () => void
-  } => Boolean(item))
+  ]
+  const toolItems = toolCandidates.filter(
+    (item): item is RoomToolItem => item !== null,
+  )
 
   return (
     <div className="dd-snaplink__room-head">

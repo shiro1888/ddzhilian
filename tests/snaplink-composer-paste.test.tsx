@@ -79,7 +79,7 @@ function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkS
 }
 
 function openSelectedConversation() {
-  fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+  fireEvent.click(screen.getByRole('link', { name: /世界对话 1/ }))
   return screen.getByPlaceholderText(/发送给 世界对话 1/)
 }
 

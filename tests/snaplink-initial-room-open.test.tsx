@@ -119,13 +119,13 @@ describe('SnapLinkStage initial room opening', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('region', { name: 'DD直连文件互传工作台' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /世界对话 1/ })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /世界对话 1/ })).toBeInTheDocument()
     })
 
     expect(screen.queryByText(/历史内容/)).not.toBeInTheDocument()
     expect(onOpenRoomConversation).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: /世界对话 1/ }))
+    fireEvent.click(screen.getByRole('link', { name: /世界对话 1/ }))
 
     expect(onOpenRoomConversation).toHaveBeenCalledWith('ROOM123')
     await waitFor(() => {
