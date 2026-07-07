@@ -16,6 +16,7 @@ import type {
   AiModelOption,
   AiQuotaStatus,
 } from '../../lib/ddzhilian-types'
+import { createBrowserId } from '../../lib/create-browser-id'
 import type { AiDraftContextPayload, AiDraftRequest } from '../types'
 import { extractPlainTextFromRichText, openHtmlDocumentFullscreenPreview, sanitizeRichTextHtml } from '../utils'
 import { TextThinkingMatrixLoader } from './TextThinkingMatrixLoader'
@@ -152,11 +153,7 @@ function ConversationArchiveIcon() {
 }
 
 function createId(prefix: string) {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createBrowserId(prefix)
 }
 
 function buildConversationTitle(prompt: string) {
@@ -477,17 +474,35 @@ function downloadTextFile(fileName: string, content: string) {
 }
 
 async function copyTextToClipboard(value: string) {
-  if (!navigator.clipboard) {
-    return
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return true
+    } catch {
+      // Fall back to the legacy textarea path below for older browsers or denied permissions.
+    }
   }
 
-  await navigator.clipboard.writeText(value)
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.setAttribute('readonly', '')
+  try {
+    document.body.appendChild(textarea)
+    textarea.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    textarea.remove()
+  }
 }
 
-function markCodeCopyButton(button: HTMLButtonElement) {
+function markCodeCopyButton(button: HTMLButtonElement, copied = true) {
   const previousText = button.textContent ?? '复制'
-  button.textContent = '已复制'
-  button.classList.add('is-copied')
+  button.textContent = copied ? '已复制' : '复制失败'
+  button.classList.toggle('is-copied', copied)
 
   window.setTimeout(() => {
     button.textContent = previousText
@@ -545,6 +560,8 @@ export function ChatAiStage({
     () => conversations.find((conversation) => conversation.id === pendingDeleteConversationId) ?? null,
     [conversations, pendingDeleteConversationId],
   )
+  const isPendingDeleteConversation = Boolean(pendingDeleteConversation)
+  const isActiveConversationEmpty = !activeConversation || activeConversation.messages.length === 0
   const filteredConversations = useMemo(() => {
     const visibleConversations = conversations
       .filter((conversation) => showArchived ? conversation.archived : !conversation.archived)
@@ -555,7 +572,7 @@ export function ChatAiStage({
     }
 
     return visibleConversations.filter((conversation) => {
-      const lastMessage = conversation.messages.at(-1)?.content ?? ''
+      const lastMessage = conversation.messages[conversation.messages.length - 1]?.content ?? ''
       return `${conversation.title}\n${extractPlainTextFromRichText(lastMessage)}`
         .toLowerCase()
         .includes(keyword)
@@ -1212,7 +1229,7 @@ export function ChatAiStage({
 
     const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
     if (codeText) {
-      void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
+      void copyTextToClipboard(codeText).then((copied) => markCodeCopyButton(copyButton, copied))
     }
   }
 
@@ -1312,7 +1329,7 @@ export function ChatAiStage({
                     {conversation.parentConversationId ? '分支 · ' : ''}
                     {conversation.title}
                   </strong>
-                  <small>{conversation.messages.at(-1)?.content || '还没有消息'}</small>
+                  <small>{conversation.messages[conversation.messages.length - 1]?.content || '还没有消息'}</small>
                 </span>
                 <time>{formatConversationTime(conversation.updatedAt)}</time>
               </button>
@@ -1384,7 +1401,12 @@ export function ChatAiStage({
         ) : null}
       </aside>
 
-      <div className="dd-ai-chat__workspace">
+      <div
+        className={[
+          'dd-ai-chat__workspace',
+          isPendingDeleteConversation ? 'is-confirm-open' : '',
+        ].filter(Boolean).join(' ')}
+      >
         {isDraggingFiles ? (
           <div className="dd-ai-chat__drag-overlay" role="status" aria-live="polite">
             <div className="dd-ai-chat__drag-panel">
@@ -1551,7 +1573,7 @@ export function ChatAiStage({
           </div>
         ) : null}
 
-        <div className="dd-ai-chat__thread" ref={threadRef}>
+        <div className={['dd-ai-chat__thread', isActiveConversationEmpty ? 'is-empty' : ''].filter(Boolean).join(' ')} ref={threadRef}>
           {!activeConversation || activeConversation.messages.length === 0 ? (
             <div className="dd-ai-chat__empty">
               <span className="dd-ai-chat__empty-badge" aria-hidden="true">DD</span>
@@ -1670,6 +1692,7 @@ export function ChatAiStage({
             className="dd-ai-chat__file-input"
             type="file"
             multiple
+            hidden
             accept="image/png,image/jpeg,image/webp,image/gif,text/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yaml,.yml,.log"
             onChange={handleAttachmentSelection}
           />
@@ -1708,6 +1731,8 @@ export function ChatAiStage({
             <textarea
               value={draft}
               placeholder="给 DD助手发消息，或把文件拖到这里…"
+              aria-label="给 DD助手发消息"
+              enterKeyHint="send"
               rows={attachments.length > 0 ? 2 : 3}
               onChange={handleDraftChange}
               onCompositionStart={handleDraftCompositionStart}

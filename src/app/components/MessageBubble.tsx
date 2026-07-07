@@ -45,6 +45,13 @@ type MessageBubbleProps = {
   onPointerCancel?: PointerEventHandler<HTMLDivElement>
 }
 
+function hasOnlyCodeBlock(html: string) {
+  const normalized = html.trim()
+  return /^(?:\s*)?<pre\b[^>]*\bclass=(?:"|')([^"']*\bdd-code-block\b[^"']*)(?:"|')[^>]*>[\s\S]*<\/pre>(?:\s*)?$/i.test(
+    normalized,
+  )
+}
+
 export function MessageBubble({
   entryId,
   html,
@@ -57,6 +64,9 @@ export function MessageBubble({
   onPointerLeave,
   onPointerCancel,
 }: MessageBubbleProps) {
+  const hasCodeBlock = html.includes('dd-code-block')
+  const isOnlyCodeBlock = hasOnlyCodeBlock(html)
+
   return (
     <div
       className={[
@@ -70,7 +80,13 @@ export function MessageBubble({
       onPointerCancel={isImageOnly ? onPointerCancel : undefined}
     >
       <div
-        className={`dd-snaplink__bubble dd-chatbox__bubble--rich${isImageOnly ? ' is-image-only' : ''}`}
+        className={[
+          'dd-snaplink__bubble',
+          'dd-chatbox__bubble--rich',
+          hasCodeBlock ? 'has-code-block' : '',
+          isOnlyCodeBlock ? 'is-code-only' : '',
+          isImageOnly ? 'is-image-only' : '',
+        ].filter(Boolean).join(' ')}
         onClick={onClick}
         onContextMenu={onContextMenu}
         dangerouslySetInnerHTML={{ __html: html }}

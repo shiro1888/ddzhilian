@@ -140,6 +140,9 @@ type BotMentionTriggerRange = {
 
 const AI_BOT_MENTION_LABEL = '@DD助手'
 const ROOM_JOIN_CODE_MAX_LENGTH = 12
+const MOBILE_BREAKPOINT = 761
+const MOBILE_MEDIA_QUERY = `(max-width: ${String(MOBILE_BREAKPOINT - 1)}px)`
+const DESKTOP_MEDIA_QUERY = `(min-width: ${String(MOBILE_BREAKPOINT)}px)`
 
 type SnapLinkOcrImageTarget = {
   src: string
@@ -1083,7 +1086,7 @@ async function copyTextToClipboard(value: string) {
   if (navigator.clipboard) {
     try {
       await navigator.clipboard.writeText(value)
-      return
+      return true
     } catch {
       // Fall back to a temporary textarea when clipboard permissions are unavailable.
     }
@@ -1094,10 +1097,15 @@ async function copyTextToClipboard(value: string) {
   textarea.style.position = 'fixed'
   textarea.style.left = '-9999px'
   textarea.setAttribute('readonly', '')
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  textarea.remove()
+  try {
+    document.body.appendChild(textarea)
+    textarea.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    textarea.remove()
+  }
 }
 
 async function copyRichTextToClipboard(value: string) {
@@ -1112,13 +1120,13 @@ async function copyRichTextToClipboard(value: string) {
           'text/plain': new Blob([plainText], { type: 'text/plain' }),
         }),
       ])
-      return
+      return true
     } catch {
       // Fall back to text-only clipboard behavior below.
     }
   }
 
-  await copyTextToClipboard(plainText || sanitizedHtml || value)
+  return copyTextToClipboard(plainText || sanitizedHtml || value)
 }
 
 function renderQuoteDraftHtml(quoteDraft: SnapLinkQuoteDraftState) {
@@ -1836,7 +1844,7 @@ export function SnapLinkStage({
       !isLobbyOpen ||
       !selectedRoomId ||
       typeof window === 'undefined' ||
-      !window.matchMedia('(min-width: 761px)').matches
+      !window.matchMedia(DESKTOP_MEDIA_QUERY).matches
     ) {
       return
     }
@@ -3251,7 +3259,7 @@ export function SnapLinkStage({
   }
 
   const shouldShowConversationOnDesktop = () =>
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 761px)').matches
+    typeof window !== 'undefined' && window.matchMedia(DESKTOP_MEDIA_QUERY).matches
 
   const handleShowWorkbenchNearby = () => {
     handleBackToLobby()
@@ -3456,7 +3464,7 @@ export function SnapLinkStage({
   }
 
   const handleWorkbenchDeviceListClick = (deviceId: string) => {
-    if (window.matchMedia('(max-width: 760px)').matches) {
+    if (window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
       handleWorkbenchDeviceSendText(deviceId)
       return
     }
@@ -3550,16 +3558,19 @@ export function SnapLinkStage({
   }
 
 
-  const handleCopyRoomId = () => {
+  const handleCopyRoomId = async () => {
     if (!selectedRoomId) {
       return
     }
 
     const copyValue = isSelectedRoomPublic ? selectedRoomId : selectedRoomShareValue ?? selectedRoomId
-    setCopiedRoomId(selectedRoomId)
-    if (navigator.clipboard) {
-      void navigator.clipboard.writeText(copyValue)
+    const didCopy = await copyTextToClipboard(copyValue)
+    if (!didCopy) {
+      setCopiedRoomId(null)
+      return
     }
+
+    setCopiedRoomId(selectedRoomId)
     window.setTimeout(() => setCopiedRoomId(null), 1600)
   }
 
@@ -3992,7 +4003,9 @@ export function SnapLinkStage({
 
   const handleCopyOcrText = () => {
     if (hasOcrResultText) {
-      void copyTextToClipboard(ocrResultText)
+      void copyTextToClipboard(ocrResultText).then((copied) => {
+        showSettingsFeedback(copied ? 'OCR 文字已复制' : '复制失败')
+      })
     }
   }
 
@@ -4245,9 +4258,9 @@ export function SnapLinkStage({
     return true
   }
 
-  const markCodeCopyButton = (button: HTMLButtonElement) => {
-    button.classList.add('is-copied')
-    button.textContent = '已复制'
+  const markCodeCopyButton = (button: HTMLButtonElement, copied = true) => {
+    button.classList.toggle('is-copied', copied)
+    button.textContent = copied ? '已复制' : '复制失败'
 
     window.setTimeout(() => {
       button.classList.remove('is-copied')
@@ -4277,7 +4290,7 @@ export function SnapLinkStage({
 
       const codeText = copyButton.closest('pre')?.querySelector('code')?.textContent ?? ''
       if (codeText) {
-        void copyTextToClipboard(codeText).then(() => markCodeCopyButton(copyButton))
+        void copyTextToClipboard(codeText).then((copied) => markCodeCopyButton(copyButton, copied))
       }
       return
     }
@@ -5141,6 +5154,7 @@ export function SnapLinkStage({
   const renderDesktopConversationSideList = () => {
     const normalizedQuery = conversationSearchQuery.trim().toLowerCase()
     const assistantRoom = lobbyRoomListItems.find((room) => room.isAssistant)
+    const buildRoomHref = (roomId: string) => `/text?room=${encodeURIComponent(roomId)}`
     const shouldShowAssistant =
       normalizedQuery.length === 0 ||
       'dd助手 ai 辅助 总结 传输 说明'.includes(normalizedQuery)
@@ -5220,16 +5234,17 @@ export function SnapLinkStage({
         </label>
         <div className="dd-snaplink__conversation-side-list">
           {shouldShowAssistant ? (
-            <button
-              type="button"
+            <a
+              href={assistantRoom ? buildRoomHref(assistantRoom.roomId) : '/chat'}
               className={[
                 'dd-snaplink__conversation-row',
                 'is-assistant',
                 assistantRoom?.roomId === selectedRoomId ? 'is-active' : '',
               ].filter(Boolean).join(' ')}
               aria-current={assistantRoom?.roomId === selectedRoomId ? 'page' : undefined}
-              onClick={() => {
+              onClick={(event) => {
                 if (assistantRoom) {
+                  event.preventDefault()
                   handleRoomSelection(assistantRoom.roomId)
                   return
                 }
@@ -5251,15 +5266,15 @@ export function SnapLinkStage({
               <span className="dd-snaplink__conversation-meta">
                 {assistantRoom?.updatedAtLabel || '刚刚'}
               </span>
-            </button>
+            </a>
           ) : null}
           {filteredRooms.map((room) => {
             const isActive = room.roomId === selectedRoomId
 
             return (
-              <button
+              <a
                 key={room.roomId}
-                type="button"
+                href={buildRoomHref(room.roomId)}
                 className={[
                   'dd-snaplink__conversation-row',
                   room.isPublic ? 'is-public' : '',
@@ -5268,7 +5283,10 @@ export function SnapLinkStage({
                   isActive ? 'is-active' : '',
                 ].filter(Boolean).join(' ')}
                 aria-current={isActive ? 'page' : undefined}
-                onClick={() => handleRoomSelection(room.roomId)}
+                onClick={(event) => {
+                  event.preventDefault()
+                  handleRoomSelection(room.roomId)
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault()
                   handleToggleWorkbenchRoomPinned(room)
@@ -5295,7 +5313,7 @@ export function SnapLinkStage({
                     <em>{Math.min(room.memberCount, room.onlineCount + 1).toString()} 在线</em>
                   )}
                 </span>
-              </button>
+              </a>
             )
           })}
           {filteredDevices.map((device) => {
@@ -5582,7 +5600,14 @@ export function SnapLinkStage({
         </span>
         <p>{preview}</p>
         <div className="dd-snaplink__text-history-actions">
-          <button type="button" onClick={() => void copyRichTextToClipboard(entry.text)}>
+          <button
+            type="button"
+            onClick={() => {
+              void copyRichTextToClipboard(entry.text).then((copied) => {
+                showSettingsFeedback(copied ? '文本已复制' : '复制失败')
+              })
+            }}
+          >
             复制
           </button>
           <button
@@ -5672,14 +5697,22 @@ export function SnapLinkStage({
   }
 
   const handleCopyHistoryText = (entry: HistoryTextSummary) => {
-    void copyRichTextToClipboard(entry.text).then(() => {
-      markHistoryActionCopied(`text-${entry.historyId}`)
+    void copyRichTextToClipboard(entry.text).then((copied) => {
+      if (copied) {
+        markHistoryActionCopied(`text-${entry.historyId}`)
+      } else {
+        showSettingsFeedback('复制失败')
+      }
     })
   }
 
   const handleCopyHistoryLink = (entry: SnapLinkSharedLinkEntry) => {
-    void copyTextToClipboard(entry.url).then(() => {
-      markHistoryActionCopied(`link-${entry.id}`)
+    void copyTextToClipboard(entry.url).then((copied) => {
+      if (copied) {
+        markHistoryActionCopied(`link-${entry.id}`)
+      } else {
+        showSettingsFeedback('复制失败')
+      }
     })
   }
 
@@ -6060,10 +6093,14 @@ export function SnapLinkStage({
       icon: <Copy size={16} strokeWidth={2} />,
       action: () => {
         const text = selectedRoomId || (typeof window !== 'undefined' ? window.location.href : '')
-        if (text && navigator.clipboard) {
-          void navigator.clipboard.writeText(text)
+        if (!text) {
+          showSettingsFeedback('没有可复制内容')
+          return
         }
-        showSettingsFeedback(selectedRoomId ? '房间码已复制' : '页面链接已复制')
+
+        void copyTextToClipboard(text).then((copied) => {
+          showSettingsFeedback(copied ? (selectedRoomId ? '房间码已复制' : '页面链接已复制') : '复制失败')
+        })
       },
     },
   ]
@@ -6118,6 +6155,7 @@ export function SnapLinkStage({
         'has-no-mobile-actions',
         isZenMode ? 'is-zen' : '',
         isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+        isEmojiPickerOpen ? 'is-emoji-picker-open' : '',
         workbenchVisibleTransferQueueCount === 0 ? 'has-empty-transfer-queue' : '',
       ].filter(Boolean).join(' ')}
       aria-label="DD直连文件互传工作台"
@@ -6318,7 +6356,7 @@ export function SnapLinkStage({
             ))}
           </div>
 
-          <div className="dd-snaplink__tool-mobile-queue">
+          <div className={['dd-snaplink__tool-mobile-queue', isMobileQueueOpen ? 'is-mobile-open' : ''].filter(Boolean).join(' ')}>
             <TransferQueuePanel
               entries={workbenchTransferEntries}
               activeCount={workbenchActiveTransferCount}
@@ -6579,6 +6617,7 @@ export function SnapLinkStage({
                 'dd-snaplink__room-workbench',
                 isZenMode ? 'is-zen' : '',
                 isDesktopQueueCollapsed ? 'is-queue-collapsed' : '',
+                isEmojiPickerOpen ? 'is-emoji-picker-open' : '',
                 workbenchVisibleTransferQueueCount === 0 ? 'has-empty-transfer-queue' : '',
               ].filter(Boolean).join(' ')}
               aria-label="DD直连房间会话工作台"
@@ -6927,6 +6966,7 @@ export function SnapLinkStage({
                 aiModelOptions={aiModelOptions}
                 isEmojiPickerOpen={isEmojiPickerOpen}
                 isSendDisabled={isSendDisabled}
+                enterToSend={devicePreferences.enterToSend}
                 ocrTriggerRef={ocrTriggerRef}
                 ocrFileInputRef={ocrFileInputRef}
                 botTriggerRef={botTriggerRef}

@@ -5,6 +5,7 @@
   --font-display: var(--font-ui);
   --base-font-size: 15px;
   --line-height-body: 1.5;
+  --viewport-h: 100vh;
 
   --ink: #111111;
   --ink-soft: #666666;
@@ -166,7 +167,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100svh;
+  min-height: 100vh;
   background: var(--shell-bg);
 }
 
@@ -196,10 +197,11 @@ svg {
 }
 
 textarea {
+  min-height: 2.75rem;
   field-sizing: content;
 }
 
 #root {
-  min-height: 100svh;
+  min-height: 100vh;
   background: var(--shell-bg);
 }

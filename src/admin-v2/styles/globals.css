@@ -65,7 +65,7 @@
   --muted-foreground: #666666;
   --accent: #e6f6ee;
   --accent-foreground: #087d42;
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: #dc2626;
   --border: #d9d9d9;
   --input: #d9d9d9;
   --ring: #07c160;
@@ -108,7 +108,7 @@
   --muted-foreground: #a8a8ad;
   --accent: #183b2a;
   --accent-foreground: #92f0b7;
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: #f87171;
   --border: #35353b;
   --input: #35353b;
   --ring: #2fd574;
@@ -127,70 +127,76 @@
   --sidebar-ring: #2fd574;
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+@supports (color: oklch(0.577 0.245 27.325)) {
+  :root {
+    --destructive: oklch(0.577 0.245 27.325);
   }
 
-  html {
-    @apply font-sans;
-    overscroll-behavior: none;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-sans), system-ui, sans-serif;
+  .dark {
+    --destructive: oklch(0.704 0.191 22.216);
   }
 }
 
-@layer utilities {
-  .no-scrollbar {
-    scrollbar-width: none;
-  }
+* {
+  @apply border-border outline-ring/50;
+}
 
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
+html {
+  @apply font-sans;
+  overscroll-behavior: none;
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-2xs {
-    box-shadow: var(--shadow-2xs);
-  }
+body {
+  @apply bg-background text-foreground;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-xs {
-    box-shadow: var(--shadow-xs);
-  }
+.no-scrollbar {
+  scrollbar-width: none;
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-sm {
-    box-shadow: var(--shadow-sm);
-  }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow {
-    box-shadow: var(--shadow);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-2xs {
+  box-shadow: var(--shadow-2xs);
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-md {
-    box-shadow: var(--shadow-md);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-xs {
+  box-shadow: var(--shadow-xs);
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-lg {
-    box-shadow: var(--shadow-lg);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-xl {
-    box-shadow: var(--shadow-xl);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow {
+  box-shadow: var(--shadow);
+}
 
-  [data-theme-preset]:not([data-theme-preset="default"]) .shadow-2xl {
-    box-shadow: var(--shadow-2xl);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-md {
+  box-shadow: var(--shadow-md);
+}
 
-  html[data-font="geist"] body {
-    --font-sans: var(--font-geist);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-lg {
+  box-shadow: var(--shadow-lg);
+}
 
-  html[data-font="geistMono"] body {
-    --font-sans: var(--font-geist-mono);
-  }
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-xl {
+  box-shadow: var(--shadow-xl);
+}
+
+[data-theme-preset]:not([data-theme-preset="default"]) .shadow-2xl {
+  box-shadow: var(--shadow-2xl);
+}
+
+html[data-font="geist"] body {
+  --font-sans: var(--font-geist);
+}
+
+html[data-font="geistMono"] body {
+  --font-sans: var(--font-geist-mono);
 }
 
 .disable-transitions * {

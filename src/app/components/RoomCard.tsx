@@ -17,6 +17,7 @@ export function RoomCard({ room, onOpen, onTogglePinned }: RoomCardProps) {
         room.isPublic ? 'is-public' : '',
         room.unreadCount > 0 ? 'has-unread' : '',
         room.pinned ? 'is-pinned' : '',
+        'has-avatar',
       ].filter(Boolean).join(' ')}
       onContextMenu={(event) => {
         event.preventDefault()

@@ -1,16 +1,19 @@
-const CACHE_NAME = 'ddzhilian-v2';
+const CACHE_NAME = 'ddzhilian-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
+  '/icon-512-maskable.png',
   '/apple-touch-icon.png',
   '/favicon.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(STATIC_ASSETS.map((asset) => cache.add(asset).catch(() => undefined)))
+    )
   );
   self.skipWaiting();
 });

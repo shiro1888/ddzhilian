@@ -12,6 +12,7 @@ import type {
   AiImageResponse,
   AiImageResult,
 } from '../../lib/ddzhilian-types'
+import { createBrowserId } from '../../lib/create-browser-id'
 
 type ImageAttachmentPreview = {
   id: string
@@ -178,9 +179,7 @@ type ImageResolution = (typeof imageResolutionOptions)[number]['value']
 type ImageQuality = (typeof imageQualityOptions)[number]['value']
 
 function createEntryId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createBrowserId('image-entry')
 }
 
 function resolveImageSource(image: AiImageResult) {
@@ -494,6 +493,7 @@ function PanoramaViewer({ src, alt }: PanoramaViewerProps) {
     let animationFrame = 0
     let canvas: HTMLCanvasElement | null = null
     let resizeObserver: ResizeObserver | null = null
+    let removeResizeListener: (() => void) | null = null
     let removeInteractionListeners: (() => void) | null = null
 
     const disposeViewer = () => {
@@ -504,6 +504,8 @@ function PanoramaViewer({ src, alt }: PanoramaViewerProps) {
 
       removeInteractionListeners?.()
       removeInteractionListeners = null
+      removeResizeListener?.()
+      removeResizeListener = null
       resizeObserver?.disconnect()
       resizeObserver = null
       texture?.dispose()
@@ -635,8 +637,10 @@ function PanoramaViewer({ src, alt }: PanoramaViewerProps) {
           viewerCanvas.removeEventListener('wheel', handleWheel)
         }
 
-        resizeObserver = new ResizeObserver(resizeViewer)
-        resizeObserver.observe(container)
+        resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resizeViewer) : null
+        resizeObserver?.observe(container)
+        window.addEventListener('resize', resizeViewer)
+        removeResizeListener = () => window.removeEventListener('resize', resizeViewer)
 
         const renderFrame = () => {
           if (!renderer || isDisposed) {
@@ -743,7 +747,7 @@ export function ImageGenerationStage({
   const pendingScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const quotaRefreshRequestIdRef = useRef(0)
   const imageTasks = useMemo(() => buildImageTaskSummaries(entries), [entries])
-  const selectedImageTask = imageTasks.find((task) => task.id === selectedImageTaskId) ?? imageTasks.at(-1)
+  const selectedImageTask = imageTasks.find((task) => task.id === selectedImageTaskId) ?? imageTasks[imageTasks.length - 1]
   const completedImageTaskCount = imageTasks.filter((task) => task.status === 'complete').length
   const hasEntries = entries.length > 0
   const serverReservedImageQuota = imageQuota?.totalReserved ?? 0

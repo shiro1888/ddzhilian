@@ -44,6 +44,7 @@ type RoomComposerProps = {
   aiModelOptions: AiModelOption[]
   isEmojiPickerOpen: boolean
   isSendDisabled: boolean
+  enterToSend: boolean
   ocrTriggerRef: RefObject<HTMLButtonElement | null>
   ocrFileInputRef: RefObject<HTMLInputElement | null>
   botTriggerRef: RefObject<HTMLButtonElement | null>
@@ -104,6 +105,7 @@ export function RoomComposer({
   aiModelOptions,
   isEmojiPickerOpen,
   isSendDisabled,
+  enterToSend,
   ocrTriggerRef,
   ocrFileInputRef,
   botTriggerRef,
@@ -197,7 +199,7 @@ export function RoomComposer({
                   type="button"
                   className="dd-snaplink__plus-item"
                   role="menuitem"
-                  onClick={() => filePickerRef.current?.click()}
+                  onClick={() => runPlusAction(() => filePickerRef.current?.click())}
                 >
                   <Paperclip size={17} strokeWidth={2} aria-hidden="true" />
                   <span>
@@ -209,7 +211,7 @@ export function RoomComposer({
                   type="button"
                   className="dd-snaplink__plus-item"
                   role="menuitem"
-                  onClick={() => imagePickerRef.current?.click()}
+                  onClick={() => runPlusAction(() => imagePickerRef.current?.click())}
                 >
                   <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />
                   <span>
@@ -221,7 +223,7 @@ export function RoomComposer({
                   type="button"
                   className="dd-snaplink__plus-item"
                   role="menuitem"
-                  onClick={() => cameraPickerRef.current?.click()}
+                  onClick={() => runPlusAction(() => cameraPickerRef.current?.click())}
                 >
                   <Camera size={17} strokeWidth={2} aria-hidden="true" />
                   <span>
@@ -373,7 +375,9 @@ export function RoomComposer({
             ref={inputRef}
             defaultValue={defaultDraft}
             placeholder={targetName ? `发送给 ${targetName} · 拖文件到这里也能发送` : '输入消息...'}
+            aria-label={targetName ? `发送给 ${targetName}` : '消息输入'}
             autoComplete="off"
+            enterKeyHint={enterToSend ? 'send' : 'enter'}
             rows={1}
             onChange={onDraftChange}
             onCompositionStart={onDraftCompositionStart}

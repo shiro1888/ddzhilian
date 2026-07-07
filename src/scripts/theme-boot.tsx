@@ -69,6 +69,10 @@ export function ThemeBootScript() {
         var rawNavbarStyle = readPreference("navbar_style", DEFAULTS.navbar_style);
         var rawSidebarVariant = readPreference("sidebar_variant", DEFAULTS.sidebar_variant);
         var rawSidebarCollapsible = readPreference("sidebar_collapsible", DEFAULTS.sidebar_collapsible);
+        var supportsOklch = !!(window.CSS && window.CSS.supports && window.CSS.supports("color", "oklch(0.577 0.245 27.325)"));
+        var themePreset = supportsOklch
+          ? (rawPreset || DEFAULTS.theme_preset)
+          : DEFAULTS.theme_preset;
 
         var mode = rawMode === "dark" || rawMode === "light" || rawMode === "system"
           ? rawMode
@@ -80,7 +84,7 @@ export function ThemeBootScript() {
 
         root.classList.toggle("dark", resolvedMode === "dark");
         root.setAttribute("data-theme-mode", mode);
-        root.setAttribute("data-theme-preset", rawPreset || DEFAULTS.theme_preset);
+        root.setAttribute("data-theme-preset", themePreset);
         root.setAttribute("data-font", rawFont || DEFAULTS.font);
         root.setAttribute("data-content-layout", rawContentLayout || DEFAULTS.content_layout);
         root.setAttribute("data-navbar-style", rawNavbarStyle || DEFAULTS.navbar_style);

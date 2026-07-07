@@ -468,7 +468,7 @@ function parseStringLiteral(expression: string) {
   }
 
   const quote = trimmedExpression[0]
-  if ((quote !== '"' && quote !== "'") || trimmedExpression.at(-1) !== quote) {
+  if ((quote !== '"' && quote !== "'") || trimmedExpression[trimmedExpression.length - 1] !== quote) {
     return null
   }
 

@@ -602,11 +602,32 @@ function PptxPreview({ source }: { source: DocumentPreviewSource }) {
 }
 
 async function copyDocumentTextToClipboard(value: string) {
-  if (!navigator.clipboard) {
-    throw new Error('当前浏览器不支持剪贴板写入。')
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return
+    } catch {
+      // Fall back to the legacy textarea path below for older browsers or denied permissions.
+    }
   }
 
-  await navigator.clipboard.writeText(value)
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.setAttribute('readonly', '')
+  let copied = false
+  try {
+    document.body.appendChild(textarea)
+    textarea.select()
+    copied = document.execCommand('copy')
+  } finally {
+    textarea.remove()
+  }
+
+  if (!copied) {
+    throw new Error('当前浏览器不支持剪贴板写入。')
+  }
 }
 
 function markDocumentCodeCopyButton(button: HTMLButtonElement, label: string, className?: string) {

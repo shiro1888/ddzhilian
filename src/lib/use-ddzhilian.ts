@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { deleteBrowserOcrHistory, listBrowserOcrHistory, startBrowserOcrJob } from './browser-ocr'
+import { createBrowserId } from './create-browser-id'
 import { resolveDocumentPreviewKind } from './document-preview'
 import type {
   AiChatImageInput,
@@ -231,7 +232,13 @@ function debugLog(...parts: unknown[]) {
 function createRandomSuffix(length = 4) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const bytes = new Uint8Array(length)
-  crypto.getRandomValues(bytes)
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
   return Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('')
 }
 
@@ -2344,7 +2351,7 @@ export function useDdzhilian() {
     const nextItems: TransferItem[] = []
 
     for (const file of files) {
-      const historyId = crypto.randomUUID()
+      const historyId = createBrowserId('history')
       const fileMimeType = file.type || undefined
       const previewUrl = isPreviewableMediaType(fileMimeType)
         ? URL.createObjectURL(file)
@@ -2361,7 +2368,7 @@ export function useDdzhilian() {
       }
 
       for (const target of targetSet) {
-        const id = crypto.randomUUID()
+        const id = createBrowserId('transfer')
         transferFilesRef.current.set(id, file)
 
         const status: TransferStatus =
@@ -3219,7 +3226,7 @@ export function useDdzhilian() {
     }
 
     const record: TextRecord = {
-      id: options?.recordId ?? crypto.randomUUID(),
+      id: options?.recordId ?? createBrowserId('text'),
       sessionId,
       roomId: sessionsRef.current[sessionId]?.roomId,
       sourceDeviceId: selfRef.current?.deviceId,
@@ -3259,7 +3266,7 @@ export function useDdzhilian() {
     options?: { recordId?: string; createdAt?: string },
   ) => {
     const activeSelf = selfRef.current
-    const historyId = options?.recordId ?? crypto.randomUUID()
+    const historyId = options?.recordId ?? createBrowserId('text-history')
     const createdAt = options?.createdAt ?? new Date().toISOString()
 
     if (!activeSelf?.deviceId || !activeSelf.historyAuthToken) {
@@ -4125,8 +4132,8 @@ export function useDdzhilian() {
     }
 
     for (const file of files) {
-      const transferId = crypto.randomUUID()
-      const historyId = crypto.randomUUID()
+      const transferId = createBrowserId('transfer')
+      const historyId = createBrowserId('history')
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       const createdAt = new Date().toISOString()
 

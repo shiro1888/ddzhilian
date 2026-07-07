@@ -20,12 +20,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#07c160',
 }
 
 const serviceWorkerBootstrapScript = process.env.NODE_ENV === 'production'
-  ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js')})}`
-  : `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.getRegistrations().then((registrations)=>registrations.forEach((registration)=>registration.unregister()));if(window.caches){window.caches.keys().then((keys)=>keys.forEach((key)=>window.caches.delete(key)))}})}`
+  ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').then((registration)=>registration.update()).catch(()=>{})})}`
+  : `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.getRegistrations().then((registrations)=>registrations.forEach((registration)=>registration.unregister())).catch(()=>{});if(window.caches){window.caches.keys().then((keys)=>keys.forEach((key)=>window.caches.delete(key))).catch(()=>{})}})}`
 
 export default function RootLayout({
   children,

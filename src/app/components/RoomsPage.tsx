@@ -117,7 +117,7 @@ export function RoomsPage({
       {hasConversationRows ? (
         <div className="dd-snaplink__workbench-room-list">
           {onOpenAssistant ? (
-            <article className="dd-snaplink__workbench-room is-assistant is-pinned">
+            <article className="dd-snaplink__workbench-room is-assistant is-pinned has-avatar">
               <button
                 type="button"
                 className="dd-snaplink__workbench-room-open"
@@ -150,7 +150,7 @@ export function RoomsPage({
           ))}
           {onOpenDeviceConversation
             ? deviceConversations.map((device) => (
-                <article key={device.deviceId} className="dd-snaplink__workbench-room is-device">
+                <article key={device.deviceId} className="dd-snaplink__workbench-room is-device has-avatar">
                   <button
                     type="button"
                     className="dd-snaplink__workbench-room-open"

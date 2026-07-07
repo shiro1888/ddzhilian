@@ -395,7 +395,7 @@ export class HistoryRegistry {
   getTextStatsForRoom(roomId: string): HistoryTextRoomStats {
     this.prune();
     const records = this.listTextRecordsForRoom(roomId);
-    const latest = records.at(-1);
+    const latest = records[records.length - 1];
 
     return {
       count: records.length,
@@ -409,8 +409,8 @@ export class HistoryRegistry {
     this.prune();
     const fileRecords = [...this.filesById.values()].sort(sortByCreatedAt);
     const textRecords = [...this.textsById.values()].sort(sortByCreatedAt);
-    const lastFileAt = fileRecords.at(-1)?.createdAt;
-    const lastTextAt = textRecords.at(-1)?.createdAt;
+    const lastFileAt = fileRecords[fileRecords.length - 1]?.createdAt;
+    const lastTextAt = textRecords[textRecords.length - 1]?.createdAt;
     const lastActivityAt = [lastFileAt, lastTextAt]
       .filter((value): value is string => Boolean(value))
       .sort((left, right) => compareHistoryTimestamp(right, left))[0];

@@ -230,7 +230,7 @@ export class ImageGenerationHistoryRegistry {
 
     const records = ((data ?? []) as PersistedImageGenerationRow[]).map(fromRow);
     const items = records.slice(0, pageSize);
-    const oldest = items.at(-1);
+    const oldest = items[items.length - 1];
 
     return {
       items,

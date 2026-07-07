@@ -29,6 +29,7 @@ export function TransferQueuePanel({
   const visibleEntries = entries.filter((entry) => entry.tone !== 'completed')
   const desktopToggleLabel = isDesktopCollapsed ? '展开传输' : '收起传输'
   const hasIncomingNotice = Boolean(incomingNotice)
+  const hasTransferBadge = visibleEntries.length > 0
 
   if (visibleEntries.length === 0 && !hasIncomingNotice) {
     return null
@@ -40,6 +41,7 @@ export function TransferQueuePanel({
         'dd-snaplink__queue',
         isMobileOpen ? 'is-mobile-open' : '',
         isDesktopCollapsed ? 'is-desktop-collapsed' : '',
+        hasTransferBadge ? 'has-transfer-badge' : '',
       ].filter(Boolean).join(' ')}
       aria-label="正在传输"
     >

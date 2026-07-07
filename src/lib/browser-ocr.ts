@@ -1,4 +1,5 @@
 import type { OcrResult, OcrResultItem } from '@paddleocr/paddleocr-js'
+import { createBrowserId } from './create-browser-id'
 import type { OcrHistoryResponse, OcrJobResponse, OcrLine } from './ddzhilian-types'
 
 const BROWSER_OCR_HISTORY_STORAGE_KEY = 'ddzhilian.ocr.history.v1'
@@ -16,11 +17,7 @@ type BrowserOcrRunOptions = {
 let browserOcrRunnerPromise: Promise<BrowserOcrRunner> | null = null
 
 function createOcrJobId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-
-  return `ocr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createBrowserId('ocr')
 }
 
 function getOcrJobExpiry(createdAt: string) {

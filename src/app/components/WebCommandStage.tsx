@@ -35,9 +35,13 @@ function getCopyDefaultLabel(language: WebCommandLanguage) {
 }
 
 async function copyText(value: string) {
-  if (navigator.clipboard) {
-    await navigator.clipboard.writeText(value)
-    return
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return
+    } catch {
+      // Fall back to the legacy textarea path below for older browsers or denied permissions.
+    }
   }
 
   const textarea = document.createElement('textarea')
@@ -45,10 +49,18 @@ async function copyText(value: string) {
   textarea.style.position = 'fixed'
   textarea.style.left = '-9999px'
   textarea.setAttribute('readonly', '')
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  textarea.remove()
+  let copied = false
+  try {
+    document.body.appendChild(textarea)
+    textarea.select()
+    copied = document.execCommand('copy')
+  } finally {
+    textarea.remove()
+  }
+
+  if (!copied) {
+    throw new Error('当前浏览器不支持剪贴板写入。')
+  }
 }
 
 function resolveWebCommandApiBaseUrl() {
@@ -497,14 +509,17 @@ export function WebCommandStage({
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    const resizeObserver = new ResizeObserver(() => {
+    const fitTerminal = () => {
       fitAddon.fit()
-    })
-    resizeObserver.observe(terminalHost)
-    window.requestAnimationFrame(() => fitAddon.fit())
+    }
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fitTerminal) : null
+    resizeObserver?.observe(terminalHost)
+    window.addEventListener('resize', fitTerminal)
+    window.requestAnimationFrame(fitTerminal)
 
     return () => {
-      resizeObserver.disconnect()
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', fitTerminal)
       terminal.dispose()
       terminalRef.current = null
       fitAddonRef.current = null

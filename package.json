@@ -3,6 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "browserslist": [
+    "Chrome >= 91",
+    "Edge >= 91",
+    "Firefox >= 91",
+    "Safari >= 15"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",

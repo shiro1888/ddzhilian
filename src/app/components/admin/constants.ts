@@ -8,6 +8,7 @@ import type {
   AdminOpenRouterConfig,
   AdminUsageTrendBucket,
 } from '../../../lib/ddzhilian-types'
+import { createBrowserId } from '../../../lib/create-browser-id'
 
 export const ADMIN_BRAND_NAME = 'ddzhilian管理系统'
 export const MODEL_PREVIEW_LIMIT = 5
@@ -475,11 +476,7 @@ export function upsertOpenAiCompatibleModel(
 
 export function createFeedbackProviderId(prefix: string) {
   const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'config'
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `feedback:${safePrefix}-${crypto.randomUUID()}`
-  }
-
-  return `feedback:${safePrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return `feedback:${safePrefix}-${createBrowserId('provider')}`
 }
 
 export function createOpenAiProviderConfig(input: {

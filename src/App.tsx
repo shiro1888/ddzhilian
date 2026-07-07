@@ -1,4 +1,14 @@
-import { Suspense, lazy, startTransition, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  lazy,
+  startTransition,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminStage } from './app/components/AdminStage'
@@ -50,6 +60,7 @@ import type {
 } from './lib/ddzhilian-types'
 import { resolveDocumentPreviewKind } from './lib/document-preview'
 import type { DocumentPreviewSource } from './lib/document-preview'
+import { createBrowserId } from './lib/create-browser-id'
 import { useAccountAuth } from './lib/use-account-auth'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
@@ -454,6 +465,14 @@ function App() {
   const handledPrivateRoomRef = useRef<string | null>(null)
   const suppressNextPrivateRoomAutoOpenRef = useRef(false)
   const transferTelemetrySamplesRef = useRef<Record<string, TransferTelemetrySample>>({})
+  const updateViewportHeight = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const viewportHeight = Math.round((window.visualViewport?.height ?? window.innerHeight) || 0)
+    document.documentElement.style.setProperty('--viewport-h', `${viewportHeight}px`)
+  }, [])
 
   const {
     self,
@@ -510,6 +529,24 @@ function App() {
     getAiQuota,
     sendRoomFiles,
   } = useDdzhilian()
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const visualViewport = window.visualViewport
+    updateViewportHeight()
+    window.addEventListener('resize', updateViewportHeight)
+    visualViewport?.addEventListener('resize', updateViewportHeight)
+    visualViewport?.addEventListener('scroll', updateViewportHeight)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight)
+      visualViewport?.removeEventListener('resize', updateViewportHeight)
+      visualViewport?.removeEventListener('scroll', updateViewportHeight)
+    }
+  }, [updateViewportHeight])
 
   useEffect(() => {
     if (location.pathname === '/') {
@@ -1680,7 +1717,7 @@ function App() {
     }
 
     if (nextNotices.length > 0) {
-      queueMicrotask(() => {
+      Promise.resolve().then(() => {
         setConversationNotices((previous) => [...previous, ...nextNotices])
       })
     }
@@ -1689,8 +1726,12 @@ function App() {
   }, [connectionStates, roomById, sessionRoomIdById])
 
   const handleViewChange = (view: NavView) => {
+    const nextPath = pathForView(view)
+
     startTransition(() => {
-      navigate(pathForView(view))
+      if (location.pathname !== nextPath) {
+        navigate(nextPath)
+      }
       setLocalError(null)
     })
   }
@@ -1753,7 +1794,7 @@ function App() {
         await sendRoomFiles(
           selectedRoom.roomId,
           files.map((file) => ({
-            id: crypto.randomUUID(),
+            id: createBrowserId('file'),
             file,
           })),
         )
@@ -1852,7 +1893,7 @@ function App() {
     try {
       const drafts = await Promise.all(
         selectedFiles.map(async (file) => ({
-          id: crypto.randomUUID(),
+          id: createBrowserId('image'),
           name: file.name || '粘贴图片',
           size: file.size,
           mimeType: file.type || undefined,
@@ -1958,7 +1999,7 @@ function App() {
     const aiThinkingStartedAt = shouldShowAiThinking ? Date.now() : null
 
     try {
-      const recordId = crypto.randomUUID()
+      const recordId = createBrowserId('text')
       const createdAt = new Date().toISOString()
       const isAiBotQuotaPrompt = aiBotQuestion !== null && isAiQuotaPrompt(aiBotQuestion)
 
@@ -1994,7 +2035,7 @@ function App() {
             roomId: botRoomId,
             replyToName: self?.deviceName ?? localIdentity.deviceName,
             kind: isAiBotQuotaPrompt ? 'quota' : 'chat',
-            historyId: crypto.randomUUID(),
+            historyId: createBrowserId('ai-history'),
             createdAt: new Date().toISOString(),
             provider: selectedAiModelOption?.provider,
             model: selectedAiModelOption?.id ?? (selectedAiModel || undefined),
