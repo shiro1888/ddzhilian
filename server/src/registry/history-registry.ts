@@ -1,6 +1,7 @@
 import { appendFileSync, createWriteStream, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { basename, join } from 'node:path';
+import { Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -196,9 +197,42 @@ function buildStoragePath(roomId: string, historyId: string, fileName: string) {
   );
 }
 
-async function drainStream(stream: NodeJS.ReadableStream) {
+const historyFileTooLargeMessage = 'History file exceeds maximum allowed size.';
+
+function getChunkByteLength(chunk: Buffer | string, encoding?: BufferEncoding) {
+  return Buffer.isBuffer(chunk)
+    ? chunk.byteLength
+    : Buffer.byteLength(chunk, encoding);
+}
+
+function createMaxBytesGuard(maxBytes: number) {
+  let receivedBytes = 0;
+
+  return new Transform({
+    transform(chunk: Buffer | string, encoding: BufferEncoding, callback: TransformCallback) {
+      receivedBytes += getChunkByteLength(chunk, encoding);
+
+      if (receivedBytes > maxBytes) {
+        callback(new Error(historyFileTooLargeMessage));
+        return;
+      }
+
+      callback(null, chunk);
+    },
+  });
+}
+
+async function drainStream(stream: NodeJS.ReadableStream, maxBytes?: number) {
+  let receivedBytes = 0;
+
   for await (const chunk of stream) {
-    void chunk;
+    if (maxBytes !== undefined) {
+      receivedBytes += getChunkByteLength(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+
+      if (receivedBytes > maxBytes) {
+        throw new Error(historyFileTooLargeMessage);
+      }
+    }
   }
 }
 
@@ -537,7 +571,7 @@ export class HistoryRegistry {
     this.prune();
     const existing = this.filesById.get(input.historyId);
     if (existing) {
-      await drainStream(input.stream);
+      await drainStream(input.stream, this.maxBytes);
       return existing;
     }
 
@@ -548,7 +582,7 @@ export class HistoryRegistry {
     const tempPath = `${storagePath}.part-${Date.now().toString(36)}`;
 
     try {
-      await pipeline(input.stream, createWriteStream(tempPath));
+      await pipeline(input.stream, createMaxBytesGuard(this.maxBytes), createWriteStream(tempPath));
       const stat = await fs.stat(tempPath);
       this.assertWithinMaxBytes(stat.size);
       await fs.rename(tempPath, storagePath);
