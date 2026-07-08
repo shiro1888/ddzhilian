@@ -41,9 +41,10 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
       : file.transferStatus === 'transferring' || file.transferStatus === 'failed'
         ? rawProgressPercent
         : 0
-    : rawProgressPercent
+      : rawProgressPercent
   const isCompleted = file.transferStatus === 'completed' || file.tone === 'completed'
   const isActive = file.transferStatus === 'transferring' || file.tone === 'active'
+  const completedLabel = file.fromSelf ? '发送成功' : '接收完成'
 
   return (
     <div className={`dd-snaplink__file-card${isCompleted ? ' is-completed' : isActive ? ' is-active' : ''}`}>
@@ -62,11 +63,11 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
         </div>
       ) : null}
       {isCompleted ? (
-        <div className="dd-snaplink__file-done" aria-label="发送成功">
+        <div className="dd-snaplink__file-done" aria-label={completedLabel}>
           <span aria-hidden="true">✓</span>
-          发送成功
+          {completedLabel}
         </div>
-      ) : (
+      ) : isActive ? (
         <div
           className="dd-snaplink__file-progress"
           role="progressbar"
@@ -76,7 +77,7 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
         >
           <div style={{ width: `${progressPercent}%` }} />
         </div>
-      )}
+      ) : null}
       {actions}
     </div>
   )

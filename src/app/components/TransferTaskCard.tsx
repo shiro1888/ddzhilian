@@ -21,13 +21,18 @@ export function TransferTaskCard({
   actions,
 }: TransferTaskCardProps) {
   const rawProgressPercent = Math.round(Math.min(Math.max(progress, 0), 1) * 100)
+  const isProgressing = status === 'transferring'
   const visibleProgressPercent =
     status === 'completed'
       ? 100
-      : status === 'transferring' || status === 'failed'
+      : isProgressing || status === 'failed'
         ? rawProgressPercent
         : 0
-  const progressLabel = `${visibleProgressPercent.toString()}%`
+  const progressLabel = status === 'completed'
+    ? '100%'
+    : isProgressing || status === 'failed'
+      ? `${visibleProgressPercent.toString()}%`
+      : file.statusLabel
   const telemetryLabels = [file.transferSpeedLabel, file.transferEtaLabel].filter(
     (label): label is string => Boolean(label),
   )
@@ -64,15 +69,17 @@ export function TransferTaskCard({
         <span>{file.statusLabel}</span>
         <em>{directionLabel}</em>
       </div>
-      <div
-        className="dd-snaplink__queue-progress"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={visibleProgressPercent}
-      >
-        <span style={{ width: `${visibleProgressPercent.toString()}%` }} />
-      </div>
+      {isProgressing ? (
+        <div
+          className="dd-snaplink__queue-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={visibleProgressPercent}
+        >
+          <span style={{ width: `${visibleProgressPercent.toString()}%` }} />
+        </div>
+      ) : null}
       <div className="dd-snaplink__queue-meta">
         <span>{sizeLabel}</span>
         <span>{file.detail}</span>

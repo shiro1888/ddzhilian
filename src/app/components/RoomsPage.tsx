@@ -1,4 +1,5 @@
-import { Bot, Users } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Bot, Search, Users } from 'lucide-react'
 
 import type { OnlineDeviceListItem, RoomListItem } from '../types'
 import { EmptyState } from './EmptyState'
@@ -47,8 +48,40 @@ export function RoomsPage({
   const isFull = variant === 'full'
   const publicRoom = rooms.find((room) => room.isPublic)
   const canJoinRoom = roomJoinDraft.trim().length > 0
-  const hasDeviceConversations = deviceConversations.length > 0 && Boolean(onOpenDeviceConversation)
-  const hasConversationRows = rooms.length > 0 || Boolean(onOpenAssistant) || hasDeviceConversations
+  const [conversationQuery, setConversationQuery] = useState('')
+  const normalizedConversationQuery = conversationQuery.trim().toLowerCase()
+  const filteredRooms = useMemo(() => {
+    if (!normalizedConversationQuery) {
+      return rooms
+    }
+
+    return rooms.filter((room) =>
+      [
+        room.title,
+        room.previewText,
+        room.roomId,
+        room.isPublic ? '公共 世界对话' : '房间 会话',
+      ].filter(Boolean).join(' ').toLowerCase().includes(normalizedConversationQuery),
+    )
+  }, [normalizedConversationQuery, rooms])
+  const filteredDeviceConversations = useMemo(() => {
+    if (!normalizedConversationQuery) {
+      return deviceConversations
+    }
+
+    return deviceConversations.filter((device) =>
+      [
+        device.deviceName,
+        device.platform,
+        device.scopeLabel,
+        device.shortCode,
+        '设备 私聊 附近',
+      ].filter(Boolean).join(' ').toLowerCase().includes(normalizedConversationQuery),
+    )
+  }, [deviceConversations, normalizedConversationQuery])
+  const hasDeviceConversations = filteredDeviceConversations.length > 0 && Boolean(onOpenDeviceConversation)
+  const hasRawConversationRows = rooms.length > 0 || Boolean(onOpenAssistant) || (deviceConversations.length > 0 && Boolean(onOpenDeviceConversation))
+  const hasConversationRows = filteredRooms.length > 0 || Boolean(onOpenAssistant && !normalizedConversationQuery) || hasDeviceConversations
 
   return (
     <section
@@ -114,9 +147,31 @@ export function RoomsPage({
           </form>
         </div>
       ) : null}
+      {hasRawConversationRows ? (
+        <label className="dd-snaplink__room-search">
+          <Search size={15} strokeWidth={2} aria-hidden="true" />
+          <span className="sr-only">搜索会话或设备</span>
+          <input
+            value={conversationQuery}
+            placeholder="搜索会话或设备"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setConversationQuery(event.target.value)}
+          />
+          {conversationQuery ? (
+            <button
+              type="button"
+              aria-label="清空搜索"
+              onClick={() => setConversationQuery('')}
+            >
+              x
+            </button>
+          ) : null}
+        </label>
+      ) : null}
       {hasConversationRows ? (
         <div className="dd-snaplink__workbench-room-list">
-          {onOpenAssistant ? (
+          {onOpenAssistant && !normalizedConversationQuery ? (
             <article className="dd-snaplink__workbench-room is-assistant is-pinned has-avatar">
               <button
                 type="button"
@@ -140,7 +195,7 @@ export function RoomsPage({
               </button>
             </article>
           ) : null}
-          {rooms.map((room) => (
+          {filteredRooms.map((room) => (
             <RoomCard
               key={room.roomId}
               room={room}
@@ -149,7 +204,7 @@ export function RoomsPage({
             />
           ))}
           {onOpenDeviceConversation
-            ? deviceConversations.map((device) => (
+            ? filteredDeviceConversations.map((device) => (
                 <article key={device.deviceId} className="dd-snaplink__workbench-room is-device has-avatar">
                   <button
                     type="button"
@@ -182,13 +237,25 @@ export function RoomsPage({
         <EmptyState
           className="dd-snaplink__workbench-room-empty"
           icon={<Users size={22} strokeWidth={1.8} aria-hidden="true" />}
-          title="暂无房间"
-          description={<span>创建或加入公共房间后，会出现在这里。</span>}
+          title={normalizedConversationQuery ? `没有匹配「${conversationQuery.trim()}」的会话或设备` : '暂无房间'}
+          description={(
+            <span>
+              {normalizedConversationQuery
+                ? '换个关键词试试，或清空搜索恢复全部列表。'
+                : '创建或加入公共房间后，会出现在这里。'}
+            </span>
+          )}
           actions={(
             <div className="dd-snaplink__empty-actions" aria-label="房间快捷操作">
-              <button type="button" onClick={onCreatePublicRoom}>
-                创建房间
-              </button>
+              {normalizedConversationQuery ? (
+                <button type="button" onClick={() => setConversationQuery('')}>
+                  清空搜索
+                </button>
+              ) : (
+                <button type="button" onClick={onCreatePublicRoom}>
+                  创建房间
+                </button>
+              )}
             </div>
           )}
         />
