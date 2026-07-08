@@ -24140,10 +24140,13 @@
 
   .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
     display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    column-gap: 10px;
     align-content: center;
+    align-items: center;
     min-height: 56px;
     max-height: 64px;
-    padding: 8px 12px 8px 48px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--snap-border-soft);
   }
 
@@ -24174,10 +24177,9 @@
   }
 
     .dd-snaplink__room-mobile-actions {
-      top: 50%;
-      left: 8px;
+      position: static;
       z-index: 30;
-      transform: translateY(-50%);
+      transform: none;
     }
   }
 
