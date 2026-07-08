@@ -9735,7 +9735,17 @@
 .dd-snaplink__room-workbench a,
 .dd-snaplink__room-workbench a:visited,
 .dd-snaplink__assist-list a,
-.dd-snaplink__assist-list a:visited {
+.dd-snaplink__assist-list a:visited,
+.dd-snaplink__workbench a,
+.dd-snaplink__workbench a:visited,
+.dd-snaplink__workbench a:hover,
+.dd-snaplink__workbench a:focus,
+.dd-snaplink__room-card,
+.dd-snaplink__room-card:hover,
+.dd-snaplink__room-card:focus,
+.dd-snaplink__assist-card,
+.dd-snaplink__assist-card:hover,
+.dd-snaplink__assist-card:focus {
   text-decoration: none;
 }
 
@@ -24169,4 +24179,64 @@
       z-index: 30;
       transform: translateY(-50%);
     }
+  }
+
+/* Chrome 91/93 fallback: keep key DD chat surfaces visible when color-mix() is unsupported. */
+@supports not (color: color-mix(in srgb, #000000 50%, #ffffff 50%)) {
+  .dd-snaplink__brand em,
+  .dd-snaplink__assist-pill,
+  .dd-snaplink__room-card-kind,
+  .dd-snaplink__room-badge {
+    background: #eefcf4;
+  }
+
+  .dd-snaplink__room-more,
+  .dd-snaplink__room-more-stats span,
+  .dd-snaplink__room-more-security,
+  .dd-snaplink__room-workbench .dd-snaplink__room,
+  .dd-snaplink__room-workbench .dd-snaplink__compose,
+  .dd-snaplink__mobile-workbench-nav {
+    background: var(--snap-surface, #ffffff);
+  }
+
+  .dd-snaplink__room-more-security,
+  .dd-snaplink__room-meta-strip span,
+  .dd-snaplink__room-card,
+  .dd-snaplink__assist-card,
+  .dd-snaplink__input-wrap,
+  .dd-snaplink__composer-shell {
+    border-color: var(--snap-border, #e5e7eb);
+  }
+
+  .dd-snaplink__room-meta-strip span.is-online,
+  .dd-snaplink__room-card.is-active,
+  .dd-snaplink__assist-card.is-active {
+    border-color: rgba(22, 163, 74, 0.28);
+    background: #eefcf4;
+  }
+
+  .dd-snaplink__room-meta-strip span.is-transfer {
+    border-color: rgba(217, 119, 6, 0.32);
+    background: #fff7ed;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav {
+    background: var(--snap-panel, #ffffff);
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button.is-active {
+    border-color: rgba(22, 163, 74, 0.24);
+    background: #eefcf4;
+  }
+
+  .dd-snaplink__mobile-nav-badge {
+    border-color: var(--snap-panel, #ffffff);
+  }
+
+  .dd-snaplink__queue.is-desktop-collapsed:not(.has-transfer-badge)
+    > .dd-snaplink__queue-collapsed-rail:hover,
+  .dd-snaplink__queue.is-desktop-collapsed:not(.has-transfer-badge)
+    > .dd-snaplink__queue-collapsed-rail:focus-visible {
+    border-color: rgba(22, 163, 74, 0.34);
+  }
 }
