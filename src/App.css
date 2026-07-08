@@ -9731,6 +9731,14 @@
   display: none;
 }
 
+/* Keep room/contact list text from inheriting browser default link underlines. */
+.dd-snaplink__room-workbench a,
+.dd-snaplink__room-workbench a:visited,
+.dd-snaplink__assist-list a,
+.dd-snaplink__assist-list a:visited {
+  text-decoration: none;
+}
+
 .dd-snaplink__room-search {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -24155,9 +24163,10 @@
     font-size: 16px;
   }
 
-  .dd-snaplink__room-mobile-actions {
-    top: 8px;
-    left: 8px;
-    z-index: 30;
-  }
+    .dd-snaplink__room-mobile-actions {
+      top: 50%;
+      left: 8px;
+      z-index: 30;
+      transform: translateY(-50%);
+    }
 }
