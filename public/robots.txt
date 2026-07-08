@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin-v2
+
+Host: https://dd.shiro1888.com
+Sitemap: https://dd.shiro1888.com/sitemap.xml

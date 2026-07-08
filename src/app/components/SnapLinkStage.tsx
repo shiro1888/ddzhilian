@@ -6475,6 +6475,13 @@ export function SnapLinkStage({
           )}
         </div>
         <div className="dd-snaplink__top-actions">
+          <nav className="dd-snaplink__legal-links" aria-label="站点信息">
+            <a href="/about">关于</a>
+            <a href="/privacy">隐私</a>
+            <a href="/terms">条款</a>
+            <a href="/advertising">广告</a>
+            <a href="/contact">联系</a>
+          </nav>
           {roomListItems.length > 0 ? (
             <select
               aria-label="选择对话"

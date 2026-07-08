@@ -4,6 +4,10 @@ import { AdminV2Providers } from '@/admin-v2/providers'
 
 export const metadata: Metadata = {
   title: 'DD直连管理台',
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function AdminV2Layout({
