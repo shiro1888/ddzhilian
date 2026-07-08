@@ -32,7 +32,7 @@ export function TransferTaskCard({
     ? '100%'
     : isProgressing || status === 'failed'
       ? `${visibleProgressPercent.toString()}%`
-      : file.statusLabel
+      : null
   const telemetryLabels = [file.transferSpeedLabel, file.transferEtaLabel].filter(
     (label): label is string => Boolean(label),
   )
@@ -48,7 +48,7 @@ export function TransferTaskCard({
       ].join(' ')}
       data-transfer-status={status}
       data-transfer-direction={file.fromSelf ? 'outgoing' : 'incoming'}
-      aria-label={`${directionLabel}任务：${file.fileName}，${peerLabel}，${file.statusLabel}，${progressLabel}`}
+      aria-label={`${directionLabel}任务：${file.fileName}，${peerLabel}，${file.statusLabel}${progressLabel ? `，${progressLabel}` : ''}`}
     >
       <div className="dd-snaplink__queue-card-head">
         <span className="dd-snaplink__queue-ext">{extension}</span>
@@ -56,7 +56,7 @@ export function TransferTaskCard({
           <strong title={file.fileName}>{file.fileName}</strong>
           <small>{file.fromSelf ? '发送到' : '来自'} {file.subtitle}</small>
         </span>
-        <span className="dd-snaplink__queue-percent">{progressLabel}</span>
+        {progressLabel ? <span className="dd-snaplink__queue-percent">{progressLabel}</span> : null}
       </div>
       <div className="dd-snaplink__queue-status">
         {status === 'completed' ? (

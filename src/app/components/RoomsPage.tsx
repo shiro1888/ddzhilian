@@ -79,9 +79,16 @@ export function RoomsPage({
       ].filter(Boolean).join(' ').toLowerCase().includes(normalizedConversationQuery),
     )
   }, [deviceConversations, normalizedConversationQuery])
+  const shouldShowAssistant = Boolean(
+    onOpenAssistant &&
+    (
+      !normalizedConversationQuery ||
+      'dd助手 ai 辅助 总结 传输 说明 文件 生成'.includes(normalizedConversationQuery)
+    ),
+  )
   const hasDeviceConversations = filteredDeviceConversations.length > 0 && Boolean(onOpenDeviceConversation)
   const hasRawConversationRows = rooms.length > 0 || Boolean(onOpenAssistant) || (deviceConversations.length > 0 && Boolean(onOpenDeviceConversation))
-  const hasConversationRows = filteredRooms.length > 0 || Boolean(onOpenAssistant && !normalizedConversationQuery) || hasDeviceConversations
+  const hasConversationRows = filteredRooms.length > 0 || shouldShowAssistant || hasDeviceConversations
 
   return (
     <section
@@ -171,7 +178,7 @@ export function RoomsPage({
       ) : null}
       {hasConversationRows ? (
         <div className="dd-snaplink__workbench-room-list">
-          {onOpenAssistant && !normalizedConversationQuery ? (
+          {shouldShowAssistant ? (
             <article className="dd-snaplink__workbench-room is-assistant is-pinned has-avatar">
               <button
                 type="button"

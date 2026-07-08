@@ -6843,13 +6843,14 @@ export function SnapLinkStage({
                     const actorIdentity = resolveActorIdentity(renderedEntry, isBotMessage)
                     const showSenderIdentity = !isGroupedWithPrevious
                     const showMessageTime = !isGroupedWithNext
+                    const shouldUseSelfAvatarImage = renderedEntry.fromSelf && Boolean(deviceAvatarDataUrl)
                     const avatarClassName = [
                       'dd-snaplink__avatar',
                       showSenderIdentity ? '' : 'is-placeholder',
-                      renderedEntry.fromSelf && deviceAvatarDataUrl && showSenderIdentity ? 'has-image' : '',
+                      shouldUseSelfAvatarImage ? 'has-image' : '',
                     ].filter(Boolean).join(' ')
                     const selfAvatarStyle =
-                      renderedEntry.fromSelf && deviceAvatarDataUrl && showSenderIdentity
+                      shouldUseSelfAvatarImage
                         ? { '--dd-avatar': `url("${deviceAvatarDataUrl}")` } as CSSProperties
                         : undefined
                     const isImageOnlyMessage =
