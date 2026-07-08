@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { CookiePreferenceButton } from '../cookie-preference-button'
 import { ClientRoot } from '../client-root'
 
@@ -264,12 +265,18 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const routeKey = await resolveRouteKey(params)
 
-  if (!routeKey) {
+  if (routeKey === null) {
     const resolved = await params
     const appRoute = appRoutes[(resolved.slug ?? []).join('/')]
 
     if (!appRoute) {
-      return {}
+      return {
+        title: '页面不存在',
+        robots: {
+          index: false,
+          follow: false,
+        },
+      }
     }
 
     return {
@@ -705,5 +712,16 @@ function MarketingPage({ routeKey }: { routeKey: RouteKey }) {
 export default async function Page({ params }: PageProps) {
   const routeKey = await resolveRouteKey(params)
 
-  return routeKey ? <MarketingPage routeKey={routeKey} /> : <ClientRoot />
+  if (routeKey !== null) {
+    return <MarketingPage routeKey={routeKey} />
+  }
+
+  const resolved = await params
+  const appRoute = appRoutes[(resolved.slug ?? []).join('/')]
+
+  if (!appRoute) {
+    notFound()
+  }
+
+  return <ClientRoot />
 }

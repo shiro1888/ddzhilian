@@ -24243,6 +24243,60 @@
   }
 }
 
+/* Chrome 91/93 broader fallback: color-mix() declarations are ignored by old Chrome,
+   so give shared product surfaces stable background, border and focus colors. */
+@supports not (color: color-mix(in srgb, #000000 50%, #ffffff 50%)) {
+  .dd-music-card__lyrics,
+  .dd-ai-chat__conversation-list button.is-active,
+  .dd-ai-chat__confirm,
+  .dd-image-auth-facts span,
+  .dd-image-auth-flow span,
+  .dd-snaplink__settings-avatar,
+  .dd-snaplink__file-done span {
+    background: #f0fdf4;
+  }
+
+  .dd-admin-topbar__module-toggle:hover,
+  .dd-admin-topbar__module-toggle.is-active {
+    border-color: #a7f3d0;
+    background: #f0fdf4;
+    color: var(--cc-green, #07c160);
+  }
+
+  .dd-ai-chat__composer textarea:focus {
+    border-color: #6ee7b7;
+  }
+
+  .dd-ai-chat__drag-overlay {
+    border-color: #86efac;
+    background: rgba(240, 253, 244, 0.92);
+  }
+
+  .dd-ai-chat__drag-panel {
+    border-color: #bbf7d0;
+    background: #ffffff;
+  }
+
+  .dd-image-auth-facts span {
+    border-color: #bbf7d0;
+  }
+
+  .dd-snaplink__device-radar {
+    background: #f8fafc;
+  }
+
+  .dd-snaplink__device-radar-center {
+    box-shadow: 0 0 0 6px rgba(7, 193, 96, 0.14);
+  }
+
+  .dd-snaplink__device-radar-node:hover .dd-snaplink__device-radar-icon,
+  .dd-snaplink__device-radar-node:focus-visible .dd-snaplink__device-radar-icon,
+  .dd-snaplink__device-radar-node.is-selected .dd-snaplink__device-radar-icon {
+    border-color: #86efac;
+    color: var(--snap-green, #07c160);
+  }
+}
+
 .dd-snaplink__legal-links {
   display: inline-flex;
   align-items: center;
