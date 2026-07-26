@@ -19,8 +19,8 @@
     "preview": "node scripts/serve-out.mjs",
     "test": "vitest run",
     "test:admin": "vitest run tests/admin-v2-provider-api.test.ts tests/admin-v2-provider-page.test.tsx tests/admin-v2-providers-workspace.test.tsx tests/admin-v2-ai-draft-providers.test.ts",
-    "test:admin:providers": "vitest run tests/admin-v2-provider-api.test.ts tests/admin-v2-provider-page.test.tsx tests/admin-v2-providers-workspace.test.tsx tests/admin-v2-ai-draft-providers.test.ts",
-    "test:full": "npm run test && npm run lint && npm run build && npm run build --prefix server"
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test:full": "npm run typecheck && npm run test && npm run lint && npm run build && npm run build --prefix server"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.0",

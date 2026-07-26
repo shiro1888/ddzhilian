@@ -17,7 +17,9 @@ export default defineConfig({
       },
     },
     setupFiles: ['./tests/setup.tsx'],
-    testTimeout: 15000,
+    // SnapLinkStage renders a very large tree; under parallel workers on a
+    // loaded machine those suites can exceed a 15s budget on render alone.
+    testTimeout: 30000,
     include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     exclude: [
       '**/node_modules/**',

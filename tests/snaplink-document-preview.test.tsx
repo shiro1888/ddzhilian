@@ -5,14 +5,11 @@ import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
 import { resolveDocxPreviewLayout } from '@/app/components/DocumentPreviewDialog'
 import { resolveDocumentPreviewKind } from '@/lib/document-preview'
 
-const noop = vi.fn()
+import { createSnapLinkBaseProps } from './helpers/snaplink'
 
+// This suite renders inside an already-open public room.
 function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkStageProps {
-  return {
-    isDragging: false,
-    activeView: 'conversation',
-    deviceId: 'device-self',
-    deviceName: 'windows-SELF',
+  return createSnapLinkBaseProps({
     selectedRoomId: 'ROOM123',
     selectedConversationName: '世界对话 1',
     activeTransferLabel: '世界对话 1 · 已连接',
@@ -30,57 +27,11 @@ function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkS
         status: 'history',
         pinned: false,
         unreadCount: 0,
+        members: [],
       },
     ],
-    onlineDeviceItems: [],
-    chatDraft: '',
-    composerImageDrafts: [],
-    fileInputId: 'file-input',
-    isSendDisabled: true,
-    isAiGenerating: false,
-    aiGeneratingRoomId: null,
-    aiQuotaLabel: '',
-    aiModelOptions: [],
-    selectedAiModel: '',
-    selectedAiModelLabel: '默认模型',
-    unifiedConversationEntries: [],
-    fileConversationEmptyState: '暂无内容',
-    sharedMediaEntries: [],
-    sharedFileEntries: [],
-    sharedLinkEntries: [],
-    localError: null,
-    errorMessage: null,
-    aiChatElement: <div>AI</div>,
-    imageElement: <div>Image</div>,
-    adminElement: <div>Admin</div>,
-    commandElement: <div>Command</div>,
-    onOpenRoomConversation: noop,
-    onStartPrivateChat: noop,
-    onDeviceNameChange: noop,
-    onOpenRoomHome: noop,
-    onOpenAiChatView: noop,
-    onOpenCommandView: noop,
-    onChatDraftChange: noop,
-    onAiModelChange: noop,
-    onPastedImageSelection: noop,
-    onComposerImageRemove: noop,
-    onDirectFileSelection: noop,
-    onStartOcrJob: vi.fn(),
-    onListOcrHistory: vi.fn(),
-    onDeleteOcrHistory: vi.fn(),
-    onSendText: noop,
-    onRecallText: noop,
-    onRecallFile: noop,
-    onLoadOlderRoomHistory: noop,
-    canRecallAnyMessage: false,
-    onRetryTransfer: noop,
-    onCancelTransfer: noop,
-    onDragEnter: noop,
-    onDragOver: noop,
-    onDragLeave: noop,
-    onDrop: noop,
     ...overrides,
-  }
+  })
 }
 
 function openSelectedConversation() {

@@ -32,6 +32,7 @@ export function createAdminStateFixture(
         usedNeurons: 10,
         dailyNeuronBudget: 1000,
         remainingNeurons: 990,
+        freeOnly: true,
       },
     },
     onlineDevices: {
