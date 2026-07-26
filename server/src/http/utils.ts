@@ -139,6 +139,12 @@ export function pipeStorageFileResponse(
     }
   });
 
+  response.on('close', () => {
+    if (!stream.destroyed) {
+      stream.destroy();
+    }
+  });
+
   stream.pipe(response);
 }
 
@@ -162,6 +168,14 @@ export function readBearerToken(value: string | string[] | undefined) {
   return match?.[1]?.trim();
 }
 
+function decodeCookieValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function parseCookies(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw) {
@@ -179,7 +193,10 @@ export function parseCookies(value: string | string[] | undefined) {
           return [entry, ''] as const;
         }
 
-        return [entry.slice(0, index), decodeURIComponent(entry.slice(index + 1))] as const;
+        return [
+          entry.slice(0, index),
+          decodeCookieValue(entry.slice(index + 1)),
+        ] as const;
       }),
   );
 }

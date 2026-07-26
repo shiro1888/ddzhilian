@@ -79,7 +79,7 @@ export function TrustDeviceDialog({
         </div>
         <PinInput
           value={pinDraft}
-          placeholder={shortCode ? `例如 ${shortCode}` : '输入对方短码'}
+          placeholder="输入对方短码"
           onChange={onPinChange}
         />
         {pinError ? <p className="dd-snaplink__trust-dialog-error">{pinError}</p> : null}

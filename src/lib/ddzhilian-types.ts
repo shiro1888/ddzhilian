@@ -28,6 +28,7 @@ export type SignalEnvelope =
 
 export type DeviceSettingsPayload = {
   deviceId?: string
+  deviceSecret?: string
   deviceName?: string
   platform?: string
   accountId?: string
@@ -42,7 +43,8 @@ export type PeerSummary = {
   deviceName: string
   platform: string
   shortCode: string
-  pairToken: string
+  /** Only present for the viewer's own device; peers never expose theirs. */
+  pairToken?: string
   online: boolean
   relation: {
     sameAccount: boolean
@@ -125,6 +127,7 @@ export type DirectorySnapshotPayload = {
     shortCode: string
     pairToken: string
     historyAuthToken: string
+    deviceSecret?: string
     accountId?: string
     autoConnect: boolean
     discoverable: boolean

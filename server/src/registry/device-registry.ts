@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import type WebSocket from 'ws';
 
 import {
@@ -13,6 +15,7 @@ import {
 } from '../protocol.js';
 import {
   createDeviceId,
+  createDeviceSecret,
   createHistoryAuthToken,
   createPairToken,
   createShortCode,
@@ -37,9 +40,22 @@ export interface ConnectedDevice {
   shortCode: string;
   pairToken: string;
   historyAuthToken: string;
+  /** Proof of possession required to reclaim this deviceId on a later hello. */
+  deviceSecret: string;
   nativeLan?: NativeLanCapabilityPayload;
   network: NetworkContext;
   lastSeenAt: string;
+}
+
+function timingSafeEqualString(left: string, right: string) {
+  const leftBuffer = Buffer.from(left, 'utf8');
+  const rightBuffer = Buffer.from(right, 'utf8');
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function normalizeText(value: string | undefined, fallback: string) {
@@ -110,18 +126,82 @@ export class DeviceRegistry {
 
   private readonly byHistoryAuthToken = new Map<string, string>();
 
+  /**
+   * Outlives disconnects on purpose: a deviceId stays claimable by its owner
+   * across reconnects, so the secret that guards it must survive `remove()`.
+   */
+  private readonly secretsByDeviceId = new Map<
+    string,
+    { secret: string; expiresAt: number }
+  >();
+
+  private readonly secretTtlMs = 30 * 24 * 60 * 60 * 1000;
+
+  private pruneExpiredSecrets() {
+    const now = Date.now();
+
+    for (const [deviceId, entry] of this.secretsByDeviceId) {
+      if (entry.expiresAt <= now && !this.byId.has(deviceId)) {
+        this.secretsByDeviceId.delete(deviceId);
+      }
+    }
+  }
+
+  /**
+   * Resolves the identity a hello may claim.
+   *
+   * deviceIds are public: they are broadcast in every directory snapshot and
+   * stored alongside history records. Without proof of possession, any client
+   * could assert another device's id, evict it, and inherit its rooms and
+   * history token. A device that has never been issued a secret is trusted on
+   * first use so existing installs keep their id; from then on the secret is
+   * required, and a mismatched claim silently gets a brand-new identity rather
+   * than disconnecting the rightful owner.
+   */
+  private resolveDeviceId(payload: DeviceHelloPayload) {
+    const requestedId = payload.deviceId?.trim();
+
+    if (!requestedId) {
+      return createDeviceId();
+    }
+
+    this.pruneExpiredSecrets();
+    const known = this.secretsByDeviceId.get(requestedId);
+
+    if (!known) {
+      return requestedId;
+    }
+
+    const presented = payload.deviceSecret?.trim();
+
+    if (presented && timingSafeEqualString(presented, known.secret)) {
+      return requestedId;
+    }
+
+    return createDeviceId();
+  }
+
   register(
     socket: WebSocket,
     payload: DeviceHelloPayload,
     network: NetworkContext,
   ) {
-    const deviceId = payload.deviceId?.trim() || createDeviceId();
+    const deviceId = this.resolveDeviceId(payload);
     const existing = this.byId.get(deviceId);
 
+    // Only evict after the claim is settled — a rejected reclaim must never be
+    // able to kick the legitimate holder off.
     if (existing && existing.socket !== socket) {
       existing.socket.close(4001, 'Device replaced by a newer connection.');
       this.remove(deviceId);
     }
+
+    const deviceSecret =
+      this.secretsByDeviceId.get(deviceId)?.secret ?? createDeviceSecret();
+    this.secretsByDeviceId.set(deviceId, {
+      secret: deviceSecret,
+      expiresAt: Date.now() + this.secretTtlMs,
+    });
 
     const now = new Date().toISOString();
     const device: ConnectedDevice = {
@@ -139,6 +219,7 @@ export class DeviceRegistry {
       shortCode: this.createUniqueShortCode(deviceId),
       pairToken: this.createUniquePairToken(deviceId),
       historyAuthToken: this.createUniqueHistoryAuthToken(deviceId),
+      deviceSecret,
       nativeLan: normalizeNativeLan(payload.nativeLan),
       network,
       lastSeenAt: now,
@@ -329,6 +410,7 @@ export class DeviceRegistry {
         shortCode: viewer.shortCode,
         pairToken: viewer.pairToken,
         historyAuthToken: viewer.historyAuthToken,
+        deviceSecret: viewer.deviceSecret,
         accountId: viewer.accountId,
         autoConnect: viewer.autoConnect,
         discoverable: viewer.discoverable,
@@ -391,7 +473,6 @@ export class DeviceRegistry {
       deviceName: candidate.deviceName,
       platform: candidate.platform,
       shortCode: candidate.shortCode,
-      pairToken: candidate.pairToken,
       online: true,
       preferredTransport: getPreferredTransport(viewer, candidate),
       relation: {

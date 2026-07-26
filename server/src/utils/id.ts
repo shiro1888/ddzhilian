@@ -32,6 +32,10 @@ export function createHistoryAuthToken() {
   return createToken(32, TOKEN_ALPHABET);
 }
 
+export function createDeviceSecret() {
+  return createToken(32, TOKEN_ALPHABET);
+}
+
 export function createSessionId() {
   return `sess_${createToken(18, TOKEN_ALPHABET)}`;
 }

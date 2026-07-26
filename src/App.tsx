@@ -1728,6 +1728,13 @@ function App() {
   const handleViewChange = (view: NavView) => {
     const nextPath = pathForView(view)
 
+    // The admin console is a separate Next route tree, not part of this SPA.
+    // A client-side navigate would only swap in a placeholder at /admin.
+    if (view === 'admin') {
+      window.location.assign(nextPath)
+      return
+    }
+
     startTransition(() => {
       if (location.pathname !== nextPath) {
         navigate(nextPath)

@@ -45,9 +45,11 @@ const CHUNK_SIZE = 64 * 1024
 const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
 const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
 const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
+const CHANNEL_BUFFER_WAIT_TIMEOUT_MS = 60_000
 const DATA_CHANNEL_HEARTBEAT_INTERVAL_MS = 1_000
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
+const HISTORY_RETRY_COOLDOWN_MS = 15_000
 const HISTORY_AUTH_EXPIRED_MESSAGE = '连接凭证已失效，正在重新连接，请稍后重试。'
 const HISTORY_FILE_MISSING_MESSAGE = '历史文件实体不存在或已被清理，无法预览/下载。'
 const IMAGE_JOB_POLL_INTERVAL_MS = 2_000
@@ -178,6 +180,8 @@ type HistoryTextPaginationState = {
   hasMore: boolean
   oldestCreatedAt?: string
   oldestHistoryId?: string
+  /** Set when a fetch failed, so the initial load is not retried immediately. */
+  failedAt?: number
 }
 
 function saveBlobAsDownload(blob: Blob, fileName: string) {
@@ -197,6 +201,8 @@ function saveBlobAsDownload(blob: Blob, fileName: string) {
 
 type StoredIdentity = {
   deviceId?: string
+  /** Server-issued proof of possession; required to reclaim deviceId later. */
+  deviceSecret?: string
   deviceName: string
   platform: string
   accountId?: string
@@ -972,6 +978,7 @@ export function useDdzhilian() {
           hasMore: currentState?.hasMore ?? room.historyTextCount > 0,
           oldestCreatedAt: currentState?.oldestCreatedAt,
           oldestHistoryId: currentState?.oldestHistoryId,
+          failedAt: undefined,
         },
       }))
     })
@@ -1020,6 +1027,7 @@ export function useDdzhilian() {
             hasMore: payload.hasMore === true,
             oldestCreatedAt: payload.nextCursor?.createdAt,
             oldestHistoryId: payload.nextCursor?.historyId,
+            failedAt: undefined,
           },
         }))
       })
@@ -1037,6 +1045,7 @@ export function useDdzhilian() {
             hasMore: currentState?.hasMore ?? room.historyTextCount > 0,
             oldestCreatedAt: currentState?.oldestCreatedAt,
             oldestHistoryId: currentState?.oldestHistoryId,
+            failedAt: Date.now(),
           },
         }))
       })
@@ -1052,6 +1061,7 @@ export function useDdzhilian() {
     const nextIdentity: StoredIdentity = {
       ...identityRef.current,
       deviceId: snapshot.self.deviceId,
+      deviceSecret: snapshot.self.deviceSecret ?? identityRef.current.deviceSecret,
       deviceName: snapshot.self.deviceName,
       platform: snapshot.self.platform,
       accountId: snapshot.self.accountId,
@@ -2224,6 +2234,13 @@ export function useDdzhilian() {
             }
           }
 
+          // A failed transfer keeps its status until the user retries; the
+          // branches below would otherwise resurrect it as 'connecting' or
+          // 'ready' and erase the error message.
+          if (item.status === 'failed') {
+            return item
+          }
+
           if (connectedTarget) {
             if (item.status === 'queued' || item.status === 'waiting_for_target' || item.status === 'connecting') {
               return {
@@ -2256,10 +2273,6 @@ export function useDdzhilian() {
               status: 'ready',
               errorMessage: undefined,
             }
-          }
-
-          if (item.status === 'failed') {
-            return item
           }
 
           if (!item.sessionId && !item.targetDeviceId && connected.length > 1) {
@@ -2906,12 +2919,19 @@ export function useDdzhilian() {
     preferredTransferIds?: string[],
     preferredSessionId?: string | null,
   ) => {
+    // Only an explicit retry may resume a failed item. Otherwise every
+    // data-channel open would silently re-send transfers the user already saw
+    // fail — including ones the receiver rejected.
+    const resumableStatuses = preferredTransferIds
+      ? ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed']
+      : ['queued', 'waiting_for_target', 'connecting', 'ready']
+
     const candidates = transferItemsRef.current.filter((item) => {
       if (preferredTransferIds && !preferredTransferIds.includes(item.id)) {
         return false
       }
 
-      return ['queued', 'waiting_for_target', 'connecting', 'ready', 'failed'].includes(item.status)
+      return resumableStatuses.includes(item.status)
     })
 
     for (const item of candidates) {
@@ -3105,18 +3125,45 @@ export function useDdzhilian() {
   }
 
   const waitForBufferedAmount = async (channel: RTCDataChannel) => {
+    if (channel.readyState !== 'open') {
+      throw new Error('数据通道已断开，传输中止。')
+    }
+
     if (channel.bufferedAmount < CHANNEL_BUFFER_HIGH_WATER) {
       return
     }
 
-    await new Promise<void>((resolve) => {
+    // A channel that dies while its buffer is full never fires
+    // 'bufferedamountlow', so settle on every terminal condition instead —
+    // otherwise the send loop parks forever holding the File and the channel.
+    await new Promise<void>((resolve, reject) => {
       channel.bufferedAmountLowThreshold = CHANNEL_BUFFER_LOW_WATER
-      const flush = () => {
-        channel.removeEventListener('bufferedamountlow', flush)
+
+      const cleanup = () => {
+        channel.removeEventListener('bufferedamountlow', onFlush)
+        channel.removeEventListener('close', onDead)
+        channel.removeEventListener('error', onDead)
+        window.clearTimeout(timeoutId)
+      }
+
+      const onFlush = () => {
+        cleanup()
         resolve()
       }
 
-      channel.addEventListener('bufferedamountlow', flush)
+      const onDead = () => {
+        cleanup()
+        reject(new Error('数据通道已断开，传输中止。'))
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        cleanup()
+        reject(new Error('等待通道缓冲区释放超时。'))
+      }, CHANNEL_BUFFER_WAIT_TIMEOUT_MS)
+
+      channel.addEventListener('bufferedamountlow', onFlush)
+      channel.addEventListener('close', onDead)
+      channel.addEventListener('error', onDead)
     })
   }
 
@@ -4232,6 +4279,11 @@ export function useDdzhilian() {
     ensureRoomHistoryLoaded: (roomId: string) => {
       const state = historyTextPaginationRef.current[roomId]
       if (state?.initialized || state?.isLoading) {
+        return
+      }
+      // A failed fetch clears isLoading, and the caller re-runs on every
+      // render, so without this the failure becomes an unbounded retry storm.
+      if (state?.failedAt && Date.now() - state.failedAt < HISTORY_RETRY_COOLDOWN_MS) {
         return
       }
       void fetchRoomHistoryTexts(roomId, 'initial')

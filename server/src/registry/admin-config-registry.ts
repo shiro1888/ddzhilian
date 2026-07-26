@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -590,6 +590,14 @@ function toEnvLine(key: string, value: string) {
   return `${key}=${JSON.stringify(value)}`;
 }
 
+function writeEnvFile(contents: string) {
+  // Write through a temp file so a failure mid-write cannot leave a truncated
+  // .env behind, matching OcrJobRegistry.save.
+  const tempPath = `${ENV_PATH}.tmp`;
+  writeFileSync(tempPath, contents, 'utf8');
+  renameSync(tempPath, ENV_PATH);
+}
+
 function syncSystemPromptToEnvFile(systemPrompt: string) {
   const nextLine = toEnvLine('AI_SYSTEM_PROMPT', systemPrompt);
 
@@ -621,9 +629,15 @@ function syncSystemPromptToEnvFile(systemPrompt: string) {
       }
     }
 
-    writeFileSync(ENV_PATH, `${nextLines.join('\n').replace(/\n*$/, '\n')}`, 'utf8');
-  } catch {
-    writeFileSync(ENV_PATH, `${nextLine}\n`, 'utf8');
+    writeEnvFile(`${nextLines.join('\n').replace(/\n*$/, '\n')}`);
+  } catch (error) {
+    // Only a missing file justifies starting a fresh .env. Any other read
+    // failure (EACCES, EMFILE, EISDIR) must not destroy existing settings.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+
+    writeEnvFile(`${nextLine}\n`);
   }
 }
 

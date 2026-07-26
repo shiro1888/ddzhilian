@@ -413,6 +413,10 @@ const cloudflareAiQuota = new CloudflareAiQuota(
 );
 const aiRequestMaxBytes = 24 * 1024 * 1024;
 const historyTextRequestMaxBytes = 2 * 1024 * 1024;
+// The client uploads fixed 2 MiB chunks (SERVER_UPLOAD_CHUNK_SIZE in
+// src/lib/use-ddzhilian.ts). Anything larger is buffered in memory before the
+// registry ever sees it, so cap it from the Content-Range header alone.
+const historyUploadChunkMaxBytes = 8 * 1024 * 1024;
 const aiPromptMaxBytes = 32 * 1024;
 const aiResponseMaxChars = 12_000;
 const aiChatImageMaxCount = 4;
@@ -431,6 +435,8 @@ const imageGenerationJobMaxCount = 200;
 const codexImageRetryStatusCodes = new Set([502, 504, 524]);
 const ocrAllowedUploadTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const ocrMaxActiveJobs = 4;
+/** Slots claimed by in-flight OCR handlers that have not yet created a job. */
+let pendingOcrJobReservations = 0;
 const ocrHistoryListLimit = 20;
 const ocrUnavailableMessage = 'OCR 模型服务暂不可用';
 const ocrReachabilityTimeoutMs = 2_000;
@@ -1157,54 +1163,64 @@ async function handleOcrCreateRequest(
     return;
   }
 
-  if (ocrJobs.countActive() >= ocrMaxActiveJobs) {
+  // The upload read and reachability probe below both await, so the slot has
+  // to be claimed synchronously here or concurrent uploads all pass the gate.
+  if (ocrJobs.countActive() + pendingOcrJobReservations >= ocrMaxActiveJobs) {
     writeJson(response, 429, { error: 'OCR 任务较多，请稍后重试。' });
     return;
   }
 
-  let image: OcrImageUpload;
+  pendingOcrJobReservations += 1;
+
   try {
-    image = await readOcrImageUpload(request);
-  } catch (error) {
-    if (error instanceof AccountAuthError) {
-      writeJson(response, error.statusCode, { error: error.message });
+    let image: OcrImageUpload;
+    try {
+      image = await readOcrImageUpload(request);
+    } catch (error) {
+      if (error instanceof AccountAuthError) {
+        writeJson(response, error.statusCode, { error: error.message });
+        return;
+      }
+
+      writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
+        error:
+          error instanceof RequestBodyTooLargeError
+            ? 'OCR 图片上传请求体过大。'
+            : 'OCR 上传请求格式无效。',
+      });
       return;
     }
 
-    writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 400, {
-      error:
-        error instanceof RequestBodyTooLargeError
-          ? 'OCR 图片上传请求体过大。'
-          : 'OCR 上传请求格式无效。',
+    try {
+      await ensureOcrServiceReachable();
+    } catch (error) {
+      const statusCode = error instanceof OcrProxyError ? error.statusCode : 503;
+      const message = error instanceof Error ? error.message : ocrUnavailableMessage;
+      writeJson(response, statusCode, { error: message });
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const job = ocrJobs.create({
+      jobId: randomUUID(),
+      ownerKey: getAiChatConversationScope(authResult.device),
+      fileName: image.filename,
+      mimeType: image.mimeType,
+      byteSize: image.buffer.byteLength,
+      createdAt,
     });
-    return;
+
+    runOcrJob(job.jobId, image);
+    writeJson(response, 202, {
+      jobId: job.jobId,
+      status: job.status,
+      pollUrl: `/api/ocr/jobs/${encodeURIComponent(job.jobId)}`,
+    });
+  } finally {
+    // Runs synchronously after ocrJobs.create() registered the job, so
+    // countActive() takes over the slot with no gap.
+    pendingOcrJobReservations -= 1;
   }
-
-  try {
-    await ensureOcrServiceReachable();
-  } catch (error) {
-    const statusCode = error instanceof OcrProxyError ? error.statusCode : 503;
-    const message = error instanceof Error ? error.message : ocrUnavailableMessage;
-    writeJson(response, statusCode, { error: message });
-    return;
-  }
-
-  const createdAt = new Date().toISOString();
-  const job = ocrJobs.create({
-    jobId: randomUUID(),
-    ownerKey: getAiChatConversationScope(authResult.device),
-    fileName: image.filename,
-    mimeType: image.mimeType,
-    byteSize: image.buffer.byteLength,
-    createdAt,
-  });
-
-  runOcrJob(job.jobId, image);
-  writeJson(response, 202, {
-    jobId: job.jobId,
-    status: job.status,
-    pollUrl: `/api/ocr/jobs/${encodeURIComponent(job.jobId)}`,
-  });
 }
 
 function handleOcrJobRequest(
@@ -5989,6 +6005,13 @@ async function handleAiChatRequest(
       : undefined;
 
     if (saved && !saved.ok) {
+      // The upstream call succeeded but the reply could not be stored, so the
+      // user gets nothing — mirror the empty-answer path and hand the neurons
+      // back instead of holding them until the daily reset.
+      if (quotaReservation) {
+        cloudflareAiQuota.release(quotaReservation);
+      }
+
       writeJson(response, saved.statusCode, { error: saved.message });
       return;
     }
@@ -6406,8 +6429,27 @@ async function handleAiImageRequest(
   const createdAtDate = new Date();
   const createdAt = createdAtDate.toISOString();
   const jobId = randomUUID();
-  let quota: AccountImageQuotaStatus;
-  let quotaReservation: AccountImageQuotaReservation;
+
+  const job: ImageGenerationJob = {
+    jobId,
+    userId: authResult.user.id,
+    user: authResult.user,
+    prompt,
+    model,
+    modelCandidates,
+    size,
+    quality,
+    sourceImageCount: uploadedImages.length,
+    status: 'queued',
+    createdAt,
+    updatedAt: createdAt,
+  };
+
+  // Claim the per-user slot before awaiting the reservation, otherwise two
+  // requests in the same tick both pass the existingJob check above and each
+  // spends a quota unit on its own upstream generation.
+  imageGenerationJobs.set(job.jobId, job);
+
   try {
     const reservationResult = await accountRegistry.reserveImageQuota({
       user: authResult.user,
@@ -6417,9 +6459,10 @@ async function handleAiImageRequest(
       reservationId: jobId,
       expiresAt: new Date(createdAtDate.getTime() + imageGenerationJobRetentionMs).toISOString(),
     });
-    quota = reservationResult.quota;
-    quotaReservation = reservationResult.reservation;
+    job.quota = reservationResult.quota;
+    job.quotaReservation = reservationResult.reservation;
   } catch (error) {
+    imageGenerationJobs.delete(job.jobId);
     const statusCode = error instanceof AccountAuthError ? error.statusCode : 503;
     const message = error instanceof AccountAuthError
       ? error.message
@@ -6432,24 +6475,6 @@ async function handleAiImageRequest(
     return;
   }
 
-  const job: ImageGenerationJob = {
-    jobId,
-    userId: authResult.user.id,
-    user: authResult.user,
-    prompt,
-    model,
-    modelCandidates,
-    size,
-    quality,
-    sourceImageCount: uploadedImages.length,
-    quotaReservation,
-    status: 'queued',
-    createdAt,
-    updatedAt: createdAt,
-    quota,
-  };
-
-  imageGenerationJobs.set(job.jobId, job);
   startImageGenerationJob(job, upstreamRequests);
   writeJson(response, 202, {
     ...toImageGenerationJobPayload(job, resolveRequestBaseUrl(request)),
@@ -6947,6 +6972,18 @@ const httpServer = createServer((request, response) => {
 
     if (contentRange) {
       const expectedChunkBytes = contentRange.end - contentRange.start + 1;
+
+      if (
+        expectedChunkBytes > historyUploadChunkMaxBytes ||
+        contentRange.total > config.historyMaxBytes
+      ) {
+        writeJson(response, 413, {
+          error: 'Chunk exceeds maximum allowed size.',
+        });
+        request.resume();
+        return;
+      }
+
       void readRequestBuffer(request, { maxBytes: expectedChunkBytes })
         .then((buffer) =>
           history.saveFileChunk({
@@ -7404,7 +7441,11 @@ function broadcastHistoryRecalled(payload: {
   }
 }
 
+// Single global sweep. Per-socket timers only handle liveness, so registry
+// maintenance costs one pass per tick regardless of how many clients connect.
 const historyMaintenanceInterval = setInterval(() => {
+  sessions.prune(config.sessionIdleMs);
+
   if (history.prune()) {
     broadcastSnapshots();
   }
@@ -8183,6 +8224,14 @@ function handleEvent(
       broadcastSnapshots();
       return deviceId;
     }
+
+    default: {
+      emitError(socket, {
+        code: 'BAD_EVENT',
+        message: 'Unsupported websocket event payload.',
+      });
+      return deviceId;
+    }
   }
 }
 
@@ -8210,7 +8259,21 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
       return;
     }
 
-    currentDeviceId = handleEvent(socket, currentDeviceId, event);
+    try {
+      currentDeviceId = handleEvent(socket, currentDeviceId, event);
+    } catch (error) {
+      console.warn('Websocket event handling failed', {
+        type: event.type,
+        deviceId: currentDeviceId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      emitError(socket, {
+        code: 'BAD_EVENT',
+        message: 'Unsupported websocket event payload.',
+      });
+      return;
+    }
 
     if (currentDeviceId) {
       devices.touch(currentDeviceId);
@@ -8260,15 +8323,28 @@ wsServer.on('connection', (socket: SocketWithAddress, request) => {
     }
 
     isAlive = false;
-    sessions.prune(config.sessionIdleMs);
-    if (history.prune()) {
-      broadcastSnapshots();
-    }
     socket.ping();
   }, config.pingIntervalMs);
 
   socket.on('close', () => {
     clearInterval(interval);
+  });
+});
+
+// A signaling server should degrade, not die. Individual request and event
+// handlers already guard their own failures; these are the last resort so one
+// unhandled throw cannot disconnect every connected device.
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception', {
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection', {
+    message: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
   });
 });
 

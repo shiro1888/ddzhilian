@@ -40,6 +40,8 @@ export type SignalEnvelope =
 
 export interface DeviceHelloPayload {
   deviceId?: string;
+  /** Proof of possession for `deviceId`; issued by the server on first hello. */
+  deviceSecret?: string;
   deviceName?: string;
   platform?: string;
   accountId?: string;
@@ -65,7 +67,6 @@ export interface PeerSummary {
   deviceName: string;
   platform: string;
   shortCode: string;
-  pairToken: string;
   online: boolean;
   preferredTransport: TransportMode;
   relation: {
@@ -151,6 +152,7 @@ export interface DirectorySnapshotPayload {
     shortCode: string;
     pairToken: string;
     historyAuthToken: string;
+    deviceSecret: string;
     accountId?: string;
     autoConnect: boolean;
     discoverable: boolean;
@@ -314,8 +316,44 @@ export type ServerEvent =
     };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+function hasStringField(payload: Record<string, unknown>, field: string) {
+  return typeof payload[field] === 'string';
+}
+
+/**
+ * Every entry maps a client event type to a predicate over its payload. Events
+ * whose payload is optional map to `null`. The dispatcher in index.ts reads
+ * payload fields without further guards, so anything not listed here — or with
+ * a payload that fails its predicate — must be rejected before dispatch.
+ */
+const clientEventPayloadGuards: Record<
+  ClientEvent['type'],
+  ((payload: Record<string, unknown>) => boolean) | null
+> = {
+  hello: () => true,
+  'update-settings': () => true,
+  'update-preferences': () => true,
+  'update-room-state': (payload) => hasStringField(payload, 'roomId'),
+  'pair-by-short-code': (payload) => hasStringField(payload, 'shortCode'),
+  'pair-by-token': (payload) => hasStringField(payload, 'pairToken'),
+  'join-room': (payload) => hasStringField(payload, 'roomId'),
+  'request-connect': (payload) => hasStringField(payload, 'targetDeviceId'),
+  signal: (payload) =>
+    hasStringField(payload, 'sessionId') &&
+    hasStringField(payload, 'targetDeviceId') &&
+    isRecord(payload.signal) &&
+    hasStringField(payload.signal, 'kind'),
+  'session-state': (payload) =>
+    hasStringField(payload, 'sessionId') &&
+    hasStringField(payload, 'targetDeviceId') &&
+    hasStringField(payload, 'state'),
+  'create-public-room': null,
+  'create-bot-room': null,
+  'request-snapshot': null,
+};
 
 export function parseClientEvent(raw: string): ClientEvent | null {
   try {
@@ -323,6 +361,18 @@ export function parseClientEvent(raw: string): ClientEvent | null {
 
     if (!isRecord(parsed) || typeof parsed.type !== 'string') {
       return null;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(clientEventPayloadGuards, parsed.type)) {
+      return null;
+    }
+
+    const guard = clientEventPayloadGuards[parsed.type as ClientEvent['type']];
+
+    if (guard) {
+      if (!isRecord(parsed.payload) || !guard(parsed.payload)) {
+        return null;
+      }
     }
 
     return parsed as ClientEvent;

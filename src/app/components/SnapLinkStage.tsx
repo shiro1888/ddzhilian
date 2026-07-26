@@ -228,9 +228,11 @@ const snapLinkAiChatSelectionValue = '__snaplink_ai_chat__'
 const snapLinkImageSelectionValue = '__snaplink_image__'
 const snapLinkCommandSelectionValue = '__snaplink_command__'
 const snapLinkComposerMaxHeight = 120
+const PDF_PREVIEW_URL_REVOKE_DELAY_MS = 60_000
 const snapLinkInitialMessageRenderCount = 80
 const snapLinkMessageRenderStep = 80
 const snapLinkHistoryLoadThreshold = 72
+const snapLinkPinnedToBottomThreshold = 96
 const snapLinkNewOutgoingEntryAnimationMs = 500
 const snapLinkNewOutgoingEntryAnimationCleanupMs = snapLinkNewOutgoingEntryAnimationMs + 150
 const snapLinkPendingOutgoingEntryAnimationMs = 12_000
@@ -1658,7 +1660,12 @@ export function SnapLinkStage({
   const documentPreviewRequestSeqRef = useRef(0)
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
-  const messageScrollRestoreRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null)
+  const messageScrollRestoreRef = useRef<{
+    previousScrollHeight: number
+    previousScrollTop: number
+    firstEntryId: string | null
+  } | null>(null)
+  const isPinnedToBottomRef = useRef(true)
   const outgoingEntryAnimationStateRef = useRef<{
     roomId: string | null
     ids: Set<string>
@@ -1895,12 +1902,17 @@ export function SnapLinkStage({
       })),
     [pendingIncomingFileOffers],
   )
-  const workbenchTransferEntries = useMemo(
+  // Capping belongs to the compact sidebar only. Counts and the full transfer
+  // board must read the complete list or they under-report.
+  const workbenchAllTransferEntries = useMemo(
     () =>
       [...pendingIncomingOfferEntries, ...globalTransferEntries]
-        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-        .slice(0, 8),
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     [globalTransferEntries, pendingIncomingOfferEntries],
+  )
+  const workbenchTransferEntries = useMemo(
+    () => workbenchAllTransferEntries.slice(0, 8),
+    [workbenchAllTransferEntries],
   )
   const workbenchHistoryFileEntries = useMemo(
     () =>
@@ -2007,22 +2019,22 @@ export function SnapLinkStage({
     },
     [normalizedHistorySearchQuery, sharedLinkEntries],
   )
-  const workbenchActiveTransferCount = workbenchTransferEntries.filter((file) =>
+  const workbenchActiveTransferCount = workbenchAllTransferEntries.filter((file) =>
     isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
   ).length
-  const activeTransferSpeedLabel = workbenchTransferEntries.find((file) =>
+  const activeTransferSpeedLabel = workbenchAllTransferEntries.find((file) =>
     isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)) && file.transferSpeedLabel,
   )?.transferSpeedLabel
-  const workbenchCompletedTransferCount = workbenchTransferEntries.filter(
+  const workbenchCompletedTransferCount = workbenchAllTransferEntries.filter(
     (file) => resolveSnapLinkTransferStatus(file) === 'completed',
   ).length
-  const workbenchFailedTransferCount = workbenchTransferEntries.filter(
+  const workbenchFailedTransferCount = workbenchAllTransferEntries.filter(
     (file) => resolveSnapLinkTransferStatus(file) === 'failed',
   ).length
-  const workbenchVisibleTransferQueueCount = workbenchTransferEntries.filter(
+  const workbenchVisibleTransferQueueCount = workbenchAllTransferEntries.filter(
     (file) => file.tone !== 'completed',
   ).length
-  const activeIncomingReceiveEntries = workbenchTransferEntries.filter((file) =>
+  const activeIncomingReceiveEntries = workbenchAllTransferEntries.filter((file) =>
     !file.fromSelf && isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
   )
   const latestIncomingReceiveEntry = activeIncomingReceiveEntries[0] ?? null
@@ -2322,6 +2334,9 @@ export function SnapLinkStage({
     ),
     [conversationEntriesWithRecallGhosts, messageRenderCount],
   )
+  // `visibleConversationEntries.length` saturates at messageRenderCount, so a
+  // room at the render cap would stop firing the auto-scroll effect entirely.
+  const latestConversationEntryId = visibleConversationEntries.at(-1)?.id ?? null
   const ocrPanelId = `${fileInputId}-ocr-panel`
   const ocrResultText = getSnapLinkOcrText(ocrJob)
   const hasOcrResultText = ocrResultText.length > 0
@@ -2342,6 +2357,7 @@ export function SnapLinkStage({
 
   useEffect(() => {
     messageScrollRestoreRef.current = null
+    isPinnedToBottomRef.current = true
   }, [selectedRoomId])
 
   useEffect(() => {
@@ -2578,7 +2594,16 @@ export function SnapLinkStage({
 
   const handleMessagesScroll = useCallback(() => {
     const messages = messagesRef.current
-    if (!messages || !selectedRoomId || !hasActiveRoom || messages.scrollTop > snapLinkHistoryLoadThreshold) {
+    if (!messages) {
+      return
+    }
+
+    // Recorded before the early return below, so it stays accurate no matter
+    // where in the stream the user is reading.
+    isPinnedToBottomRef.current =
+      messages.scrollHeight - messages.scrollTop - messages.clientHeight <= snapLinkPinnedToBottomThreshold
+
+    if (!selectedRoomId || !hasActiveRoom || messages.scrollTop > snapLinkHistoryLoadThreshold) {
       return
     }
 
@@ -2586,6 +2611,7 @@ export function SnapLinkStage({
       messageScrollRestoreRef.current = {
         previousScrollHeight: messages.scrollHeight,
         previousScrollTop: messages.scrollTop,
+        firstEntryId: visibleConversationEntries[0]?.id ?? null,
       }
       setMessageRenderState((current) => {
         const currentCount = current.roomId === selectedRoomId
@@ -2603,6 +2629,7 @@ export function SnapLinkStage({
     messageScrollRestoreRef.current = {
       previousScrollHeight: messages.scrollHeight,
       previousScrollTop: messages.scrollTop,
+      firstEntryId: visibleConversationEntries[0]?.id ?? null,
     }
     setMessageRenderState((current) => {
       const currentCount = current.roomId === selectedRoomId
@@ -2620,7 +2647,7 @@ export function SnapLinkStage({
     hasActiveRoom,
     onLoadOlderRoomHistory,
     selectedRoomId,
-    visibleConversationEntries.length,
+    visibleConversationEntries,
   ])
 
   useEffect(() => {
@@ -2643,15 +2670,32 @@ export function SnapLinkStage({
     const restore = messageScrollRestoreRef.current
     if (restore) {
       messageScrollRestoreRef.current = null
-      messages.scrollTop = Math.max(
-        0,
-        messages.scrollHeight - restore.previousScrollHeight + restore.previousScrollTop,
-      )
+
+      // Only restore when older entries were actually prepended. If the load
+      // returned nothing the ref is stale, and applying it would jump the user
+      // backwards on the next incoming message.
+      if ((visibleConversationEntries[0]?.id ?? null) !== restore.firstEntryId) {
+        messages.scrollTop = Math.max(
+          0,
+          messages.scrollHeight - restore.previousScrollHeight + restore.previousScrollTop,
+        )
+        return
+      }
+    }
+
+    // Never yank a user who scrolled up to read history back to the bottom.
+    if (!isPinnedToBottomRef.current) {
       return
     }
 
     messages.scrollTop = messages.scrollHeight
-  }, [hasActiveRoom, selectedRoomId, shouldShowAiThinking, visibleConversationEntries.length])
+  }, [
+    hasActiveRoom,
+    latestConversationEntryId,
+    selectedRoomId,
+    shouldShowAiThinking,
+    visibleConversationEntries,
+  ])
 
   useEffect(() => {
     if (isComposerComposingRef.current) {
@@ -3576,6 +3620,8 @@ export function SnapLinkStage({
 
   const armOutgoingEntryAnimation = () => {
     shouldAnimateNextOutgoingEntryRef.current = true
+    // Sending is an explicit intent to follow the conversation again.
+    isPinnedToBottomRef.current = true
     if (pendingOutgoingEntryAnimationTimeoutRef.current !== null) {
       window.clearTimeout(pendingOutgoingEntryAnimationTimeoutRef.current)
     }
@@ -4506,8 +4552,23 @@ export function SnapLinkStage({
             return
           }
 
+          // Navigating the current tab would unload the SPA, killing the
+          // signaling session and any in-flight transfer. Open a new context
+          // instead, and fall back to the in-app dialog if it is blocked.
           const previewUrl = createNativePdfPreviewUrl(payload)
-          window.location.href = previewUrl
+          const isObjectUrl = typeof payload.source !== 'string'
+          const previewWindow = window.open(previewUrl, '_blank', 'noopener')
+
+          if (isObjectUrl) {
+            // The new tab still needs the URL while it loads, so revoke late.
+            window.setTimeout(() => {
+              URL.revokeObjectURL(previewUrl)
+            }, PDF_PREVIEW_URL_REVOKE_DELAY_MS)
+          }
+
+          if (!previewWindow) {
+            setDocumentPreview({ status: 'ready', payload })
+          }
         },
         (error) => {
           if (documentPreviewRequestSeqRef.current !== requestSeq) {
@@ -5932,13 +5993,13 @@ export function SnapLinkStage({
 
   const renderWorkbenchTransferBoard = () => {
     const visibleTransferTab = workbenchTransferTab === 'history' ? 'active' : workbenchTransferTab
-    const activeEntries = workbenchTransferEntries.filter((file) =>
+    const activeEntries = workbenchAllTransferEntries.filter((file) =>
       isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
     )
-    const completedEntries = workbenchTransferEntries.filter(
+    const completedEntries = workbenchAllTransferEntries.filter(
       (file) => resolveSnapLinkTransferStatus(file) === 'completed',
     )
-    const failedEntries = workbenchTransferEntries.filter(
+    const failedEntries = workbenchAllTransferEntries.filter(
       (file) => resolveSnapLinkTransferStatus(file) === 'failed',
     )
     const transferTabs: TransferQueuePageTab[] = [
@@ -6379,7 +6440,7 @@ export function SnapLinkStage({
           note={toolSideNote}
           rows={toolContextRows}
           actions={toolSideActions}
-          transferCount={workbenchTransferEntries.length}
+          transferCount={workbenchAllTransferEntries.length}
           activeTransferCount={workbenchActiveTransferCount}
           completedTransferCount={workbenchCompletedTransferCount}
           failedTransferCount={workbenchFailedTransferCount}

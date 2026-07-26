@@ -26,16 +26,6 @@ function createTestStorage() {
 const localStorageMock = createTestStorage()
 const sessionStorageMock = createTestStorage()
 
-Object.defineProperty(window, 'localStorage', {
-  configurable: true,
-  value: localStorageMock,
-})
-
-Object.defineProperty(window, 'sessionStorage', {
-  configurable: true,
-  value: sessionStorageMock,
-})
-
 Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
   value: localStorageMock,
@@ -46,41 +36,56 @@ Object.defineProperty(globalThis, 'sessionStorage', {
   value: sessionStorageMock,
 })
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
+// Server-side modules run under `// @vitest-environment node`, where none of
+// the DOM globals below exist. The mocks further down are lazy, so they stay
+// harmless there.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: localStorageMock,
+  })
 
-Object.defineProperty(window, 'ResizeObserver', {
-  writable: true,
-  value: class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-})
+  Object.defineProperty(window, 'sessionStorage', {
+    configurable: true,
+    value: sessionStorageMock,
+  })
 
-Object.defineProperty(window, 'IntersectionObserver', {
-  writable: true,
-  value: class IntersectionObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-})
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
 
-HTMLElement.prototype.scrollIntoView = vi.fn()
-HTMLElement.prototype.hasPointerCapture = vi.fn()
-HTMLElement.prototype.releasePointerCapture = vi.fn()
+  Object.defineProperty(window, 'ResizeObserver', {
+    writable: true,
+    value: class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  })
+
+  Object.defineProperty(window, 'IntersectionObserver', {
+    writable: true,
+    value: class IntersectionObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  })
+
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+  HTMLElement.prototype.hasPointerCapture = vi.fn()
+  HTMLElement.prototype.releasePointerCapture = vi.fn()
+}
 
 vi.mock('next/link', () => ({
   default: ({

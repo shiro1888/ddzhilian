@@ -12,9 +12,9 @@ import {
   type HistoryTextSummary,
 } from '../protocol.js';
 
-const HISTORY_ROOT = fileURLToPath(new URL('../../data/history', import.meta.url));
-const FILES_ROOT = join(HISTORY_ROOT, 'files');
-const INDEX_PATH = join(HISTORY_ROOT, 'index.json');
+const DEFAULT_HISTORY_ROOT = fileURLToPath(
+  new URL('../../data/history', import.meta.url),
+);
 const REMOTE_BATCH_SIZE = 500;
 
 export interface HistoryFileRecord {
@@ -120,6 +120,8 @@ export interface HistoryRegistryOptions {
   retentionMs: number;
   maxBytes: number;
   textRetentionMs: number;
+  /** Overrides the on-disk location; defaults to server/data/history. */
+  storageRoot?: string;
   supabase?: {
     url: string;
     serviceRoleKey: string;
@@ -189,9 +191,14 @@ function safeFileSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'file';
 }
 
-function buildStoragePath(roomId: string, historyId: string, fileName: string) {
+function buildStoragePath(
+  filesRoot: string,
+  roomId: string,
+  historyId: string,
+  fileName: string,
+) {
   return join(
-    FILES_ROOT,
+    filesRoot,
     safeFileSegment(roomId),
     `${safeFileSegment(historyId)}-${safeFileSegment(basename(fileName))}`,
   );
@@ -333,10 +340,19 @@ export class HistoryRegistry {
 
   private readonly historyTextsTable?: string;
 
+  private readonly historyRoot: string;
+
+  private readonly filesRoot: string;
+
+  private readonly indexPath: string;
+
   private constructor(options: HistoryRegistryOptions) {
     this.retentionMs = options.retentionMs;
     this.maxBytes = options.maxBytes;
     this.textRetentionMs = options.textRetentionMs;
+    this.historyRoot = options.storageRoot ?? DEFAULT_HISTORY_ROOT;
+    this.filesRoot = join(this.historyRoot, 'files');
+    this.indexPath = join(this.historyRoot, 'index.json');
     this.supabaseClient = options.supabase
       ? createClient(options.supabase.url, options.supabase.serviceRoleKey, {
           auth: { persistSession: false, autoRefreshToken: false },
@@ -345,7 +361,7 @@ export class HistoryRegistry {
     this.historyFilesTable = options.supabase?.historyFilesTable;
     this.historyTextsTable = options.supabase?.historyTextsTable;
 
-    mkdirSync(FILES_ROOT, { recursive: true });
+    mkdirSync(this.filesRoot, { recursive: true });
   }
 
   private readonly filesById = new Map<string, HistoryFileRecord>();
@@ -355,6 +371,9 @@ export class HistoryRegistry {
   private readonly textsById = new Map<string, HistoryTextRecord>();
 
   private readonly textIdsByRoomId = new Map<string, Set<string>>();
+
+  /** Serializes concurrent chunk appends per historyId. */
+  private readonly chunkLocks = new Map<string, Promise<void>>();
 
   listForRoom(roomId: string) {
     this.prune();
@@ -492,8 +511,8 @@ export class HistoryRegistry {
     this.textsById.clear();
     this.textIdsByRoomId.clear();
 
-    rmSync(FILES_ROOT, { recursive: true, force: true });
-    mkdirSync(FILES_ROOT, { recursive: true });
+    rmSync(this.filesRoot, { recursive: true, force: true });
+    mkdirSync(this.filesRoot, { recursive: true });
 
     if (!this.supabaseClient) {
       this.persistLocalIndex();
@@ -520,10 +539,10 @@ export class HistoryRegistry {
 
     this.assertWithinMaxBytes(input.data.byteLength);
 
-    const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
+    const roomDir = join(this.filesRoot, safeFileSegment(input.roomId));
     await fs.mkdir(roomDir, { recursive: true });
 
-    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
+    const storagePath = buildStoragePath(this.filesRoot, input.roomId, input.historyId, input.fileName);
     await fs.writeFile(storagePath, input.data);
 
     const record: HistoryFileRecord = {
@@ -575,10 +594,10 @@ export class HistoryRegistry {
       return existing;
     }
 
-    const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
+    const roomDir = join(this.filesRoot, safeFileSegment(input.roomId));
     await fs.mkdir(roomDir, { recursive: true });
 
-    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
+    const storagePath = buildStoragePath(this.filesRoot, input.roomId, input.historyId, input.fileName);
     const tempPath = `${storagePath}.part-${Date.now().toString(36)}`;
 
     try {
@@ -683,6 +702,44 @@ export class HistoryRegistry {
     total: number;
     data: Buffer;
   }) {
+    // Reading the current offset and appending straddles awaits, so two
+    // concurrent chunks for one historyId would both observe the same offset
+    // and both append. Chain every chunk of a given upload onto the previous.
+    const previous = this.chunkLocks.get(input.historyId) ?? Promise.resolve();
+    const current = previous.then(() => this.saveFileChunkExclusive(input));
+    // The stored tail must never reject, or the next waiter inherits the
+    // rejection instead of taking its turn.
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    this.chunkLocks.set(input.historyId, tail);
+
+    try {
+      return await current;
+    } finally {
+      if (this.chunkLocks.get(input.historyId) === tail) {
+        this.chunkLocks.delete(input.historyId);
+      }
+    }
+  }
+
+  private async saveFileChunkExclusive(input: {
+    historyId: string;
+    roomId: string;
+    sessionId?: string;
+    isPublic: boolean;
+    sourceDeviceId: string;
+    sourceDeviceName: string;
+    fileName: string;
+    mimeType?: string;
+    createdAt: string;
+    start: number;
+    end: number;
+    total: number;
+    data: Buffer;
+  }) {
     this.prune();
     const existing = this.filesById.get(input.historyId);
     if (existing) {
@@ -701,10 +758,10 @@ export class HistoryRegistry {
       throw new Error('Chunk size does not match Content-Range.');
     }
 
-    const roomDir = join(FILES_ROOT, safeFileSegment(input.roomId));
+    const roomDir = join(this.filesRoot, safeFileSegment(input.roomId));
     await fs.mkdir(roomDir, { recursive: true });
 
-    const storagePath = buildStoragePath(input.roomId, input.historyId, input.fileName);
+    const storagePath = buildStoragePath(this.filesRoot, input.roomId, input.historyId, input.fileName);
     const tempPath = `${storagePath}.part`;
     const currentOffset = await this.readPartialSize(tempPath);
 
@@ -728,6 +785,12 @@ export class HistoryRegistry {
     }
 
     if (nextOffset !== input.total) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Ignore cleanup failures for an already-missing partial file.
+      }
+
       throw new Error('Chunk upload exceeded declared file size.');
     }
 
@@ -889,7 +952,7 @@ export class HistoryRegistry {
 
   private loadFromLocalIndex() {
     try {
-      const raw = readFileSync(INDEX_PATH, 'utf8');
+      const raw = readFileSync(this.indexPath, 'utf8');
       const parsed = JSON.parse(raw) as {
         files?: HistoryFileRecord[];
         texts?: HistoryTextRecord[];
@@ -925,11 +988,11 @@ export class HistoryRegistry {
   }
 
   private persistLocalIndex() {
-    mkdirSync(HISTORY_ROOT, { recursive: true });
+    mkdirSync(this.historyRoot, { recursive: true });
     const files = [...this.filesById.values()].sort(sortByCreatedAt);
     const texts = [...this.textsById.values()].sort(sortByCreatedAt);
     writeFileSync(
-      INDEX_PATH,
+      this.indexPath,
       JSON.stringify({ files, texts }, null, 2),
       'utf8',
     );
