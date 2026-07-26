@@ -16,6 +16,9 @@ const DEFAULT_HISTORY_ROOT = fileURLToPath(
   new URL('../../data/history', import.meta.url),
 );
 const REMOTE_BATCH_SIZE = 500;
+const PARTIAL_UPLOAD_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+/** How long a `.part` file may sit untouched before it counts as abandoned. */
+const PARTIAL_UPLOAD_IDLE_MS = 60 * 60 * 1000;
 
 export interface HistoryFileRecord {
   historyId: string;
@@ -875,7 +878,69 @@ export class HistoryRegistry {
       }
     }
 
+    this.schedulePartialUploadSweep(now);
+
     return changed;
+  }
+
+  private lastPartialSweepAt = 0;
+
+  /**
+   * An upload that stops before its final chunk leaves a `.part` file behind
+   * with no index record, so neither prune() nor pruneRoomCapacity() can ever
+   * reclaim it. Sweep abandoned ones on a slow cadence — prune() runs on every
+   * history read, and this walks the disk.
+   */
+  private schedulePartialUploadSweep(now: number) {
+    if (now - this.lastPartialSweepAt < PARTIAL_UPLOAD_SWEEP_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastPartialSweepAt = now;
+    void this.sweepAbandonedPartialUploads(now).catch((error: unknown) => {
+      console.warn('Abandoned partial upload sweep failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
+  private async sweepAbandonedPartialUploads(now: number) {
+    let roomDirs: string[];
+    try {
+      roomDirs = await fs.readdir(this.filesRoot);
+    } catch {
+      return;
+    }
+
+    for (const roomDir of roomDirs) {
+      const roomPath = join(this.filesRoot, roomDir);
+
+      let entries: string[];
+      try {
+        entries = await fs.readdir(roomPath);
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        if (!entry.includes('.part')) {
+          continue;
+        }
+
+        const partialPath = join(roomPath, entry);
+
+        try {
+          const stats = await fs.stat(partialPath);
+          if (now - stats.mtimeMs < PARTIAL_UPLOAD_IDLE_MS) {
+            continue;
+          }
+
+          await fs.unlink(partialPath);
+        } catch {
+          // Another request may have completed or removed it meanwhile.
+        }
+      }
+    }
   }
 
   toSummary(record: HistoryFileRecord, publicBaseUrl?: string, isPublic = record.isPublic): HistoryFileSummary {

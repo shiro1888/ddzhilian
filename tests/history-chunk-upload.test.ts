@@ -2,17 +2,19 @@
 // HistoryRegistry resolves its default storage root from import.meta.url,
 // which is not a file: URL under the jsdom environment this project defaults
 // to. Each test also gets its own storageRoot so nothing touches real data.
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HistoryRegistry } from '../server/src/registry/history-registry'
 
 const tempDirs: string[] = []
+let lastStorageRoot = ''
 
 async function createRegistry() {
   const storageRoot = await mkdtemp(join(tmpdir(), 'ddzhilian-history-'))
   tempDirs.push(storageRoot)
+  lastStorageRoot = storageRoot
 
   return HistoryRegistry.create({
     storageRoot,
@@ -125,6 +127,46 @@ describe('HistoryRegistry.saveFileChunk', () => {
         data: Buffer.from('short'),
       }),
     ).rejects.toThrow(/Content-Range/)
+  })
+
+  it('reclaims abandoned .part files but leaves an in-progress upload alone', async () => {
+    const registry = await createRegistry()
+
+    // An upload that never sends its final chunk has no index record, so
+    // nothing else in prune() can ever reclaim it.
+    await registry.saveFileChunk({
+      ...baseInput('history-abandoned'),
+      start: 0,
+      end: 3,
+      total: 1024,
+      data: Buffer.from('FFFF'),
+    })
+
+    const roomDir = join(lastStorageRoot, 'files', 'ROOM01')
+    const stalePath = join(roomDir, 'stale-upload.part')
+    await writeFile(stalePath, 'orphan')
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    await utimes(stalePath, twoHoursAgo, twoHoursAgo)
+
+    // HistoryRegistry.create() already ran one sweep, so advance past the
+    // sweep interval. The fresh .part file is still well inside the idle
+    // window at this point and must survive.
+    registry.prune(Date.now() + 20 * 60 * 1000)
+
+    // The sweep is fire-and-forget, so poll rather than guessing a delay.
+    let remaining: string[] = []
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      remaining = await readdir(roomDir)
+      if (!remaining.includes('stale-upload.part')) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect(remaining).not.toContain('stale-upload.part')
+    // The fresh upload's own .part file must survive.
+    expect(remaining.some((entry) => entry.includes('.part'))).toBe(true)
   })
 
   it('rejects an upload declaring more than the configured capacity', async () => {
