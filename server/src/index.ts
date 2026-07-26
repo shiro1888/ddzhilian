@@ -363,7 +363,9 @@ type SocketWithAddress = WebSocket & {
 };
 
 const config = loadConfig();
-const devices = new DeviceRegistry();
+const devices = new DeviceRegistry({
+  secretStorePath: fileURLToPath(new URL('../data/devices/secrets.json', import.meta.url)),
+});
 const history = await HistoryRegistry.create({
   retentionMs: config.historyRetentionMs,
   maxBytes: config.historyMaxBytes,

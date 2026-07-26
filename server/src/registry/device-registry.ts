@@ -1,4 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
+import { dirname } from 'node:path';
 
 import type WebSocket from 'ws';
 
@@ -117,6 +120,22 @@ function derivePublicHttpBaseUrl(publicWsUrl: string) {
   }
 }
 
+export interface DeviceRegistryOptions {
+  /**
+   * Where to persist device secrets. Omitting it keeps them in memory only,
+   * which is fine for tests but reopens the impersonation window on every
+   * restart in production — see loadSecrets.
+   */
+  secretStorePath?: string;
+  secretTtlMs?: number;
+}
+
+type PersistedDeviceSecret = {
+  deviceId: string;
+  secret: string;
+  expiresAt: number;
+};
+
 export class DeviceRegistry {
   private readonly byId = new Map<string, ConnectedDevice>();
 
@@ -135,7 +154,94 @@ export class DeviceRegistry {
     { secret: string; expiresAt: number }
   >();
 
-  private readonly secretTtlMs = 30 * 24 * 60 * 60 * 1000;
+  private readonly secretTtlMs: number;
+
+  private readonly secretStorePath?: string;
+
+  private secretSaveQueue = Promise.resolve();
+
+  constructor(options: DeviceRegistryOptions = {}) {
+    this.secretStorePath = options.secretStorePath;
+    this.secretTtlMs = options.secretTtlMs ?? 30 * 24 * 60 * 60 * 1000;
+    this.loadSecrets();
+  }
+
+  /**
+   * deviceIds are durable and publicly observable — they are broadcast in every
+   * directory snapshot and stored alongside history records. An in-memory-only
+   * secret store therefore means a restart returns every previously harvested
+   * id to trust-on-first-use, so the secrets have to outlive the process.
+   */
+  private loadSecrets() {
+    if (!this.secretStorePath) {
+      return;
+    }
+
+    let raw: string;
+    try {
+      raw = readFileSync(this.secretStorePath, 'utf8');
+    } catch {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { secrets?: unknown };
+      if (!Array.isArray(parsed.secrets)) {
+        return;
+      }
+
+      const now = Date.now();
+      for (const entry of parsed.secrets as PersistedDeviceSecret[]) {
+        if (
+          typeof entry?.deviceId !== 'string' ||
+          typeof entry.secret !== 'string' ||
+          typeof entry.expiresAt !== 'number' ||
+          entry.expiresAt <= now
+        ) {
+          continue;
+        }
+
+        this.secretsByDeviceId.set(entry.deviceId, {
+          secret: entry.secret,
+          expiresAt: entry.expiresAt,
+        });
+      }
+    } catch (error) {
+      console.warn('Device secret store is unreadable; starting empty', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private enqueueSecretSave() {
+    if (!this.secretStorePath) {
+      return;
+    }
+
+    this.secretSaveQueue = this.secretSaveQueue
+      .then(() => this.saveSecrets())
+      .catch((error: unknown) => {
+        console.error('Device secret store save failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
+  private async saveSecrets() {
+    const storePath = this.secretStorePath;
+    if (!storePath) {
+      return;
+    }
+
+    const secrets: PersistedDeviceSecret[] = [...this.secretsByDeviceId].map(
+      ([deviceId, entry]) => ({ deviceId, ...entry }),
+    );
+
+    await fs.mkdir(dirname(storePath), { recursive: true });
+    const tempPath = `${storePath}.tmp`;
+    await fs.writeFile(tempPath, `${JSON.stringify({ secrets }, null, 2)}\n`, 'utf8');
+    await fs.rename(tempPath, storePath);
+  }
 
   private pruneExpiredSecrets() {
     const now = Date.now();
@@ -202,6 +308,7 @@ export class DeviceRegistry {
       secret: deviceSecret,
       expiresAt: Date.now() + this.secretTtlMs,
     });
+    this.enqueueSecretSave();
 
     const now = new Date().toISOString();
     const device: ConnectedDevice = {

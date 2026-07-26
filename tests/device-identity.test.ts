@@ -1,5 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type WebSocket from 'ws'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from '../server/src/registry/device-registry'
 import type { NetworkContext } from '../server/src/utils/network'
 
@@ -105,6 +108,75 @@ describe('DeviceRegistry identity claims', () => {
     )
 
     expect(device.deviceId).toBe('device-legacy-install')
+  })
+})
+
+describe('DeviceRegistry secret persistence', () => {
+  const tempDirs: string[] = []
+
+  afterEach(async () => {
+    for (const dir of tempDirs.splice(0)) {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  async function createStorePath() {
+    const dir = await mkdtemp(join(tmpdir(), 'ddzhilian-device-secrets-'))
+    tempDirs.push(dir)
+    return join(dir, 'secrets.json')
+  }
+
+  it('still rejects a harvested deviceId after a restart', async () => {
+    const secretStorePath = await createStorePath()
+
+    const first = new DeviceRegistry({ secretStorePath })
+    const owner = first.register(createSocket(), { deviceId: 'device-durable' }, testNetwork)
+
+    // Let the queued atomic write land.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // deviceIds are public and durable, so without persistence a restart would
+    // return every harvested id to trust-on-first-use.
+    const restarted = new DeviceRegistry({ secretStorePath })
+    const attacker = restarted.register(
+      createSocket(),
+      { deviceId: 'device-durable' },
+      testNetwork,
+    )
+
+    expect(attacker.deviceId).not.toBe('device-durable')
+
+    const reclaimed = restarted.register(
+      createSocket(),
+      { deviceId: 'device-durable', deviceSecret: owner.deviceSecret },
+      testNetwork,
+    )
+
+    expect(reclaimed.deviceId).toBe('device-durable')
+    expect(reclaimed.deviceSecret).toBe(owner.deviceSecret)
+  })
+
+  it('starts empty when the store is missing or corrupt', async () => {
+    const secretStorePath = await createStorePath()
+
+    // Never written: the file does not exist yet.
+    const registry = new DeviceRegistry({ secretStorePath })
+    const device = registry.register(createSocket(), { deviceId: 'device-fresh' }, testNetwork)
+
+    expect(device.deviceId).toBe('device-fresh')
+  })
+
+  it('keeps secrets in memory when no store path is configured', () => {
+    const registry = new DeviceRegistry()
+    const owner = registry.register(createSocket(), { deviceId: 'device-memory' }, testNetwork)
+
+    const reclaimed = registry.register(
+      createSocket(),
+      { deviceId: 'device-memory', deviceSecret: owner.deviceSecret },
+      testNetwork,
+    )
+
+    expect(reclaimed.deviceId).toBe('device-memory')
   })
 })
 
