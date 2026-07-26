@@ -712,6 +712,13 @@ function MarketingPage({ routeKey }: { routeKey: RouteKey }) {
 export default async function Page({ params }: PageProps) {
   const routeKey = await resolveRouteKey(params)
 
+  // The product is the landing page: `/` opens the workbench directly rather
+  // than an interstitial marketing page. Its SEO metadata still comes from
+  // marketingRoutes[''] via generateMetadata; only the body changes.
+  if (routeKey === '') {
+    return <ClientRoot />
+  }
+
   if (routeKey !== null) {
     return <MarketingPage routeKey={routeKey} />
   }
