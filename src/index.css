@@ -1,5 +1,10 @@
 :root {
-  --font-ui: 'Maple UI', 'Maple Mono', 'Maple Mono NF CN', 'Maple Mono CN', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', Arial, sans-serif;
+  /*
+   * Monospace faces belong in --font-mono only. They used to sit second here,
+   * so anyone with Maple Mono installed but not Maple UI got the entire
+   * interface in a terminal font. Fall through to system CJK sans instead.
+   */
+  --font-ui: 'Maple UI', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', system-ui, Arial, sans-serif;
   --font-mono: 'Maple Mono', 'Maple Mono NF CN', 'Maple Mono CN', 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace;
   --font-body: var(--font-ui);
   --font-display: var(--font-ui);

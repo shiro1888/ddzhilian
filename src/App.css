@@ -12821,28 +12821,34 @@
     overflow: visible;
   }
 
+  /*
+   * A tab bar, not a row of chips. Bordered pills read as five competing
+   * buttons; an icon over its label is the idiom people already know, and it
+   * lets the active state be carried by colour alone.
+   */
   .dd-snaplink__mobile-workbench-nav button {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 3px;
     width: 100%;
     min-width: 0;
-    min-height: 36px;
-    padding: 0 4px;
-    border: 1px solid var(--snap-border);
-    border-radius: 999px;
-    background: #ffffff;
-    color: var(--snap-ink-soft);
+    min-height: 44px;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--snap-muted);
     font: inherit;
-    font-size: 11px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 400;
     white-space: nowrap;
     cursor: pointer;
   }
 
   .dd-snaplink__mobile-workbench-nav button.is-active {
-    border-color: color-mix(in srgb, var(--snap-green) 38%, var(--snap-border));
-    background: var(--snap-green-soft);
+    background: transparent;
     color: var(--snap-green);
   }
 
@@ -12924,8 +12930,8 @@
     }
 
     .dd-snaplink__mobile-workbench-nav button {
-      min-height: 32px;
-      padding: 0 2px;
+      min-height: 44px;
+      padding: 2px;
       font-size: 10px;
     }
   }
@@ -14726,30 +14732,32 @@
   text-align: right;
 }
 
+/*
+ * Matches the conversation-list label treatment so the app has one way of
+ * showing a classification. This badge previously used a monospace face, a
+ * 700 weight and a slate palette borrowed from nowhere else in the UI, which
+ * made an incidental platform hint read like a code token.
+ */
 .dd-snaplink__sender-badge {
   display: inline-grid;
   place-items: center;
   flex: none;
   min-height: 17px;
   padding: 0 5px;
-  border: 1px solid #d6dbe3;
   border-radius: 4px;
-  background: #f8fafc;
-  color: #64748b;
-  font-family: var(--font-mono);
+  background: color-mix(in srgb, var(--snap-ink) 6%, transparent);
+  color: var(--snap-muted);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
   text-transform: lowercase;
 }
 
 .dd-snaplink__sender-badge.is-ai {
-  border-color: #111827;
-  background: #111827;
+  background: color-mix(in srgb, var(--snap-ink) 82%, transparent);
   color: #ffffff;
-  font-family: inherit;
-  font-weight: 800;
+  font-weight: 500;
   text-transform: none;
 }
 
@@ -14772,7 +14780,14 @@
   color: var(--snap-theme-self-text);
 }
 
+/*
+ * The default peer colour (#F5F4F1) sits one step from the canvas (#F5F5F5),
+ * so incoming messages had no surface at all. Bubble colours are user-set, so
+ * derive the edge from the bubble itself rather than hard-coding one — every
+ * palette then keeps a readable boundary.
+ */
 .dd-snaplink__row.is-peer .dd-snaplink__bubble {
+  border: 1px solid color-mix(in srgb, var(--snap-theme-peer-text) 10%, var(--snap-theme-peer));
   border-bottom-left-radius: 4px;
   background: var(--snap-theme-peer);
   color: var(--snap-theme-peer-text);
@@ -21849,7 +21864,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 14px 10px;
+  padding: 12px 14px 8px;
 }
 
 .dd-snaplink__conversation-side-head span {
@@ -21860,8 +21875,9 @@
 
 .dd-snaplink__conversation-side-head strong {
   color: var(--snap-ink);
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .dd-snaplink__conversation-side-head small {
@@ -21903,7 +21919,7 @@
   background: color-mix(in srgb, var(--snap-surface) 72%, #f3f4f6);
   color: var(--snap-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .dd-snaplink__conversation-side-list {
@@ -21961,7 +21977,7 @@
   background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
   color: var(--snap-green);
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .dd-snaplink__conversation-avatar.is-assistant {
@@ -22002,32 +22018,43 @@
   min-width: 0;
 }
 
+/*
+ * Weights across this row are deliberately limited to 600 / 500 / 400. Mixing
+ * 900/800/700/600 on adjacent elements is what made the list read as unsorted:
+ * everything competed, so nothing led.
+ */
 .dd-snaplink__conversation-title strong {
   overflow: hidden;
   color: var(--snap-ink);
   font-size: 13.5px;
-  font-weight: 800;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/*
+ * Structural labels (公共 / 房间 / 设备) are classification, not status. Green
+ * is reserved for live state — online, sendable, in progress — so these stay
+ * neutral and quiet.
+ */
 .dd-snaplink__conversation-title em {
   flex: none;
   padding: 1px 5px;
-  border-radius: 999px;
-  background: #eefcf4;
-  background: color-mix(in srgb, var(--snap-green) 10%, var(--snap-surface));
-  color: var(--snap-green);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--snap-ink) 6%, transparent);
+  color: var(--snap-muted);
   font-size: 10px;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .dd-snaplink__conversation-main small {
   overflow: hidden;
   color: var(--snap-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -22036,16 +22063,19 @@
 .dd-snaplink__conversation-side-meta {
   display: grid;
   justify-items: end;
-  gap: 5px;
+  gap: 4px;
   color: var(--snap-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* Online count is live state, so it keeps the accent — but at text weight. */
 .dd-snaplink__conversation-side-meta em {
   color: var(--snap-green);
   font-style: normal;
+  font-weight: 500;
 }
 
 .dd-snaplink__conversation-side-meta strong {
@@ -22646,11 +22676,10 @@
     font-size: 12px;
   }
 
+  /* Tab bar: the active tab is marked by colour, not by a filled pill. */
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button.is-active {
-    border-color: rgba(22, 163, 74, 0.24);
-    background: #eefcf4;
-    border-color: color-mix(in srgb, var(--snap-green) 24%, transparent);
-    background: color-mix(in srgb, var(--snap-green) 10%, #ffffff);
+    border-color: transparent;
+    background: transparent;
   }
 
   .dd-snaplink__mobile-nav-label {
@@ -22791,7 +22820,7 @@
   color: var(--snap-ink);
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .dd-snaplink__conversation-side-search input::placeholder {
@@ -24227,8 +24256,8 @@
   }
 
   .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav button.is-active {
-    border-color: rgba(22, 163, 74, 0.24);
-    background: #eefcf4;
+    border-color: transparent;
+    background: transparent;
   }
 
   .dd-snaplink__mobile-nav-badge {

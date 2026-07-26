@@ -1,3 +1,10 @@
+import {
+  History,
+  MessageCircle,
+  MonitorSmartphone,
+  User,
+  type LucideIcon,
+} from 'lucide-react'
 import type { SidebarNavMode } from './SidebarNav'
 import type { SidebarNavTool } from './SidebarNav'
 
@@ -16,6 +23,9 @@ type MobileWorkbenchNavProps = {
 type MobileWorkbenchNavItem = {
   mode: SidebarNavMode
   label: string
+  // Same glyphs as the desktop rail, so a mode is recognisable by the same
+  // mark on both surfaces.
+  icon: LucideIcon
   onClick: () => void
   badgeCount?: number
 }
@@ -35,19 +45,28 @@ export function MobileWorkbenchNav({
     {
       mode: 'rooms',
       label: '消息',
+      icon: MessageCircle,
       onClick: onShowRooms,
       isActive: activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files',
     },
     {
       mode: 'nearby',
       label: '设备',
+      icon: MonitorSmartphone,
       onClick: onShowNearby,
       isActive: activeMode === 'nearby',
     },
-    { mode: 'transfers', label: '传输', onClick: onShowQueue, badgeCount: activeTransferCount },
+    {
+      mode: 'transfers',
+      label: '传输',
+      icon: History,
+      onClick: onShowQueue,
+      badgeCount: activeTransferCount,
+    },
     {
       mode: 'settings',
       label: '我的',
+      icon: User,
       onClick: onShowSettings,
       isActive: activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool),
     },
@@ -61,6 +80,8 @@ export function MobileWorkbenchNav({
           ? `${item.label} · ${item.badgeCount.toString()} 个进行中`
           : item.label
 
+        const Icon = item.icon
+
         return (
           <button
             key={item.mode}
@@ -70,6 +91,7 @@ export function MobileWorkbenchNav({
             aria-label={itemAriaLabel}
             onClick={item.onClick}
           >
+            <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
             <span className="dd-snaplink__mobile-nav-label">{item.label}</span>
             {item.badgeCount && item.badgeCount > 0 ? (
               <span className="dd-snaplink__mobile-nav-badge" aria-hidden="true">

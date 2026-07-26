@@ -4909,8 +4909,10 @@ export function SnapLinkStage({
           <Send size={24} strokeWidth={1.8} />
         </span>
         <strong>这里还没有消息</strong>
+        {/* The buttons below already name the two actions, so the prose that
+            restated them has been dropped — the state keeps its context line
+            and lets the controls speak for themselves. */}
         <p>{fileConversationEmptyState}</p>
-        <small>发送第一条文本，或把文件拖到对话区开始协作。进度会显示在传输记录里。</small>
         <div className="dd-snaplink__room-empty-actions">
           <button type="button" onClick={() => inputRef.current?.focus()}>
             发送文本
@@ -5262,9 +5264,11 @@ export function SnapLinkStage({
     return (
       <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
         <div className="dd-snaplink__conversation-side-head">
+          {/* The list below already shows what it contains, so the subtitle
+              that named the categories has been dropped to give the rows the
+              vertical space instead. */}
           <span>
             <strong>消息</strong>
-            <small>世界对话、房间和 DD助手</small>
           </span>
           <button
             type="button"
