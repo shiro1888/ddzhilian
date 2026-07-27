@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -116,7 +117,10 @@ describe('DeviceRegistry secret persistence', () => {
 
   afterEach(async () => {
     for (const dir of tempDirs.splice(0)) {
-      await rm(dir, { recursive: true, force: true })
+      // Saves are queued, so a temp file can appear mid-removal and make
+      // rmdir fail with ENOTEMPTY on Windows. Retrying is what maxRetries is
+      // for; without it this cleanup fails intermittently under load.
+      await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 })
     }
   })
 
@@ -126,14 +130,28 @@ describe('DeviceRegistry secret persistence', () => {
     return join(dir, 'secrets.json')
   }
 
+  /**
+   * The save is queued and atomic, so wait for the file to actually appear
+   * rather than guessing a delay — a fixed sleep raced under parallel load.
+   */
+  async function waitForStore(storePath: string) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (existsSync(storePath)) {
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    throw new Error(`device secret store was never written: ${storePath}`)
+  }
+
   it('still rejects a harvested deviceId after a restart', async () => {
     const secretStorePath = await createStorePath()
 
     const first = new DeviceRegistry({ secretStorePath })
     const owner = first.register(createSocket(), { deviceId: 'device-durable' }, testNetwork)
 
-    // Let the queued atomic write land.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForStore(secretStorePath)
 
     // deviceIds are public and durable, so without persistence a restart would
     // return every harvested id to trust-on-first-use.

@@ -38,7 +38,9 @@ function baseInput(historyId: string) {
 
 afterEach(async () => {
   for (const dir of tempDirs.splice(0)) {
-    await rm(dir, { recursive: true, force: true })
+    // The partial-upload sweep is fire-and-forget, so a file can appear
+    // mid-removal and fail rmdir with ENOTEMPTY on Windows.
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 })
   }
 })
 

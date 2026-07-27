@@ -14556,17 +14556,20 @@
   line-height: 1.6;
 }
 
+/*
+ * An empty room is a place to start, not a dialog. The bordered, gradient-
+ * filled card made the message canvas look like it was covering something up
+ * — and DESIGN.zh-CN.md rules gradients out of everyday UI anyway. The
+ * content is already centred, so the shell around it was doing no work.
+ */
 .dd-snaplink__room-empty-card {
   display: grid;
   justify-items: center;
   gap: 10px;
-  width: min(100%, 420px);
-  padding: 24px;
-  border: 1px solid color-mix(in srgb, var(--snap-green) 22%, var(--snap-border));
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(7, 193, 96, 0.1), transparent 38%),
-    var(--snap-surface);
+  width: min(100%, 380px);
+  padding: 8px;
+  border: 0;
+  background: transparent;
   color: var(--snap-ink-soft);
   text-align: center;
 }
@@ -14574,9 +14577,9 @@
 .dd-snaplink__room-empty-icon {
   display: inline-grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: var(--snap-green-soft);
   color: var(--snap-green);
 }
@@ -15954,8 +15957,15 @@
   white-space: pre-wrap;
 }
 
+/*
+ * A long room name must not wrap the placeholder onto extra lines and grow
+ * the composer — it truncates instead. The header already names the target.
+ */
 .dd-snaplink__input-wrap textarea::placeholder {
+  overflow: hidden;
   color: var(--snap-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dd-snaplink__emoji-trigger {
@@ -21864,7 +21874,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px 8px;
+  padding: 10px 14px 6px;
 }
 
 .dd-snaplink__conversation-side-head span {
@@ -21911,8 +21921,8 @@
 }
 
 .dd-snaplink__conversation-side-search {
-  margin: 0 12px 10px;
-  padding: 9px 12px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: #f3f4f6;
@@ -21933,12 +21943,17 @@
 .dd-snaplink__conversation-row {
   position: relative;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 64px;
-  padding: 8px 9px;
+  /*
+   * 56px keeps the two text lines and the 38px avatar comfortable while
+   * fitting roughly two more conversations per screen than the old 64px.
+   * Still well above the 44px touch target the rows need on mobile.
+   */
+  min-height: 56px;
+  padding: 6px 9px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -21971,12 +21986,12 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
   background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
   color: var(--snap-green);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -24202,15 +24217,7 @@
   .dd-snaplink__room-workbench .dd-snaplink__input-wrap textarea {
     font-size: 16px;
   }
-
-    .dd-snaplink__room-mobile-actions {
-      position: absolute;
-      top: 50%;
-      left: 12px;
-      z-index: 30;
-      transform: translateY(-50%);
-    }
-  }
+}
 
 /* Chrome 91/93 fallback: keep key DD chat surfaces visible when color-mix() is unsupported. */
 @supports not (color: color-mix(in srgb, #000000 50%, #ffffff 50%)) {

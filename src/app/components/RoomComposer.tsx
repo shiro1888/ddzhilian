@@ -374,7 +374,9 @@ export function RoomComposer({
           <textarea
             ref={inputRef}
             defaultValue={defaultDraft}
-            placeholder={targetName ? `发送给 ${targetName} · 拖文件到这里也能发送` : '输入消息...'}
+            /* The drag hint is meaningless on touch and pushed the placeholder
+               to three lines on a phone; dragging already has its own overlay. */
+            placeholder={targetName ? `发送给 ${targetName}` : '输入消息'}
             aria-label={targetName ? `发送给 ${targetName}` : '消息输入'}
             autoComplete="off"
             enterKeyHint={enterToSend ? 'send' : 'enter'}
