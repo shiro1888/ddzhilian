@@ -4251,7 +4251,6 @@
   --cc-text-tertiary: var(--snap-muted, #a1a1aa);
   --cc-hover: var(--snap-bg, #f5f4f1);
   --cc-active-row: #fafafa;
-  --cc-active-accent: #3f3f46;
   --cc-green: var(--snap-green, #16a34a);
   --input-bg: #ffffff;
   --input-border-soft: var(--snap-border, #e4e4e7);
@@ -4743,7 +4742,6 @@
   --cc-text-tertiary: #91a494;
   --cc-hover: rgba(190, 216, 195, 0.1);
   --cc-active-row: rgba(237, 245, 239, 0.1);
-  --cc-active-accent: #d4d4d8;
   --input-bg: #152019;
   --input-border-soft: rgba(155, 179, 161, 0.28);
 }
@@ -4762,7 +4760,6 @@
       --cc-text-tertiary: #91a494;
       --cc-hover: rgba(190, 216, 195, 0.1);
       --cc-active-row: rgba(237, 245, 239, 0.1);
-      --cc-active-accent: #d4d4d8;
       --input-bg: #152019;
       --input-border-soft: rgba(155, 179, 161, 0.28);
     }
@@ -6868,7 +6865,6 @@
   --image-auth-surface: #ffffff;
   --image-auth-soft: #f8faf9;
   --image-auth-line: #e2e8e5;
-  --image-auth-line-strong: #d2ddd8;
   --image-auth-text: #1f352f;
   --image-auth-subtle: #4a635b;
   --image-auth-muted: #889d95;
@@ -6894,7 +6890,6 @@
   --image-auth-surface: #2b2b2f;
   --image-auth-soft: #242427;
   --image-auth-line: #35353b;
-  --image-auth-line-strong: #45454d;
   --image-auth-text: #f2f2f3;
   --image-auth-subtle: #b8c2bd;
   --image-auth-muted: #7f8b86;
@@ -22100,7 +22095,9 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--snap-danger, #fa5151);
+  /* --snap-danger was never defined, so the fallback always won and the
+     unread badge kept its light-mode red in dark mode. --danger is themed. */
+  background: var(--danger);
   color: #ffffff;
   font-size: 10.5px;
 }
