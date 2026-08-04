@@ -1,0 +1,24 @@
+[Unit]
+Description=ddzhilian signaling server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ddzhilian
+Group=ddzhilian
+WorkingDirectory=/opt/ddzhilian-server
+Environment=NODE_ENV=production
+EnvironmentFile=-/opt/ddzhilian-server/.env
+ExecStart=/usr/bin/node /opt/ddzhilian-server/dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/ddzhilian-server/data
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
