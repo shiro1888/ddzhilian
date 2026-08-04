@@ -75,7 +75,10 @@ import { AdminConfigRegistry, type AdminAiSettingsSnapshot } from './registry/ad
 import { AdminSessionRegistry } from './registry/admin-session-registry.js';
 import { AiChatConversationRegistry } from './registry/ai-chat-conversation-registry.js';
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
-import { HistoryRegistry } from './registry/history-registry.js';
+import {
+  HistoryFileTooLargeError,
+  HistoryRegistry,
+} from './registry/history-registry.js';
 import {
   type ImageGenerationCursor,
   ImageGenerationHistoryRegistry,
@@ -6701,7 +6704,7 @@ const httpServer = createServer((request, response) => {
 
       if (
         expectedChunkBytes > historyUploadChunkMaxBytes ||
-        contentRange.total > config.historyMaxBytes
+        (config.historyMaxBytes > 0 && contentRange.total > config.historyMaxBytes)
       ) {
         writeJson(response, 413, {
           error: 'Chunk exceeds maximum allowed size.',
@@ -6747,10 +6750,14 @@ const httpServer = createServer((request, response) => {
           broadcastSnapshots();
         })
         .catch((error) => {
-          writeJson(response, error instanceof RequestBodyTooLargeError ? 413 : 500, {
-            error: error instanceof RequestBodyTooLargeError
+          const requestTooLarge = error instanceof RequestBodyTooLargeError;
+          const historyTooLarge = error instanceof HistoryFileTooLargeError;
+          writeJson(response, requestTooLarge || historyTooLarge ? 413 : 500, {
+            error: requestTooLarge
               ? 'Chunk exceeds declared Content-Range size.'
-              : error instanceof Error ? error.message : 'History chunk upload failed.',
+              : historyTooLarge
+                ? 'History file exceeds maximum allowed size.'
+                : 'History chunk upload failed.',
           });
         });
       return;
@@ -6774,8 +6781,11 @@ const httpServer = createServer((request, response) => {
         broadcastSnapshots();
       })
       .catch((error) => {
-        writeJson(response, 500, {
-          error: error instanceof Error ? error.message : 'History upload failed.',
+        const historyTooLarge = error instanceof HistoryFileTooLargeError;
+        writeJson(response, historyTooLarge ? 413 : 500, {
+          error: historyTooLarge
+            ? 'History file exceeds maximum allowed size.'
+            : 'History upload failed.',
         });
       });
     return;

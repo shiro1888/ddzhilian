@@ -209,6 +209,13 @@ function buildStoragePath(
 
 const historyFileTooLargeMessage = 'History file exceeds maximum allowed size.';
 
+export class HistoryFileTooLargeError extends Error {
+  constructor(message = historyFileTooLargeMessage) {
+    super(message);
+    this.name = 'HistoryFileTooLargeError';
+  }
+}
+
 function getChunkByteLength(chunk: Buffer | string, encoding?: BufferEncoding) {
   return Buffer.isBuffer(chunk)
     ? chunk.byteLength
@@ -222,8 +229,8 @@ function createMaxBytesGuard(maxBytes: number) {
     transform(chunk: Buffer | string, encoding: BufferEncoding, callback: TransformCallback) {
       receivedBytes += getChunkByteLength(chunk, encoding);
 
-      if (receivedBytes > maxBytes) {
-        callback(new Error(historyFileTooLargeMessage));
+      if (maxBytes > 0 && receivedBytes > maxBytes) {
+        callback(new HistoryFileTooLargeError());
         return;
       }
 
@@ -236,11 +243,11 @@ async function drainStream(stream: NodeJS.ReadableStream, maxBytes?: number) {
   let receivedBytes = 0;
 
   for await (const chunk of stream) {
-    if (maxBytes !== undefined) {
+    if (maxBytes !== undefined && maxBytes > 0) {
       receivedBytes += getChunkByteLength(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
 
       if (receivedBytes > maxBytes) {
-        throw new Error(historyFileTooLargeMessage);
+        throw new HistoryFileTooLargeError();
       }
     }
   }
@@ -1065,7 +1072,7 @@ export class HistoryRegistry {
 
   private assertWithinMaxBytes(size: number) {
     if (this.maxBytes > 0 && size > this.maxBytes) {
-      throw new Error('File exceeds history storage limit.');
+      throw new HistoryFileTooLargeError('File exceeds history storage limit.');
     }
   }
 

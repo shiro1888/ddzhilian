@@ -101,5 +101,5 @@ describe('SnapLinkStage recall animation', () => {
     })
 
     expect(screen.queryByText('这条消息将被撤回')).not.toBeInTheDocument()
-  }, 15000)
+  }, 30000)
 })

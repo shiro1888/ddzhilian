@@ -5,13 +5,14 @@
 import { mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HistoryRegistry } from '../server/src/registry/history-registry'
 
 const tempDirs: string[] = []
 let lastStorageRoot = ''
 
-async function createRegistry() {
+async function createRegistry(maxBytes = 10 * 1024 * 1024) {
   const storageRoot = await mkdtemp(join(tmpdir(), 'ddzhilian-history-'))
   tempDirs.push(storageRoot)
   lastStorageRoot = storageRoot
@@ -20,7 +21,7 @@ async function createRegistry() {
     storageRoot,
     retentionMs: 24 * 60 * 60 * 1000,
     textRetentionMs: 24 * 60 * 60 * 1000,
-    maxBytes: 10 * 1024 * 1024,
+    maxBytes,
   })
 }
 
@@ -45,6 +46,27 @@ afterEach(async () => {
 })
 
 describe('HistoryRegistry.saveFileChunk', () => {
+  it('treats a zero history cap as unlimited for chunked and streamed files', async () => {
+    const registry = await createRegistry(0)
+
+    const chunkResult = await registry.saveFileChunk({
+      ...baseInput('history-unlimited-chunk'),
+      start: 0,
+      end: 3,
+      total: 4,
+      data: Buffer.from('ABCD'),
+    })
+
+    expect(chunkResult.complete).toBe(true)
+
+    const streamed = await registry.saveFileStream({
+      ...baseInput('history-unlimited-stream'),
+      stream: Readable.from([Buffer.from('EFGH')]),
+    })
+
+    expect(streamed.size).toBe(4)
+  })
+
   it('assembles sequential chunks into the declared total', async () => {
     const registry = await createRegistry()
 
