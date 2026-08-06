@@ -46,6 +46,7 @@ import {
   type OpenAiCompatibleReasoningEffort,
   type OpenAiCompatibleWireApi,
 } from './config.js';
+import { loadBuildInfo } from './build-info.js';
 import {
   buildRefreshedOpenAiCompatibleModelConfig,
   type OpenAiCompatibleModelOption,
@@ -366,6 +367,7 @@ type SocketWithAddress = WebSocket & {
 };
 
 const config = loadConfig();
+const buildInfo = await loadBuildInfo();
 const devices = new DeviceRegistry({
   secretStorePath: fileURLToPath(new URL('../data/devices/secrets.json', import.meta.url)),
 });
@@ -4022,6 +4024,7 @@ function buildAiQuotaPayload(activeAi: ActiveAiSettings, model: string) {
   const providers = getAvailableAiSettings();
   if (activeAi.kind !== 'cloudflare') {
     return {
+      available: true,
       date: new Date().toISOString().slice(0, 10),
       usedNeurons: 0,
       dailyNeuronBudget: 0,
@@ -4040,11 +4043,25 @@ function buildAiQuotaPayload(activeAi: ActiveAiSettings, model: string) {
   } = config.cloudflareAi;
 
   return {
+    available: true,
     ...cloudflareAiQuota.getStatus(dailyNeuronBudget),
     freeOnly,
     provider: 'cloudflare',
     model,
     models: buildAiModelOptionsPayload(providers),
+  };
+}
+
+function buildUnavailableAiQuotaPayload() {
+  return {
+    available: false,
+    unavailableReason: '管理员尚未配置 AI 服务。',
+    date: new Date().toISOString().slice(0, 10),
+    usedNeurons: 0,
+    dailyNeuronBudget: 0,
+    remainingNeurons: 0,
+    freeOnly: false,
+    models: [],
   };
 }
 
@@ -5230,6 +5247,11 @@ function handleAiQuotaRequest(
   const authResult = authenticateHistoryRequest(request);
   if (!authResult.ok) {
     writeJson(response, authResult.statusCode, { error: authResult.message });
+    return;
+  }
+
+  if (getAvailableAiSettings().length === 0) {
+    writeJson(response, 200, buildUnavailableAiQuotaPayload());
     return;
   }
 
@@ -7030,6 +7052,16 @@ const httpServer = createServer((request, response) => {
     response.end(
       JSON.stringify({
         ok: true,
+        build: buildInfo,
+        capabilities: {
+          accounts: Boolean(accounts),
+          aiChat: getAvailableAiSettings().length > 0,
+          imageGeneration: Boolean(
+            accounts &&
+            imageGenerationHistory &&
+            !getCodexImageConfigurationError()
+          ),
+        },
         onlineDevices: devices.list().length,
         openRooms: openRoomIds.size,
         openSessions: openSessionIds.size,

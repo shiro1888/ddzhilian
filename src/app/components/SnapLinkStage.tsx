@@ -46,6 +46,7 @@ import type {
   UnifiedConversationEntry,
 } from '../types'
 import type {
+  AiAvailabilityState,
   AiModelOption,
   DevicePreferencesPayload,
   DeviceSettingsPayload,
@@ -927,6 +928,8 @@ export type SnapLinkStageProps = {
   isSendDisabled: boolean
   isAiGenerating: boolean
   aiGeneratingRoomId: string | null
+  aiAvailability?: AiAvailabilityState
+  aiAvailabilityMessage?: string
   aiQuotaLabel: string
   aiModelOptions: AiModelOption[]
   selectedAiModel: string
@@ -1524,6 +1527,8 @@ export function SnapLinkStage({
   isSendDisabled,
   isAiGenerating,
   aiGeneratingRoomId,
+  aiAvailability = 'available',
+  aiAvailabilityMessage,
   aiQuotaLabel,
   aiModelOptions,
   selectedAiModel,
@@ -5316,7 +5321,7 @@ export function SnapLinkStage({
 
                 handleOpenAiChat()
               }}
-              title="打开 DD助手"
+              title={aiAvailability === 'available' ? '打开 DD助手' : aiAvailabilityMessage}
             >
               <span className="dd-snaplink__conversation-avatar is-assistant" aria-hidden="true">
                 <Bot size={17} strokeWidth={1.9} />
@@ -5324,9 +5329,21 @@ export function SnapLinkStage({
               <span className="dd-snaplink__conversation-main">
                 <span className="dd-snaplink__conversation-title">
                   <strong>DD助手</strong>
-                  <em>置顶</em>
+                  <em>
+                    {aiAvailability === 'available'
+                      ? '置顶'
+                      : aiAvailability === 'checking'
+                        ? '检查中'
+                        : '未配置'}
+                  </em>
                 </span>
-                <small>{assistantRoom?.previewText || '总结传输记录，生成文件说明'}</small>
+                <small>
+                  {assistantRoom?.previewText || (
+                    aiAvailability === 'available'
+                      ? '总结传输记录，生成文件说明'
+                      : aiAvailabilityMessage || 'AI 服务暂不可用'
+                  )}
+                </small>
               </span>
               <span className="dd-snaplink__conversation-meta">
                 {assistantRoom?.updatedAtLabel || '刚刚'}
@@ -6299,7 +6316,9 @@ export function SnapLinkStage({
     const isImageTool = tool === 'image'
     const toolTitle = isAiTool ? 'DD助手' : isImageTool ? '图片工具' : '命令行'
     const toolSubtitle = isAiTool
-      ? '本地优先 · 上下文不外传'
+      ? aiAvailability === 'available'
+        ? '本地优先 · 仅发送你明确提交的内容'
+        : aiAvailabilityMessage || 'AI 服务暂不可用'
       : isImageTool
         ? '提示词生成 · 历史与额度同步'
         : '本页运行 · 结果可发送'
@@ -6309,7 +6328,9 @@ export function SnapLinkStage({
         ? 'DD直连图片工具'
         : 'DD直连 命令行'
     const toolSideNote = isAiTool
-      ? 'DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。'
+      ? aiAvailability === 'available'
+        ? 'DD助手只会向模型服务发送你明确提交的内容；未选择的本机文件不会上传。'
+        : aiAvailabilityMessage || '管理员尚未配置 AI 服务。'
       : isImageTool
         ? '图片生成记录独立保存，传输文件仍通过 DD直连传输记录管理。'
         : '运行结果可复制，也可以继续发送给设备。'
@@ -6319,10 +6340,13 @@ export function SnapLinkStage({
           {
             label: aiTransferContextFiles.length > 0 ? '分析最近传输' : '辅助生成传输说明',
             action: () => onPrepareAiDraft?.(buildAiTransferAnalysisPrompt(), buildAiTransferAnalysisContext()),
+            disabled: aiAvailability !== 'available',
             title:
-              aiTransferContextFiles.length > 0
-                ? '把最近传输文件整理成分析草稿'
-                : '生成一段用于文件传输说明的草稿',
+              aiAvailability !== 'available'
+                ? aiAvailabilityMessage
+                : aiTransferContextFiles.length > 0
+                  ? '把最近传输文件整理成分析草稿'
+                  : '生成一段用于文件传输说明的草稿',
           },
           { label: '发送文本', action: handleShowWorkbenchText },
           { label: '查看附近设备', action: handleShowWorkbenchNearby },

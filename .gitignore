@@ -48,3 +48,7 @@ android/local.properties
 # Codex/browser temporary attachments
 tmp/
 .codex-remote-attachments/
+/an-tmp.mjs
+/ctx-tmp.mjs
+/shot.mjs
+/styles.mjs

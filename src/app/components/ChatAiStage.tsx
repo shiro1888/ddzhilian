@@ -13,6 +13,7 @@ import type {
   AiChatImageInput,
   AiChatMessageAttachmentSummary,
   AiChatResponse,
+  AiAvailabilityState,
   AiModelOption,
   AiQuotaStatus,
 } from '../../lib/ddzhilian-types'
@@ -82,6 +83,8 @@ type ChatAiStageProps = {
   aiModelOptions: AiModelOption[]
   selectedAiModel: string
   selectedAiModelLabel: string
+  aiAvailability?: AiAvailabilityState
+  aiAvailabilityMessage?: string
   isConversationSyncReady: boolean
   onAiModelChange: (model: string) => void
   onAskAi: (
@@ -514,6 +517,8 @@ export function ChatAiStage({
   aiModelOptions,
   selectedAiModel,
   selectedAiModelLabel,
+  aiAvailability = 'available',
+  aiAvailabilityMessage,
   isConversationSyncReady,
   onAiModelChange,
   onAskAi,
@@ -579,8 +584,17 @@ export function ChatAiStage({
     })
   }, [conversations, searchDraft, showArchived])
   const isGenerating = Boolean(activeGeneration)
+  const isAiAvailable = aiAvailability === 'available'
   const trimmedDraft = draft.trim()
-  const canSubmit = (Boolean(trimmedDraft) || attachments.length > 0) && !isGenerating
+  const canSubmit = isAiAvailable && (Boolean(trimmedDraft) || attachments.length > 0) && !isGenerating
+  const aiAvailabilityTitle = aiAvailability === 'checking'
+    ? '正在检查 DD助手'
+    : 'DD助手暂不可用'
+  const aiAvailabilityDescription = aiAvailabilityMessage || (
+    aiAvailability === 'checking'
+      ? '正在确认服务器是否已经配置 AI 服务，请稍候。'
+      : '管理员尚未配置 AI 服务。'
+  )
   const isSyncAuthNotice = localError?.includes('AI 会话同步授权') ?? false
 
   useEffect(() => {
@@ -1016,6 +1030,11 @@ export function ChatAiStage({
     event.stopPropagation()
     setIsDraggingFiles(false)
 
+    if (!isAiAvailable) {
+      setLocalError(aiAvailabilityDescription)
+      return
+    }
+
     if (isGenerating) {
       setLocalError('请先停止当前生成，再添加附件。')
       return
@@ -1117,6 +1136,11 @@ export function ChatAiStage({
 
   const sendPrompt = (prompt: string, options?: { appendUserMessage?: boolean }) => {
     const normalizedPrompt = prompt.trim()
+    if (!isAiAvailable) {
+      setLocalError(aiAvailabilityDescription)
+      return
+    }
+
     if (!activeConversation || (!normalizedPrompt && attachments.length === 0) || isGenerating) {
       return
     }
@@ -1449,7 +1473,7 @@ export function ChatAiStage({
                 <span>模型</span>
                 <select
                   value={selectedAiModel}
-                  disabled={aiModelOptions.length === 0 || isGenerating}
+                  disabled={!isAiAvailable || aiModelOptions.length === 0 || isGenerating}
                   aria-label="选择 AI 模型"
                   onChange={(event) => onAiModelChange(event.target.value)}
                 >
@@ -1467,7 +1491,7 @@ export function ChatAiStage({
               <button
                 type="button"
                 className={`dd-ai-chat__search-pill${isWebSearchEnabled ? ' is-on' : ''}`}
-                disabled={isGenerating}
+                disabled={!isAiAvailable || isGenerating}
                 aria-pressed={isWebSearchEnabled}
                 onClick={() => setIsWebSearchEnabled((current) => !current)}
               >
@@ -1508,7 +1532,7 @@ export function ChatAiStage({
                     <span>模型</span>
                     <select
                       value={selectedAiModel}
-                      disabled={aiModelOptions.length === 0 || isGenerating}
+                      disabled={!isAiAvailable || aiModelOptions.length === 0 || isGenerating}
                       aria-label="选择 AI 模型"
                       onChange={(event) => onAiModelChange(event.target.value)}
                     >
@@ -1527,14 +1551,14 @@ export function ChatAiStage({
                     <input
                       type="checkbox"
                       checked={isWebSearchEnabled}
-                      disabled={isGenerating}
+                      disabled={!isAiAvailable || isGenerating}
                       onChange={(event) => setIsWebSearchEnabled(event.currentTarget.checked)}
                     />
                     <span>联网搜索</span>
                   </label>
                 </details>
                 {SHOW_SAMPLE_OUTPUT ? (
-                  <button type="button" onClick={insertSampleMessages} disabled={isGenerating}>
+                  <button type="button" onClick={insertSampleMessages} disabled={!isAiAvailable || isGenerating}>
                     示例输出
                   </button>
                 ) : null}
@@ -1577,26 +1601,32 @@ export function ChatAiStage({
           {!activeConversation || activeConversation.messages.length === 0 ? (
             <div className="dd-ai-chat__empty">
               <span className="dd-ai-chat__empty-badge" aria-hidden="true">DD</span>
-              <strong>你好，我是 DD助手</strong>
-              <span>把文件拖进来，或选择一个常用任务开始。内容仅在本机处理，联网时只发送你选中的上下文。</span>
-              <div className="dd-ai-chat__quick-prompts" aria-label="常用提示">
-                {quickPromptSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion.label}
-                    type="button"
-                    onClick={() => {
-                      setDraft(suggestion.prompt)
-                      setDraftContext(null)
-                    }}
-                    disabled={isGenerating}
-                  >
-                    <strong>{suggestion.label}</strong>
-                    <span>{suggestion.description}</span>
-                  </button>
-                ))}
-              </div>
+              <strong>{isAiAvailable ? '你好，我是 DD助手' : aiAvailabilityTitle}</strong>
+              <span>
+                {isAiAvailable
+                  ? '把文件拖进来，或选择一个常用任务开始。仅向模型服务发送你明确提交的内容和上下文。'
+                  : aiAvailabilityDescription}
+              </span>
+              {isAiAvailable ? (
+                <div className="dd-ai-chat__quick-prompts" aria-label="常用提示">
+                  {quickPromptSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.label}
+                      type="button"
+                      onClick={() => {
+                        setDraft(suggestion.prompt)
+                        setDraftContext(null)
+                      }}
+                      disabled={isGenerating}
+                    >
+                      <strong>{suggestion.label}</strong>
+                      <span>{suggestion.description}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {SHOW_SAMPLE_OUTPUT ? (
-                <button type="button" onClick={insertSampleMessages}>
+                <button type="button" onClick={insertSampleMessages} disabled={!isAiAvailable || isGenerating}>
                   示例输出
                 </button>
               ) : null}
@@ -1693,6 +1723,7 @@ export function ChatAiStage({
             type="file"
             multiple
             hidden
+            disabled={!isAiAvailable || isGenerating}
             accept="image/png,image/jpeg,image/webp,image/gif,text/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yaml,.yml,.log"
             onChange={handleAttachmentSelection}
           />
@@ -1701,7 +1732,7 @@ export function ChatAiStage({
             className="dd-ai-chat__attach"
             aria-label="添加附件"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isGenerating}
+            disabled={!isAiAvailable || isGenerating}
           >
             +
           </button>
@@ -1734,6 +1765,7 @@ export function ChatAiStage({
               aria-label="给 DD助手发消息"
               enterKeyHint="send"
               rows={attachments.length > 0 ? 2 : 3}
+              disabled={!isAiAvailable}
               onChange={handleDraftChange}
               onCompositionStart={handleDraftCompositionStart}
               onCompositionEnd={handleDraftCompositionEnd}
@@ -1741,7 +1773,11 @@ export function ChatAiStage({
             />
           </div>
           <div className="dd-ai-chat__composer-footer">
-            <span>Enter 发送 · Shift + Enter 换行 · 内容不经过服务器保存</span>
+            <span>
+              {isAiAvailable
+                ? 'Enter 发送 · Shift + Enter 换行 · 会话记录默认保存在本机'
+                : aiAvailabilityDescription}
+            </span>
             <div>
               {isGenerating ? (
                 <button type="button" className="is-secondary" onClick={handleStopGeneration}>
@@ -1832,7 +1868,7 @@ export function ChatAiStage({
               <strong>{latestWebSearchSourceCount.toString()}</strong>
             </div>
           </div>
-          <p className="dd-ai-chat__context-note">DD助手只读取你选择的内容，不会上传整机文件，也不会经过中转服务器保存。</p>
+          <p className="dd-ai-chat__context-note">DD助手只会向模型服务发送你明确提交的内容；未选择的本机文件不会上传。</p>
         </section>
       </aside>
     </section>

@@ -57,6 +57,9 @@ jobs:
           npm ci --include=dev --prefix server
           npm run build --prefix server
 
+      - name: Audit production dependencies
+        run: npm run audit:prod
+
       - name: Stage deployment artifacts
         run: |
           rm -rf deploy-artifacts/github-actions
@@ -65,6 +68,19 @@ jobs:
           rsync -a --delete out/ deploy-artifacts/github-actions/frontend/
           rsync -a --delete server/dist/ deploy-artifacts/github-actions/backend/dist/
           cp server/package.json server/package-lock.json deploy-artifacts/github-actions/backend/
+
+          node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises'
+
+          await writeFile(
+            'deploy-artifacts/github-actions/backend/.build-info.json',
+            `${JSON.stringify({
+              sha: process.env.GITHUB_SHA ?? null,
+              builtAt: new Date().toISOString(),
+              runId: process.env.GITHUB_RUN_ID ?? null,
+            }, null, 2)}\n`,
+          )
+          NODE
 
           if [ -d server/email-templates ]; then
             rsync -a --delete server/email-templates/ deploy-artifacts/github-actions/backend/email-templates/

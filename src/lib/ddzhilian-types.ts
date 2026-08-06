@@ -584,6 +584,8 @@ export type AiModelOption = {
 }
 
 export type AiQuotaStatus = {
+  available?: boolean
+  unavailableReason?: string
   date: string
   usedNeurons: number
   dailyNeuronBudget: number
@@ -594,6 +596,8 @@ export type AiQuotaStatus = {
   model?: string
   models?: AiModelOption[]
 }
+
+export type AiAvailabilityState = 'checking' | 'available' | 'unavailable'
 
 export type AdminHistoryStats = {
   fileCount: number

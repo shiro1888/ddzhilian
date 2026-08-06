@@ -10,7 +10,6 @@ import {
   useState,
 } from 'react'
 import type { DragEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminStage } from './app/components/AdminStage'
 import { ChatAiStage } from './app/components/ChatAiStage'
 import { ImageAccountGate } from './app/components/ImageAccountGate'
@@ -64,6 +63,7 @@ import { createBrowserId } from './lib/create-browser-id'
 import { useAccountAuth } from './lib/use-account-auth'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
+import { useBrowserNavigation } from './lib/use-browser-navigation'
 
 const AI_BOT_MENTION_LABEL = '@DD助手'
 const AI_THINKING_MIN_VISIBLE_MS = 650
@@ -424,8 +424,7 @@ function setLatestRoomPreviewEvent(
 }
 
 function App() {
-  const location = useLocation()
-  const navigate = useNavigate()
+  const { location, navigate } = useBrowserNavigation()
   const fileInputId = useId()
   const [isDragging, setIsDragging] = useState(false)
   const [chatDraft, setChatDraft] = useState('')
@@ -442,6 +441,7 @@ function App() {
   const [workbenchTextRequestId, setWorkbenchTextRequestId] = useState(0)
   const [conversationNotices, setConversationNotices] = useState<ConversationNotice[]>([])
   const [aiQuotaStatus, setAiQuotaStatus] = useState<AiQuotaStatus | null>(null)
+  const [aiAvailabilityError, setAiAvailabilityError] = useState<string | null>(null)
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
   const [selectedAiModel, setSelectedAiModel] = useState('')
   const [historyDownloadProgressById, setHistoryDownloadProgressById] = useState<
@@ -566,6 +566,7 @@ function App() {
   useEffect(() => {
     if (!self?.historyAuthToken) {
       setAiQuotaStatus(null)
+      setAiAvailabilityError(null)
       setAiModelOptions([])
       setSelectedAiModel('')
       return
@@ -577,6 +578,7 @@ function App() {
       .then((status) => {
         if (!isCancelled) {
           setAiQuotaStatus(status)
+          setAiAvailabilityError(null)
           const models = status.models ?? []
           setAiModelOptions(models)
           setSelectedAiModel((current) => {
@@ -596,9 +598,12 @@ function App() {
           })
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isCancelled) {
           setAiQuotaStatus(null)
+          setAiAvailabilityError(
+            error instanceof Error ? error.message : '无法确认 AI 服务状态。',
+          )
           setAiModelOptions([])
           setSelectedAiModel('')
         }
@@ -1414,17 +1419,32 @@ function App() {
   const canSendRoomContentWithoutConnection =
     Boolean(selectedRoom) &&
     hasChatTextDraft
-  const aiQuotaLabel = aiQuotaStatus
+  const aiAvailability = aiAvailabilityError || aiQuotaStatus?.available === false
+    ? 'unavailable'
+    : aiQuotaStatus && aiModelOptions.length > 0
+      ? 'available'
+      : 'checking'
+  const aiAvailabilityMessage = aiAvailability === 'unavailable'
+    ? aiQuotaStatus?.unavailableReason || aiAvailabilityError || '管理员尚未配置 AI 服务。'
+    : aiAvailability === 'checking'
+      ? '正在检查 AI 服务配置…'
+      : ''
+  const isAiAvailable = aiAvailability === 'available'
+  const aiQuotaLabel = isAiAvailable && aiQuotaStatus
     ? aiQuotaStatus.provider && aiQuotaStatus.provider !== 'cloudflare'
       ? (aiQuotaStatus.limitLabel ?? '外部 API 计费')
       : `今日剩余 ${aiQuotaStatus.remainingNeurons.toLocaleString()} / ${aiQuotaStatus.dailyNeuronBudget.toLocaleString()} Neurons`
-    : '助手额度加载中'
+    : aiAvailabilityMessage
   const selectedAiModelOption = findAiModelOption(aiModelOptions, selectedAiModel)
   const selectedAiModelLabel =
-    selectedAiModelOption?.label ||
-    selectedAiModel ||
-    aiQuotaStatus?.model ||
-    '助手模型'
+    aiAvailability === 'unavailable'
+      ? '未配置模型'
+      : aiAvailability === 'checking'
+        ? '正在检查模型'
+        : selectedAiModelOption?.label ||
+          selectedAiModel ||
+          aiQuotaStatus?.model ||
+          '助手模型'
   const selectedConversationTransferSessionIds = [...selectedConversationSessionIds]
   const sessionRoomIdById = useMemo(
     () => new Map(sessions.map((session) => [session.sessionId, session.roomId] as const)),
@@ -1979,6 +1999,11 @@ function App() {
       return
     }
 
+    if (aiBotPrompt !== null && !isAiAvailable) {
+      setLocalError(aiAvailabilityMessage || 'DD助手暂不可用。')
+      return
+    }
+
     const isPublicRoom = Boolean(selectedRoom?.isPublic)
     const isPrivateDeviceRoom = Boolean(selectedRoom && !selectedRoom.isPublic && !isSelectedBotRoom)
     const shouldSendRoomContentThroughHistory =
@@ -2233,9 +2258,15 @@ function App() {
       aiModelOptions={aiModelOptions}
       selectedAiModel={selectedAiModel}
       selectedAiModelLabel={selectedAiModelLabel}
+      aiAvailability={aiAvailability}
+      aiAvailabilityMessage={aiAvailabilityMessage}
       isConversationSyncReady={Boolean(self?.historyAuthToken)}
       onAiModelChange={setSelectedAiModel}
       onAskAi={(prompt, options) => {
+        if (!isAiAvailable) {
+          return Promise.reject(new Error(aiAvailabilityMessage || 'DD助手暂不可用。'))
+        }
+
         const requestedModelOption = findAiModelOption(aiModelOptions, options?.model ?? selectedAiModel)
         return askAi(prompt, {
           kind: 'chat',
@@ -2249,7 +2280,10 @@ function App() {
       onListConversations={listAiChatConversations}
       onSaveConversations={saveAiChatConversations}
       onDeleteConversationRemote={deleteAiChatConversation}
-      onQuotaStatusChange={setAiQuotaStatus}
+      onQuotaStatusChange={(status) => {
+        setAiQuotaStatus(status)
+        setAiAvailabilityError(null)
+      }}
       draftRequest={aiDraftRequest}
     />
   )
@@ -2303,10 +2337,13 @@ function App() {
       fileInputId={fileInputId}
       isSendDisabled={
         !hasChatDraftContent ||
-        (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection)
+        (selectedRoomConnectedTargets.length === 0 && !canSendRoomContentWithoutConnection) ||
+        (isSelectedBotRoom && !isAiAvailable)
       }
       isAiGenerating={isAiGenerating}
       aiGeneratingRoomId={aiGeneratingRoomId}
+      aiAvailability={aiAvailability}
+      aiAvailabilityMessage={aiAvailabilityMessage}
       aiQuotaLabel={aiQuotaLabel}
       aiModelOptions={aiModelOptions}
       selectedAiModel={selectedAiModel}

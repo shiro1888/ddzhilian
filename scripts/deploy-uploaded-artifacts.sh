@@ -89,7 +89,7 @@ run_as_root mkdir -p "$backend_backup_dir"
 if [ -d "$BACKEND_DIR/dist" ]; then
   run_as_root rsync -a "$BACKEND_DIR/dist/" "$backend_backup_dir/dist/"
 fi
-for file_name in package.json package-lock.json; do
+for file_name in package.json package-lock.json .build-info.json; do
   if [ -f "$BACKEND_DIR/$file_name" ]; then
     run_as_root cp "$BACKEND_DIR/$file_name" "$backend_backup_dir/$file_name"
   fi
@@ -99,6 +99,11 @@ log "Publishing backend to $BACKEND_DIR"
 run_as_root mkdir -p "$BACKEND_DIR"
 run_as_root rsync -a --delete "$RELEASE_DIR/backend/dist/" "$BACKEND_DIR/dist/"
 run_as_root cp "$RELEASE_DIR/backend/package.json" "$RELEASE_DIR/backend/package-lock.json" "$BACKEND_DIR/"
+if [ -f "$RELEASE_DIR/backend/.build-info.json" ]; then
+  run_as_root cp "$RELEASE_DIR/backend/.build-info.json" "$BACKEND_DIR/.build-info.json"
+else
+  run_as_root rm -f "$BACKEND_DIR/.build-info.json"
+fi
 
 if [ -d "$RELEASE_DIR/backend/email-templates" ]; then
   run_as_root rsync -a --delete "$RELEASE_DIR/backend/email-templates/" "$BACKEND_DIR/email-templates/"
@@ -109,7 +114,7 @@ if [ -d "$RELEASE_DIR/backend/scripts" ]; then
 fi
 
 log "Installing backend production dependencies"
-run_as_root npm ci --omit=dev --prefix "$BACKEND_DIR"
+run_as_root npm ci --omit=dev --prefix "$BACKEND_DIR" --registry=https://registry.npmjs.org
 
 log "Restarting backend service: $BACKEND_SERVICE"
 run_as_root systemctl restart "$BACKEND_SERVICE"

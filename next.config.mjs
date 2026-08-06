@@ -10,9 +10,6 @@ const nextConfig = {
       'ort.bundle.min.mjs': './node_modules/onnxruntime-web/dist/ort.bundle.min.mjs',
     },
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
 }
 
 export default nextConfig

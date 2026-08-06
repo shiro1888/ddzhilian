@@ -1,12 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatAiStage } from '@/app/components/ChatAiStage'
-import type { AiModelOption } from '@/lib/ddzhilian-types'
+import type { AiAvailabilityState, AiModelOption } from '@/lib/ddzhilian-types'
 
 type ChatAiStageRenderOptions = {
   aiModelOptions?: AiModelOption[]
   selectedAiModel?: string
   selectedAiModelLabel?: string
+  aiAvailability?: AiAvailabilityState
+  aiAvailabilityMessage?: string
   onAiModelChange?: (model: string) => void
 }
 
@@ -16,6 +18,8 @@ function renderChatAiStage(options: ChatAiStageRenderOptions = {}) {
       aiModelOptions={options.aiModelOptions ?? []}
       selectedAiModel={options.selectedAiModel ?? ''}
       selectedAiModelLabel={options.selectedAiModelLabel ?? '默认模型'}
+      aiAvailability={options.aiAvailability}
+      aiAvailabilityMessage={options.aiAvailabilityMessage}
       isConversationSyncReady={false}
       onAiModelChange={options.onAiModelChange ?? vi.fn()}
       onAskAi={vi.fn()}
@@ -112,5 +116,19 @@ describe('ChatAiStage file drag and drop', () => {
     fireEvent.change(select, { target: { value: 'openrouter::openai/gpt-4.1-mini' } })
 
     expect(onAiModelChange).toHaveBeenCalledWith('openrouter::openai/gpt-4.1-mini')
+  })
+
+  it('shows a disabled composer when the server has no AI provider', () => {
+    renderChatAiStage({
+      aiAvailability: 'unavailable',
+      aiAvailabilityMessage: '管理员尚未配置 AI 服务。',
+    })
+
+    expect(screen.getByText('DD助手暂不可用')).toBeInTheDocument()
+    expect(screen.getAllByText('管理员尚未配置 AI 服务。').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox', { name: '给 DD助手发消息' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '添加附件' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled()
+    expect(screen.queryByLabelText('常用提示')).not.toBeInTheDocument()
   })
 })

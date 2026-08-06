@@ -43,6 +43,9 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --include=dev --prefix server
 
+      - name: Audit production dependencies
+        run: npm run audit:prod
+
       - name: Lint
         run: npm run lint
 
