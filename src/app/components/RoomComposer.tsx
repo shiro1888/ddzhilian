@@ -15,7 +15,9 @@ import {
   FileText,
   Image as ImageIcon,
   Paperclip,
+  Plus,
   ScanText,
+  Smile,
 } from 'lucide-react'
 
 import type { ComposerImageDraft } from '../types'
@@ -184,7 +186,7 @@ export function RoomComposer({
               setIsPlusMenuOpen((current) => !current)
             }}
           >
-            +
+            <Plus size={19} strokeWidth={2} aria-hidden="true" />
           </button>
           {isPlusMenuOpen ? (
             <>
@@ -397,7 +399,7 @@ export function RoomComposer({
             title="选择 emoji"
             onClick={onEmojiToggle}
           >
-            🙂
+            <Smile size={18} strokeWidth={1.9} aria-hidden="true" />
           </button>
           {isEmojiPickerOpen ? (
             <div

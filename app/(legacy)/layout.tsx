@@ -4,6 +4,7 @@ import { ThemeBootScript } from '@/scripts/theme-boot'
 import '@xterm/xterm/css/xterm.css'
 import '../../src/index.css'
 import '../../src/App.css'
+import '../../src/app/styles/snaplink-polish.css'
 
 export default function LegacyLayout({
   children,

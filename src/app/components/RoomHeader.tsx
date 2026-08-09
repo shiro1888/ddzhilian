@@ -67,6 +67,8 @@ export function RoomHeader({
   const qrPayload = roomShareValue || displayRoomCode
   const isCopied = roomCodeLabel === '已复制'
   const detailRows = connectionDetails.slice(0, 3)
+  const primaryConnectionDetail = detailRows[0]
+  const secondaryConnectionDetails = detailRows.slice(1)
 
   useEffect(() => {
     if (!isMoreOpen) {
@@ -248,6 +250,41 @@ export function RoomHeader({
           </div>
         </div>
       </div>
+      {primaryConnectionDetail ? (
+        <div
+          className={`dd-snaplink__room-route is-${primaryConnectionDetail.tone ?? 'default'}`}
+          aria-label="当前连接状态"
+        >
+          <span className="dd-snaplink__room-route-node is-local">
+            <i aria-hidden="true" />
+            此设备
+          </span>
+          <span className="dd-snaplink__room-route-track" aria-hidden="true">
+            <i />
+          </span>
+          <span className="dd-snaplink__room-route-state">
+            <small>{primaryConnectionDetail.label}</small>
+            <strong>{primaryConnectionDetail.value}</strong>
+          </span>
+          <span className="dd-snaplink__room-route-track" aria-hidden="true">
+            <i />
+          </span>
+          <span className="dd-snaplink__room-route-node is-peer" title={peerTitle || peerLabel}>
+            <i aria-hidden="true" />
+            {peerTitle || peerLabel}
+          </span>
+          {secondaryConnectionDetails.length > 0 ? (
+            <span className="dd-snaplink__room-route-facts">
+              {secondaryConnectionDetails.map((item) => (
+                <span key={item.id} className={item.tone ? `is-${item.tone}` : undefined}>
+                  <small>{item.label}</small>
+                  <strong>{item.value}</strong>
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -26,6 +26,7 @@ import {
   Plus,
   Radio,
   ScanText,
+  Search,
   Send,
   ShieldCheck,
   Smartphone,
@@ -273,13 +274,13 @@ type SnapLinkThemeStyle = CSSProperties & {
 }
 
 const snapLinkDefaultThemeColors: SnapLinkThemeColors = {
-  self: '#F9887F',
-  peer: '#F5F4F1',
-  ai: '#EFF6FF',
+  self: '#95EC69',
+  peer: '#FFFFFF',
+  ai: '#EAF7E1',
 }
 const snapLinkThemeColorOptions: Array<{ label: string; colors: SnapLinkThemeColors }> = [
+  { label: '经典绿', colors: { self: '#95EC69', peer: '#FFFFFF', ai: '#EAF7E1' } },
   { label: '珊瑚', colors: { self: '#F9887F', peer: '#FFF4F2', ai: '#FFE8E5' } },
-  { label: '微信绿', colors: { self: '#95EC69', peer: '#F2F8ED', ai: '#EAF7E1' } },
   { label: '天空蓝', colors: { self: '#6EA8FE', peer: '#F3F7FF', ai: '#EAF2FF' } },
   { label: '青柠', colors: { self: '#B7E36D', peer: '#F6FAEE', ai: '#EEF8D8' } },
   { label: '暖橙', colors: { self: '#F6B35D', peer: '#FFF7ED', ai: '#FFEED8' } },
@@ -4908,30 +4909,41 @@ export function SnapLinkStage({
       )
     }
 
+    const emptyStateTitle = isSelectedRoomAssistant
+      ? '开始使用 DD助手'
+      : isSelectedRoomPublic
+        ? `在 ${selectedConversationName} 发起话题`
+        : `开始和 ${selectedConversationName} 对话`
+    const emptyStateInitial = Array.from(selectedConversationName.trim() || 'D')[0].toUpperCase()
+    const isSelectedRoomReachable = isSelectedRoomAssistant
+      ? aiAvailability === 'available'
+      : isSelectedRoomPublic
+        ? selectedRoomOnlineCount > 0
+        : selectedRoomOnlineCount > 1 || selectedRoom.status === 'connected'
+
     return (
       <div className="dd-snaplink__room-empty-card">
-        <span className="dd-snaplink__room-empty-icon" aria-hidden="true">
-          <Send size={24} strokeWidth={1.8} />
+        <span className="dd-snaplink__room-empty-icon is-avatar" aria-hidden="true">
+          {emptyStateInitial}
+          <i className={isSelectedRoomReachable ? 'is-online' : ''} />
         </span>
-        <strong>这里还没有消息</strong>
-        {/* The buttons below already name the two actions, so the prose that
-            restated them has been dropped — the state keeps its context line
-            and lets the controls speak for themselves. */}
+        <strong>{emptyStateTitle}</strong>
         <p>{fileConversationEmptyState}</p>
         <div className="dd-snaplink__room-empty-actions">
           <button type="button" onClick={() => inputRef.current?.focus()}>
-            发送文本
+            写消息
           </button>
           <button
             type="button"
             onClick={() => document.getElementById(fileInputId)?.click()}
           >
-            选择文件
+            发送文件
           </button>
           <button type="button" onClick={handleShowWorkbenchNearby}>
-            查看设备
+            设备列表
           </button>
         </div>
+        <small>{selectedRoomTechnicalNote.replace(/^技术信息：/, '')}</small>
       </div>
     )
   }
@@ -5274,6 +5286,12 @@ export function SnapLinkStage({
               vertical space instead. */}
           <span>
             <strong>消息</strong>
+            <small>
+              {lobbyRoomListItems.length.toString()} 个会话 ·{' '}
+              {workbenchOnlineDeviceCount > 0
+                ? `${workbenchOnlineDeviceCount.toString()} 台对端在线`
+                : '暂无对端在线'}
+            </small>
           </span>
           <button
             type="button"
@@ -5287,6 +5305,7 @@ export function SnapLinkStage({
         </div>
         <label className="dd-snaplink__conversation-side-search">
           <span className="sr-only">搜索会话</span>
+          <Search size={15} strokeWidth={1.9} aria-hidden="true" />
           <input
             value={conversationSearchQuery}
             placeholder="搜索会话"
@@ -5484,6 +5503,7 @@ export function SnapLinkStage({
           </div>
           <label className="dd-snaplink__conversation-side-search">
             <span className="sr-only">搜索设备</span>
+            <Search size={15} strokeWidth={1.9} aria-hidden="true" />
             <input
               value={conversationSearchQuery}
               placeholder="搜索设备"
