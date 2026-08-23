@@ -102,7 +102,7 @@ export function createSnapLinkRoom(overrides: Partial<RoomListItem> = {}): RoomL
     isPublic: true,
     publicIndex: 1,
     memberCount: 1,
-    onlineCount: 1,
+    onlineCount: 0,
     status: 'history',
     pinned: false,
     unreadCount: 0,

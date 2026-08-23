@@ -46,6 +46,11 @@ import type {
   SharedContentTab,
   UnifiedConversationEntry,
 } from '../types'
+import {
+  getRoomOnlineMemberCount,
+  getRoomPeerOnlineCount,
+  resolveRoomPeerPresenceLabel,
+} from '../room-presence'
 import type {
   AiAvailabilityState,
   AiModelOption,
@@ -436,8 +441,7 @@ function toSnapLinkPreviewOriginRect(rect: DOMRect): SnapLinkPreviewOriginRect |
 }
 
 function resolveSnapLinkApiBaseUrl() {
-  const env = process.env as Record<string, string | undefined>
-  const configuredUrl = env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
+  const configuredUrl = process.env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
 
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '')
@@ -1339,18 +1343,23 @@ function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) 
     return 'AI 助手'
   }
 
-  const visibleOnlineCount = Math.min(room.memberCount, Math.max(room.onlineCount, 0) + 1)
+  const peerOnlineCount = getRoomPeerOnlineCount(room)
+  const onlineMemberCount = getRoomOnlineMemberCount(room)
 
   if (room.isPublic) {
-    return `${visibleOnlineCount.toString()} 台设备在线`
+    return resolveRoomPeerPresenceLabel(room)
   }
 
   if (room.memberCount > 2) {
-    return `${visibleOnlineCount.toString()} 位成员在线`
+    return `${onlineMemberCount.toString()}/${room.memberCount.toString()} 位成员在线（含本机）`
   }
 
-  if (room.status === 'connected' || room.onlineCount > 0) {
-    return '对方在线 · 直连中'
+  if (room.status === 'connected') {
+    return '对方在线 · WebRTC 直连中'
+  }
+
+  if (peerOnlineCount > 0) {
+    return '对方在线 · 等待直连'
   }
 
   return '对方离线'
@@ -1761,9 +1770,10 @@ export function SnapLinkStage({
     () => roomListItems.find((room) => room.roomId === selectedRoomId),
     [roomListItems, selectedRoomId],
   )
-  const selectedRoomOnlineCount = selectedRoom
-    ? Math.min(selectedRoom.memberCount, selectedRoom.onlineCount + 1)
-    : 0
+  const selectedRoomPeerOnlineCount = selectedRoom ? getRoomPeerOnlineCount(selectedRoom) : 0
+  const selectedRoomOnlineMemberCount = selectedRoom ? getRoomOnlineMemberCount(selectedRoom) : 0
+  const selectedRoomMemberCount = selectedRoom ? Math.max(selectedRoom.memberCount, 1) : 0
+  const isSelectedRoomDirectlyConnected = selectedRoom?.status === 'connected'
   const isAiChatOpen = activeView === 'ai-chat'
   const isImageOpen = activeView === 'image'
   const isAdminOpen = activeView === 'admin'
@@ -2221,8 +2231,10 @@ export function SnapLinkStage({
   const selectedRoomCopyLabel = isSelectedRoomPublic ? '复制房间码' : '复制链接'
   const selectedRoomCopiedLabel = isSelectedRoomPublic ? '已复制房间码' : '已复制链接'
   const selectedRoomTechnicalNote = isSelectedRoomAssistant
-    ? '技术信息：模型由后端代理调用 · 只读取你发送的内容'
-    : '技术信息：WebRTC 端到端直连 · 文件不经过服务器'
+    ? '技术信息：内容经后端代理处理 · 最多读取当前房间近 24 小时的对话上下文'
+    : isSelectedRoomPublic
+      ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 24 小时'
+      : '技术信息：通过 WebRTC 在设备间直连 · 文件不上传服务器历史副本'
   const selectedRoomMoreDetails = isSelectedRoomAssistant
     ? [
         {
@@ -2236,44 +2248,48 @@ export function SnapLinkStage({
           value: '按需开启',
         },
         {
-          id: 'record',
-          label: '记录',
-          value: '本机保留',
-          tone: 'safe' as const,
+          id: 'context',
+          label: '上下文',
+          value: '最多近 24 小时',
         },
       ]
     : isSelectedRoomPublic
       ? [
           {
-            id: 'online',
-            label: '在线设备',
-            value: `${selectedRoomOnlineCount.toString()} 台`,
-            tone: 'safe' as const,
+            id: 'connection',
+            label: '连接',
+            value: selectedRoomPeerOnlineCount > 0
+              ? `${selectedRoomPeerOnlineCount.toString()} 台对端在线`
+              : '等待对端上线',
+            tone: selectedRoomPeerOnlineCount > 0 ? 'safe' as const : 'warning' as const,
           },
           {
             id: 'scope',
-            label: '谁能看到',
-            value: '同一网络内的设备',
+            label: '可见范围',
+            value: '连接到当前服务的设备',
           },
           {
             id: 'retention',
-            label: '内容保留',
-            value: '24 小时',
+            label: '历史副本',
+            value: '最长 24 小时',
           },
         ]
       : isSelectedGroupRoom
         ? [
             {
-              id: 'members',
-              label: '成员',
-              value: `${selectedRoomOnlineCount.toString()} / ${(selectedRoom?.memberCount ?? 1).toString()} 在线`,
-              tone: selectedRoomOnlineCount > 1 ? 'safe' as const : 'default' as const,
-            },
-            {
               id: 'connection',
               label: '连接',
-              value: selectedRoomOnlineCount > 1 ? '直连中' : '等待成员上线',
-              tone: selectedRoomOnlineCount > 1 ? 'safe' as const : 'warning' as const,
+              value: isSelectedRoomDirectlyConnected
+                ? 'WebRTC 直连'
+                : selectedRoomPeerOnlineCount > 0
+                  ? '成员在线，等待直连'
+                  : '等待成员上线',
+              tone: isSelectedRoomDirectlyConnected ? 'safe' as const : 'warning' as const,
+            },
+            {
+              id: 'members',
+              label: '成员',
+              value: `${selectedRoomOnlineMemberCount.toString()}/${selectedRoomMemberCount.toString()} 在线（含本机）`,
             },
             {
               id: 'join',
@@ -2285,8 +2301,12 @@ export function SnapLinkStage({
             {
               id: 'connection',
               label: '连接',
-              value: selectedRoomOnlineCount > 1 || selectedRoom?.status === 'connected' ? '直连中' : '对方离线',
-              tone: selectedRoomOnlineCount > 1 || selectedRoom?.status === 'connected' ? 'safe' as const : 'warning' as const,
+              value: isSelectedRoomDirectlyConnected
+                ? 'WebRTC 直连'
+                : selectedRoomPeerOnlineCount > 0
+                  ? '对方在线，等待直连'
+                  : '对方离线',
+              tone: isSelectedRoomDirectlyConnected ? 'safe' as const : 'warning' as const,
             },
             {
               id: 'network',
@@ -4917,9 +4937,7 @@ export function SnapLinkStage({
     const emptyStateInitial = Array.from(selectedConversationName.trim() || 'D')[0].toUpperCase()
     const isSelectedRoomReachable = isSelectedRoomAssistant
       ? aiAvailability === 'available'
-      : isSelectedRoomPublic
-        ? selectedRoomOnlineCount > 0
-        : selectedRoomOnlineCount > 1 || selectedRoom.status === 'connected'
+      : selectedRoomPeerOnlineCount > 0 || selectedRoom.status === 'connected'
 
     return (
       <div className="dd-snaplink__room-empty-card">
@@ -5015,7 +5033,7 @@ export function SnapLinkStage({
 
   const renderWorkbenchRoomTargetButton = (room: RoomListItem, intent: 'file' | 'text' = 'file') => {
     const isSelected = selectedRoomId === room.roomId && !isLobbyOpen
-    const onlineLabel = `${Math.max(room.onlineCount + 1, 1).toString()} 在线`
+    const onlineLabel = resolveRoomPeerPresenceLabel(room)
     const inactiveLabel = intent === 'text' ? `${onlineLabel} · 进入后发文本` : `${onlineLabel} · 进入后发送`
 
     return (
@@ -5411,7 +5429,7 @@ export function SnapLinkStage({
                   {room.unreadCount > 0 ? (
                     <strong>{room.unreadCount > 99 ? '99+' : room.unreadCount}</strong>
                   ) : (
-                    <em>{Math.min(room.memberCount, room.onlineCount + 1).toString()} 在线</em>
+                    <em>{resolveRoomPeerPresenceLabel(room)}</em>
                   )}
                 </span>
               </a>
@@ -5979,7 +5997,7 @@ export function SnapLinkStage({
       }}
       onDiscoverableChange={(checked) => {
         onDeviceSettingsChange({ discoverable: checked })
-        showSettingsFeedback(checked ? '已允许被附近设备发现' : '已关闭附近发现')
+        showSettingsFeedback(checked ? '已允许当前服务内的设备发现' : '已关闭设备发现')
       }}
       onAllowShortCodeChange={(checked) => {
         onDeviceSettingsChange({ allowShortCode: checked })
@@ -6215,12 +6233,12 @@ export function SnapLinkStage({
         details={[
           {
             id: 'lan-workbench',
-            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />同一网络可见</>,
+            label: <><Wifi size={13} strokeWidth={2} aria-hidden="true" />当前服务可见</>,
           },
-          { id: 'webrtc', label: '直连中' },
+          { id: 'webrtc', label: '设备直连优先' },
           {
             id: 'serverless',
-            label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />文件不经过服务器</>,
+            label: <><ShieldCheck size={13} strokeWidth={2} aria-hidden="true" />公共房间保留历史</>,
           },
         ]}
         ariaLabel="工具连接状态"
@@ -6619,10 +6637,10 @@ export function SnapLinkStage({
           {hasActiveRoom && selectedRoom ? (
             <span
               className="dd-snaplink__online-count"
-              aria-label={`${selectedRoomOnlineCount.toString()} 人在线`}
-              title={`${selectedRoomOnlineCount.toString()} 人在线`}
+              aria-label={`${selectedRoomOnlineMemberCount.toString()} 人在线，包含本机`}
+              title={`${selectedRoomOnlineMemberCount.toString()} 人在线（含本机）`}
             >
-              <span>{selectedRoomOnlineCount}</span>
+              <span>{selectedRoomOnlineMemberCount}</span>
             </span>
           ) : null}
           <div className="dd-snaplink__theme">
@@ -6819,7 +6837,7 @@ export function SnapLinkStage({
                   <div className="dd-snaplink__room-member-head">
                     <strong>更多功能</strong>
                     <span>
-                      {selectedRoomOnlineCount.toString()} 在线 · {(selectedRoom?.memberCount ?? 1).toString()} 成员
+                      {selectedRoomOnlineMemberCount.toString()}/{selectedRoomMemberCount.toString()} 在线（含本机）
                     </span>
                   </div>
                   <div className="dd-snaplink__room-member-actions" aria-label="更多操作">
@@ -6912,7 +6930,12 @@ export function SnapLinkStage({
                 </SharedContentPanel>
               ) : null}
 
-              {isDragging ? <RoomDragOverlay targetName={selectedConversationName} /> : null}
+              {isDragging ? (
+                <RoomDragOverlay
+                  targetName={selectedConversationName}
+                  deliveryNote={selectedRoomTechnicalNote.replace(/^技术信息：/, '')}
+                />
+              ) : null}
 
               <RoomConversationStream
                 messagesRef={messagesRef}

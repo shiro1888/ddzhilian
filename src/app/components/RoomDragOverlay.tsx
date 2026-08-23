@@ -1,8 +1,12 @@
 type RoomDragOverlayProps = {
   targetName?: string
+  deliveryNote?: string
 }
 
-export function RoomDragOverlay({ targetName = '当前对话' }: RoomDragOverlayProps) {
+export function RoomDragOverlay({
+  targetName = '当前对话',
+  deliveryNote = '松开后发送到当前会话',
+}: RoomDragOverlayProps) {
   return (
     <div className="dd-snaplink__drag-overlay" role="status" aria-live="polite">
       <div className="dd-snaplink__drag-panel">
@@ -10,7 +14,7 @@ export function RoomDragOverlay({ targetName = '当前对话' }: RoomDragOverlay
           +
         </span>
         <strong>松开，发送到 {targetName}</strong>
-        <span>松开后直接发送 · 文件不经过服务器</span>
+        <span>{deliveryNote}</span>
       </div>
     </div>
   )

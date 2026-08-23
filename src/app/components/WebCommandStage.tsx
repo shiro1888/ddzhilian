@@ -64,8 +64,7 @@ async function copyText(value: string) {
 }
 
 function resolveWebCommandApiBaseUrl() {
-  const env = process.env as Record<string, string | undefined>
-  const configuredUrl = env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
+  const configuredUrl = process.env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
 
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '')

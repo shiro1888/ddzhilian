@@ -49,7 +49,7 @@ export function RoomHeader({
   shareSubtitle,
   copyLabel = '复制房间码',
   copiedLabel = '已复制',
-  technicalNote = '技术信息：WebRTC 端到端直连 · 文件不经过服务器',
+  technicalNote = '技术信息：连接方式与历史留存取决于房间类型',
   peerLabel,
   peerTitle,
   connectionDetails = [],
@@ -253,6 +253,9 @@ export function RoomHeader({
       {primaryConnectionDetail ? (
         <div
           className={`dd-snaplink__room-route is-${primaryConnectionDetail.tone ?? 'default'}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           aria-label="当前连接状态"
         >
           <span className="dd-snaplink__room-route-node is-local">

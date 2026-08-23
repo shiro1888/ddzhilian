@@ -1,4 +1,5 @@
 import type { RoomListItem } from '../types'
+import { getRoomPeerOnlineCount, resolveRoomPeerPresenceLabel } from '../room-presence'
 
 type RoomCardProps = {
   room: RoomListItem
@@ -8,7 +9,8 @@ type RoomCardProps = {
 
 export function RoomCard({ room, onOpen, onTogglePinned }: RoomCardProps) {
   const avatarLabel = room.isPublic ? '世' : Array.from(room.title.trim() || '房')[0]
-  const visibleOnlineCount = Math.min(room.memberCount, room.onlineCount + 1)
+  const peerOnlineCount = getRoomPeerOnlineCount(room)
+  const peerPresenceLabel = resolveRoomPeerPresenceLabel(room)
 
   return (
     <article
@@ -32,7 +34,7 @@ export function RoomCard({ room, onOpen, onTogglePinned }: RoomCardProps) {
       >
         <span className="dd-snaplink__workbench-room-avatar" aria-hidden="true">
           {avatarLabel}
-          <i className={visibleOnlineCount > 0 ? 'is-online' : ''} />
+          <i className={peerOnlineCount > 0 ? 'is-online' : ''} />
         </span>
         <span className="dd-snaplink__workbench-room-main">
           <span className="dd-snaplink__workbench-room-title">
@@ -47,7 +49,7 @@ export function RoomCard({ room, onOpen, onTogglePinned }: RoomCardProps) {
           {room.unreadCount > 0 ? (
             <strong>{room.unreadCount > 99 ? '99+' : room.unreadCount}</strong>
           ) : (
-            <em>{visibleOnlineCount.toString()} 在线</em>
+            <em>{peerPresenceLabel}</em>
           )}
         </span>
       </button>

@@ -30,9 +30,11 @@ describe('RoomHeader connection ribbon', () => {
       />,
     )
 
-    const ribbon = screen.getByLabelText('当前连接状态')
+    const ribbon = screen.getByRole('status', { name: '当前连接状态' })
 
     expect(ribbon).toHaveClass('is-safe')
+    expect(ribbon).toHaveAttribute('aria-live', 'polite')
+    expect(ribbon).toHaveAttribute('aria-atomic', 'true')
     expect(within(ribbon).getByText('此设备')).toBeInTheDocument()
     expect(within(ribbon).getByText('设计协作室')).toBeInTheDocument()
     expect(within(ribbon).getByText('WebRTC 直连')).toBeInTheDocument()
@@ -50,6 +52,6 @@ describe('RoomHeader connection ribbon', () => {
       />,
     )
 
-    expect(screen.queryByLabelText('当前连接状态')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: '当前连接状态' })).not.toBeInTheDocument()
   })
 })

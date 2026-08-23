@@ -347,7 +347,7 @@ export function SettingsPanel({
               <div className="dd-snaplink__settings-switch-list">
                 <SettingsSwitch
                   label="允许被发现"
-                  description="同一网络内的设备可以看到这台设备"
+                  description="连接到当前服务的设备可以看到这台设备"
                   checked={discoverable}
                   onChange={onDiscoverableChange}
                 />
@@ -365,8 +365,8 @@ export function SettingsPanel({
                 />
               </div>
               <div className="dd-snaplink__settings-status-list">
-            <span>直连传输</span>
-                <span>文件不经过服务器</span>
+                <span>私聊文件优先直连</span>
+                <span>公共房间保留历史副本</span>
               </div>
             </div>
 

@@ -62,8 +62,10 @@ type RecallHistoryOptions = {
 }
 
 function readPublicEnv(name: 'SIGNALING_WS_URL' | 'SIGNALING_HTTP_URL') {
-  const env = process.env as Record<string, string | undefined>
-  return env[`NEXT_PUBLIC_${name}`]?.trim() || ''
+  // Next.js only inlines NEXT_PUBLIC values when the property access is static.
+  return name === 'SIGNALING_WS_URL'
+    ? process.env.NEXT_PUBLIC_SIGNALING_WS_URL?.trim() || ''
+    : process.env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
 }
 
 function delay(ms: number) {

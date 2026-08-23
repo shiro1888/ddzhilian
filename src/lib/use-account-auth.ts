@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AccountEmailCheckResponse, AccountSessionResponse, AccountUser } from './ddzhilian-types'
 
-function readPublicEnv(name: 'SIGNALING_HTTP_URL') {
-  const env = process.env as Record<string, string | undefined>
-  return (
-    env[`NEXT_PUBLIC_${name}`]?.trim() ||
-    env[`VITE_${name}`]?.trim() ||
-    ''
-  )
+function readPublicSignalingHttpUrl() {
+  // Keep the access static so Next.js can inline it into the browser bundle.
+  return process.env.NEXT_PUBLIC_SIGNALING_HTTP_URL?.trim() || ''
 }
 
 function resolveAccountApiBaseUrl() {
-  const configuredUrl = readPublicEnv('SIGNALING_HTTP_URL')
+  const configuredUrl = readPublicSignalingHttpUrl()
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '')
   }
