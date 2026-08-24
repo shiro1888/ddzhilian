@@ -107,6 +107,7 @@ export interface RoomStateSummary {
 
 export interface DevicePreferencesPayload {
   enterToSend: boolean;
+  soundEffects: boolean;
 }
 
 export interface HistoryFileSummary {
@@ -323,6 +324,58 @@ function hasStringField(payload: Record<string, unknown>, field: string) {
   return typeof payload[field] === 'string';
 }
 
+function hasOptionalStringField(payload: Record<string, unknown>, field: string) {
+  return payload[field] === undefined || typeof payload[field] === 'string';
+}
+
+function hasOptionalBooleanField(payload: Record<string, unknown>, field: string) {
+  return payload[field] === undefined || typeof payload[field] === 'boolean';
+}
+
+function isNativeLanCapabilityPayload(value: unknown) {
+  if (value === undefined) {
+    return true;
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.lanNativeEnabled === 'boolean' &&
+    typeof value.lanDiscoveryEnabled === 'boolean' &&
+    typeof value.lanTransferEnabled === 'boolean' &&
+    (value.localProtocol === undefined || value.localProtocol === 'http' || value.localProtocol === 'https') &&
+    (value.localPort === undefined ||
+      (Number.isInteger(value.localPort) && Number(value.localPort) >= 1 && Number(value.localPort) <= 65_535)) &&
+    hasOptionalStringField(value, 'localFingerprint') &&
+    hasOptionalBooleanField(value, 'localDownloadFallback')
+  );
+}
+
+function isDeviceSettingsPayload(payload: Record<string, unknown>) {
+  return (
+    hasOptionalStringField(payload, 'deviceName') &&
+    hasOptionalStringField(payload, 'platform') &&
+    hasOptionalStringField(payload, 'accountId') &&
+    hasOptionalBooleanField(payload, 'autoConnect') &&
+    hasOptionalBooleanField(payload, 'discoverable') &&
+    hasOptionalBooleanField(payload, 'allowShortCode') &&
+    isNativeLanCapabilityPayload(payload.nativeLan)
+  );
+}
+
+function isDeviceHelloPayload(payload: Record<string, unknown>) {
+  return (
+    isDeviceSettingsPayload(payload) &&
+    hasOptionalStringField(payload, 'deviceId') &&
+    hasOptionalStringField(payload, 'deviceSecret') &&
+    (payload.requestedPairToken === undefined ||
+      payload.requestedPairToken === null ||
+      typeof payload.requestedPairToken === 'string')
+  );
+}
+
 /**
  * Every entry maps a client event type to a predicate over its payload. Events
  * whose payload is optional map to `null`. The dispatcher in index.ts reads
@@ -333,10 +386,15 @@ const clientEventPayloadGuards: Record<
   ClientEvent['type'],
   ((payload: Record<string, unknown>) => boolean) | null
 > = {
-  hello: () => true,
-  'update-settings': () => true,
-  'update-preferences': () => true,
-  'update-room-state': (payload) => hasStringField(payload, 'roomId'),
+  hello: isDeviceHelloPayload,
+  'update-settings': isDeviceSettingsPayload,
+  'update-preferences': (payload) =>
+    hasOptionalBooleanField(payload, 'enterToSend') &&
+    hasOptionalBooleanField(payload, 'soundEffects'),
+  'update-room-state': (payload) =>
+    hasStringField(payload, 'roomId') &&
+    hasOptionalBooleanField(payload, 'pinned') &&
+    hasOptionalStringField(payload, 'lastReadAt'),
   'pair-by-short-code': (payload) => hasStringField(payload, 'shortCode'),
   'pair-by-token': (payload) => hasStringField(payload, 'pairToken'),
   'join-room': (payload) => hasStringField(payload, 'roomId'),

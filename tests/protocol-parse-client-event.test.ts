@@ -66,4 +66,59 @@ describe('parseClientEvent', () => {
       payload: {},
     })
   })
+
+  it('accepts boolean preference updates, including sound effects', () => {
+    expect(
+      parseClientEvent(
+        JSON.stringify({
+          type: 'update-preferences',
+          payload: { enterToSend: false, soundEffects: false },
+        }),
+      ),
+    ).toEqual({
+      type: 'update-preferences',
+      payload: { enterToSend: false, soundEffects: false },
+    })
+  })
+
+  it('rejects malformed settings and preference values before dispatch', () => {
+    expect(
+      parseClientEvent(
+        JSON.stringify({ type: 'update-preferences', payload: { soundEffects: 'yes' } }),
+      ),
+    ).toBeNull()
+    expect(
+      parseClientEvent(
+        JSON.stringify({ type: 'update-settings', payload: { discoverable: 'yes' } }),
+      ),
+    ).toBeNull()
+    expect(
+      parseClientEvent(
+        JSON.stringify({
+          type: 'update-settings',
+          payload: {
+            nativeLan: {
+              lanNativeEnabled: true,
+              lanDiscoveryEnabled: true,
+              lanTransferEnabled: true,
+              localPort: 70_000,
+            },
+          },
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      parseClientEvent(
+        JSON.stringify({ type: 'hello', payload: { deviceName: 42 } }),
+      ),
+    ).toBeNull()
+    expect(
+      parseClientEvent(
+        JSON.stringify({
+          type: 'update-room-state',
+          payload: { roomId: 'ROOM01', pinned: 'yes' },
+        }),
+      ),
+    ).toBeNull()
+  })
 })

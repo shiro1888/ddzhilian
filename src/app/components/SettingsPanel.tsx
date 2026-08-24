@@ -1,26 +1,19 @@
 import type { CSSProperties, FormEventHandler, ReactNode } from 'react'
 import {
   Bot,
-  Clock3,
-  Command,
+  Camera,
+  ChevronRight,
   FileText,
   Image as ImageIcon,
   Monitor,
   MoonStar,
-  Settings,
+  ScanText,
   ShieldCheck,
-  SlidersHorizontal,
+  Sparkles,
+  Terminal,
   Wifi,
 } from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
-
-export type SettingsPanelThemeColorTarget = 'self' | 'peer' | 'ai'
-export type SettingsPanelThemeColors = Record<SettingsPanelThemeColorTarget, string>
-
-type SettingsPanelThemeOption = {
-  label: string
-  colors: SettingsPanelThemeColors
-}
 
 type SettingsPanelThemeModeOption = {
   label: string
@@ -42,10 +35,9 @@ type SettingsPanelProps = {
   allowShortCode: boolean
   autoConnect: boolean
   enterToSend: boolean
+  soundEffects?: boolean
   themeMode: ThemeMode
   resolvedThemeMode: ResolvedThemeMode
-  themeColors: SettingsPanelThemeColors
-  themeOptions: SettingsPanelThemeOption[]
   feedbackMessage: string | null
   canOpenAdmin?: boolean
   onAvatarClick?: () => void
@@ -55,14 +47,12 @@ type SettingsPanelProps = {
   onAllowShortCodeChange: (checked: boolean) => void
   onAutoConnectChange: (checked: boolean) => void
   onEnterToSendChange: (checked: boolean) => void
+  onSoundEffectsChange: (checked: boolean) => void
   onThemeModeChange: (mode: ThemeMode) => void
-  onThemeColorChange: (target: SettingsPanelThemeColorTarget, value: string) => void
-  onThemePresetApply: (colors: SettingsPanelThemeColors) => void
-  onThemeReset: () => void
-  onShowHistory?: () => void
   onOpenAiChat?: () => void
   onOpenImage?: () => void
   onOpenCommand?: () => void
+  onOpenOcr?: () => void
   onOpenAdmin?: () => void
 }
 
@@ -71,14 +61,6 @@ type SettingsSwitchProps = {
   description: string
   checked: boolean
   onChange: (checked: boolean) => void
-}
-
-type ThemeColorFieldProps = {
-  target: SettingsPanelThemeColorTarget
-  label: string
-  description: string
-  value: string
-  onChange: (target: SettingsPanelThemeColorTarget, value: string) => void
 }
 
 const themeModeOptions: SettingsPanelThemeModeOption[] = [
@@ -125,29 +107,6 @@ function getThemeModeSummary(mode: ThemeMode, resolvedMode: ResolvedThemeMode) {
   return `当前固定为${mode === 'dark' ? '深色' : '浅色'}界面`
 }
 
-function ThemeColorField({
-  target,
-  label,
-  description,
-  value,
-  onChange,
-}: ThemeColorFieldProps) {
-  return (
-    <label className="dd-snaplink__theme-field">
-      <span>
-        <strong>{label}</strong>
-        <small>{description}</small>
-      </span>
-      <input
-        type="color"
-        value={value}
-        aria-label={`${label}颜色`}
-        onChange={(event) => onChange(target, event.target.value)}
-      />
-    </label>
-  )
-}
-
 export function SettingsPanel({
   header,
   deviceName,
@@ -162,10 +121,9 @@ export function SettingsPanel({
   allowShortCode,
   autoConnect,
   enterToSend,
+  soundEffects = true,
   themeMode,
   resolvedThemeMode,
-  themeColors,
-  themeOptions,
   feedbackMessage,
   canOpenAdmin = false,
   onAvatarClick,
@@ -175,19 +133,14 @@ export function SettingsPanel({
   onAllowShortCodeChange,
   onAutoConnectChange,
   onEnterToSendChange,
+  onSoundEffectsChange,
   onThemeModeChange,
-  onThemeColorChange,
-  onThemePresetApply,
-  onThemeReset,
-  onShowHistory,
   onOpenAiChat,
   onOpenImage,
   onOpenCommand,
+  onOpenOcr,
   onOpenAdmin,
 }: SettingsPanelProps) {
-  const hasHistoryShortcut = Boolean(onShowHistory)
-  const hasToolShortcuts = Boolean(onOpenAiChat || onOpenImage || onOpenCommand || (canOpenAdmin && onOpenAdmin))
-
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
       {header}
@@ -208,7 +161,9 @@ export function SettingsPanel({
               onClick={onAvatarClick}
             >
               {avatarDataUrl ? null : <Monitor size={18} strokeWidth={1.8} aria-hidden="true" />}
-              <i aria-hidden="true">相</i>
+              <span className="dd-snaplink__settings-avatar-badge" aria-hidden="true">
+                <Camera size={10} strokeWidth={2.4} />
+              </span>
             </button>
             <span>
               <strong>当前设备</strong>
@@ -248,226 +203,173 @@ export function SettingsPanel({
           </button>
         </form>
 
-        {hasHistoryShortcut ? (
-          <div className="dd-snaplink__settings-card">
-            <div className="dd-snaplink__settings-card-head">
-              <Clock3 size={18} strokeWidth={1.8} aria-hidden="true" />
-              <span>
-                <strong>传输记录</strong>
-                <small>文件、文本和链接都在这里，不占主导航</small>
-              </span>
-            </div>
-            <div className="dd-snaplink__settings-menu-list">
-              <button type="button" onClick={onShowHistory}>
-                <Clock3 size={17} strokeWidth={1.9} aria-hidden="true" />
-                <span>
-                  <strong>查看传输记录</strong>
-                  <small>下载文件、复制文本或复用链接</small>
-                </span>
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {hasToolShortcuts ? (
-          <div className="dd-snaplink__settings-card is-my-shortcuts">
-            <div className="dd-snaplink__settings-card-head">
-              <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
-              <span>
-                <strong>工具中心</strong>
-                <small>DD助手、图片和命令行收在这里，主界面保持简洁</small>
-              </span>
-            </div>
-            <div className="dd-snaplink__settings-menu-list">
-              {onOpenAiChat ? (
-                <button type="button" onClick={onOpenAiChat}>
-                  <Bot size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>DD助手</strong>
-                    <small>总结传输内容，辅助生成文本</small>
-                  </span>
-                </button>
-              ) : null}
-              {onOpenAiChat ? (
-                <button type="button" onClick={onOpenAiChat}>
-                  <SlidersHorizontal size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>DD助手设置</strong>
-                    <small>模型、联网搜索和额度在 DD助手里调整</small>
-                  </span>
-                </button>
-              ) : null}
-              {onOpenImage ? (
-                <button type="button" onClick={onOpenImage}>
-                  <ImageIcon size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>图片工具</strong>
-                    <small>图片生成与传输文件联动</small>
-                  </span>
-                </button>
-              ) : null}
-              {onOpenCommand ? (
-                <button type="button" onClick={onOpenCommand}>
-                  <Command size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>命令行</strong>
-                    <small>运行命令并发送结果文本</small>
-                  </span>
-                </button>
-              ) : null}
-              {canOpenAdmin && onOpenAdmin ? (
-                <button type="button" onClick={onOpenAdmin}>
-                  <ShieldCheck size={17} strokeWidth={1.9} aria-hidden="true" />
-                  <span>
-                    <strong>管理员</strong>
-                    <small>设备管理、模型策略和后台控制面板</small>
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        <details className="dd-snaplink__settings-advanced">
-          <summary>
+        <div className="dd-snaplink__settings-card">
+          <div className="dd-snaplink__settings-card-head">
+            <MoonStar size={18} strokeWidth={1.8} aria-hidden="true" />
             <span>
-              <strong>高级设置</strong>
-              <small>连接、发送、外观和消息主题</small>
+              <strong>外观模式</strong>
+              <small>默认浅色，也可以切换深色或跟随系统</small>
             </span>
-          </summary>
-          <div className="dd-snaplink__settings-advanced-grid">
-            <div className="dd-snaplink__settings-card">
-              <div className="dd-snaplink__settings-card-head">
-                <Wifi size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>
-                  <strong>连接与发现</strong>
-                  <small>管理别人能不能看到这台设备</small>
-                </span>
-              </div>
-              <div className="dd-snaplink__settings-switch-list">
-                <SettingsSwitch
-                  label="允许被发现"
-                  description="连接到当前服务的设备可以看到这台设备"
-                  checked={discoverable}
-                  onChange={onDiscoverableChange}
-                />
-                <SettingsSwitch
-                  label="允许短码连接"
-                  description="其他设备可以通过短码发起连接"
-                  checked={allowShortCode}
-                  onChange={onAllowShortCodeChange}
-                />
-                <SettingsSwitch
-                  label="自动连接同一账号设备"
-                  description="同一账号设备上线后自动尝试连接"
-                  checked={autoConnect}
-                  onChange={onAutoConnectChange}
-                />
-              </div>
-              <div className="dd-snaplink__settings-status-list">
-                <span>私聊文件优先直连</span>
-                <span>公共房间保留历史副本</span>
-              </div>
-            </div>
+          </div>
+          <div className="dd-snaplink__settings-mode-group" role="group" aria-label="外观模式">
+            {themeModeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`dd-snaplink__settings-mode-option${themeMode === option.value ? ' is-active' : ''}`}
+                aria-pressed={themeMode === option.value}
+                onClick={() => onThemeModeChange(option.value)}
+              >
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
+              </button>
+            ))}
+          </div>
+          <p className="dd-snaplink__settings-mode-note">
+            {getThemeModeSummary(themeMode, resolvedThemeMode)}
+          </p>
+        </div>
 
-            <div className="dd-snaplink__settings-card">
-              <div className="dd-snaplink__settings-card-head">
-                <FileText size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>
-                  <strong>发送偏好</strong>
-                  <small>控制文本输入的发送方式</small>
-                </span>
-              </div>
-              <div className="dd-snaplink__settings-switch-list">
-                <SettingsSwitch
-                  label="回车发送"
-                  description="开启后 Enter 发送，Shift + Enter 换行"
-                  checked={enterToSend}
-                  onChange={onEnterToSendChange}
-                />
-              </div>
-            </div>
+        <div className="dd-snaplink__settings-card">
+          <div className="dd-snaplink__settings-card-head">
+            <Wifi size={18} strokeWidth={1.8} aria-hidden="true" />
+            <span>
+              <strong>连接与发现</strong>
+              <small>管理别人能不能看到这台设备</small>
+            </span>
+          </div>
+          <div className="dd-snaplink__settings-switch-list">
+            <SettingsSwitch
+              label="允许被发现"
+              description="连接到当前服务的设备可以看到这台设备"
+              checked={discoverable}
+              onChange={onDiscoverableChange}
+            />
+            <SettingsSwitch
+              label="允许短码连接"
+              description="其他设备可以通过短码发起连接"
+              checked={allowShortCode}
+              onChange={onAllowShortCodeChange}
+            />
+            <SettingsSwitch
+              label="自动连接同一账号设备"
+              description="同一账号设备上线后自动尝试连接"
+              checked={autoConnect}
+              onChange={onAutoConnectChange}
+            />
+          </div>
+        </div>
 
-            <div className="dd-snaplink__settings-card">
-              <div className="dd-snaplink__settings-card-head">
-                <MoonStar size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>
-                  <strong>外观模式</strong>
-                  <small>默认浅色，也可以切换深色或跟随系统</small>
-                </span>
-              </div>
-              <div className="dd-snaplink__settings-mode-group" role="group" aria-label="外观模式">
-                {themeModeOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`dd-snaplink__settings-mode-option${themeMode === option.value ? ' is-active' : ''}`}
-                    aria-pressed={themeMode === option.value}
-                    onClick={() => onThemeModeChange(option.value)}
-                  >
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
-                  </button>
-                ))}
-              </div>
-              <p className="dd-snaplink__settings-mode-note">
-                {getThemeModeSummary(themeMode, resolvedThemeMode)}
-              </p>
-            </div>
-
-            <div className="dd-snaplink__settings-card">
-              <div className="dd-snaplink__settings-card-head">
-                <Settings size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>
-                  <strong>消息主题</strong>
-                  <small>只调整前端显示，不影响传输逻辑</small>
-                </span>
-              </div>
-              <div className="dd-snaplink__settings-theme-fields">
-                <ThemeColorField
-                  target="self"
-                  label="发送的信息框"
-                  description="自己发送的消息气泡"
-                  value={themeColors.self}
-                  onChange={onThemeColorChange}
-                />
-                <ThemeColorField
-                  target="peer"
-                  label="接收的信息框"
-                  description="其他成员发送的消息气泡"
-                  value={themeColors.peer}
-                  onChange={onThemeColorChange}
-                />
-                <ThemeColorField
-                  target="ai"
-                  label="助手的信息框"
-                  description="DD助手回复气泡"
-                  value={themeColors.ai}
-                  onChange={onThemeColorChange}
-                />
-              </div>
-              <div className="dd-snaplink__settings-theme-presets" aria-label="主题预设">
-                {themeOptions.map((option) => (
-                  <button
-                    key={option.label}
-                    type="button"
-                    onClick={() => onThemePresetApply(option.colors)}
-                  >
-                    <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
-                      <i style={{ background: option.colors.self }} />
-                      <i style={{ background: option.colors.peer }} />
-                      <i style={{ background: option.colors.ai }} />
-                    </span>
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <button type="button" className="dd-snaplink__settings-reset" onClick={onThemeReset}>
-                恢复默认
+        <div className="dd-snaplink__settings-card">
+          <div className="dd-snaplink__settings-card-head">
+            <FileText size={18} strokeWidth={1.8} aria-hidden="true" />
+            <span>
+              <strong>发送与偏好</strong>
+              <small>控制文本输入与交互快捷键</small>
+            </span>
+          </div>
+          <div className="dd-snaplink__settings-switch-list">
+            <SettingsSwitch
+              label="回车发送"
+              description="开启后 Enter 发送，Shift + Enter 换行"
+              checked={enterToSend}
+              onChange={onEnterToSendChange}
+            />
+            <SettingsSwitch
+              label="操作提示音"
+              description="发送消息、接收文件与新设备发现时播放轻柔提示音"
+              checked={soundEffects}
+              onChange={onSoundEffectsChange}
+            />
+          </div>
+          {canOpenAdmin && onOpenAdmin ? (
+            <div className="dd-snaplink__settings-admin-link">
+              <button type="button" onClick={onOpenAdmin}>
+                <ShieldCheck size={16} strokeWidth={1.9} aria-hidden="true" />
+                <span>进入管理员控制面板</span>
               </button>
             </div>
+          ) : null}
+        </div>
+
+        <div className="dd-snaplink__settings-card is-tools-card">
+          <div className="dd-snaplink__settings-card-head">
+            <Sparkles size={18} strokeWidth={1.8} aria-hidden="true" />
+            <span>
+              <strong>工具与扩展工坊</strong>
+              <small>直达命令行沙箱、AI 智能助手、图片工坊与文字提取</small>
+            </span>
           </div>
-        </details>
+          <div className="dd-snaplink__settings-tool-grid">
+            {onOpenCommand ? (
+              <button
+                type="button"
+                className="dd-snaplink__settings-tool-btn"
+                onClick={onOpenCommand}
+              >
+                <div className="dd-snaplink__settings-tool-icon is-command">
+                  <Terminal size={18} strokeWidth={2} />
+                </div>
+                <div className="dd-snaplink__settings-tool-info">
+                  <strong>命令行沙箱</strong>
+                  <small>Python / Java / PlantUML 终端运行</small>
+                </div>
+                <ChevronRight size={15} className="dd-snaplink__settings-tool-arrow" />
+              </button>
+            ) : null}
+
+            {onOpenAiChat ? (
+              <button
+                type="button"
+                className="dd-snaplink__settings-tool-btn"
+                onClick={onOpenAiChat}
+              >
+                <div className="dd-snaplink__settings-tool-icon is-ai">
+                  <Bot size={18} strokeWidth={2} />
+                </div>
+                <div className="dd-snaplink__settings-tool-info">
+                  <strong>AI 智能助手</strong>
+                  <small>多模型会话与智能问答</small>
+                </div>
+                <ChevronRight size={15} className="dd-snaplink__settings-tool-arrow" />
+              </button>
+            ) : null}
+
+            {onOpenImage ? (
+              <button
+                type="button"
+                className="dd-snaplink__settings-tool-btn"
+                onClick={onOpenImage}
+              >
+                <div className="dd-snaplink__settings-tool-icon is-image">
+                  <ImageIcon size={18} strokeWidth={2} />
+                </div>
+                <div className="dd-snaplink__settings-tool-info">
+                  <strong>图片工坊</strong>
+                  <small>AI 绘图、参考图与画廊</small>
+                </div>
+                <ChevronRight size={15} className="dd-snaplink__settings-tool-arrow" />
+              </button>
+            ) : null}
+
+            {onOpenOcr ? (
+              <button
+                type="button"
+                className="dd-snaplink__settings-tool-btn"
+                onClick={onOpenOcr}
+              >
+                <div className="dd-snaplink__settings-tool-icon is-ocr">
+                  <ScanText size={18} strokeWidth={2} />
+                </div>
+                <div className="dd-snaplink__settings-tool-info">
+                  <strong>图片文字识别 (OCR)</strong>
+                  <small>拖拽/相册图片提取文字</small>
+                </div>
+                <ChevronRight size={15} className="dd-snaplink__settings-tool-arrow" />
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </section>
   )

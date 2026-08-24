@@ -83,6 +83,7 @@ export type RoomStateSummary = {
 
 export type DevicePreferencesPayload = {
   enterToSend: boolean
+  soundEffects?: boolean
 }
 
 export type HistoryFileSummary = {

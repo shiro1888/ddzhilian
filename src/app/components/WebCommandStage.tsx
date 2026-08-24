@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Loader2, Play, RotateCcw, Send, Trash2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  Code2,
+  Copy,
+  FileCode2,
+  Loader2,
+  Play,
+  RotateCcw,
+  Send,
+  Terminal as TerminalIcon,
+  Trash2,
+} from 'lucide-react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
+import { navigateBackToText } from '../../lib/navigate-back-to-text'
 import {
   runWebCommandSandbox,
   serverSandboxLanguages,
@@ -28,6 +42,19 @@ type WebCommandStageProps = {
   historyAuthToken?: string
   onResultTextChange?: (text: string) => void
   onShareResult?: (text: string) => void
+}
+
+function getEditorFilename(language: WebCommandLanguage) {
+  switch (language) {
+    case 'python':
+      return 'main.py'
+    case 'java':
+      return 'Main.java'
+    case 'c':
+      return 'main.c'
+    case 'plantuml':
+      return 'diagram.puml'
+  }
 }
 
 function getCopyDefaultLabel(language: WebCommandLanguage) {
@@ -277,6 +304,8 @@ export function WebCommandStage({
   const [stdin, setStdin] = useState('')
   const [result, setResult] = useState<WebCommandRunResult | null>(null)
   const [isRunning, setIsRunning] = useState(false)
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false)
+  const langMenuRef = useRef<HTMLDivElement | null>(null)
   const [copyLabel, setCopyLabel] = useState(getCopyDefaultLabel('python'))
   const [mobilePane, setMobilePane] = useState<WebCommandMobilePane>('source')
   const terminalHostRef = useRef<HTMLDivElement | null>(null)
@@ -291,6 +320,31 @@ export function WebCommandStage({
   const isPlantUmlMode = language === 'plantuml'
   const isServerSandboxLanguage = serverSandboxLanguages.has(language)
   const missingSandboxAuth = isServerSandboxLanguage && !historyAuthToken?.trim()
+
+  useEffect(() => {
+    if (!isLangMenuOpen) {
+      return undefined
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setIsLangMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsLangMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isLangMenuOpen])
 
   useEffect(() => {
     languageRef.current = language
@@ -496,10 +550,10 @@ export function WebCommandStage({
       fontSize: 13,
       scrollback: 600,
       theme: {
-        background: '#111111',
+        background: '#09090b',
         foreground: '#f5f5f5',
-        cursor: '#95ec69',
-        selectionBackground: '#3f3f46',
+        cursor: '#10b981',
+        selectionBackground: 'rgba(16, 185, 129, 0.25)',
       },
     })
     const fitAddon = new FitAddon()
@@ -607,12 +661,37 @@ export function WebCommandStage({
     onShareResult?.(shareableResultText)
   }
 
-  const sandboxLabel = language === 'java' || language === 'plantuml' ? 'Docker 沙箱' : '浏览器沙箱'
-  const sandboxDescription = language === 'java'
-    ? 'Java 代码通过后端 Docker 沙箱执行，支持标准输入。'
-    : language === 'plantuml'
-      ? 'PlantUML 通过后端沙箱渲染为 PNG 图片，停止输入后会自动预览。'
-      : `${languageLabels[language]} 在浏览器沙箱中运行，结果只显示在当前页面。`
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault()
+      if (!isRunning && !missingSandboxAuth) {
+        executeCurrentSource()
+      }
+      return
+    }
+
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      const textarea = event.currentTarget
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const nextSource = source.substring(0, start) + '  ' + source.substring(end)
+      setSource(nextSource)
+      window.requestAnimationFrame(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 2
+      })
+    }
+  }
+
+  const handleStdinKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault()
+      if (!isRunning && !missingSandboxAuth) {
+        executeCurrentSource()
+      }
+    }
+  }
+
   const runState = isRunning ? 'running' : result ? (result.ok ? 'success' : 'failed') : 'idle'
   const runStateLabel = isRunning ? '运行中' : result ? (result.ok ? '运行成功' : '运行失败') : '待运行'
   const sourceLineCount = source.split(/\r?\n/).length
@@ -621,28 +700,69 @@ export function WebCommandStage({
   return (
     <section className={`dd-web-command is-${runState} is-mobile-${mobilePane}${isPlantUmlMode ? ' is-plantuml' : ''}`} aria-label="命令行">
       <header className="dd-web-command__head">
-        <div>
-          <span className="dd-web-command__eyebrow">
-            {sandboxLabel}
-          </span>
-          <h1>命令行</h1>
-          <p>{sandboxDescription}</p>
+        <div className="dd-web-command__head-brand">
+          <button
+            type="button"
+            className="dd-web-command__back-btn"
+            aria-label="返回"
+            onClick={navigateBackToText}
+          >
+            <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+          <div className="dd-web-command__head-text">
+            <h1>命令行</h1>
+          </div>
         </div>
         <div className="dd-web-command__head-actions">
           <span className={`dd-web-command__run-state is-${runState}`}>{runStateLabel}</span>
-          <label>
-            <span>语言</span>
-            <select
-              value={language}
-              onChange={(event) => handleLanguageChange(event.target.value as WebCommandLanguage)}
+          <div className="dd-web-command__lang-selector" ref={langMenuRef}>
+            <button
+              type="button"
+              className={`dd-web-command__lang-trigger${isLangMenuOpen ? ' is-active' : ''}`}
+              aria-haspopup="listbox"
+              aria-expanded={isLangMenuOpen}
+              aria-label={`切换运行语言，当前${languageLabels[language]}`}
+              title="切换运行语言"
+              onClick={() => setIsLangMenuOpen((current) => !current)}
             >
-              {supportedLanguages.map((item) => (
-                <option key={item} value={item}>
-                  {languageLabels[item]}
-                </option>
-              ))}
-            </select>
-          </label>
+              <Code2 size={14} strokeWidth={2} className="dd-web-command__lang-icon" aria-hidden="true" />
+              <span className="dd-web-command__lang-current">{languageLabels[language]}</span>
+              <ChevronDown size={13} strokeWidth={2.2} className="dd-web-command__lang-chevron" aria-hidden="true" />
+            </button>
+
+            {isLangMenuOpen ? (
+              <div className="dd-web-command__lang-menu" role="listbox" aria-label="语言选项">
+                <div className="dd-web-command__lang-menu-list">
+                  {supportedLanguages.map((item) => {
+                    const isSelected = item === language
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`dd-web-command__lang-option${isSelected ? ' is-selected' : ''}`}
+                        onClick={() => {
+                          handleLanguageChange(item)
+                          setIsLangMenuOpen(false)
+                        }}
+                      >
+                        <span className={`dd-web-command__lang-badge is-${item}`}>
+                          {item === 'c' ? 'C' : item === 'plantuml' ? 'UML' : item.toUpperCase().slice(0, 2)}
+                        </span>
+                        <div className="dd-web-command__lang-option-text">
+                          <strong>{languageLabels[item]}</strong>
+                        </div>
+                        {isSelected ? (
+                          <Check size={16} strokeWidth={2.5} className="dd-web-command__lang-check" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             className="dd-web-command__primary"
@@ -659,28 +779,6 @@ export function WebCommandStage({
           </button>
         </div>
       </header>
-
-      <div className="dd-web-command__safety-strip" aria-label="命令行运行范围">
-        <span>
-          <strong>运行环境</strong>
-          {sandboxLabel}
-        </span>
-        <span>
-          <strong>输出范围</strong>
-          结果只留在本页
-        </span>
-        <span>
-          <strong>传输联动</strong>
-          复制后可发送给附近设备
-        </span>
-      </div>
-
-      <div className="dd-web-command__status-strip" aria-label="运行状态">
-        <span>语言：{languageLabels[language]}</span>
-        <span>源码：{sourceLineCount.toString()} 行 · {source.length.toString()} 字符</span>
-        <span>状态：{resultStatus}</span>
-        <span>{language === 'java' ? `stdin：${stdin.length.toString()} 字符` : '本页运行结果不会写入文件'}</span>
-      </div>
 
       <nav className="dd-web-command__mobile-tabs" aria-label="命令行移动端面板">
         <button
@@ -715,19 +813,58 @@ export function WebCommandStage({
           aria-label="源码"
         >
           <div className="dd-web-command__panel-head">
-            <strong>{languageLabels[language]}</strong>
-            <span>{source.length.toString()} 字符</span>
+            <div className="dd-web-command__panel-head-left">
+              <span className="dd-web-command__file-tab">
+                <FileCode2 size={14} className="dd-web-command__file-tab-icon" aria-hidden="true" />
+                <strong>{getEditorFilename(language)}</strong>
+              </span>
+              <span className="dd-web-command__panel-pill">{sourceLineCount.toString()} 行 · {source.length.toString()} 字符</span>
+            </div>
+            <div className="dd-web-command__panel-head-actions">
+              <button
+                type="button"
+                className="dd-web-command__mini-btn"
+                title="清空代码"
+                onClick={() => setSource('')}
+              >
+                <Trash2 size={12} aria-hidden="true" />
+                <span>清空</span>
+              </button>
+              <button
+                type="button"
+                className="dd-web-command__mini-btn"
+                title="复制代码"
+                onClick={() => copyText(source)}
+              >
+                <Copy size={12} aria-hidden="true" />
+                <span>复制</span>
+              </button>
+            </div>
           </div>
           <textarea
             value={source}
             spellCheck={false}
             onChange={(event) => setSource(event.target.value)}
+            onKeyDown={handleEditorKeyDown}
           />
           {language === 'java' ? (
             <>
-              <div className="dd-web-command__panel-head">
-                <strong>stdin</strong>
-                <span>{stdin.length.toString()} 字符</span>
+              <div className="dd-web-command__panel-head is-stdin">
+                <div className="dd-web-command__panel-head-left">
+                  <strong>stdin 标准输入</strong>
+                  <span className="dd-web-command__panel-pill">{stdin.length.toString()} 字符</span>
+                </div>
+                <div className="dd-web-command__panel-head-actions">
+                  <button
+                    type="button"
+                    className="dd-web-command__mini-btn"
+                    title="清空标准输入"
+                    onClick={() => setStdin('')}
+                  >
+                    <Trash2 size={12} aria-hidden="true" />
+                    <span>清空</span>
+                  </button>
+                </div>
               </div>
               <textarea
                 className="dd-web-command__stdin-input"
@@ -735,6 +872,7 @@ export function WebCommandStage({
                 spellCheck={false}
                 aria-label="Java 标准输入"
                 onChange={(event) => setStdin(event.target.value)}
+                onKeyDown={handleStdinKeyDown}
               />
             </>
           ) : null}
@@ -745,28 +883,31 @@ export function WebCommandStage({
             <>
               <div className="dd-web-command__viewer-head">
                 <div className="dd-web-command__viewer-title">
-                  <strong>图片预览</strong>
+                  <span className="dd-web-command__file-tab is-preview">
+                    <FileCode2 size={14} className="dd-web-command__file-tab-icon" aria-hidden="true" />
+                    <strong>预览</strong>
+                  </span>
                   <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
                     {resultStatus}
                   </span>
                 </div>
-                <div>
+                <div className="dd-web-command__terminal-actions">
                   <button type="button" disabled={isRunning} onClick={handleClearOutput}>
-                    <Trash2 size={14} aria-hidden="true" />
-                    清空
+                    <Trash2 size={13} aria-hidden="true" />
+                    <span>清空</span>
                   </button>
                   <button type="button" onClick={handleCopyResult}>
-                    <Copy size={14} aria-hidden="true" />
-                    {copyLabel}
+                    <Copy size={13} aria-hidden="true" />
+                    <span>{copyLabel}</span>
                   </button>
-                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
-                    <Send size={14} aria-hidden="true" />
-                    发送结果
+                  <button type="button" className="is-send" disabled={!shareableResultText} onClick={handleShareResult}>
+                    <Send size={13} aria-hidden="true" />
+                    <span>发送结果</span>
                   </button>
                 </div>
               </div>
-              <div className="dd-web-command__plantuml-viewer" aria-live="polite">
-                {result?.image ? (
+              <div className="dd-web-command__viewer-body">
+                {result?.image?.dataUrl ? (
                   <div className="dd-web-command__image-result">
                     <img src={result.image.dataUrl} alt="PlantUML 渲染结果" />
                   </div>
@@ -781,42 +922,31 @@ export function WebCommandStage({
           ) : (
             <>
               <div className="dd-web-command__terminal-head">
-                <strong>Terminal</strong>
-                <div>
+                <div className="dd-web-command__terminal-title">
+                  <span className="dd-web-command__file-tab is-terminal">
+                    <TerminalIcon size={14} className="dd-web-command__file-tab-icon" aria-hidden="true" />
+                    <strong>终端</strong>
+                  </span>
+                  <span className={`dd-web-command__terminal-pill ${result?.ok ? 'is-ok' : result ? 'is-error' : ''}`}>
+                    {resultStatus}
+                  </span>
+                </div>
+                <div className="dd-web-command__terminal-actions">
                   <button type="button" onClick={handleClearOutput}>
-                    <Trash2 size={14} aria-hidden="true" />
-                    清空
+                    <Trash2 size={13} aria-hidden="true" />
+                    <span>清空</span>
                   </button>
                   <button type="button" onClick={handleCopyResult}>
-                    <Copy size={14} aria-hidden="true" />
-                    {copyLabel}
+                    <Copy size={13} aria-hidden="true" />
+                    <span>{copyLabel}</span>
                   </button>
-                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
-                    <Send size={14} aria-hidden="true" />
-                    发送结果
+                  <button type="button" className="is-send" disabled={!shareableResultText} onClick={handleShareResult}>
+                    <Send size={13} aria-hidden="true" />
+                    <span>发送结果</span>
                   </button>
                 </div>
               </div>
               <div ref={terminalHostRef} className="dd-web-command__terminal" />
-              <div className="dd-web-command__result-head">
-                <strong>输出结果</strong>
-                <div className="dd-web-command__result-actions">
-                  <span className={result?.ok ? 'is-ok' : result ? 'is-error' : ''}>
-                    {resultStatus}
-                  </span>
-                  <button type="button" onClick={handleCopyResult}>
-                    <Copy size={14} aria-hidden="true" />
-                    {copyLabel}
-                  </button>
-                  <button type="button" disabled={!shareableResultText} onClick={handleShareResult}>
-                    <Send size={14} aria-hidden="true" />
-                    发送结果
-                  </button>
-                </div>
-              </div>
-              <div className="dd-web-command__result-area">
-                <pre className="dd-web-command__result">{resultOutput}</pre>
-              </div>
             </>
           )}
         </section>

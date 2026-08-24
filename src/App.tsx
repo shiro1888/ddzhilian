@@ -1401,13 +1401,13 @@ function App() {
   const fileConversationEmptyState =
     selectedRoom
       ? isSelectedBotRoom
-        ? '这里是和 DD助手的私密聊天，不会出现在世界对话。'
+        ? 'AI 私密助手，随时解答问题与辅助分析。'
         : selectedRoom.isPublic
-        ? '公共房间适合多人共享文本，也可以从这里发起文件任务。'
+        ? '公共共享空间，随时收发消息与文件。'
         : selectedConnectedTarget
-        ? '把文件拖进对话区，或点「＋」选择文件发送。'
-        : `还没有与 ${selectedConversationName} 直连，发送文件前会先等待对方在线。`
-      : '选择一个已有对话后，消息和文件会显示在这里。'
+        ? '拖拽文件到此处，或点击下方按钮即刻发送。'
+        : `与 ${selectedConversationName} 直连，随时发送消息与文件。`
+      : '选择会话后开始交流。'
   const hasChatDraftContent =
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft) ||
@@ -1756,7 +1756,8 @@ function App() {
     }
 
     startTransition(() => {
-      if (location.pathname !== nextPath) {
+      const currentFull = `${location.pathname}${location.search || ''}`
+      if (currentFull !== nextPath) {
         navigate(nextPath)
       }
       setLocalError(null)

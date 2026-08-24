@@ -17,6 +17,17 @@ function getFileExtension(fileName: string) {
   return extension.slice(0, 5).toUpperCase()
 }
 
+function getFileKindClass(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
+  if (/^(pdf|doc|docx|pages|epub)$/.test(ext)) return 'is-doc'
+  if (/^(jpg|jpeg|png|gif|webp|svg|heic|raw)$/.test(ext)) return 'is-image'
+  if (/^(zip|rar|7z|tar|gz|pkg|dmg|iso)$/.test(ext)) return 'is-archive'
+  if (/^(ts|tsx|js|jsx|json|py|rs|go|java|c|cpp|html|css|sql|sh)$/.test(ext)) return 'is-code'
+  if (/^(mp3|wav|flac|aac|m4a|ogg)$/.test(ext)) return 'is-audio'
+  if (/^(mp4|mov|mkv|avi|webm)$/.test(ext)) return 'is-video'
+  return 'is-generic'
+}
+
 function isImageFileEntry(file: FileConversationEntry) {
   return Boolean(
     file.mimeType?.toLowerCase().startsWith('image/') ||
@@ -41,7 +52,7 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
       : file.transferStatus === 'transferring' || file.transferStatus === 'failed'
         ? rawProgressPercent
         : 0
-      : rawProgressPercent
+    : rawProgressPercent
   const isCompleted = file.transferStatus === 'completed' || file.tone === 'completed'
   const isActive = file.transferStatus === 'transferring' || file.tone === 'active'
   const completedLabel = file.fromSelf ? '发送成功' : '接收完成'
@@ -49,7 +60,9 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
   return (
     <div className={`dd-snaplink__file-card${isCompleted ? ' is-completed' : isActive ? ' is-active' : ''}`}>
       <div className="dd-snaplink__file-top">
-        <span className="dd-snaplink__file-ext">{getFileExtension(file.fileName)}</span>
+        <span className={`dd-snaplink__file-ext ${getFileKindClass(file.fileName)}`}>
+          {getFileExtension(file.fileName)}
+        </span>
         <div>
           <strong title={file.fileName}>{file.fileName}</strong>
           <span>

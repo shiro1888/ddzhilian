@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, CompositionEvent as ReactCompositionEvent, FormEvent, KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { ChevronLeft } from 'lucide-react'
+import { navigateBackToText } from '../../lib/navigate-back-to-text'
 import type { BufferGeometry, Material, Texture, WebGLRenderer } from 'three'
 import type {
   AiImageHistoryCursor,
@@ -1922,9 +1924,19 @@ export function ImageGenerationStage({
         {renderTaskSidebar()}
         <div className="dd-image-workbench__main">
           <header className="dd-image-stage__topbar">
-            <div>
-              <strong>AI 图片生成</strong>
-              <span>参考图、提示词和输出设置集中在一个工作台中。</span>
+            <div className="dd-image-stage__heading-wrap">
+              <button
+                type="button"
+                className="dd-image-stage__back-btn"
+                aria-label="返回"
+                onClick={navigateBackToText}
+              >
+                <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+              <div>
+                <strong>AI 图片生成</strong>
+                <span>参考图、提示词和输出设置集中在一个工作台中。</span>
+              </div>
             </div>
             <div className="dd-image-stage__account">
               <span className="dd-image-stage__email">{userEmail}</span>

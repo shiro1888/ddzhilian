@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 import {
   Bot,
+  ChevronLeft,
   Copy,
   Image as ImageIcon,
   MoreHorizontal,
@@ -36,6 +37,7 @@ type RoomHeaderProps = {
   peerTitle: string
   connectionDetails?: RoomHeaderConnectionDetail[]
   onCopyRoomId: () => void
+  onBack?: () => void
   onOpenAssistant?: () => void
   onOpenImageTool?: () => void
   onOpenOcr?: () => void
@@ -54,6 +56,7 @@ export function RoomHeader({
   peerTitle,
   connectionDetails = [],
   onCopyRoomId,
+  onBack,
   onOpenAssistant,
   onOpenImageTool,
   onOpenOcr,
@@ -178,6 +181,16 @@ export function RoomHeader({
     <div className="dd-snaplink__room-head">
       <div className="dd-snaplink__room-head-main">
         <div className="dd-snaplink__room-left">
+          {onBack ? (
+            <button
+              type="button"
+              className="dd-snaplink__room-back-btn"
+              aria-label="返回消息列表"
+              onClick={onBack}
+            >
+              <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          ) : null}
           <span className="dd-snaplink__room-title-block">
             <strong title={peerTitle}>{peerTitle || peerLabel}</strong>
             <small title={peerLabel}>

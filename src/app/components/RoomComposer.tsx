@@ -29,6 +29,72 @@ type RoomComposerQuoteDraft = {
   text: string
 }
 
+type EmojiCategory = {
+  id: string
+  name: string
+  icon: string
+  emojis: string[]
+}
+
+const emojiCategories: EmojiCategory[] = [
+  {
+    id: 'smileys',
+    name: '表情',
+    icon: '😀',
+    emojis: [
+      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂',
+      '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩',
+      '😘', '😗', '😚', '😋', '😛', '😜', '🤪', '😝',
+      '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐',
+      '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌',
+      '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢',
+      '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠',
+      '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '😮',
+      '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰',
+      '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓',
+      '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈',
+    ],
+  },
+  {
+    id: 'gestures',
+    name: '手势',
+    icon: '👍',
+    emojis: [
+      '👍', '👎', '👌', '🤌', '🤏', '✌️', '🤞', '🫰',
+      '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇',
+      '☝️', '👋', '🤚', '🖐️', '✋', '🖖', '👏', '🙌',
+      '👐', '🤲', '🤝', '🙏', '✍️', '💪', '🦾', '🦿',
+      '🫡', '🫶', '❤️', '🧡', '💛', '💚', '💙', '💜',
+    ],
+  },
+  {
+    id: 'objects',
+    name: '生活',
+    icon: '🎉',
+    emojis: [
+      '🎉', '🎊', '🎈', '🎁', '🏆', '🥇', '🥈', '🥉',
+      '🔥', '⚡', '✨', '🌟', '💫', '💥', '💯', '💢',
+      '☕', '🍵', '🧋', '🍺', '🍻', '🍷', '🥂', '🍾',
+      '🍕', '🍔', '🍟', '🍜', '🍱', '🍙', '🍰', '🍦',
+      '🚀', '✈️', '🚗', '🛵', '🚲', '🛴', '💻', '📱',
+      '📷', '🎬', '🎧', '🎮', '💡', '⏰', '📌', '📦',
+    ],
+  },
+  {
+    id: 'symbols',
+    name: '符号',
+    icon: '❤️',
+    emojis: [
+      '❤️', '💖', '💘', '💝', '💗', '💓', '💞', '💕',
+      '💟', '❣️', '💔', '❤️‍🔥', '❤️‍🩹', '💌', '💤', '💢',
+      '✅', '✔️', '☑️', '❌', '❎', '❓', '❗', '❕',
+      '⚠️', '🚫', '⛔', '💬', '💭', '🗯️', '👀', '👁️',
+    ],
+  },
+]
+
+const roomComposerBotMentionLabel = '@DD助手'
+
 type RoomComposerProps = {
   quoteDraft: RoomComposerQuoteDraft | null
   images: ComposerImageDraft[]
@@ -76,19 +142,6 @@ type RoomComposerProps = {
   onOpenImageTool?: () => void
   onOpenCommandTool?: () => void
 }
-
-const roomComposerQuickEmojis = [
-  '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆',
-  '😉', '😊', '😋', '😎', '😍', '😘', '🥰', '🤫',
-  '🙂', '🤗', '🤔', '🧐', '😐', '😶', '🙄', '😏',
-  '😣', '😢', '😮', '😬', '😯', '😪', '😫', '😴',
-  '😌', '😛', '😜', '😝', '🤤', '😟', '😓', '😔',
-  '☹️', '🙃', '🤑', '😲', '🙁', '😖', '😞', '😧',
-  '😤', '😡', '😨', '😱', '😳', '🥺', '😇', '🤭',
-  '👍', '👎', '👏', '🙏', '💪', '👌', '👋', '❤️',
-]
-
-const roomComposerBotMentionLabel = '@DD助手'
 
 export function RoomComposer({
   quoteDraft,
@@ -138,6 +191,9 @@ export function RoomComposer({
   onOpenCommandTool,
 }: RoomComposerProps) {
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<string>('smileys')
+  const currentCategory = emojiCategories.find((c) => c.id === activeCategory) ?? emojiCategories[0]
+
   const filePickerRef = useRef<HTMLInputElement | null>(null)
   const imagePickerRef = useRef<HTMLInputElement | null>(null)
   const cameraPickerRef = useRef<HTMLInputElement | null>(null)
@@ -408,12 +464,26 @@ export function RoomComposer({
               role="dialog"
               aria-label="Emoji 选择器"
             >
-              <div className="dd-snaplink__emoji-picker-head">
-                <strong>表情</strong>
-                <small>点击输入到发送框</small>
+              <div className="dd-snaplink__emoji-picker-nav" role="tablist" aria-label="表情分类">
+                {emojiCategories.map((category) => {
+                  const isSelected = category.id === activeCategory
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      className={`dd-snaplink__emoji-tab${isSelected ? ' is-active' : ''}`}
+                      onClick={() => setActiveCategory(category.id)}
+                    >
+                      <span aria-hidden="true">{category.icon}</span>
+                      <span>{category.name}</span>
+                    </button>
+                  )
+                })}
               </div>
-              <div className="dd-snaplink__emoji-grid">
-                {roomComposerQuickEmojis.map((emoji) => (
+              <div className="dd-snaplink__emoji-grid" role="tabpanel">
+                {currentCategory.emojis.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
@@ -434,6 +504,7 @@ export function RoomComposer({
                   onClick={onEmojiBackspace}
                 >
                   <Delete size={18} strokeWidth={2.2} aria-hidden="true" />
+                  <span>退格</span>
                 </button>
                 <button type="button" className="is-primary" disabled={isSendDisabled} onClick={onEmojiSend}>
                   发送
@@ -442,7 +513,13 @@ export function RoomComposer({
             </div>
           ) : null}
         </div>
-        <button type="submit" className="dd-snaplink__send" disabled={isSendDisabled} title="发送">
+        <button
+          type="submit"
+          className="dd-snaplink__send"
+          disabled={isSendDisabled}
+          title={enterToSend ? "发送消息 (Enter · Shift+Enter 换行)" : "发送消息 (Ctrl + Enter)"}
+          aria-label={enterToSend ? "发送 (Enter)" : "发送 (Ctrl+Enter)"}
+        >
           <svg
             viewBox="0 0 24 24"
             fill="none"

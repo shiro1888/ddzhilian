@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
+import { navigateBackToText } from '../../lib/navigate-back-to-text'
 import type {
   ChangeEvent,
   CompositionEvent as ReactCompositionEvent,
@@ -1441,7 +1443,15 @@ export function ChatAiStage({
           </div>
         ) : null}
         <header className="dd-ai-chat__topbar">
-          <div>
+          <div className="dd-ai-chat__title-wrap">
+            <button
+              type="button"
+              className="dd-ai-chat__back-btn"
+              aria-label="返回"
+              onClick={navigateBackToText}
+            >
+              <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
             {renamingConversationId === activeConversation?.id ? (
               <form
                 className="dd-ai-chat__rename"

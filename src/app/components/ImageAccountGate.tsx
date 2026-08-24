@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { ChevronLeft } from 'lucide-react'
+import { navigateBackToText } from '../../lib/navigate-back-to-text'
 
 type ImageAccountGateProps = {
   isLoading: boolean
@@ -139,6 +141,15 @@ export function ImageAccountGate({
 
           <div className="dd-image-auth-card__form">
             <div className="dd-image-auth-form-head">
+              <button
+                type="button"
+                className="dd-image-auth__back-btn"
+                aria-label="返回"
+                onClick={navigateBackToText}
+              >
+                <ChevronLeft size={18} strokeWidth={2.4} aria-hidden="true" />
+                <span>返回</span>
+              </button>
               <span>{mode === 'login' ? '账号登录' : '账号注册'}</span>
               <strong>{mode === 'login' ? '继续使用图片工具' : '开启图片历史同步'}</strong>
               <p>{mode === 'login' ? '登录后可读取图片额度、历史记录和参考图任务。' : '创建后需要按邮件提示完成确认，再回到这里登录。'}</p>

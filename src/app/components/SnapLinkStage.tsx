@@ -18,13 +18,16 @@ import {
   Command,
   FileUp,
   ImageIcon,
+  ImagePlus,
   Laptop,
   Maximize2,
   Minimize2,
   Monitor,
   MoonStar,
+  PenLine,
   Plus,
   Radio,
+  RotateCw,
   ScanText,
   Search,
   Send,
@@ -32,6 +35,7 @@ import {
   Smartphone,
   SunMedium,
   Tablet,
+  Trash2,
   Upload,
   Users,
   Wifi,
@@ -64,6 +68,12 @@ import type {
 } from '../../lib/ddzhilian-types'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 import { applyThemeMode, subscribeToSystemTheme } from '../../lib/preferences/theme-utils'
+import {
+  playMessageSentSound,
+  playMessageReceivedSound,
+  playPeerConnectedSound,
+  playTransferCompletedSound,
+} from '../../lib/sound/sound-effects'
 import { CommandPalette } from './CommandPalette'
 import type { CommandPaletteItem } from './CommandPalette'
 import { ConfirmReceiveDialog } from './ConfirmReceiveDialog'
@@ -1523,7 +1533,7 @@ export function SnapLinkStage({
   devicePlatform,
   deviceShortCode,
   deviceSettings = { autoConnect: true, discoverable: true, allowShortCode: true },
-  devicePreferences = { enterToSend: true },
+  devicePreferences = { enterToSend: true, soundEffects: true },
   accountId,
   selectedRoomId,
   autoOpenRoomId,
@@ -1793,6 +1803,71 @@ export function SnapLinkStage({
       settingsFeedbackTimeoutRef.current = null
     }
   }, [])
+
+  const previousConversationSnapshotRef = useRef({
+    roomId: selectedRoomId,
+    entryIds: new Set(unifiedConversationEntries.map((entry) => entry.id)),
+  })
+  useEffect(() => {
+    const previousSnapshot = previousConversationSnapshotRef.current
+    const nextEntryIds = new Set(unifiedConversationEntries.map((entry) => entry.id))
+
+    if (
+      previousSnapshot.roomId === selectedRoomId &&
+      unifiedConversationEntries.some(
+        (entry) => !entry.fromSelf && !previousSnapshot.entryIds.has(entry.id),
+      )
+    ) {
+      playMessageReceivedSound(devicePreferences.soundEffects !== false)
+    }
+
+    previousConversationSnapshotRef.current = {
+      roomId: selectedRoomId,
+      entryIds: nextEntryIds,
+    }
+  }, [devicePreferences.soundEffects, selectedRoomId, unifiedConversationEntries])
+
+  const previousOnlineDeviceIdsRef = useRef(
+    new Set(onlineDeviceItems.map((device) => device.deviceId)),
+  )
+  useEffect(() => {
+    const previousDeviceIds = previousOnlineDeviceIdsRef.current
+    const nextDeviceIds = new Set(onlineDeviceItems.map((device) => device.deviceId))
+
+    if (onlineDeviceItems.some((device) => !previousDeviceIds.has(device.deviceId))) {
+      playPeerConnectedSound(devicePreferences.soundEffects !== false)
+    }
+
+    previousOnlineDeviceIdsRef.current = nextDeviceIds
+  }, [onlineDeviceItems, devicePreferences.soundEffects])
+
+  const previousTransferStatusByIdRef = useRef(
+    new Map(
+      globalTransferEntries.map((file) => [file.id, resolveSnapLinkTransferStatus(file)] as const),
+    ),
+  )
+  useEffect(() => {
+    const previousStatusById = previousTransferStatusByIdRef.current
+    const nextStatusById = new Map<string, ReturnType<typeof resolveSnapLinkTransferStatus>>()
+    let hasNewCompletion = false
+
+    for (const file of globalTransferEntries) {
+      const nextStatus = resolveSnapLinkTransferStatus(file)
+      const previousStatus = previousStatusById.get(file.id)
+
+      if (previousStatus !== undefined && previousStatus !== 'completed' && nextStatus === 'completed') {
+        hasNewCompletion = true
+      }
+
+      nextStatusById.set(file.id, nextStatus)
+    }
+
+    previousTransferStatusByIdRef.current = nextStatusById
+
+    if (hasNewCompletion) {
+      playTransferCompletedSound(devicePreferences.soundEffects !== false)
+    }
+  }, [devicePreferences.soundEffects, globalTransferEntries])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3386,11 +3461,6 @@ export function SnapLinkStage({
     setWorkbenchMode('text')
   }, [onOpenRoomHome, workbenchTextRequestId])
 
-  const handleShowWorkbenchHistory = () => {
-    handleBackToLobby()
-    setWorkbenchMode('history')
-  }
-
   const handleShowWorkbenchSettings = () => {
     handleBackToLobby()
     setDeviceNameDraft(deviceName)
@@ -3708,6 +3778,7 @@ export function SnapLinkStage({
       setIsThemePanelOpen(false)
       botMentionTriggerRangeRef.current = null
       armOutgoingEntryAnimation()
+      playMessageSentSound(devicePreferences.soundEffects !== false)
       onSendText(quoteHtml)
       setQuoteDraft(null)
     }
@@ -4930,10 +5001,8 @@ export function SnapLinkStage({
     }
 
     const emptyStateTitle = isSelectedRoomAssistant
-      ? '开始使用 DD助手'
-      : isSelectedRoomPublic
-        ? `在 ${selectedConversationName} 发起话题`
-        : `开始和 ${selectedConversationName} 对话`
+      ? 'DD助手'
+      : selectedConversationName
     const emptyStateInitial = Array.from(selectedConversationName.trim() || 'D')[0].toUpperCase()
     const isSelectedRoomReachable = isSelectedRoomAssistant
       ? aiAvailability === 'available'
@@ -4949,7 +5018,7 @@ export function SnapLinkStage({
         <p>{fileConversationEmptyState}</p>
         <div className="dd-snaplink__room-empty-actions">
           <button type="button" onClick={() => inputRef.current?.focus()}>
-            写消息
+            发消息
           </button>
           <button
             type="button"
@@ -4957,11 +5026,8 @@ export function SnapLinkStage({
           >
             发送文件
           </button>
-          <button type="button" onClick={handleShowWorkbenchNearby}>
-            设备列表
-          </button>
         </div>
-        <small>{selectedRoomTechnicalNote.replace(/^技术信息：/, '')}</small>
+        <small className="dd-snaplink__room-empty-note">{selectedRoomTechnicalNote.replace(/^技术信息：/, '')}</small>
       </div>
     )
   }
@@ -5978,10 +6044,9 @@ export function SnapLinkStage({
       allowShortCode={deviceSettings.allowShortCode !== false}
       autoConnect={deviceSettings.autoConnect !== false}
       enterToSend={devicePreferences.enterToSend}
+      soundEffects={devicePreferences.soundEffects !== false}
       themeMode={themeMode}
       resolvedThemeMode={resolvedThemeMode}
-      themeColors={themeColors}
-      themeOptions={snapLinkThemeColorOptions}
       feedbackMessage={settingsFeedbackMessage}
       canOpenAdmin={canRecallAnyMessage}
       onAvatarClick={openAvatarPicker}
@@ -6008,8 +6073,12 @@ export function SnapLinkStage({
         showSettingsFeedback(checked ? '已开启自动连接' : '已关闭自动连接')
       }}
       onEnterToSendChange={(checked) => {
-        onDevicePreferencesChange({ enterToSend: checked })
+        onDevicePreferencesChange({ ...devicePreferences, enterToSend: checked })
         showSettingsFeedback(checked ? '已开启回车发送' : '已关闭回车发送')
+      }}
+      onSoundEffectsChange={(checked) => {
+        onDevicePreferencesChange({ ...devicePreferences, soundEffects: checked })
+        showSettingsFeedback(checked ? '已开启操作提示音' : '已关闭操作提示音')
       }}
       onThemeModeChange={(nextThemeMode) => {
         updateWorkbenchThemeMode(nextThemeMode)
@@ -6020,22 +6089,10 @@ export function SnapLinkStage({
 
         showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
       }}
-      onThemeColorChange={(target, value) => {
-        updateThemeColor(target, value)
-        showSettingsFeedback('消息主题已更新')
-      }}
-      onThemePresetApply={(colors) => {
-        applyThemeColors(colors)
-        showSettingsFeedback('主题预设已应用')
-      }}
-      onThemeReset={() => {
-        resetThemeColors()
-        showSettingsFeedback('主题已恢复默认')
-      }}
-      onShowHistory={handleShowWorkbenchHistory}
       onOpenAiChat={handleOpenAiChat}
       onOpenImage={handleOpenImage}
       onOpenCommand={handleOpenCommand}
+      onOpenOcr={() => setIsOcrPanelOpen(true)}
       onOpenAdmin={onOpenAdminView}
     />
   )
@@ -6772,28 +6829,6 @@ export function SnapLinkStage({
                 {renderDesktopConversationSideList()}
 
                 <div className="dd-snaplink__room-detail-pane">
-                <div className="dd-snaplink__room-mobile-actions" aria-label="移动端房间更多入口">
-                  <button
-                    type="button"
-                    className="dd-snaplink__room-mobile-back"
-                    onClick={handleShowWorkbenchRooms}
-                  >
-                    ‹ 返回消息
-                  </button>
-                  <button
-                    type="button"
-                    className={isMobileRoomMembersOpen || Boolean(effectiveActiveSharedTab) ? 'is-active' : ''}
-                    aria-pressed={isMobileRoomMembersOpen}
-                    aria-expanded={isMobileRoomMembersOpen}
-                    onClick={() => {
-                      setActiveSharedTab(null)
-                      setIsMobileRoomMembersOpen((current) => !current)
-                    }}
-                  >
-                    更多
-                  </button>
-                </div>
-
                 <section className="dd-snaplink__room" aria-label="ddzhilian 对话">
                   <RoomHeader
                     roomCodeLabel={copiedRoomId === selectedRoomId ? '已复制' : selectedRoomId}
@@ -6807,6 +6842,7 @@ export function SnapLinkStage({
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}
                     onCopyRoomId={handleCopyRoomId}
+                    onBack={handleShowWorkbenchRooms}
                     onOpenAssistant={handleOpenAiChat}
                     onOpenImageTool={handleOpenImage}
                     onOpenOcr={handleOcrTriggerClick}
@@ -7178,8 +7214,11 @@ export function SnapLinkStage({
           aria-label="图片文字识别"
         >
           <div className="dd-ocr-panel__titlebar">
-            <div>
-              <strong>图片文字识别</strong>
+            <div className="dd-ocr-panel__title-left">
+              <span className="dd-ocr-panel__title-icon">
+                <ScanText size={18} strokeWidth={2} />
+              </span>
+              <strong>图片文字识别 (OCR)</strong>
               <span className={`dd-ocr-panel__status is-${ocrStatus}`} aria-live="polite">
                 {getSnapLinkOcrStatusLabel(ocrStatus)}
               </span>
@@ -7206,6 +7245,9 @@ export function SnapLinkStage({
               {ocrImage ? (
                 <div className="dd-ocr-panel__image-stage">
                   <img src={ocrImage.previewUrl} alt={ocrImage.name} />
+                  <button type="button" className="dd-ocr-panel__reselect-btn" onClick={openOcrFilePicker}>
+                    重新选图
+                  </button>
                 </div>
               ) : (
                 <button
@@ -7213,13 +7255,18 @@ export function SnapLinkStage({
                   className="dd-ocr-panel__empty-preview"
                   onClick={openOcrFilePicker}
                 >
-                  待选择图片
+                  <div className="dd-ocr-panel__empty-icon">
+                    <ImagePlus size={30} strokeWidth={1.8} />
+                  </div>
+                  <strong>点击或拖拽图片到这里</strong>
+                  <small>支持 PNG、JPG、WebP 格式</small>
+                  <span className="dd-ocr-panel__empty-btn">选择本地图片</span>
                 </button>
               )}
               {isOcrDropTarget ? (
                 <div className="dd-ocr-panel__drop-hint" role="status" aria-live="polite">
-                  <strong>拖动图片到这里</strong>
-                  <span>松开后开始识别 PNG、JPEG、WebP</span>
+                  <strong>松开以开始识别</strong>
+                  <span>支持 PNG、JPEG、WebP</span>
                 </div>
               ) : null}
             </div>
@@ -7231,30 +7278,35 @@ export function SnapLinkStage({
               {ocrStatus === 'running' ? (
                 <div className="dd-ocr-panel__running">
                   <span />
-                  <span>识别中</span>
+                  <span>智能识别中...</span>
                 </div>
               ) : null}
               {ocrError ? <p className="dd-ocr-panel__error">{ocrError}</p> : null}
               <textarea
                 readOnly
                 value={ocrResultText}
-                placeholder={ocrStatus === 'failed' ? '识别失败' : '识别完成后显示文本'}
+                placeholder={ocrStatus === 'failed' ? '识别失败' : '提取出的文字将在此显示，可随时一键复制或发送到会话...'}
                 aria-label="OCR 识别文本"
               />
               <div className="dd-ocr-panel__actions">
                 <button type="button" disabled={!hasOcrResultText} onClick={handleCopyOcrText}>
+                  <Copy size={13} strokeWidth={1.9} />
                   复制文本
                 </button>
                 <button type="button" disabled={!hasOcrResultText} onClick={handleInsertOcrText}>
+                  <PenLine size={13} strokeWidth={1.9} />
                   插入输入框
                 </button>
-                <button type="button" disabled={!hasOcrResultText} onClick={handleSendOcrText}>
+                <button type="button" className="is-primary" disabled={!hasOcrResultText} onClick={handleSendOcrText}>
+                  <Send size={13} strokeWidth={1.9} />
                   发送到当前对话
                 </button>
                 <button type="button" disabled={!canRetryOcr} onClick={handleRetryOcr}>
+                  <RotateCw size={13} strokeWidth={1.9} />
                   重新识别
                 </button>
                 <button type="button" onClick={handleClearOcr}>
+                  <Trash2 size={13} strokeWidth={1.9} />
                   清除
                 </button>
               </div>

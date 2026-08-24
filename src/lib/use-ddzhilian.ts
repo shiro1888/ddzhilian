@@ -493,7 +493,7 @@ export function useDdzhilian() {
   const [onlinePeers, setOnlinePeers] = useState<PeerSummary[]>([])
   const [roomsById, setRoomsById] = useState<Record<string, RoomSummary>>({})
   const [roomStates, setRoomStates] = useState<RoomStateSummary[]>([])
-  const [preferences, setPreferences] = useState<DevicePreferencesPayload>({ enterToSend: true })
+  const [preferences, setPreferences] = useState<DevicePreferencesPayload>({ enterToSend: true, soundEffects: true })
   const [historyFiles, setHistoryFiles] = useState<HistoryFileSummary[]>([])
   const [historyTexts, setHistoryTexts] = useState<HistoryTextSummary[]>([])
   const [historyTextPaginationByRoomId, setHistoryTextPaginationByRoomId] = useState<
@@ -1128,7 +1128,10 @@ export function useDdzhilian() {
       setOnlinePeers(normalizedPeers)
       setRoomsById(nextRoomsById)
       setRoomStates(snapshot.roomStates ?? [])
-      setPreferences(snapshot.self.preferences ?? { enterToSend: true })
+      setPreferences({
+        enterToSend: snapshot.self.preferences?.enterToSend ?? true,
+        soundEffects: snapshot.self.preferences?.soundEffects ?? true,
+      })
       setHistoryFiles(snapshot.historyFiles)
       setHistoryTexts((previous) => {
         const roomsWithPersistedTexts = new Set(

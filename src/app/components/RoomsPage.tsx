@@ -120,8 +120,8 @@ export function RoomsPage({
               <strong>公共房间</strong>
               <small>
                 {publicRoom
-                  ? '公共房间已创建，进入后可复制短码分享给别人。'
-                  : '创建一个可分享短码的房间，用来收发文件和文本。'}
+                  ? '已创建，可复制短码邀请他人加入。'
+                  : '创建共享空间，快捷收发文件与文本。'}
               </small>
             </span>
             <button
@@ -168,12 +168,18 @@ export function RoomsPage({
           {conversationQuery ? (
             <button
               type="button"
+              className="dd-snaplink__room-search-clear"
               aria-label="清空搜索"
+              title="清空搜索"
               onClick={() => setConversationQuery('')}
             >
-              x
+              ×
             </button>
-          ) : null}
+          ) : (
+            <kbd className="dd-snaplink__room-search-kbd" aria-hidden="true">
+              ⌘K
+            </kbd>
+          )}
         </label>
       ) : null}
       {hasConversationRows ? (

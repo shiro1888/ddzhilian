@@ -19,7 +19,25 @@ type StoredState = {
 
 const defaultPreferences: DevicePreferencesPayload = {
   enterToSend: true,
+  soundEffects: true,
 };
+
+function normalizePreferences(value: unknown): DevicePreferencesPayload {
+  const preferences = value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
+
+  return {
+    enterToSend:
+      typeof preferences.enterToSend === 'boolean'
+        ? preferences.enterToSend
+        : defaultPreferences.enterToSend,
+    soundEffects:
+      typeof preferences.soundEffects === 'boolean'
+        ? preferences.soundEffects
+        : defaultPreferences.soundEffects,
+  };
+}
 
 export class UiStateRegistry {
   private readonly preferencesByDeviceId = new Map<string, DevicePreferencesPayload>();
@@ -36,10 +54,10 @@ export class UiStateRegistry {
   }
 
   updatePreferences(deviceId: string, patch: Partial<DevicePreferencesPayload>) {
-    const next = {
+    const next = normalizePreferences({
       ...this.getPreferences(deviceId),
       ...patch,
-    };
+    });
 
     this.preferencesByDeviceId.set(deviceId, next);
     this.persist();
@@ -86,10 +104,7 @@ export class UiStateRegistry {
       const parsed = JSON.parse(readFileSync(INDEX_PATH, 'utf8')) as StoredState;
 
       for (const [deviceId, preferences] of Object.entries(parsed.preferences ?? {})) {
-        this.preferencesByDeviceId.set(deviceId, {
-          ...defaultPreferences,
-          ...preferences,
-        });
+        this.preferencesByDeviceId.set(deviceId, normalizePreferences(preferences));
       }
 
       for (const [deviceId, states] of Object.entries(parsed.roomStates ?? {})) {

@@ -55,9 +55,8 @@ function mockPlantUmlFetch() {
 }
 
 function switchToPlantUml() {
-  fireEvent.change(screen.getByRole('combobox', { name: '语言' }), {
-    target: { value: 'plantuml' },
-  })
+  fireEvent.click(screen.getByRole('button', { name: /切换运行语言/ }))
+  fireEvent.click(screen.getByRole('option', { name: /PlantUML/ }))
 }
 
 function editSource(source: string) {

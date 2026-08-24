@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CheckCircle2, Clock3, FolderOpen, Send, XCircle } from 'lucide-react'
+import { FolderOpen } from 'lucide-react'
 import type { FileConversationEntry } from '../types'
 import { EmptyState } from './EmptyState'
 
@@ -81,30 +81,6 @@ export function TransferQueuePage({
           )
         })}
       </div>
-      {!isHistoryTab ? (
-        <div className="dd-snaplink__transfer-status-guide" aria-label="传输状态说明">
-          <span>
-            <Clock3 size={15} strokeWidth={1.9} aria-hidden="true" />
-            <strong>连接/确认</strong>
-            <small>连接和确认阶段保持 0%</small>
-          </span>
-          <span>
-            <Send size={15} strokeWidth={1.9} aria-hidden="true" />
-            <strong>正在发送/接收</strong>
-            <small>按对方确认字节显示</small>
-          </span>
-          <span>
-            <CheckCircle2 size={15} strokeWidth={1.9} aria-hidden="true" />
-            <strong>发送/接收完成</strong>
-            <small>完成确认后为 100%</small>
-          </span>
-          <span>
-            <XCircle size={15} strokeWidth={1.9} aria-hidden="true" />
-            <strong>失败可重试</strong>
-            <small>保留失败前进度</small>
-          </span>
-        </div>
-      ) : null}
       {incomingNotice}
       {isHistoryTab ? (
         <div className="dd-snaplink__transfer-history-tab">
