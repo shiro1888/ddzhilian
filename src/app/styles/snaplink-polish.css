@@ -2556,6 +2556,25 @@
   background: rgba(239, 68, 68, 0.1) !important;
 }
 
+/* Remaining near-white surfaces → tokens */
+.dd-snaplink__room-action-card,
+.dd-snaplink__room-join-card,
+.dd-snaplink__transfer-status-guide span {
+  background: var(--snap-surface) !important;
+}
+
+.dd-snaplink__room-more-tools button {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-border) !important;
+  color: var(--snap-ink-soft) !important;
+}
+
+.dd-snaplink__workbench-device:hover,
+.dd-snaplink__queue-card:hover {
+  background: var(--snap-surface-hover) !important;
+  border-color: var(--snap-green) !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
@@ -6231,6 +6250,7 @@ button.is-secondary:disabled,
   position: relative !important;
   margin: 2px 8px !important;
   border-radius: 12px !important;
+  background: var(--snap-surface) !important;
   transition: all 140ms ease !important;
 }
 
