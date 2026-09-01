@@ -2429,6 +2429,70 @@
   color: #ffffff !important;
 }
 
+/* Transfer group count badge → token + dark-aware */
+.dd-snaplink__transfer-group-head span {
+  background: rgba(15, 23, 42, 0.06) !important;
+  color: var(--snap-muted) !important;
+}
+
+:root.dark .dd-snaplink__transfer-group-head span,
+:root[data-theme-mode="dark"] .dd-snaplink__transfer-group-head span {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--snap-muted) !important;
+}
+
+/* Neutral / tinted badges (transport, trust, room tags) → token + dark-aware */
+.dd-snaplink__transport-badge,
+.dd-snaplink__trust-badge,
+.dd-snaplink__workbench-room-title em,
+.dd-snaplink__workbench-room-side em {
+  background: rgba(15, 23, 42, 0.06) !important;
+  color: var(--snap-muted) !important;
+}
+
+.dd-snaplink__transport-badge.is-lan,
+.dd-snaplink__trust-badge.is-trusted {
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #6366f1 !important;
+}
+
+.dd-snaplink__transport-badge.is-remote {
+  background: rgba(87, 107, 149, 0.12) !important;
+  color: var(--snap-blue) !important;
+}
+
+.dd-snaplink__transport-badge.is-discoverable,
+.dd-snaplink__trust-badge.is-pending {
+  background: rgba(15, 23, 42, 0.06) !important;
+  color: var(--snap-muted) !important;
+}
+
+:root.dark .dd-snaplink__transport-badge,
+:root[data-theme-mode="dark"] .dd-snaplink__transport-badge,
+:root.dark .dd-snaplink__trust-badge,
+:root[data-theme-mode="dark"] .dd-snaplink__trust-badge,
+:root.dark .dd-snaplink__workbench-room-title em,
+:root[data-theme-mode="dark"] .dd-snaplink__workbench-room-title em,
+:root.dark .dd-snaplink__workbench-room-side em,
+:root[data-theme-mode="dark"] .dd-snaplink__workbench-room-side em {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--snap-muted) !important;
+}
+
+:root.dark .dd-snaplink__transport-badge.is-lan,
+:root[data-theme-mode="dark"] .dd-snaplink__transport-badge.is-lan,
+:root.dark .dd-snaplink__trust-badge.is-trusted,
+:root[data-theme-mode="dark"] .dd-snaplink__trust-badge.is-trusted {
+  background: rgba(99, 102, 241, 0.18) !important;
+  color: #a5b4fc !important;
+}
+
+:root.dark .dd-snaplink__transport-badge.is-remote,
+:root[data-theme-mode="dark"] .dd-snaplink__transport-badge.is-remote {
+  background: rgba(126, 156, 216, 0.16) !important;
+  color: #a5c0ee !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
