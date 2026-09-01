@@ -2533,6 +2533,29 @@
   background: rgba(99, 102, 241, 0.12) !important;
 }
 
+/* Text-send page: textarea + history rows → token surfaces */
+.dd-snaplink__text-send-input textarea {
+  background: var(--snap-surface) !important;
+}
+
+.dd-snaplink__text-send-input textarea:focus {
+  background: var(--snap-surface-solid) !important;
+}
+
+.dd-snaplink__text-history-row,
+.dd-snaplink__history-link-row {
+  background: var(--snap-surface) !important;
+}
+
+.dd-snaplink__text-history-row.is-failed {
+  background: rgba(239, 68, 68, 0.05) !important;
+}
+
+:root.dark .dd-snaplink__text-history-row.is-failed,
+:root[data-theme-mode="dark"] .dd-snaplink__text-history-row.is-failed {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
