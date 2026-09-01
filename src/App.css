@@ -852,7 +852,7 @@
 
 .dd-chatbox__bubble--rich code {
   padding: 0.12em 0.36em;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #1b1b1b;
   color: #f4f4f4;
   font-family: var(--font-mono);
@@ -1804,7 +1804,7 @@
   height: 36px;
   padding: 9px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
   color: inherit;
   cursor: pointer;
@@ -2440,7 +2440,7 @@
 .dd-admin-widget-shell[data-admin-widget-key='providerConfig'][data-admin-widget-size='5x4'] .dd-admin-config-form input,
 .dd-admin-widget-shell[data-admin-widget-key='providerConfig'][data-admin-widget-size='5x4'] .dd-admin-config-form select {
   min-height: 38px;
-  border-radius: 11px;
+  border-radius: 12px;
 }
 
 .dd-admin-widget-shell[data-admin-widget-key='providerConfig'][data-admin-widget-size='5x4'] .dd-admin-provider-tabs button {
@@ -5403,7 +5403,7 @@
   border-radius: 8px;
   background: var(--ai-snap-surface);
   color: var(--ai-snap-ink-soft);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .dd-ai-chat__quick-prompts button:hover:not(:disabled) {
@@ -5725,7 +5725,7 @@
   border-radius: 8px;
   background: var(--ai-snap-ink);
   color: var(--ai-snap-bg);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -5757,7 +5757,7 @@
   border-radius: 8px;
   background: var(--ai-snap-surface);
   color: var(--ai-snap-ink);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .dd-ai-chat__search input {
@@ -5770,7 +5770,7 @@
   border-radius: 8px;
   background: var(--ai-snap-surface);
   color: var(--ai-snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -5791,7 +5791,7 @@
   margin-bottom: 6px;
   padding: 9px 10px;
   border: 1px solid var(--ai-snap-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--ai-snap-surface);
   color: var(--ai-snap-ink);
   transition:
@@ -5813,7 +5813,7 @@
 
 .dd-ai-chat__conversation-list strong {
   color: var(--ai-snap-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -5912,7 +5912,7 @@
 .dd-ai-chat__topbar p {
   margin-top: 1px;
   color: var(--ai-snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__topbar-actions {
@@ -5926,7 +5926,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--ai-snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .dd-ai-chat__topbar-actions select {
@@ -6058,7 +6058,7 @@
   margin-bottom: 0;
   padding: 0 2px;
   color: var(--ai-snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__message-meta strong {
@@ -6120,7 +6120,7 @@
   margin-top: 0;
   padding: 0 4px;
   color: var(--ai-snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .dd-ai-chat__message-attachments {
@@ -6140,7 +6140,7 @@
   border-radius: 8px;
   background: var(--ai-snap-bg);
   color: var(--ai-snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__message-attachments strong {
@@ -6322,9 +6322,9 @@
   max-width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--ai-snap-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--ai-snap-bg);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__sources > summary {
@@ -6403,10 +6403,10 @@
 .dd-ai-chat__message-actions button {
   min-height: 20px;
   padding: 0 5px;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--ai-snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .dd-ai-chat__message-actions button:hover {
@@ -6487,13 +6487,13 @@
   border-radius: 8px;
   background: var(--ai-snap-bg);
   color: var(--ai-snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__attachment img {
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: 6px;
   object-fit: cover;
 }
 
@@ -7940,7 +7940,7 @@
   border-radius: 999px;
   background: #f8fafc;
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -8044,7 +8044,7 @@
 .dd-image-composer__option strong {
   overflow: hidden;
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8067,7 +8067,7 @@
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -8630,7 +8630,7 @@
   background: transparent;
   color: var(--snap-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -8650,7 +8650,7 @@
   min-height: 30px;
   padding: 0 4px;
   color: var(--snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1;
 }
@@ -8730,7 +8730,7 @@
   border-radius: 8px;
   background: var(--snap-bg);
   color: var(--snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -8800,7 +8800,7 @@
   border-radius: 8px;
   background: #ffffff;
   color: var(--snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -9545,7 +9545,7 @@
   min-width: 0;
   min-height: 82px;
   border: 1px solid var(--snap-border-soft);
-  border-radius: 9px;
+  border-radius: 10px;
   background: #fbfbfb;
 }
 
@@ -9561,7 +9561,7 @@
   width: 38px;
   height: 38px;
   border: 1px solid color-mix(in srgb, var(--snap-green) 20%, #ffffff);
-  border-radius: 9px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--snap-green) 9%, #ffffff);
   color: var(--snap-green);
 }
@@ -9690,7 +9690,7 @@
   grid-column: 1 / -1;
   margin: -2px 0 0;
   color: var(--danger);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -9879,7 +9879,7 @@
   flex: none;
   min-height: 18px;
   padding: 1px 6px;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #f0f0f0;
   color: #666666;
   font-size: 10px;
@@ -9900,7 +9900,7 @@
 .dd-snaplink__workbench-room-preview {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9912,7 +9912,7 @@
   gap: 5px;
   flex: none;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -10043,7 +10043,7 @@
   background: #ffffff;
   color: var(--snap-ink-soft);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
@@ -10101,7 +10101,7 @@
   min-width: 0;
   padding: 11px 12px;
   border: 1px solid var(--snap-border-soft);
-  border-radius: 9px;
+  border-radius: 10px;
   background: #fbfbfb;
   color: var(--snap-muted);
 }
@@ -10115,7 +10115,7 @@
   grid-area: title;
   overflow: hidden;
   color: var(--snap-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -10454,7 +10454,7 @@
   flex: none;
   width: 36px;
   height: 36px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #eef1f6;
   color: var(--snap-blue);
 }
@@ -10550,7 +10550,7 @@
 
 .dd-snaplink__recent-send strong {
   color: var(--snap-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.25;
 }
 
@@ -10606,7 +10606,7 @@
 .dd-snaplink__recent-send-actions .dd-snaplink__file-actions a {
   min-height: 28px;
   border-radius: 7px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-snaplink__text-send-layout,
@@ -10714,7 +10714,7 @@
 .dd-snaplink__text-history-row strong,
 .dd-snaplink__history-link-row strong {
   color: var(--snap-ink);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .dd-snaplink__text-history-row small,
@@ -11175,7 +11175,7 @@
 
 .dd-snaplink__settings-device-facts small {
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -11487,7 +11487,7 @@
   flex: none;
   width: 46px;
   height: 46px;
-  border-radius: 11px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--snap-green) 10%, #ffffff);
   color: #6366f1;
 }
@@ -11822,7 +11822,7 @@
   background: #ffffff;
   color: var(--snap-green);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 850;
   cursor: pointer;
   transition:
@@ -11870,7 +11870,7 @@
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #eef1f6;
   color: var(--snap-blue);
   font-family: var(--font-mono);
@@ -12180,7 +12180,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--snap-green);
   color: #ffffff;
 }
@@ -12333,7 +12333,7 @@
 
 .dd-snaplink__receive-dialog-file small {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-snaplink__receive-dialog-trust {
@@ -12373,7 +12373,7 @@
 
 .dd-snaplink__receive-dialog-trust small {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -12503,7 +12503,7 @@
 
 .dd-snaplink__trust-dialog-device small {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-snaplink__trust-dialog-codes {
@@ -12518,7 +12518,7 @@
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--snap-border-soft);
-  border-radius: 9px;
+  border-radius: 10px;
   background: #ffffff;
 }
 
@@ -12526,7 +12526,7 @@
 .dd-snaplink__trust-dialog-pin small,
 .dd-snaplink__trust-dialog-remember small {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -12944,7 +12944,7 @@
     min-height: 54px;
     padding: 0 8px;
     border: 1px solid var(--snap-border);
-    border-radius: 9px;
+    border-radius: 10px;
     background: #ffffff;
     color: var(--snap-ink-soft);
     font: inherit;
@@ -13682,7 +13682,7 @@
   background: var(--snap-surface);
   color: var(--snap-ink-soft);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -13736,7 +13736,7 @@
   background: var(--snap-bg);
   color: var(--snap-ink-soft);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -13755,7 +13755,7 @@
   background: var(--snap-bg);
   color: var(--snap-ink);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -13797,7 +13797,7 @@
   place-items: center;
   min-height: 56px;
   border: 1px dashed var(--snap-border);
-  border-radius: 9px;
+  border-radius: 10px;
   color: var(--snap-muted);
   font-size: 12px;
 }
@@ -13811,7 +13811,7 @@
   min-height: 56px;
   padding: 9px 10px;
   border: 1px solid var(--snap-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--snap-surface);
   color: var(--snap-ink);
   text-align: left;
@@ -13858,7 +13858,7 @@
   gap: 6px;
   min-width: 0;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13878,7 +13878,7 @@
 .dd-snaplink__room-item-preview {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13890,7 +13890,7 @@
   gap: 4px;
   flex: none;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -13986,7 +13986,7 @@
 .dd-snaplink__room-more-head span {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14014,7 +14014,7 @@
 .dd-snaplink__room-more-stats small {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14024,7 +14024,7 @@
   flex: none;
   color: var(--snap-ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -14067,7 +14067,7 @@
 .dd-snaplink__room-more-security small {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14131,7 +14131,7 @@
   background: var(--snap-bg);
   color: var(--snap-ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -14144,7 +14144,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--snap-ink-soft);
-  font-size: 12.5px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -14172,7 +14172,7 @@
 .dd-snaplink__room-meta-strip small {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14182,7 +14182,7 @@
   overflow: hidden;
   color: var(--snap-ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 850;
   text-align: right;
   text-overflow: ellipsis;
@@ -14392,7 +14392,7 @@
 .dd-snaplink__shared-main span {
   margin-top: 2px;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-snaplink__shared-actions {
@@ -14514,7 +14514,7 @@
 .dd-snaplink__system,
 .dd-snaplink__empty {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -14568,14 +14568,14 @@
   max-width: 34em;
   margin: 0;
   color: var(--snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
 .dd-snaplink__room-empty-card small {
   max-width: 34em;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -14699,7 +14699,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -15499,7 +15499,7 @@
 .dd-snaplink__message-time {
   padding: 0 4px;
   color: var(--snap-muted);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.2;
 }
 
@@ -15732,7 +15732,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 9px;
+  border-radius: 10px;
   object-fit: cover;
 }
 
@@ -15867,7 +15867,7 @@
 .dd-snaplink__bot-option span {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -16227,7 +16227,7 @@
   justify-content: space-between;
   gap: 10px;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ocr-panel__meta span {
@@ -16410,7 +16410,7 @@
 .dd-ocr-panel__history-main em {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: normal;
   line-height: 1.3;
   text-overflow: ellipsis;
@@ -16735,7 +16735,7 @@
       bottom: calc(70px + var(--snap-bottom-safe));
       width: calc(100vw - 20px);
       max-height: calc(100vh - 92px - var(--snap-bottom-safe));
-      border-radius: 9px;
+      border-radius: 10px;
     }
 
   .dd-ocr-panel__body {
@@ -16841,7 +16841,7 @@
 
   .dd-ai-chat__topbar h1 {
       overflow: hidden;
-      font-size: 12.5px;
+      font-size: 13px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -17162,7 +17162,7 @@
   padding: 0;
   border-radius: 8px;
   color: var(--ai-snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 0;
   list-style: none;
   cursor: pointer;
@@ -17397,7 +17397,7 @@
   border-radius: 7px;
   background: transparent;
   color: var(--ai-snap-ink-soft);
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
 }
 
@@ -17850,7 +17850,7 @@
   width: 18px;
   height: 18px;
   border: 1.8px solid rgba(255, 255, 255, 0.9);
-  border-radius: 5px;
+  border-radius: 6px;
   background:
     radial-gradient(circle at 70% 28%, #f7d59d 0 2px, transparent 2.5px),
     linear-gradient(135deg, transparent 52%, rgba(255, 255, 255, 0.82) 53% 60%, transparent 61%);
@@ -18861,7 +18861,7 @@
 .dd-snaplink__tool-side-row span {
   overflow: hidden;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -18978,7 +18978,7 @@
 .dd-ai-chat__context-row span,
 .dd-ai-chat__context-file small {
   color: var(--ai-snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-ai-chat__context-row strong {
@@ -19185,7 +19185,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--snap-green) 7%, #ffffff);
   color: var(--snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -19215,7 +19215,7 @@
   border-radius: 999px;
   background: var(--snap-surface);
   color: var(--snap-ink-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -19349,7 +19349,7 @@
     background: #ffffff;
     color: var(--snap-ink-soft);
     font: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 800;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -19388,7 +19388,7 @@
     .dd-snaplink__tool-mobile-actions button {
       min-height: 36px;
       padding: 0 6px;
-      font-size: 10.5px;
+      font-size: 11px;
     }
   }
 
@@ -19462,7 +19462,7 @@
   }
 
   .dd-ai-chat__empty > span:not(.dd-ai-chat__empty-badge) {
-    font-size: 12.5px;
+    font-size: 13px;
     line-height: 1.5;
   }
 
@@ -19514,7 +19514,7 @@
   }
 
   .dd-snaplink__tool-content .dd-ai-chat__conversation-list time {
-    font-size: 10.5px;
+    font-size: 11px;
   }
 
   .dd-snaplink__tool-content .dd-ai-chat__topbar {
@@ -19577,7 +19577,7 @@
   .dd-snaplink__tool-content .dd-ai-chat__empty-badge {
     width: 40px;
     height: 40px;
-    border-radius: 9px;
+    border-radius: 10px;
   }
 
   .dd-snaplink__tool-content .dd-web-command__head {
@@ -19601,7 +19601,7 @@
   .dd-snaplink__tool-content .dd-web-command__eyebrow {
     max-width: 100%;
     overflow: hidden;
-    font-size: 10.5px;
+    font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -19944,7 +19944,7 @@
     flex: 0 0 auto;
     min-height: 24px;
     padding: 0 9px;
-    font-size: 10.5px;
+    font-size: 11px;
   }
 
   .dd-snaplink__tool-content .dd-ai-chat__rail {
@@ -20010,7 +20010,7 @@
   .dd-snaplink__tool-content .dd-ai-chat__empty-badge {
     width: 38px;
     height: 38px;
-    border-radius: 9px;
+    border-radius: 10px;
     font-size: 12px !important;
   }
 
@@ -20029,7 +20029,7 @@
   }
 
   .dd-snaplink__tool-content .dd-ai-chat__quick-prompts button span {
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.35;
   }
 
@@ -20216,7 +20216,7 @@
     background: var(--snap-surface);
     color: var(--snap-ink-soft);
     font: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 800;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -20277,7 +20277,7 @@
 
   .dd-snaplink__room-member-head span {
     color: var(--snap-muted);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -20301,7 +20301,7 @@
     background: var(--snap-bg);
     color: var(--snap-ink-soft);
     font: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 800;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -20332,11 +20332,11 @@
     min-height: 48px;
     padding: 6px 3px;
     border: 1px solid var(--snap-border);
-    border-radius: 9px;
+    border-radius: 10px;
     background: var(--snap-bg);
     color: var(--snap-ink-soft);
     font: inherit;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 800;
   }
 
@@ -20364,7 +20364,7 @@
     min-height: 46px;
     padding: 7px 9px;
     border: 1px solid var(--snap-border);
-    border-radius: 9px;
+    border-radius: 10px;
     background: var(--snap-bg);
   }
 
@@ -20389,7 +20389,7 @@
   .dd-snaplink__room-member-list strong {
     overflow: hidden;
     color: var(--snap-ink);
-    font-size: 12.5px;
+    font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -20440,7 +20440,7 @@
   .dd-snaplink__room-workbench .dd-snaplink__room-actions button {
     min-height: 30px;
     padding: 0 8px;
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-meta-strip {
@@ -21256,7 +21256,7 @@
   min-height: 58px;
   padding: 10px;
   border: 1px solid #eeeeee;
-  border-radius: 11px;
+  border-radius: 12px;
   background: #fff;
   color: #222;
   touch-action: manipulation;
@@ -21301,7 +21301,7 @@
 .dd-snaplink__plus-item small {
   overflow: hidden;
   color: #999;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21409,7 +21409,7 @@
   .dd-snaplink__canvas.is-lobby .dd-snaplink__mobile-room-actions small {
     margin-top: 2px;
     color: var(--snap-muted);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 650;
   }
 
@@ -21490,7 +21490,7 @@
     grid-column: 1 / -1;
     margin: -2px 0 0;
     color: var(--danger);
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   .dd-snaplink__canvas.is-lobby .dd-snaplink__room-action-card {
@@ -21619,7 +21619,7 @@
 .dd-snaplink__workbench-rooms.is-full .dd-snaplink__mobile-room-actions small {
   margin-top: 2px;
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -21700,7 +21700,7 @@
   grid-column: 1 / -1;
   margin: -2px 0 0;
   color: var(--danger);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* 移动端顶部栏减重：像聊天 App 一样只留设备名 + 一行灰色连接状态 */
@@ -21817,7 +21817,7 @@
     min-height: 30px;
     padding: 0 10px;
     border-radius: 999px;
-    font-size: 11.5px;
+    font-size: 12px;
   }
 }
 
@@ -21953,7 +21953,7 @@
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--snap-green) 12%, var(--snap-surface));
   color: var(--snap-green);
   font-size: 13px;
@@ -22069,7 +22069,7 @@
      unread badge kept its light-mode red in dark mode. --danger is themed. */
   background: var(--danger);
   color: #ffffff;
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .dd-snaplink__room-detail-pane {
@@ -22141,7 +22141,7 @@
 
 .dd-snaplink__messages-empty-chat small {
   color: var(--snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.55;
 }
@@ -22162,7 +22162,7 @@
   content: '正在扫描附近设备…';
   margin: 4px 8px 8px;
   padding: 8px 10px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--snap-green) 9%, var(--snap-surface));
   color: var(--snap-green);
   font-size: 12px;
@@ -22226,7 +22226,7 @@
 
 .dd-snaplink__device-detail-copy small {
   color: var(--snap-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -22385,7 +22385,7 @@
   height: 46px;
   padding: 12px;
   border: 1px solid var(--snap-border-soft);
-  border-radius: 13px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--snap-green) 8%, var(--snap-surface));
   color: var(--snap-green);
 }
@@ -22398,7 +22398,7 @@
 
 .dd-snaplink__plus-item strong {
   max-width: 100%;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -22448,7 +22448,7 @@
   }
 
   .dd-snaplink__plus-item strong {
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
 }
@@ -22768,7 +22768,7 @@
   .dd-snaplink__rail-avatar {
     width: 36px;
     height: 36px;
-    border-radius: 11px;
+    border-radius: 12px;
   }
 }
 
@@ -23207,7 +23207,7 @@
 
 .dd-command-palette__item small {
   color: var(--dd-command-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -23267,7 +23267,7 @@
 .dd-snaplink__device-radar-head small,
 .dd-snaplink__device-radar-note {
   color: var(--snap-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -23385,7 +23385,7 @@
   border-radius: 999px;
   background: var(--snap-surface);
   color: var(--snap-ink-soft);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -23529,7 +23529,7 @@
 
 .dd-snaplink__emoji-item {
   height: 36px;
-  border-radius: 9px;
+  border-radius: 10px;
   color: #111827;
   font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Twemoji Mozilla', sans-serif;
   font-variant-emoji: emoji;
@@ -23561,7 +23561,7 @@
   min-height: 36px;
   padding: 0 16px;
   border: 1px solid #dfe3e8;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--snap-surface);
   color: #4b5563;
   font: inherit;
@@ -23700,7 +23700,7 @@
 .dd-snaplink__room-title-block strong {
   overflow: hidden;
   color: #111827;
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -23730,7 +23730,7 @@
   min-height: 34px;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   color: #6b7280;
 }
@@ -23839,7 +23839,7 @@
 .dd-snaplink__room-workbench .dd-snaplink__room-more-security p {
   margin: 2px 0 0;
   color: #8b949e;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -23873,7 +23873,7 @@
   border-color: transparent;
   background: #f8fafc;
   color: #6b7280;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__room-more-actions button.is-secondary:hover,
@@ -23924,7 +23924,7 @@
   background: #effbf5;
   color: #109257;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   text-align: left;
   cursor: pointer;
@@ -24046,7 +24046,7 @@
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-title-block strong {
-    font-size: 15.5px;
+    font-size: 15px;
   }
 
   .dd-snaplink__room-workbench .dd-snaplink__room-title-block small {
@@ -24348,7 +24348,7 @@
   min-width: 0;
   min-height: 50px;
   margin: 0 6px;
-  border-radius: 9px;
+  border-radius: 10px;
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active {
@@ -24591,7 +24591,7 @@
 .dd-snaplink.is-workbench-shell .dd-ai-chat__empty-badge {
   width: 42px;
   height: 42px;
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--snap-green);
 }
 
@@ -24616,7 +24616,7 @@
   min-height: 80px;
   padding: 12px 14px;
   border-color: var(--snap-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--snap-surface);
 }
 
@@ -24784,7 +24784,7 @@
     min-height: 42px;
     margin: 0 10px 8px;
     padding: 9px 11px;
-    border-radius: 9px;
+    border-radius: 10px;
     font-size: 14px;
   }
 
@@ -25000,7 +25000,7 @@
   .dd-snaplink.is-workbench-shell .dd-ai-chat__quick-prompts button {
     min-height: 72px;
     padding: 10px;
-    border-radius: 9px;
+    border-radius: 10px;
   }
 
   .dd-snaplink.is-workbench-shell .dd-ai-chat__quick-prompts button:last-child {
