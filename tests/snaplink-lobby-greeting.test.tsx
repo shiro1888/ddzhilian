@@ -14,11 +14,11 @@ describe('SnapLinkStage lobby workbench', () => {
     cleanup()
   })
 
-  it('renders the default messages workbench with an accessible region and title', () => {
+  it('renders the default transfer-first devices workbench with an accessible region and title', () => {
     render(<SnapLinkStage {...createBaseProps()} />)
 
     expect(screen.getByRole('region', { name: 'DD直连文件互传工作台' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: '消息工作台' })).toBeInTheDocument()
-    expect(screen.getByText('选择一个会话')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '设备工作台' })).toBeInTheDocument()
+    expect(screen.getByText('等待附近设备')).toBeInTheDocument()
   })
 })

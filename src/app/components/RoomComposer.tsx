@@ -499,12 +499,12 @@ export function RoomComposer({
                 <button
                   type="button"
                   className="dd-snaplink__emoji-backspace"
-                  aria-label="删除一个表情"
-                  title="删除一个表情"
+                  aria-label="删除"
+                  title="删除"
                   onClick={onEmojiBackspace}
                 >
-                  <Delete size={18} strokeWidth={2.2} aria-hidden="true" />
-                  <span>退格</span>
+                  <Delete size={17} strokeWidth={2} aria-hidden="true" />
+                  <span>删除</span>
                 </button>
                 <button type="button" className="is-primary" disabled={isSendDisabled} onClick={onEmojiSend}>
                   发送

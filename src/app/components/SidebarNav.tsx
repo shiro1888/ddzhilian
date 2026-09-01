@@ -2,11 +2,12 @@ import {
   History,
   MessageCircle,
   MonitorSmartphone,
+  Sparkles,
   User,
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
-export type SidebarNavMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'settings'
+export type SidebarNavMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'workshop' | 'settings'
 export type SidebarNavTool = 'ai-chat' | 'image' | 'command'
 
 type SidebarNavProps = {
@@ -19,6 +20,7 @@ type SidebarNavProps = {
   onShowNearby: () => void
   onShowRooms: () => void
   onShowQueue: () => void
+  onShowWorkshop?: () => void
   onShowSettings: () => void
 }
 
@@ -37,20 +39,22 @@ export function SidebarNav({
   onShowRooms,
   onShowNearby,
   onShowQueue,
+  onShowWorkshop,
   onShowSettings,
 }: SidebarNavProps) {
   const isMessagesActive = activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files'
   const isDevicesActive = activeMode === 'nearby'
   const isTransfersActive = activeMode === 'transfers'
-  const isMeActive = activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool)
+  const isWorkshopActive = activeMode === 'workshop' || Boolean(activeTool)
+  const isMeActive = activeMode === 'settings' || activeMode === 'history'
   const transferLabel = activeTransferCount > 0
     ? `传输 · ${activeTransferCount.toString()} 个进行中`
     : '传输'
 
   return (
     <aside className="dd-snaplink__rail" aria-label="主导航">
-      <div className="dd-snaplink__rail-logo">
-        <img src="/logo-dd-link.svg" alt="" />
+      <div className="dd-snaplink__rail-logo" title="DD直连">
+        <img src="/logo-dd-link.svg" alt="DD直连" />
       </div>
       <nav className="dd-snaplink__rail-nav" aria-label="DD直连主功能">
         <button
@@ -60,8 +64,8 @@ export function SidebarNav({
           onClick={onShowRooms}
           title="消息"
         >
-          <MessageCircle size={22} strokeWidth={1.8} aria-hidden="true" />
-          <span>消息</span>
+          <MessageCircle size={20} strokeWidth={1.8} aria-hidden="true" />
+          <span className="dd-snaplink__rail-label">消息</span>
         </button>
         <button
           type="button"
@@ -70,8 +74,8 @@ export function SidebarNav({
           onClick={onShowNearby}
           title="设备"
         >
-          <MonitorSmartphone size={21} strokeWidth={1.8} aria-hidden="true" />
-          <span>设备</span>
+          <MonitorSmartphone size={20} strokeWidth={1.8} aria-hidden="true" />
+          <span className="dd-snaplink__rail-label">设备</span>
         </button>
         <button
           type="button"
@@ -81,14 +85,26 @@ export function SidebarNav({
           onClick={onShowQueue}
           title={transferLabel}
         >
-          <History size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>传输</span>
+          <History size={19} strokeWidth={1.8} aria-hidden="true" />
+          <span className="dd-snaplink__rail-label">传输</span>
           {activeTransferCount > 0 ? (
             <em className="dd-snaplink__rail-badge" aria-hidden="true">
               {activeTransferCount > 99 ? '99+' : activeTransferCount.toString()}
             </em>
           ) : null}
         </button>
+        {onShowWorkshop ? (
+          <button
+            type="button"
+            className={isWorkshopActive ? 'is-active' : ''}
+            aria-pressed={isWorkshopActive}
+            onClick={onShowWorkshop}
+            title="工坊"
+          >
+            <Sparkles size={19} strokeWidth={1.8} aria-hidden="true" />
+            <span className="dd-snaplink__rail-label">工坊</span>
+          </button>
+        ) : null}
         <button
           type="button"
           className={isMeActive ? 'is-active' : ''}
@@ -96,8 +112,8 @@ export function SidebarNav({
           onClick={onShowSettings}
           title="我的"
         >
-          <User size={20} strokeWidth={1.8} aria-hidden="true" />
-          <span>我的</span>
+          <User size={19} strokeWidth={1.8} aria-hidden="true" />
+          <span className="dd-snaplink__rail-label">我的</span>
         </button>
       </nav>
       <button

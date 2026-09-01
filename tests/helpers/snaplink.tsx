@@ -10,6 +10,17 @@ import type { OcrJobResponse } from '@/lib/ddzhilian-types'
  * tests/ was excluded from every tsconfig. Keep this the single definition so
  * a prop change is a one-file edit.
  */
+/**
+ * Sets the initial workbench mode for the next render.
+ *
+ * SnapLinkStage reads its starting mode from sessionStorage
+ * (`dd_tool_return_mode`), falling back to the transfer-first devices view.
+ * Tests that exercise the messages workbench can call this in beforeEach.
+ */
+export function setInitialWorkbenchMode(mode: 'rooms' | 'nearby' | 'transfers' | 'files' | 'text' | 'history' | 'settings' | 'workshop') {
+  sessionStorage.setItem('dd_tool_return_mode', mode)
+}
+
 export function createSnapLinkBaseProps(
   overrides: Partial<SnapLinkStageProps> = {},
 ): SnapLinkStageProps {

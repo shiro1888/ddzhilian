@@ -44,11 +44,12 @@ vi.mock('gsap', () => ({
   default: gsapMock,
 }))
 
-import { createSnapLinkBaseProps as createBaseProps } from './helpers/snaplink'
+import { createSnapLinkBaseProps as createBaseProps, setInitialWorkbenchMode } from './helpers/snaplink'
 
 describe('SnapLinkStage image preview zoom', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
   })
 

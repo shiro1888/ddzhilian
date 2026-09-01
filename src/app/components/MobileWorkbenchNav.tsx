@@ -2,6 +2,7 @@ import {
   History,
   MessageCircle,
   MonitorSmartphone,
+  Sparkles,
   User,
   type LucideIcon,
 } from 'lucide-react'
@@ -17,17 +18,17 @@ type MobileWorkbenchNavProps = {
   onShowNearby: () => void
   onShowRooms: () => void
   onShowQueue: () => void
+  onShowWorkshop?: () => void
   onShowSettings: () => void
 }
 
 type MobileWorkbenchNavItem = {
   mode: SidebarNavMode
   label: string
-  // Same glyphs as the desktop rail, so a mode is recognisable by the same
-  // mark on both surfaces.
   icon: LucideIcon
   onClick: () => void
   badgeCount?: number
+  isActive?: boolean
 }
 
 export function MobileWorkbenchNav({
@@ -39,9 +40,10 @@ export function MobileWorkbenchNav({
   onShowRooms,
   onShowNearby,
   onShowQueue,
+  onShowWorkshop,
   onShowSettings,
 }: MobileWorkbenchNavProps) {
-  const items: Array<MobileWorkbenchNavItem & { isActive?: boolean }> = [
+  const items: MobileWorkbenchNavItem[] = [
     {
       mode: 'rooms',
       label: '消息',
@@ -62,15 +64,27 @@ export function MobileWorkbenchNav({
       icon: History,
       onClick: onShowQueue,
       badgeCount: activeTransferCount,
-    },
-    {
-      mode: 'settings',
-      label: '我的',
-      icon: User,
-      onClick: onShowSettings,
-      isActive: activeMode === 'settings' || activeMode === 'history' || Boolean(activeTool),
+      isActive: activeMode === 'transfers',
     },
   ]
+
+  if (onShowWorkshop) {
+    items.push({
+      mode: 'workshop',
+      label: '工坊',
+      icon: Sparkles,
+      onClick: onShowWorkshop,
+      isActive: activeMode === 'workshop' || Boolean(activeTool),
+    })
+  }
+
+  items.push({
+    mode: 'settings',
+    label: '我的',
+    icon: User,
+    onClick: onShowSettings,
+    isActive: activeMode === 'settings' || activeMode === 'history',
+  })
 
   return (
     <nav className={className} aria-label={ariaLabel}>

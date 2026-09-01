@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
 
-import { createSnapLinkBaseProps } from './helpers/snaplink'
+import { createSnapLinkBaseProps, setInitialWorkbenchMode } from './helpers/snaplink'
 
 // This suite renders inside an already-open public room.
 function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkStageProps {
@@ -52,6 +52,7 @@ function createClipboardData(files: File[]) {
 describe('SnapLinkStage composer paste', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
   })
 

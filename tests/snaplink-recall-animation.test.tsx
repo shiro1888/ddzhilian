@@ -2,11 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 
-import { createSnapLinkBaseProps as createBaseProps } from './helpers/snaplink'
+import { createSnapLinkBaseProps as createBaseProps, setInitialWorkbenchMode } from './helpers/snaplink'
 
 describe('SnapLinkStage recall animation', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
     vi.useFakeTimers()
   })

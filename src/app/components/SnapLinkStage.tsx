@@ -19,10 +19,8 @@ import {
   FileUp,
   ImageIcon,
   ImagePlus,
-  Laptop,
   Maximize2,
   Minimize2,
-  Monitor,
   MoonStar,
   PenLine,
   Plus,
@@ -32,9 +30,7 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Smartphone,
   SunMedium,
-  Tablet,
   Trash2,
   Upload,
   Users,
@@ -69,6 +65,87 @@ import type {
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 import { applyThemeMode, subscribeToSystemTheme } from '../../lib/preferences/theme-utils'
 import {
+  getSnapLinkThemeContrastColor,
+  normalizeSnapLinkThemeColor,
+  normalizeSnapLinkThemeColors,
+  readStoredSnapLinkThemeColors,
+  readStoredSnapLinkThemeMode,
+  resolveInitialSnapLinkThemeMode,
+  snapLinkDefaultThemeColors,
+  snapLinkThemeColorOptions,
+  snapLinkThemeModeLocalStorageKey,
+  snapLinkThemeModePreferenceKey,
+  snapLinkThemeStorageKey,
+  snapLinkThemeSubmitDebounceMs,
+  writeSnapLinkClientPreference,
+} from '../../lib/preferences/snaplink-theme'
+import type {
+  SnapLinkThemeColorTarget,
+  SnapLinkThemeColors,
+  SnapLinkThemeStyle,
+} from '../../lib/preferences/snaplink-theme'
+import {
+  createSnapLinkOcrFileFromImageTarget,
+  formatSnapLinkOcrTime,
+  getSnapLinkOcrHistorySummary,
+  getSnapLinkOcrStatusLabel,
+  getSnapLinkOcrText,
+  hasSnapLinkDraggedFiles,
+  isSupportedSnapLinkOcrFile,
+  resolveSnapLinkContextOcrTarget,
+} from '../../lib/ocr-utils'
+import type { SnapLinkOcrImageTarget, SnapLinkOcrStatus } from '../../lib/ocr-utils'
+import {
+  createSnapLinkAvatarDataUrl,
+  readStoredSnapLinkAvatar,
+  readStoredSnapLinkTrustedDeviceIds,
+  writeStoredSnapLinkAvatar,
+  writeStoredSnapLinkTrustedDeviceIds,
+} from '../../lib/device-preferences'
+import {
+  formatSnapLinkDeviceFingerprint,
+  getSnapLinkTransferProgress,
+  isSnapLinkDeviceTrusted,
+  isSnapLinkTransferActive,
+  resolveSnapLinkDeviceKind,
+  resolveSnapLinkTransferStatus,
+  resolveSnapLinkTransportMode,
+  resolveSnapLinkTrustLabel,
+} from '../../lib/device-display'
+import {
+  clampSnapLinkImageCometOffset,
+  escapeSnapLinkEntryIdSelector,
+  formatMessageClock,
+  getAiModelOptionValue,
+  getLatestSnapLinkEntryCreatedAtMs,
+  getSnapLinkEntryCreatedAtMs,
+  isBotConversationEntry,
+  isConversationMessageEntry,
+  prefersReducedMotion,
+  resetSnapLinkImageCometPointerState,
+  resolveActorIdentity,
+  resolveMessageActorKey,
+  resolveRoomLabel,
+  setSnapLinkImageCometPointerState,
+} from '../../lib/message-display'
+import {
+  copyRichTextToClipboard,
+  copyTextToClipboard,
+  createBotMentionDraftFromTrigger,
+  createNativePdfPreviewUrl,
+  findBotMentionTriggerStart,
+  getClipboardFiles,
+  getFileExtension,
+  getRichTextPreviewText,
+  isClipboardImageFile,
+  isImageOnlyRichText,
+  normalizePlainComposerDraft,
+  renderQuoteDraftHtml,
+  resolveMediaFileEntryKind,
+  startsWithBotMention,
+} from '../../lib/rich-text'
+import type { BotMentionTriggerRange, SnapLinkQuoteDraftState } from '../../lib/rich-text'
+import {
   playMessageSentSound,
   playMessageReceivedSound,
   playPeerConnectedSound,
@@ -77,7 +154,6 @@ import {
 import { CommandPalette } from './CommandPalette'
 import type { CommandPaletteItem } from './CommandPalette'
 import { ConfirmReceiveDialog } from './ConfirmReceiveDialog'
-import { DeviceRadar } from './DeviceRadar'
 import { DeviceCard } from './DeviceCard'
 import type { DocumentPreviewDialogState } from './DocumentPreviewDialog'
 
@@ -104,10 +180,8 @@ import { SidebarNav } from './SidebarNav'
 import { StatusPillsCollapsible } from './StatusPillsCollapsible'
 import { TopStatusBar } from './TopStatusBar'
 import { TrustDeviceDialog } from './TrustDeviceDialog'
-import type { DocumentPreviewPayload } from '../../lib/document-preview'
 import {
   collectDroppedFiles,
-  extractPlainTextFromRichText,
   formatFileSize,
   openHtmlDocumentFullscreenPreview,
   sanitizeBotReplyHtml,
@@ -121,12 +195,16 @@ import type { ToolContextPanelAction } from './ToolContextPanel'
 import { TransferQueuePage } from './TransferQueuePage'
 import type { TransferQueuePageTab } from './TransferQueuePage'
 import { TransferQueuePanel } from './TransferQueuePanel'
+import { FileActions } from './FileActions'
 import { TransferTaskCard } from './TransferTaskCard'
+import { WorkbenchDeviceIcon } from './WorkbenchDeviceIcon'
+import { WorkbenchDevicesPage } from './WorkbenchDevicesPage'
+import { WorkshopPanel } from './WorkshopPanel'
 
 type SnapLinkFileEntry = Extract<UnifiedConversationEntry, { entryType: 'file' }>['file']
 type SnapLinkTextEntry = Extract<UnifiedConversationEntry, { entryType: 'text' }>
 type SnapLinkSharedTab = Exclude<SharedContentTab, 'chat'>
-type SnapLinkWorkbenchMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'settings'
+type SnapLinkWorkbenchMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'workshop' | 'settings'
 type SnapLinkWorkbenchTransferTab = TransferQueuePageTab['id']
 type SnapLinkTrustActionKind = 'connect' | 'file' | 'text' | 'pick-file' | 'pick-camera'
 
@@ -150,22 +228,10 @@ type SnapLinkSharedLinkEntry = {
 }
 type SnapLinkActiveView = 'conversation' | 'ai-chat' | 'image' | 'admin' | 'command'
 
-type BotMentionTriggerRange = {
-  start: number
-  end: number
-}
-
-const AI_BOT_MENTION_LABEL = '@DD助手'
 const ROOM_JOIN_CODE_MAX_LENGTH = 12
 const MOBILE_BREAKPOINT = 761
 const MOBILE_MEDIA_QUERY = `(max-width: ${String(MOBILE_BREAKPOINT - 1)}px)`
 const DESKTOP_MEDIA_QUERY = `(min-width: ${String(MOBILE_BREAKPOINT)}px)`
-
-type SnapLinkOcrImageTarget = {
-  src: string
-  name: string
-  mimeType?: string
-}
 
 function normalizeRoomJoinCode(value: string) {
   const trimmed = value.trim()
@@ -201,12 +267,6 @@ type SnapLinkMessageContextMenuState = {
   top: number
 }
 
-type SnapLinkQuoteDraftState = {
-  senderName: string
-  text: string
-  html: string
-}
-
 type SnapLinkImagePreviewState = {
   src: string
   alt: string
@@ -233,8 +293,6 @@ type SnapLinkImagePreviewDragState = {
   startY: number
 }
 
-type SnapLinkOcrStatus = 'idle' | 'running' | 'complete' | 'failed'
-
 type SnapLinkOcrImageState = {
   file: File
   name: string
@@ -253,53 +311,17 @@ const snapLinkPinnedToBottomThreshold = 96
 const snapLinkNewOutgoingEntryAnimationMs = 500
 const snapLinkNewOutgoingEntryAnimationCleanupMs = snapLinkNewOutgoingEntryAnimationMs + 150
 const snapLinkPendingOutgoingEntryAnimationMs = 12_000
-const snapLinkThemeStorageKey = 'ddzhilian:snaplink-theme-colors'
-const snapLinkThemeModePreferenceKey = 'theme_mode'
-const snapLinkThemeModeLocalStorageKey = 'dd_theme'
-const snapLinkPreferenceCookieMaxAgeSeconds = 60 * 60 * 24 * 365
-const snapLinkThemeColorPattern = /^#[0-9A-Fa-f]{6}$/
-const snapLinkThemeSubmitDebounceMs = 700
 const snapLinkImagePreviewOpenDuration = 1
 const snapLinkImagePreviewOriginFeedbackDuration = 0.18
 const snapLinkImagePreviewCloseDuration = 0.34
 const snapLinkImagePreviewZoomScale = 1.85
 const snapLinkRecallBurstAnimationMs = 720
 const snapLinkRecallBurstAnimationCleanupMs = snapLinkRecallBurstAnimationMs + 120
-const snapLinkOcrSupportedMimeTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
-const snapLinkOcrFileExtensionByMimeType: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-}
 
 type SnapLinkRecallingTextEntryState = {
   entry: SnapLinkTextEntry
   phase: 'animating'
 }
-
-type SnapLinkThemeColorTarget = 'self' | 'peer' | 'ai'
-type SnapLinkThemeColors = Record<SnapLinkThemeColorTarget, string>
-type SnapLinkThemeStyle = CSSProperties & {
-  '--snap-theme-self': string
-  '--snap-theme-self-text': string
-  '--snap-theme-peer': string
-  '--snap-theme-peer-text': string
-  '--snap-theme-ai': string
-  '--snap-theme-ai-text': string
-}
-
-const snapLinkDefaultThemeColors: SnapLinkThemeColors = {
-  self: '#95EC69',
-  peer: '#FFFFFF',
-  ai: '#EAF7E1',
-}
-const snapLinkThemeColorOptions: Array<{ label: string; colors: SnapLinkThemeColors }> = [
-  { label: '经典绿', colors: { self: '#95EC69', peer: '#FFFFFF', ai: '#EAF7E1' } },
-  { label: '珊瑚', colors: { self: '#F9887F', peer: '#FFF4F2', ai: '#FFE8E5' } },
-  { label: '天空蓝', colors: { self: '#6EA8FE', peer: '#F3F7FF', ai: '#EAF2FF' } },
-  { label: '青柠', colors: { self: '#B7E36D', peer: '#F6FAEE', ai: '#EEF8D8' } },
-  { label: '暖橙', colors: { self: '#F6B35D', peer: '#FFF7ED', ai: '#FFEED8' } },
-]
 
 function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null) {
   if (!textarea) {
@@ -310,131 +332,6 @@ function syncSnapLinkComposerTextAreaHeight(textarea: HTMLTextAreaElement | null
   const nextHeight = Math.min(textarea.scrollHeight, snapLinkComposerMaxHeight)
   textarea.style.height = `${nextHeight.toString()}px`
   textarea.style.overflowY = textarea.scrollHeight > snapLinkComposerMaxHeight ? 'auto' : 'hidden'
-}
-
-function normalizeSnapLinkThemeColor(value: string, fallback: string) {
-  const normalizedValue = value.trim()
-  return snapLinkThemeColorPattern.test(normalizedValue)
-    ? normalizedValue.toUpperCase()
-    : fallback
-}
-
-function normalizeSnapLinkThemeColors(value: Partial<Record<SnapLinkThemeColorTarget, string>>) {
-  return {
-    self: normalizeSnapLinkThemeColor(value.self ?? '', snapLinkDefaultThemeColors.self),
-    peer: normalizeSnapLinkThemeColor(value.peer ?? '', snapLinkDefaultThemeColors.peer),
-    ai: normalizeSnapLinkThemeColor(value.ai ?? '', snapLinkDefaultThemeColors.ai),
-  }
-}
-
-function readStoredSnapLinkThemeColors() {
-  if (typeof window === 'undefined') {
-    return snapLinkDefaultThemeColors
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(snapLinkThemeStorageKey)
-    if (!storedValue) {
-      return snapLinkDefaultThemeColors
-    }
-
-    const parsedValue: unknown = JSON.parse(storedValue)
-    if (typeof parsedValue === 'string') {
-      return normalizeSnapLinkThemeColors({ self: parsedValue })
-    }
-
-    if (parsedValue && typeof parsedValue === 'object') {
-      return normalizeSnapLinkThemeColors(parsedValue as Partial<Record<SnapLinkThemeColorTarget, string>>)
-    }
-  } catch {
-    return snapLinkDefaultThemeColors
-  }
-
-  return snapLinkDefaultThemeColors
-}
-
-function isSnapLinkThemeMode(value: string | null | undefined): value is ThemeMode {
-  return value === 'light' || value === 'dark' || value === 'system'
-}
-
-function readSnapLinkCookie(name: string) {
-  if (typeof document === 'undefined') {
-    return null
-  }
-
-  const prefix = `${name}=`
-  const cookie = document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith(prefix))
-
-  if (!cookie) {
-    return null
-  }
-
-  try {
-    return decodeURIComponent(cookie.slice(prefix.length))
-  } catch {
-    return cookie.slice(prefix.length)
-  }
-}
-
-function writeSnapLinkClientPreference(name: string, value: string) {
-  if (typeof document === 'undefined') {
-    return
-  }
-
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${snapLinkPreferenceCookieMaxAgeSeconds}; SameSite=Lax`
-}
-
-function readStoredSnapLinkThemeMode(): ThemeMode {
-  if (typeof document === 'undefined') {
-    return 'light'
-  }
-
-  const domThemeMode = document.documentElement.getAttribute('data-theme-mode')
-  if (isSnapLinkThemeMode(domThemeMode)) {
-    return domThemeMode
-  }
-
-  const cookieThemeMode = readSnapLinkCookie(snapLinkThemeModePreferenceKey)
-  if (isSnapLinkThemeMode(cookieThemeMode)) {
-    return cookieThemeMode
-  }
-
-  if (typeof window !== 'undefined') {
-    try {
-      const localThemeMode = window.localStorage.getItem(snapLinkThemeModeLocalStorageKey)
-      if (isSnapLinkThemeMode(localThemeMode)) {
-        return localThemeMode
-      }
-    } catch {
-      // Ignore unavailable localStorage and fall back to light mode.
-    }
-  }
-
-  return 'light'
-}
-
-function resolveInitialSnapLinkThemeMode(mode: ThemeMode): ResolvedThemeMode {
-  if (mode !== 'system') {
-    return mode
-  }
-
-  if (typeof window === 'undefined') {
-    return 'light'
-  }
-
-  return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
-}
-
-function getSnapLinkThemeContrastColor(color: string) {
-  const normalizedColor = normalizeSnapLinkThemeColor(color, snapLinkDefaultThemeColors.self)
-  const red = Number.parseInt(normalizedColor.slice(1, 3), 16)
-  const green = Number.parseInt(normalizedColor.slice(3, 5), 16)
-  const blue = Number.parseInt(normalizedColor.slice(5, 7), 16)
-  const brightness = (red * 299 + green * 587 + blue * 114) / 1000
-
-  return brightness >= 150 ? '#18181B' : '#FFFFFF'
 }
 
 function toSnapLinkPreviewOriginRect(rect: DOMRect): SnapLinkPreviewOriginRect | undefined {
@@ -467,458 +364,6 @@ function resolveSnapLinkApiBaseUrl() {
   }
 
   return `${protocol}//${host}`
-}
-
-function formatSnapLinkOcrTime(value: string | undefined) {
-  if (!value) {
-    return ''
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function getSnapLinkOcrStatusLabel(status: SnapLinkOcrStatus) {
-  switch (status) {
-    case 'running':
-      return '识别中'
-    case 'complete':
-      return '识别完成'
-    case 'failed':
-      return '识别失败'
-    case 'idle':
-      return '待识别'
-  }
-}
-
-function getSnapLinkOcrText(job: OcrJobResponse | null) {
-  return job?.text?.trim() ?? ''
-}
-
-function normalizeSnapLinkImageMimeType(value: string | null | undefined) {
-  const normalizedType = value?.split(';', 1)[0]?.trim().toLowerCase()
-  if (!normalizedType) {
-    return null
-  }
-
-  return normalizedType === 'image/jpg' ? 'image/jpeg' : normalizedType
-}
-
-function getSupportedSnapLinkOcrMimeType(value: string | null | undefined) {
-  const normalizedType = normalizeSnapLinkImageMimeType(value)
-  return normalizedType && snapLinkOcrSupportedMimeTypes.has(normalizedType) ? normalizedType : null
-}
-
-function isSupportedSnapLinkOcrFile(file: Pick<File, 'name' | 'type'>) {
-  const normalizedType = normalizeSnapLinkImageMimeType(file.type)
-  if (normalizedType?.startsWith('image/') && !snapLinkOcrSupportedMimeTypes.has(normalizedType)) {
-    return false
-  }
-
-  return (
-    Boolean(normalizedType && snapLinkOcrSupportedMimeTypes.has(normalizedType)) ||
-    /\.(png|jpe?g|webp)$/i.test(file.name)
-  )
-}
-
-function getSnapLinkDataImageMimeType(src: string) {
-  const match = /^data:(image\/[^;,]+)/i.exec(src)
-  return match ? normalizeSnapLinkImageMimeType(match[1]) : null
-}
-
-function getSnapLinkOcrMimeTypeFromSource(src: string) {
-  const dataMimeType = getSnapLinkDataImageMimeType(src)
-  if (dataMimeType) {
-    return dataMimeType
-  }
-
-  const normalizedSource = src.split(/[?#]/, 1)[0]?.toLowerCase() ?? ''
-  if (/\.(?:jpe?g)$/i.test(normalizedSource)) {
-    return 'image/jpeg'
-  }
-
-  if (/\.png$/i.test(normalizedSource)) {
-    return 'image/png'
-  }
-
-  if (/\.webp$/i.test(normalizedSource)) {
-    return 'image/webp'
-  }
-
-  return null
-}
-
-function isKnownUnsupportedSnapLinkOcrSource(src: string) {
-  const dataMimeType = getSnapLinkDataImageMimeType(src)
-  if (dataMimeType?.startsWith('image/')) {
-    return !snapLinkOcrSupportedMimeTypes.has(dataMimeType)
-  }
-
-  const normalizedSource = src.split(/[?#]/, 1)[0]?.toLowerCase() ?? ''
-  return /\.(?:avif|bmp|gif|heic|svg|tiff?)$/i.test(normalizedSource)
-}
-
-function isFetchableSnapLinkOcrImageSource(src: string) {
-  const normalizedSource = src.trim()
-  if (!normalizedSource) {
-    return false
-  }
-
-  if (/^(?:data:image\/|blob:)/i.test(normalizedSource)) {
-    return true
-  }
-
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  try {
-    const url = new URL(normalizedSource, window.location.href)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-function getSnapLinkImageFileNameFromSource(src: string) {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-
-  try {
-    const url = new URL(src, window.location.href)
-    const fileName = url.pathname.split('/').filter(Boolean).pop()
-    return fileName ? decodeURIComponent(fileName) : ''
-  } catch {
-    return ''
-  }
-}
-
-function normalizeSnapLinkOcrFileName(name: string, src: string, mimeType: string) {
-  const extension = snapLinkOcrFileExtensionByMimeType[mimeType] ?? 'png'
-  const rawName = name.trim() || getSnapLinkImageFileNameFromSource(src) || '待识别图片'
-  const normalizedName = rawName
-    .replace(/[\\/:*?"<>|]+/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim() || '待识别图片'
-
-  if (/\.(?:png|jpe?g|webp)$/i.test(normalizedName)) {
-    return normalizedName
-  }
-
-  const baseName = normalizedName.replace(/\.[^.]+$/, '').trim() || '待识别图片'
-  return `${baseName}.${extension}`
-}
-
-function createSnapLinkOcrImageTarget(
-  src: string | null | undefined,
-  name: string | null | undefined,
-): SnapLinkOcrImageTarget | null {
-  const normalizedSrc = src?.trim()
-  if (
-    !normalizedSrc ||
-    !isFetchableSnapLinkOcrImageSource(normalizedSrc) ||
-    isKnownUnsupportedSnapLinkOcrSource(normalizedSrc)
-  ) {
-    return null
-  }
-
-  return {
-    src: normalizedSrc,
-    name: name?.trim() || getSnapLinkImageFileNameFromSource(normalizedSrc) || '待识别图片',
-    mimeType: getSupportedSnapLinkOcrMimeType(getSnapLinkOcrMimeTypeFromSource(normalizedSrc)) ?? undefined,
-  }
-}
-
-function resolveSnapLinkOcrTargetFromImageElement(image: HTMLImageElement) {
-  return createSnapLinkOcrImageTarget(
-    image.currentSrc || image.src || image.getAttribute('src'),
-    image.alt,
-  )
-}
-
-function resolveSnapLinkOcrTargetFromRichText(value: string) {
-  if (!value || typeof DOMParser === 'undefined') {
-    return null
-  }
-
-  const parser = new DOMParser()
-  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
-  const images = Array.from(documentFragment.body.querySelectorAll<HTMLImageElement>('img[src]'))
-  if (images.length !== 1) {
-    return null
-  }
-
-  const image = images[0]
-  return createSnapLinkOcrImageTarget(image.getAttribute('src'), image.getAttribute('alt'))
-}
-
-function resolveSnapLinkContextOcrTarget(
-  value: string,
-  target: EventTarget | null,
-  container: HTMLElement,
-) {
-  if (target instanceof Element) {
-    const image = target.closest<HTMLImageElement>('img[src]')
-    if (image && container.contains(image)) {
-      return resolveSnapLinkOcrTargetFromImageElement(image)
-    }
-  }
-
-  return resolveSnapLinkOcrTargetFromRichText(value)
-}
-
-async function createSnapLinkOcrFileFromImageTarget(target: SnapLinkOcrImageTarget) {
-  let response: Response
-  try {
-    const fetchImage = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : fetch
-    response = await fetchImage(target.src)
-  } catch {
-    throw new Error('无法读取这张图片，请确认图片仍可访问。')
-  }
-
-  if (!response.ok) {
-    throw new Error('无法读取这张图片，请确认图片仍可访问。')
-  }
-
-  const blob = await response.blob()
-  const responseMimeType = normalizeSnapLinkImageMimeType(blob.type)
-  if (responseMimeType?.startsWith('image/') && !snapLinkOcrSupportedMimeTypes.has(responseMimeType)) {
-    throw new Error('只支持 PNG、JPEG 或 WebP 图片。')
-  }
-
-  const mimeType =
-    getSupportedSnapLinkOcrMimeType(blob.type) ??
-    getSupportedSnapLinkOcrMimeType(target.mimeType) ??
-    getSupportedSnapLinkOcrMimeType(getSnapLinkOcrMimeTypeFromSource(target.src))
-  if (!mimeType) {
-    throw new Error('只支持 PNG、JPEG 或 WebP 图片。')
-  }
-
-  return new File(
-    [blob],
-    normalizeSnapLinkOcrFileName(target.name, target.src, mimeType),
-    { type: mimeType, lastModified: Date.now() },
-  )
-}
-
-function hasSnapLinkDraggedFiles(event: DragEvent<HTMLElement>) {
-  return event.dataTransfer.files.length > 0 || Array.from(event.dataTransfer.types).includes('Files')
-}
-
-function getSnapLinkOcrHistorySummary(job: OcrJobResponse) {
-  const text = getSnapLinkOcrText(job) || job.error || '无文字结果'
-  return text.replace(/\s+/g, ' ').slice(0, 80)
-}
-
-const snapLinkTrustedDevicesStorageKey = 'ddzhilian:trusted-devices:v1'
-const snapLinkAvatarStorageKey = 'dd_avatar'
-
-function readStoredSnapLinkTrustedDeviceIds() {
-  if (typeof window === 'undefined') {
-    return new Set<string>()
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(snapLinkTrustedDevicesStorageKey)
-    const parsedValue = rawValue ? JSON.parse(rawValue) : []
-
-    if (!Array.isArray(parsedValue)) {
-      return new Set<string>()
-    }
-
-    return new Set(
-      parsedValue.filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
-    )
-  } catch {
-    return new Set<string>()
-  }
-}
-
-function writeStoredSnapLinkTrustedDeviceIds(deviceIds: Set<string>) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    window.localStorage.setItem(
-      snapLinkTrustedDevicesStorageKey,
-      JSON.stringify(Array.from(deviceIds).sort()),
-    )
-  } catch {
-    // localStorage may be unavailable in private contexts; trust state then remains in memory for this tab.
-  }
-}
-
-function readStoredSnapLinkAvatar() {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  try {
-    return window.localStorage.getItem(snapLinkAvatarStorageKey)
-  } catch {
-    return null
-  }
-}
-
-function writeStoredSnapLinkAvatar(value: string | null) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    if (value) {
-      window.localStorage.setItem(snapLinkAvatarStorageKey, value)
-    } else {
-      window.localStorage.removeItem(snapLinkAvatarStorageKey)
-    }
-  } catch {
-    // Avatar is local-only; if storage is unavailable, keep the in-memory preview for this tab.
-  }
-}
-
-function createSnapLinkAvatarDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('头像读取失败'))
-    reader.onload = () => {
-      const image = new Image()
-      image.onerror = () => reject(new Error('头像图片解析失败'))
-      image.onload = () => {
-        const canvas = document.createElement('canvas')
-        const size = 128
-        canvas.width = size
-        canvas.height = size
-        const context = canvas.getContext('2d')
-        if (!context) {
-          reject(new Error('当前浏览器不支持头像裁切'))
-          return
-        }
-
-        const scale = Math.max(size / image.width, size / image.height)
-        const width = image.width * scale
-        const height = image.height * scale
-        context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.85))
-      }
-      image.src = String(reader.result ?? '')
-    }
-    reader.readAsDataURL(file)
-  })
-}
-
-function resolveSnapLinkDeviceKind(platform: string) {
-  const normalizedPlatform = platform.toLowerCase()
-
-  if (/(iphone|android|phone|mobile|pixel|huawei|xiaomi|oppo|vivo)/i.test(normalizedPlatform)) {
-    return 'phone'
-  }
-
-  if (/(ipad|tablet|pad)/i.test(normalizedPlatform)) {
-    return 'tablet'
-  }
-
-  return 'desktop'
-}
-
-function resolveSnapLinkTransportMode(device: OnlineDeviceListItem) {
-  if (device.scopeLabel.includes('同一网络')) {
-    return {
-      label: '同一网络',
-      tone: 'lan',
-    } as const
-  }
-
-  if (device.scopeLabel.includes('同一账号')) {
-    return {
-      label: '同一账号',
-      tone: 'remote',
-    } as const
-  }
-
-  return {
-    label: '可互传',
-    tone: 'discoverable',
-  } as const
-}
-
-function resolveSnapLinkTrustLabel(device: OnlineDeviceListItem, isLocallyTrusted: boolean) {
-  if (isLocallyTrusted || device.scopeLabel.includes('同一账号')) {
-    return '已信任'
-  }
-
-  return '未验证'
-}
-
-function isSnapLinkDeviceTrusted(device: OnlineDeviceListItem, trustedDeviceIds: Set<string>) {
-  return trustedDeviceIds.has(device.deviceId) || device.scopeLabel.includes('同一账号')
-}
-
-function formatSnapLinkDeviceFingerprint(device: OnlineDeviceListItem) {
-  const source = device.pairToken || device.shortCode || device.deviceId
-  const compact = source.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-
-  if (!compact) {
-    return '未知'
-  }
-
-  return compact.slice(0, 12).replace(/(.{4})(?=.)/g, '$1 ')
-}
-
-function resolveSnapLinkTransferStatus(file: FileConversationEntry) {
-  const status = file.transferStatus
-
-  if (status) {
-    return status
-  }
-
-  if (file.tone === 'completed') {
-    return 'completed'
-  }
-
-  if (file.tone === 'failed') {
-    return 'failed'
-  }
-
-  if (file.tone === 'active') {
-    return 'transferring'
-  }
-
-  return 'queued'
-}
-
-function getSnapLinkTransferProgress(file: FileConversationEntry) {
-  const status = resolveSnapLinkTransferStatus(file)
-
-  if (status === 'completed') {
-    return 1
-  }
-
-  if (status === 'transferring' || status === 'failed') {
-    return clampProgress(file.progress)
-  }
-
-  return 0
-}
-
-function isSnapLinkTransferActive(status: ReturnType<typeof resolveSnapLinkTransferStatus>) {
-  return (
-    status === 'queued' ||
-    status === 'waiting_for_target' ||
-    status === 'connecting' ||
-    status === 'ready' ||
-    status === 'transferring'
-  )
 }
 
 export type SnapLinkStageProps = {
@@ -1005,524 +450,6 @@ export type SnapLinkStageProps = {
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDragLeave: (event: DragEvent<HTMLElement>) => void
   onDrop: (event: DragEvent<HTMLElement>) => void
-}
-
-function escapeInlineHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-}
-
-function getRichTextPreviewText(value: string) {
-  const text = extractPlainTextFromRichText(value)
-  if (text) {
-    return text
-  }
-
-  if (typeof DOMParser !== 'undefined') {
-    const parser = new DOMParser()
-    const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
-    const image = documentFragment.body.querySelector('img[src]')
-    if (image) {
-      return image.getAttribute('alt')?.trim() || '图片'
-    }
-  }
-
-  return ''
-}
-
-const clipboardBlockTags = new Set(['blockquote', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'ol', 'p', 'ul'])
-
-function normalizeClipboardPlainText(value: string) {
-  return value
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u200B/g, '')
-    .replace(/\u00a0/g, ' ')
-}
-
-function extractClipboardPlainTextFromNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? ''
-  }
-
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return ''
-  }
-
-  const element = node as HTMLElement
-  const tagName = element.tagName.toLowerCase()
-  if (tagName === 'br') {
-    return '\n'
-  }
-
-  if (tagName === 'img') {
-    return element.getAttribute('alt')?.trim() || '图片'
-  }
-
-  if (tagName === 'pre') {
-    return element.querySelector('code')?.textContent ?? element.textContent ?? ''
-  }
-
-  const childText = Array.from(element.childNodes)
-    .map((child) => extractClipboardPlainTextFromNode(child))
-    .join('')
-
-  if (tagName === 'td' || tagName === 'th') {
-    return `${childText}\t`
-  }
-
-  if (tagName === 'tr') {
-    return `${childText.replace(/\t$/, '')}\n`
-  }
-
-  if (clipboardBlockTags.has(tagName)) {
-    return `${childText}\n`
-  }
-
-  return childText
-}
-
-function getRichTextClipboardText(value: string) {
-  const fallbackText = normalizeClipboardPlainText(value)
-  if (!/[<>]/.test(value) || typeof DOMParser === 'undefined') {
-    return fallbackText
-  }
-
-  const parser = new DOMParser()
-  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
-  const root = documentFragment.body.firstElementChild
-  if (!root) {
-    return fallbackText
-  }
-
-  return normalizeClipboardPlainText(extractClipboardPlainTextFromNode(root))
-    .replace(/^\n+/, '')
-    .replace(/\n+$/, '')
-}
-
-async function copyTextToClipboard(value: string) {
-  if (navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(value)
-      return true
-    } catch {
-      // Fall back to a temporary textarea when clipboard permissions are unavailable.
-    }
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.setAttribute('readonly', '')
-  try {
-    document.body.appendChild(textarea)
-    textarea.select()
-    return document.execCommand('copy')
-  } catch {
-    return false
-  } finally {
-    textarea.remove()
-  }
-}
-
-async function copyRichTextToClipboard(value: string) {
-  const sanitizedHtml = sanitizeRichTextHtml(value)
-  const plainText = getRichTextClipboardText(value)
-
-  if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && sanitizedHtml) {
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([sanitizedHtml], { type: 'text/html' }),
-          'text/plain': new Blob([plainText], { type: 'text/plain' }),
-        }),
-      ])
-      return true
-    } catch {
-      // Fall back to text-only clipboard behavior below.
-    }
-  }
-
-  return copyTextToClipboard(plainText || sanitizedHtml || value)
-}
-
-function renderQuoteDraftHtml(quoteDraft: SnapLinkQuoteDraftState) {
-  return [
-    '<blockquote class="dd-chatbox__quote">',
-    `<strong>${escapeInlineHtml(quoteDraft.senderName)}：</strong>`,
-    quoteDraft.html,
-    '</blockquote>',
-  ].join('')
-}
-
-function createNativePdfPreviewUrl(payload: DocumentPreviewPayload) {
-  if (typeof payload.source === 'string') {
-    return payload.source
-  }
-
-  const blob = payload.source instanceof Blob
-    ? payload.source
-    : new Blob([payload.source], { type: payload.mimeType || 'application/pdf' })
-  return URL.createObjectURL(blob)
-}
-
-function normalizePlainComposerDraft(value: string) {
-  if (!/[<>]/.test(value)) {
-    return value.replace(/\r\n?/g, '\n')
-  }
-
-  return extractPlainTextFromRichText(value).replace(/\s*\n+\s*/g, ' ')
-}
-
-function startsWithBotMention(value: string) {
-  return /^@(?:DD助手|DD直连小助手|ai|bot)(?:$|[\s:：,，])/i.test(value.trimStart())
-}
-
-function createBotMentionDraft(value: string) {
-  if (startsWithBotMention(value)) {
-    return value
-  }
-
-  const normalizedDraft = value.trimStart()
-  return normalizedDraft ? `${AI_BOT_MENTION_LABEL} ${normalizedDraft}` : `${AI_BOT_MENTION_LABEL} `
-}
-
-function findBotMentionTriggerStart(value: string, caretPosition: number) {
-  const beforeCaret = value.slice(0, caretPosition)
-  if (!/(^|\s)@$/.test(beforeCaret)) {
-    return null
-  }
-
-  return beforeCaret.length - 1
-}
-
-function createBotMentionDraftFromTrigger(value: string, triggerRange: BotMentionTriggerRange | null) {
-  if (!triggerRange || value.charAt(triggerRange.start) !== '@') {
-    return createBotMentionDraft(value)
-  }
-
-  const triggerEnd = Math.max(triggerRange.end, triggerRange.start + 1)
-  const valueWithoutTrigger = `${value.slice(0, triggerRange.start)}${value.slice(triggerEnd)}`
-  return createBotMentionDraft(valueWithoutTrigger)
-}
-
-function getFileExtension(fileName: string) {
-  const extension = fileName.split('.').pop()
-  if (!extension || extension === fileName) {
-    return 'FILE'
-  }
-
-  return extension.slice(0, 4).toUpperCase()
-}
-
-function resolveMediaFileEntryKind(file: FileConversationEntry) {
-  const normalizedMimeType = file.mimeType?.toLowerCase() ?? ''
-  const normalizedFileName = file.fileName.toLowerCase()
-
-  if (normalizedMimeType.startsWith('image/') || /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(normalizedFileName)) {
-    return 'image' as const
-  }
-
-  if (normalizedMimeType.startsWith('video/') || /\.(m4v|mov|mp4|ogv|webm)$/i.test(normalizedFileName)) {
-    return 'video' as const
-  }
-
-  return null
-}
-
-function getImageExtensionFromMimeType(mimeType: string) {
-  switch (mimeType.toLowerCase()) {
-    case 'image/jpeg':
-      return 'jpg'
-    case 'image/png':
-      return 'png'
-    case 'image/gif':
-      return 'gif'
-    case 'image/webp':
-      return 'webp'
-    case 'image/avif':
-      return 'avif'
-    case 'image/svg+xml':
-      return 'svg'
-    default:
-      return 'png'
-  }
-}
-
-function isClipboardImageFile(file: File) {
-  const normalizedMimeType = file.type.toLowerCase()
-  const normalizedName = file.name.toLowerCase()
-
-  return normalizedMimeType.startsWith('image/') || /\.(avif|bmp|gif|heic|jpe?g|png|svg|tiff?|webp)$/i.test(normalizedName)
-}
-
-function normalizePastedImageFile(file: File, index: number) {
-  if (file.name.trim()) {
-    return file
-  }
-
-  const extension = getImageExtensionFromMimeType(file.type || 'image/png')
-  return new File([file], `snaplink-paste-${Date.now().toString()}-${(index + 1).toString()}.${extension}`, {
-    type: file.type || 'image/png',
-    lastModified: file.lastModified || Date.now(),
-  })
-}
-
-function normalizePastedClipboardFile(file: File, index: number) {
-  return isClipboardImageFile(file) ? normalizePastedImageFile(file, index) : file
-}
-
-function getClipboardFiles(dataTransfer: DataTransfer) {
-  const itemFiles = Array.from(dataTransfer.items)
-    .filter((item) => item.kind === 'file')
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file))
-
-  const files = itemFiles.length > 0
-    ? itemFiles
-    : Array.from(dataTransfer.files)
-
-  return files.map(normalizePastedClipboardFile)
-}
-
-function isImageOnlyRichText(value: string) {
-  if (!value || typeof DOMParser === 'undefined') {
-    return false
-  }
-
-  const parser = new DOMParser()
-  const documentFragment = parser.parseFromString(`<div>${value}</div>`, 'text/html')
-  const root = documentFragment.body.firstElementChild
-  let imageCount = 0
-
-  if (!root) {
-    return false
-  }
-
-  const containsOnlyImages = (node: Node): boolean => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return !node.textContent?.trim()
-    }
-
-    if (!(node instanceof HTMLElement)) {
-      return true
-    }
-
-    const tagName = node.tagName.toLowerCase()
-    if (tagName === 'img') {
-      imageCount += 1
-      return true
-    }
-
-    if (tagName === 'br') {
-      return true
-    }
-
-    return Array.from(node.childNodes).every(containsOnlyImages)
-  }
-
-  return Array.from(root.childNodes).every(containsOnlyImages) && imageCount > 0
-}
-
-function clampProgress(progress: number) {
-  if (!Number.isFinite(progress)) {
-    return 0
-  }
-
-  return Math.min(Math.max(progress, 0), 1)
-}
-
-function formatMessageClock(iso: string) {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-}
-
-function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: string) {
-  if (!room) {
-    return fallbackName
-  }
-
-  if (room.isAssistant) {
-    return 'AI 助手'
-  }
-
-  const peerOnlineCount = getRoomPeerOnlineCount(room)
-  const onlineMemberCount = getRoomOnlineMemberCount(room)
-
-  if (room.isPublic) {
-    return resolveRoomPeerPresenceLabel(room)
-  }
-
-  if (room.memberCount > 2) {
-    return `${onlineMemberCount.toString()}/${room.memberCount.toString()} 位成员在线（含本机）`
-  }
-
-  if (room.status === 'connected') {
-    return '对方在线 · WebRTC 直连中'
-  }
-
-  if (peerOnlineCount > 0) {
-    return '对方在线 · 等待直连'
-  }
-
-  return '对方离线'
-}
-
-function getAiModelOptionValue(option: AiModelOption) {
-  return option.value ?? (option.provider ? `${option.provider}::${option.id}` : option.id)
-}
-
-function resolveAvatarLabel(senderName: string, fromSelf: boolean) {
-  if (fromSelf) {
-    return '我'
-  }
-
-  const compactName = senderName.replace(/\s+/g, '').trim()
-  if (!compactName) {
-    return 'TA'
-  }
-
-  return Array.from(compactName)[0]?.toUpperCase() ?? 'TA'
-}
-
-function prefersReducedMotion() {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-function escapeSnapLinkEntryIdSelector(value: string) {
-  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
-    return CSS.escape(value)
-  }
-
-  return value.replace(/["\\]/g, '\\$&')
-}
-
-const DEVICE_SYSTEM_PREFIXES = new Set(['windows', 'android', 'ios', 'ipad', 'mac', 'linux', 'web'])
-
-function resolveActorIdentity(
-  entry: Exclude<UnifiedConversationEntry, { entryType: 'notice' }>,
-  isBotMessage: boolean,
-) {
-  if (isBotMessage) {
-    return {
-      displayName: 'DD助手',
-      title: 'DD助手',
-      badgeLabel: '助手',
-      avatarLabel: '助',
-    }
-  }
-
-  const fallbackName = entry.fromSelf ? '我' : '对方设备'
-  const rawName = entry.senderName.trim() || fallbackName
-  const prefixMatch = rawName.match(/^([a-z]+)-(.+)$/i)
-  const systemLabel = prefixMatch?.[1]?.toLowerCase()
-  const splitDisplayName =
-    systemLabel && DEVICE_SYSTEM_PREFIXES.has(systemLabel)
-      ? prefixMatch?.[2]?.trim()
-      : undefined
-  const displayName = entry.fromSelf ? '我' : splitDisplayName || rawName
-
-  return {
-    displayName,
-    title: rawName,
-    badgeLabel: systemLabel && DEVICE_SYSTEM_PREFIXES.has(systemLabel) ? systemLabel : undefined,
-    avatarLabel: resolveAvatarLabel(displayName, entry.fromSelf),
-  }
-}
-
-function isConversationMessageEntry(
-  entry: UnifiedConversationEntry | undefined,
-): entry is Exclude<UnifiedConversationEntry, { entryType: 'notice' }> {
-  return Boolean(entry && entry.entryType !== 'notice')
-}
-
-function isBotConversationEntry(entry: Exclude<UnifiedConversationEntry, { entryType: 'notice' }>) {
-  return entry.entryType === 'text' && entry.sourceDeviceId === 'bot_cloudflare_ai'
-}
-
-function resolveMessageActorKey(entry: Exclude<UnifiedConversationEntry, { entryType: 'notice' }>) {
-  if (entry.fromSelf) {
-    return 'self'
-  }
-
-  if (isBotConversationEntry(entry)) {
-    return 'bot'
-  }
-
-  return `peer:${entry.senderName.trim() || 'unknown'}`
-}
-
-function getSnapLinkEntryCreatedAtMs(entry: UnifiedConversationEntry) {
-  const createdAtMs = Date.parse(entry.createdAt)
-  return Number.isNaN(createdAtMs) ? 0 : createdAtMs
-}
-
-function getLatestSnapLinkEntryCreatedAtMs(entries: UnifiedConversationEntry[]) {
-  return entries.reduce(
-    (latestCreatedAtMs, entry) => Math.max(latestCreatedAtMs, getSnapLinkEntryCreatedAtMs(entry)),
-    Number.NEGATIVE_INFINITY,
-  )
-}
-
-const SNAPLINK_IMAGE_COMET_ROTATE_DEGREES = 7
-const SNAPLINK_IMAGE_COMET_TRANSLATE_PX = 5
-
-function clampSnapLinkImageCometOffset(value: number) {
-  return Math.min(0.5, Math.max(-0.5, value))
-}
-
-function setSnapLinkImageCometCssValue(
-  element: HTMLElement,
-  propertyName: string,
-  value: number,
-  unit: 'deg' | 'px' | '%',
-) {
-  element.style.setProperty(propertyName, `${value.toFixed(2)}${unit}`)
-}
-
-function setSnapLinkImageCometPointerState(element: HTMLElement, xOffset: number, yOffset: number) {
-  setSnapLinkImageCometCssValue(
-    element,
-    '--snaplink-image-comet-rotate-x',
-    yOffset * SNAPLINK_IMAGE_COMET_ROTATE_DEGREES * 2,
-    'deg',
-  )
-  setSnapLinkImageCometCssValue(
-    element,
-    '--snaplink-image-comet-rotate-y',
-    xOffset * SNAPLINK_IMAGE_COMET_ROTATE_DEGREES * -2,
-    'deg',
-  )
-  setSnapLinkImageCometCssValue(
-    element,
-    '--snaplink-image-comet-translate-x',
-    xOffset * SNAPLINK_IMAGE_COMET_TRANSLATE_PX * 2,
-    'px',
-  )
-  setSnapLinkImageCometCssValue(
-    element,
-    '--snaplink-image-comet-translate-y',
-    yOffset * SNAPLINK_IMAGE_COMET_TRANSLATE_PX * -2,
-    'px',
-  )
-  setSnapLinkImageCometCssValue(element, '--snaplink-image-comet-glare-x', (xOffset + 0.5) * 100, '%')
-  setSnapLinkImageCometCssValue(element, '--snaplink-image-comet-glare-y', (yOffset + 0.5) * 100, '%')
-}
-
-function resetSnapLinkImageCometPointerState(element: HTMLElement) {
-  element.style.setProperty('--snaplink-image-comet-rotate-x', '0deg')
-  element.style.setProperty('--snaplink-image-comet-rotate-y', '0deg')
-  element.style.setProperty('--snaplink-image-comet-translate-x', '0px')
-  element.style.setProperty('--snaplink-image-comet-translate-y', '0px')
-  element.style.setProperty('--snaplink-image-comet-glare-x', '50%')
-  element.style.setProperty('--snaplink-image-comet-glare-y', '50%')
 }
 
 export function SnapLinkStage({
@@ -1640,7 +567,28 @@ export function SnapLinkStage({
   const [isZenMode, setIsZenMode] = useState(false)
   const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
   const [workbenchDeviceDropTargetId, setWorkbenchDeviceDropTargetId] = useState<string | null>(null)
-  const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>('rooms')
+  const [workbenchMode, setWorkbenchMode] = useState<SnapLinkWorkbenchMode>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const modeParam = params.get('mode') || params.get('tab')
+      const savedReturnMode = sessionStorage.getItem('dd_tool_return_mode')
+      const targetMode = modeParam || savedReturnMode
+      if (
+        targetMode === 'rooms' ||
+        targetMode === 'workshop' ||
+        targetMode === 'settings' ||
+        targetMode === 'nearby' ||
+        targetMode === 'transfers' ||
+        targetMode === 'files' ||
+        targetMode === 'text' ||
+        targetMode === 'history'
+      ) {
+        sessionStorage.removeItem('dd_tool_return_mode')
+        return targetMode as SnapLinkWorkbenchMode
+      }
+    }
+    return 'nearby'
+  })
   const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false)
@@ -3193,21 +2141,66 @@ export function SnapLinkStage({
     }
   }, [imagePreview, isImagePreviewClosing])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const params = new URLSearchParams(window.location.search)
+    const modeParam = params.get('mode') || params.get('tab')
+    const savedReturnMode = sessionStorage.getItem('dd_tool_return_mode')
+    const targetMode = modeParam || savedReturnMode
+    if (
+      targetMode === 'settings' ||
+      targetMode === 'nearby' ||
+      targetMode === 'transfers' ||
+      targetMode === 'files' ||
+      targetMode === 'text' ||
+      targetMode === 'history'
+    ) {
+      setWorkbenchMode(targetMode as SnapLinkWorkbenchMode)
+      setIsLobbyOpen(true)
+      sessionStorage.removeItem('dd_tool_return_mode')
+    }
+  }, [activeView])
+
+  const handleRoomHeaderBack = () => {
+    if (typeof window !== 'undefined') {
+      const savedReturnMode = sessionStorage.getItem('dd_tool_return_mode')
+      if (savedReturnMode === 'settings') {
+        sessionStorage.removeItem('dd_tool_return_mode')
+        handleShowWorkbenchSettings()
+        return
+      }
+    }
+    handleShowWorkbenchRooms()
+  }
+
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
-    setWorkbenchMode('rooms')
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
+    }
+    if (workbenchMode !== 'settings') {
+      setWorkbenchMode('rooms')
+    }
     onOpenAiChatView()
   }
 
   const handleOpenImage = () => {
     setActiveSharedTab(null)
     setIsLobbyOpen(false)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
+    }
     onOpenImageView()
   }
 
   const handleOpenCommand = () => {
     setActiveSharedTab(null)
     setIsLobbyOpen(false)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
+    }
     onOpenCommandView()
   }
 
@@ -3466,6 +2459,11 @@ export function SnapLinkStage({
     setDeviceNameDraft(deviceName)
     setDeviceNameError(null)
     setWorkbenchMode('settings')
+  }
+
+  const handleShowWorkbenchWorkshop = () => {
+    handleBackToLobby()
+    setWorkbenchMode('workshop')
   }
 
   const handleCreatePublicRoom = () => {
@@ -4730,103 +3728,17 @@ export function SnapLinkStage({
     setDocumentPreview(null)
   }
 
-  const renderFileActions = (file: SnapLinkFileEntry) => {
-    const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
-    const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
-    const isDocumentPreviewLoading = loadingDocumentPreviewFileId === file.id
-
-    if (!canPreviewDocument && !file.downloadUrl && !file.onDownload && !file.action && !file.canRecall) {
-      return null
-    }
-
-    return (
-      <div className="dd-snaplink__file-actions">
-        {documentPreviewHref ? (
-          <a href={documentPreviewHref} aria-label={`预览 ${file.fileName}`}>
-            预览
-          </a>
-        ) : canPreviewDocument ? (
-          <button
-            type="button"
-            aria-label={`预览 ${file.fileName}`}
-            onClick={() => openDocumentPreview(file)}
-            disabled={file.isDocumentPreviewDisabled || isDocumentPreviewLoading}
-          >
-            {isDocumentPreviewLoading ? '载入中' : '预览'}
-          </button>
-        ) : null}
-        {file.onDownload ? (
-          <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
-            {file.isDownloadDisabled ? '下载中' : '下载'}
-          </button>
-        ) : null}
-        {file.downloadUrl ? (
-          <a href={file.downloadUrl} download={file.downloadName}>
-            下载
-          </a>
-        ) : null}
-        {file.action === 'retry' ? (
-          <button type="button" onClick={() => onRetryTransfer(file.id)}>
-            重试
-          </button>
-        ) : null}
-        {file.action === 'cancel' ? (
-          <button type="button" onClick={() => onCancelTransfer(file.id)}>
-            取消
-          </button>
-        ) : null}
-        {file.historyId && file.canRecall ? (
-          <button type="button" className="is-danger" onClick={() => recallFileEntry(file)}>
-            撤回
-          </button>
-        ) : null}
-      </div>
-    )
-  }
-
-  const renderSharedFileActions = (file: FileConversationEntry) => {
-    const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
-    const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
-    const isDocumentPreviewLoading = loadingDocumentPreviewFileId === file.id
-
-    if (!canPreviewDocument && !file.downloadUrl && !file.onDownload && !file.canRecall) {
-      return null
-    }
-
-    return (
-      <div className="dd-snaplink__shared-actions">
-        {documentPreviewHref ? (
-          <a href={documentPreviewHref} aria-label={`预览 ${file.fileName}`}>
-            预览
-          </a>
-        ) : canPreviewDocument ? (
-          <button
-            type="button"
-            aria-label={`预览 ${file.fileName}`}
-            onClick={() => openDocumentPreview(file)}
-            disabled={file.isDocumentPreviewDisabled || isDocumentPreviewLoading}
-          >
-            {isDocumentPreviewLoading ? '载入中' : '预览'}
-          </button>
-        ) : null}
-        {file.onDownload ? (
-          <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
-            {file.isDownloadDisabled ? '下载中' : '下载'}
-          </button>
-        ) : null}
-        {file.downloadUrl ? (
-          <a href={file.downloadUrl} download={file.downloadName}>
-            下载
-          </a>
-        ) : null}
-        {file.historyId && file.canRecall ? (
-          <button type="button" className="is-danger" onClick={() => recallFileEntry(file)}>
-            撤回
-          </button>
-        ) : null}
-      </div>
-    )
-  }
+  const renderSharedFileActions = (file: FileConversationEntry) => (
+    <FileActions
+      variant="shared"
+      file={file}
+      isLoadingPreview={loadingDocumentPreviewFileId === file.id}
+      onOpenDocumentPreview={openDocumentPreview}
+      onRetryTransfer={onRetryTransfer}
+      onCancelTransfer={onCancelTransfer}
+      onRecallFile={recallFileEntry}
+    />
+  )
 
   const renderSharedFileRow = (file: FileConversationEntry, variant: 'media' | 'file') => {
     const mediaKind = resolveMediaFileEntryKind(file)
@@ -5032,20 +3944,6 @@ export function SnapLinkStage({
     )
   }
 
-  const renderWorkbenchDeviceIcon = (device: OnlineDeviceListItem) => {
-    const kind = resolveSnapLinkDeviceKind(device.platform)
-
-    if (kind === 'phone') {
-      return <Smartphone size={24} strokeWidth={1.8} aria-hidden="true" />
-    }
-
-    if (kind === 'tablet') {
-      return <Tablet size={24} strokeWidth={1.8} aria-hidden="true" />
-    }
-
-    return <Laptop size={26} strokeWidth={1.7} aria-hidden="true" />
-  }
-
   const renderWorkbenchDeviceCard = (device: OnlineDeviceListItem) => {
     const mode = resolveSnapLinkTransportMode(device)
     const trustLabel = resolveSnapLinkTrustLabel(device, trustedDeviceIds.has(device.deviceId))
@@ -5056,7 +3954,7 @@ export function SnapLinkStage({
         key={device.deviceId}
         device={device}
         deviceKind={resolveSnapLinkDeviceKind(device.platform)}
-        icon={renderWorkbenchDeviceIcon(device)}
+        icon={<WorkbenchDeviceIcon device={device} />}
         transportTone={mode.tone}
         transportLabel={mode.label}
         trustLabel={trustLabel}
@@ -5087,7 +3985,7 @@ export function SnapLinkStage({
         onClick={() => setSelectedWorkbenchDeviceId(device.deviceId)}
       >
         <span className={`dd-snaplink__target-device-icon is-${resolveSnapLinkDeviceKind(device.platform)}`}>
-          {renderWorkbenchDeviceIcon(device)}
+          <WorkbenchDeviceIcon device={device} />
         </span>
         <span>
           <strong>{device.deviceName}</strong>
@@ -5125,7 +4023,16 @@ export function SnapLinkStage({
     const status = resolveSnapLinkTransferStatus(file)
     const progress = getSnapLinkTransferProgress(file)
     const progressPercent = Math.round(progress * 100)
-    const actions = renderFileActions(file)
+    const actions = (
+      <FileActions
+        file={file}
+        isLoadingPreview={loadingDocumentPreviewFileId === file.id}
+        onOpenDocumentPreview={openDocumentPreview}
+        onRetryTransfer={onRetryTransfer}
+        onCancelTransfer={onCancelTransfer}
+        onRecallFile={recallFileEntry}
+      />
+    )
 
     return (
       <article key={file.id} className={`dd-snaplink__recent-send is-${status}`}>
@@ -5166,7 +4073,16 @@ export function SnapLinkStage({
         progress={progress}
         extension={getFileExtension(file.fileName)}
         sizeLabel={formatFileSize(file.fileSize)}
-        actions={renderFileActions(file)}
+        actions={(
+          <FileActions
+            file={file}
+            isLoadingPreview={loadingDocumentPreviewFileId === file.id}
+            onOpenDocumentPreview={openDocumentPreview}
+            onRetryTransfer={onRetryTransfer}
+            onCancelTransfer={onCancelTransfer}
+            onRecallFile={recallFileEntry}
+          />
+        )}
       />
     )
   }
@@ -5294,7 +4210,7 @@ export function SnapLinkStage({
         deviceName={pendingTrustDevice.deviceName}
         actionLabel={actionLabel}
         deviceKind={resolveSnapLinkDeviceKind(pendingTrustDevice.platform)}
-        deviceIcon={renderWorkbenchDeviceIcon(pendingTrustDevice)}
+        deviceIcon={<WorkbenchDeviceIcon device={pendingTrustDevice} />}
         platformLabel={pendingTrustDevice.platform}
         modeLabel={mode.label}
         lastSeenLabel={pendingTrustDevice.lastSeenLabel}
@@ -5550,174 +4466,12 @@ export function SnapLinkStage({
       {renderDesktopConversationSideList()}
       <div className="dd-snaplink__messages-detail" aria-label="消息详情占位">
         <section className="dd-snaplink__messages-empty-chat" aria-label="空会话提示">
-          <strong>选择一个会话</strong>
-          <small>从左侧打开世界对话、房间、设备或 DD助手。文件、图片和工具都在会话输入栏的「＋」里。</small>
+          <strong>把文件拖到这里，或选择左侧的设备和会话</strong>
+          <small>直接拖入文件即可开始传输；也可以先打开一个设备、房间或世界对话，发消息、传文件都在同一个输入框完成。</small>
         </section>
       </div>
     </section>
   )
-
-  const renderWorkbenchDevicesPage = () => {
-    const activeDevice = selectedWorkbenchDevice
-    const normalizedDeviceQuery = conversationSearchQuery.trim().toLowerCase()
-    const filteredDeviceItems = onlineDeviceItems.filter((device) => {
-      if (!normalizedDeviceQuery) {
-        return true
-      }
-
-      return [
-        device.deviceName,
-        device.platform,
-        device.scopeLabel,
-        device.shortCode,
-      ].filter(Boolean).join(' ').toLowerCase().includes(normalizedDeviceQuery)
-    })
-
-    return (
-      <section className="dd-snaplink__devices-shell" aria-label="设备工作台">
-        <aside className="dd-snaplink__conversation-side" aria-label="设备列表">
-          <div className="dd-snaplink__conversation-side-head">
-            <span>
-              <strong>设备</strong>
-              <small>{workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传</small>
-            </span>
-            <button type="button" onClick={handleWorkbenchRescan}>
-              查找
-            </button>
-          </div>
-          <label className="dd-snaplink__conversation-side-search">
-            <span className="sr-only">搜索设备</span>
-            <Search size={15} strokeWidth={1.9} aria-hidden="true" />
-            <input
-              value={conversationSearchQuery}
-              placeholder="搜索设备"
-              onChange={(event) => setConversationSearchQuery(event.target.value)}
-            />
-            {conversationSearchQuery ? (
-              <button
-                type="button"
-                aria-label="清空设备搜索"
-                onClick={() => setConversationSearchQuery('')}
-              >
-                ×
-              </button>
-            ) : null}
-          </label>
-          <div className={`dd-snaplink__conversation-side-list${isWorkbenchScanning ? ' is-scanning' : ''}`}>
-            {filteredDeviceItems
-              .map((device) => {
-                const isActive = activeDevice?.deviceId === device.deviceId
-
-                return (
-                  <button
-                    key={device.deviceId}
-                    type="button"
-                    className={[
-                      'dd-snaplink__conversation-row',
-                      'is-device',
-                      isActive ? 'is-active' : '',
-                    ].filter(Boolean).join(' ')}
-                    aria-current={isActive ? 'page' : undefined}
-                    onClick={() => handleWorkbenchDeviceListClick(device.deviceId)}
-                    title={`打开 ${device.deviceName}`}
-                  >
-                    <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
-                      {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
-                      <i className="is-online" />
-                    </span>
-                    <span className="dd-snaplink__conversation-main">
-                      <span className="dd-snaplink__conversation-title">
-                        <strong>{device.deviceName}</strong>
-                        <em>{device.platform || '设备'}</em>
-                      </span>
-                      <small>{device.scopeLabel || '附近设备'} · {device.lastSeenLabel || '在线'}</small>
-                    </span>
-                    <span className="dd-snaplink__conversation-side-meta">
-                      <small>在线</small>
-                      <em>{device.shortCode || '直连'}</em>
-                    </span>
-                  </button>
-                )
-              })}
-            {onlineDeviceItems.length === 0 ? (
-              <div className="dd-snaplink__conversation-empty">
-                暂无附近设备
-              </div>
-            ) : filteredDeviceItems.length === 0 ? (
-              <div className="dd-snaplink__conversation-empty">
-                没有找到相关设备
-              </div>
-            ) : null}
-          </div>
-        </aside>
-
-        <div className="dd-snaplink__devices-detail" aria-label="设备详情">
-          <DeviceRadar
-            devices={onlineDeviceItems}
-            selectedDeviceId={activeDevice?.deviceId ?? null}
-            renderIcon={renderWorkbenchDeviceIcon}
-            onSelect={handleWorkbenchDeviceListClick}
-            onOpenConversation={handleWorkbenchDeviceSendText}
-          />
-          {activeDevice ? (
-            <section className="dd-snaplink__device-detail-card">
-              <span className={`dd-snaplink__device-detail-icon is-${resolveSnapLinkDeviceKind(activeDevice.platform)}`} aria-hidden="true">
-                {renderWorkbenchDeviceIcon(activeDevice)}
-              </span>
-              <span className="dd-snaplink__device-detail-copy">
-                <strong>{activeDevice.deviceName}</strong>
-                <small>{activeDevice.scopeLabel || '附近设备'} · {activeDevice.lastSeenLabel || '在线'}</small>
-              </span>
-              <dl className="dd-snaplink__device-detail-meta">
-                <div>
-                  <dt>平台</dt>
-                  <dd>{activeDevice.platform || '未知'}</dd>
-                </div>
-                <div>
-                  <dt>短码</dt>
-                  <dd>{activeDevice.shortCode || '未公开'}</dd>
-                </div>
-                <div>
-                  <dt>连接</dt>
-                  <dd>{resolveSnapLinkTransportMode(activeDevice).label}</dd>
-                </div>
-                <div>
-                  <dt>信任</dt>
-                  <dd>{resolveSnapLinkTrustLabel(activeDevice, trustedDeviceIds.has(activeDevice.deviceId))}</dd>
-                </div>
-              </dl>
-              <div className="dd-snaplink__device-detail-actions">
-                <button type="button" className="is-primary" onClick={() => handleWorkbenchDeviceSendText(activeDevice.deviceId)}>
-                  发消息
-                </button>
-                <button type="button" onClick={() => handleWorkbenchDeviceSendFile(activeDevice.deviceId)}>
-                  发文件
-                </button>
-                <button type="button" onClick={() => handleWorkbenchDeviceTrust(activeDevice.deviceId)}>
-                  校验设备
-                </button>
-              </div>
-            </section>
-          ) : (
-            <section className="dd-snaplink__device-detail-card is-empty">
-              <span className="dd-snaplink__device-detail-icon is-empty" aria-hidden="true">
-                <Monitor size={24} strokeWidth={1.8} />
-              </span>
-              <span className="dd-snaplink__device-detail-copy">
-                <strong>等待附近设备</strong>
-                <small>让另一台设备打开 DD直连，保持在同一网络或登录同一账号。</small>
-              </span>
-              <div className="dd-snaplink__device-detail-actions">
-                <button type="button" className="is-primary" onClick={handleWorkbenchRescan}>
-                  重新查找
-                </button>
-              </div>
-            </section>
-          )}
-        </div>
-      </section>
-    )
-  }
 
   const renderWorkbenchRoomsSection = (variant: 'compact' | 'full' = 'compact') => (
     <RoomsPage
@@ -6089,11 +4843,22 @@ export function SnapLinkStage({
 
         showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
       }}
+      onOpenCustomTheme={toggleThemePanel}
       onOpenAiChat={handleOpenAiChat}
       onOpenImage={handleOpenImage}
       onOpenCommand={handleOpenCommand}
       onOpenOcr={() => setIsOcrPanelOpen(true)}
       onOpenAdmin={onOpenAdminView}
+    />
+  )
+
+  const renderWorkbenchWorkshopPage = () => (
+    <WorkshopPanel
+      onOpenAiChat={handleOpenAiChat}
+      onOpenImage={handleOpenImage}
+      onOpenCommand={handleOpenCommand}
+      onOpenOcr={handleOcrTriggerClick}
+      isOcrPanelOpen={isOcrPanelOpen}
     />
   )
 
@@ -6169,7 +4934,22 @@ export function SnapLinkStage({
     }
 
     if (workbenchMode === 'nearby') {
-      return renderWorkbenchDevicesPage()
+      return (
+        <WorkbenchDevicesPage
+          devices={onlineDeviceItems}
+          selectedDevice={selectedWorkbenchDevice}
+          onlineCount={workbenchOnlineDeviceCount}
+          searchQuery={conversationSearchQuery}
+          isScanning={isWorkbenchScanning}
+          trustedDeviceIds={trustedDeviceIds}
+          onSearchChange={setConversationSearchQuery}
+          onRescan={handleWorkbenchRescan}
+          onSelectDevice={handleWorkbenchDeviceListClick}
+          onSendText={handleWorkbenchDeviceSendText}
+          onSendFile={handleWorkbenchDeviceSendFile}
+          onTrustDevice={handleWorkbenchDeviceTrust}
+        />
+      )
     }
 
     if (workbenchMode === 'files') {
@@ -6178,6 +4958,10 @@ export function SnapLinkStage({
 
     if (workbenchMode === 'transfers') {
       return renderWorkbenchTransferBoard()
+    }
+
+    if (workbenchMode === 'workshop') {
+      return renderWorkbenchWorkshopPage()
     }
 
     if (workbenchMode === 'text') {
@@ -6363,6 +5147,7 @@ export function SnapLinkStage({
         onShowNearby={handleShowWorkbenchNearby}
         onShowRooms={handleShowWorkbenchRooms}
         onShowQueue={handleShowWorkbenchQueue}
+        onShowWorkshop={handleShowWorkbenchWorkshop}
         onShowSettings={handleShowWorkbenchSettings}
       />
 
@@ -6374,6 +5159,7 @@ export function SnapLinkStage({
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
+          onShowWorkshop={handleShowWorkbenchWorkshop}
           onShowSettings={handleShowWorkbenchSettings}
         />
 
@@ -6495,6 +5281,7 @@ export function SnapLinkStage({
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
+          onShowWorkshop={handleShowWorkbenchWorkshop}
           onShowSettings={handleShowWorkbenchSettings}
         />
 
@@ -6523,6 +5310,7 @@ export function SnapLinkStage({
             onShowNearby={handleShowWorkbenchNearby}
             onShowRooms={handleShowWorkbenchRooms}
             onShowQueue={handleShowWorkbenchQueue}
+            onShowWorkshop={handleShowWorkbenchWorkshop}
             onShowSettings={handleShowWorkbenchSettings}
           />
 
@@ -6575,7 +5363,19 @@ export function SnapLinkStage({
   }
 
   const renderFileCard = (file: SnapLinkFileEntry) => (
-    <FileMessageCard file={file} actions={renderFileActions(file)} />
+    <FileMessageCard
+      file={file}
+      actions={(
+        <FileActions
+          file={file}
+          isLoadingPreview={loadingDocumentPreviewFileId === file.id}
+          onOpenDocumentPreview={openDocumentPreview}
+          onRetryTransfer={onRetryTransfer}
+          onCancelTransfer={onCancelTransfer}
+          onRecallFile={recallFileEntry}
+        />
+      )}
+    />
   )
 
   const imagePreviewImageStyle: CSSProperties | undefined = isImagePreviewZoomed
@@ -6659,38 +5459,6 @@ export function SnapLinkStage({
           )}
         </div>
         <div className="dd-snaplink__top-actions">
-          <nav className="dd-snaplink__legal-links" aria-label="站点信息">
-            <a href="/about">关于</a>
-            <a href="/privacy">隐私</a>
-            <a href="/terms">条款</a>
-            <a href="/advertising">广告</a>
-            <a href="/contact">联系</a>
-          </nav>
-          {roomListItems.length > 0 ? (
-            <select
-              aria-label="选择对话"
-              value={
-                isImageOpen
-                  ? snapLinkImageSelectionValue
-                  : isCommandOpen
-                    ? snapLinkCommandSelectionValue
-                  : isAiChatOpen
-                    ? snapLinkAiChatSelectionValue
-                      : hasActiveRoom ? selectedRoomId ?? '' : ''
-              }
-              onChange={(event) => handleRoomSelection(event.target.value)}
-            >
-              <option value="">附近设备</option>
-              <option value={snapLinkAiChatSelectionValue}>DD助手</option>
-              <option value={snapLinkImageSelectionValue}>图片</option>
-              <option value={snapLinkCommandSelectionValue}>命令行</option>
-              {roomListItems.map((room) => (
-                <option key={room.roomId} value={room.roomId}>
-                  {room.title} · {room.roomId}
-                </option>
-              ))}
-            </select>
-          ) : null}
           {hasActiveRoom && selectedRoom ? (
             <span
               className="dd-snaplink__online-count"
@@ -6714,47 +5482,6 @@ export function SnapLinkStage({
               主题
               <span>Beta</span>
             </button>
-            {isThemePanelOpen ? (
-              <div
-                ref={themePanelRef}
-                className="dd-snaplink__theme-panel"
-                role="dialog"
-                aria-label="自定义主题 Beta"
-              >
-                <div className="dd-snaplink__theme-head">
-                  <strong>自定义主题</strong>
-                  <span>Beta</span>
-                </div>
-                <p className="dd-snaplink__theme-notice">
-                  Beta 功能：你填写的配色将会被收集，用于改进主题体验。
-                </p>
-                <div className="dd-snaplink__theme-fields">
-                  {renderThemeColorField('self', '发送的信息框', '自己发送的消息气泡')}
-                  {renderThemeColorField('peer', '接收的信息框', '其他成员发送的消息气泡')}
-                  {renderThemeColorField('ai', '助手的信息框', 'DD助手回复气泡')}
-                </div>
-                <div className="dd-snaplink__theme-presets" aria-label="主题预设">
-                  {snapLinkThemeColorOptions.map((option) => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      className="dd-snaplink__theme-preset"
-                      onClick={() => applyThemeColors(option.colors)}
-                    >
-                      <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
-                        <i style={{ background: option.colors.self }} />
-                        <i style={{ background: option.colors.peer }} />
-                        <i style={{ background: option.colors.ai }} />
-                      </span>
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <button type="button" className="dd-snaplink__theme-reset" onClick={resetThemeColors}>
-                  恢复默认
-                </button>
-              </div>
-            ) : null}
           </div>
           <button
             type="button"
@@ -6822,6 +5549,7 @@ export function SnapLinkStage({
                 onShowNearby={handleShowWorkbenchNearby}
                 onShowRooms={handleShowWorkbenchRooms}
                 onShowQueue={handleShowWorkbenchQueue}
+                onShowWorkshop={handleShowWorkbenchWorkshop}
                 onShowSettings={handleShowWorkbenchSettings}
               />
 
@@ -6842,7 +5570,7 @@ export function SnapLinkStage({
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}
                     onCopyRoomId={handleCopyRoomId}
-                    onBack={handleShowWorkbenchRooms}
+                    onBack={handleRoomHeaderBack}
                     onOpenAssistant={handleOpenAiChat}
                     onOpenImageTool={handleOpenImage}
                     onOpenOcr={handleOcrTriggerClick}
@@ -7197,9 +5925,64 @@ export function SnapLinkStage({
           )}
         </div>
       </main>
+      <footer className="dd-snaplink__legal-bar">
+        <nav className="dd-snaplink__legal-links" aria-label="站点信息">
+          <a href="/about">关于</a>
+          <a href="/privacy">隐私</a>
+          <a href="/terms">条款</a>
+          <a href="/advertising">广告</a>
+          <a href="/contact">联系</a>
+        </nav>
+      </footer>
       </section>
       {renderTrustDeviceDialog()}
       {renderIncomingFileOfferDialog()}
+      {isThemePanelOpen
+        ? createPortal(
+            <div className="dd-snaplink__theme-dialog-backdrop" role="presentation">
+              <div
+                ref={themePanelRef}
+                className="dd-snaplink__theme-panel is-dialog"
+                role="dialog"
+                aria-label="自定义主题 Beta"
+              >
+                <div className="dd-snaplink__theme-head">
+                  <strong>自定义主题</strong>
+                  <span>Beta</span>
+                </div>
+                <p className="dd-snaplink__theme-notice">
+                  Beta 功能：你填写的配色将会被收集，用于改进主题体验。
+                </p>
+                <div className="dd-snaplink__theme-fields">
+                  {renderThemeColorField('self', '发送的信息框', '自己发送的消息气泡')}
+                  {renderThemeColorField('peer', '接收的信息框', '其他成员发送的消息气泡')}
+                  {renderThemeColorField('ai', '助手的信息框', 'DD助手回复气泡')}
+                </div>
+                <div className="dd-snaplink__theme-presets" aria-label="主题预设">
+                  {snapLinkThemeColorOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className="dd-snaplink__theme-preset"
+                      onClick={() => applyThemeColors(option.colors)}
+                    >
+                      <span className="dd-snaplink__theme-preset-swatches" aria-hidden="true">
+                        <i style={{ background: option.colors.self }} />
+                        <i style={{ background: option.colors.peer }} />
+                        <i style={{ background: option.colors.ai }} />
+                      </span>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="dd-snaplink__theme-reset" onClick={resetThemeColors}>
+                  恢复默认
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
       <CommandPalette
         open={isCommandPaletteOpen}
         commands={commandPaletteItems}

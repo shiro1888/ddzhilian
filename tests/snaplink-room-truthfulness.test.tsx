@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 
-import { createSnapLinkBaseProps, createSnapLinkRoom } from './helpers/snaplink'
+import { createSnapLinkBaseProps, createSnapLinkRoom, setInitialWorkbenchMode } from './helpers/snaplink'
 
 type TestRoom = ReturnType<typeof createSnapLinkRoom>
 
@@ -23,6 +23,7 @@ function renderSelectedRoom(room: TestRoom, autoOpen = true) {
 describe('SnapLinkStage truthful room status and retention copy', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
   })
 

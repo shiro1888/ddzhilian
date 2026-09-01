@@ -2,11 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 
-import { createSnapLinkBaseProps as createBaseProps } from './helpers/snaplink'
+import { createSnapLinkBaseProps as createBaseProps, setInitialWorkbenchMode } from './helpers/snaplink'
 
 describe('SnapLinkStage initial room opening', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
   })
 

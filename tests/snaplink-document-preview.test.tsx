@@ -5,7 +5,7 @@ import type { SnapLinkStageProps } from '@/app/components/SnapLinkStage'
 import { resolveDocxPreviewLayout } from '@/app/components/DocumentPreviewDialog'
 import { resolveDocumentPreviewKind } from '@/lib/document-preview'
 
-import { createSnapLinkBaseProps } from './helpers/snaplink'
+import { createSnapLinkBaseProps, setInitialWorkbenchMode } from './helpers/snaplink'
 
 // This suite renders inside an already-open public room.
 function createBaseProps(overrides: Partial<SnapLinkStageProps> = {}): SnapLinkStageProps {
@@ -41,6 +41,7 @@ function openSelectedConversation() {
 describe('SnapLinkStage document preview', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    setInitialWorkbenchMode('rooms')
     vi.clearAllMocks()
   })
 
