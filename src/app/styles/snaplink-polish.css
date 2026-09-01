@@ -6,7 +6,8 @@
  * and elegant status indicators.
  */
 
-.dd-snaplink {
+.dd-snaplink,
+.dd-snaplink.is-workbench-shell {
   --snap-bg: #f4f4f8;
   --snap-surface: rgba(255, 255, 255, 0.78);
   --snap-surface-solid: #ffffff;
@@ -46,8 +47,10 @@
     sans-serif;
   letter-spacing: -0.012em;
   background:
-    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(99, 102, 241, 0.09), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 95% 110%, rgba(139, 92, 246, 0.07), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(99, 102, 241, 0.16), transparent 62%),
+    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(139, 92, 246, 0.12), transparent 58%),
+    radial-gradient(ellipse 42% 34% at 82% -6%, rgba(129, 140, 248, 0.1), transparent 60%),
+    linear-gradient(180deg, #eceefb 0%, var(--snap-bg) 26%, var(--snap-bg) 100%),
     var(--snap-bg);
 }
 
@@ -68,6 +71,10 @@
   --snap-line: rgba(148, 163, 184, 0.12);
   --snap-green-soft: rgba(99, 102, 241, 0.16);
   --snap-shadow-glass: 0 16px 40px 0 rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(ellipse 80% 50% at 12% -8%, rgba(99, 102, 241, 0.13), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(139, 92, 246, 0.09), transparent 55%),
+    var(--snap-bg);
 }
 
 .dd-snaplink button,
@@ -86,7 +93,6 @@
   flex-direction: column;
   height: var(--viewport-h, 100vh);
   overflow: hidden;
-  background: var(--snap-bg);
   color: var(--snap-ink);
 }
 
@@ -103,6 +109,12 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Let the shell atmosphere (ambient gradients) show through the room canvas */
+.dd-snaplink.is-workbench-shell .dd-snaplink__app.is-room,
+.dd-snaplink.is-workbench-shell .dd-snaplink__app.is-lobby {
+  background: transparent !important;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -256,8 +268,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 62px;
-  min-width: 62px;
+  width: 72px;
+  min-width: 72px;
   padding: 14px 0 14px;
   border-right: 1px solid var(--snap-border);
   background: var(--snap-sidebar);
@@ -311,9 +323,9 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
   border: 0 !important;
   box-shadow: none !important;
   background: transparent;
@@ -339,19 +351,19 @@
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
 .dd-snaplink__rail-nav button.is-active {
-  background: rgba(99, 102, 241, 0.12) !important;
-  color: #6366f1 !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
-  box-shadow: none !important;
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35) !important;
   border: 0 !important;
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
 :root.dark .dd-snaplink__rail-nav button.is-active,
 :root[data-theme-mode="dark"] .dd-snaplink__rail-nav button.is-active {
-  background: rgba(99, 102, 241, 0.18) !important;
-  color: #6366f1 !important;
-  box-shadow: none !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4) !important;
   border: 0 !important;
 }
 
@@ -729,7 +741,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: var(--snap-bg);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -1745,7 +1757,7 @@
     flex: 1 !important;
     min-height: 0 !important;
     overflow-y: auto !important;
-    background: var(--snap-bg) !important;
+    background: transparent !important;
   }
 
   .dd-snaplink__messages-shell .dd-snaplink__conversation-side {
@@ -2405,7 +2417,7 @@
 /* -------------------------------------------------------------------------- */
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__workbench {
-  grid-template-columns: 64px 1fr !important;
+  grid-template-columns: 72px 1fr !important;
   width: 100% !important;
   height: 100vh !important;
   min-height: 0;
@@ -2430,7 +2442,7 @@
   min-width: 0 !important;
   min-height: 0 !important;
   overflow: hidden;
-  background: var(--snap-bg);
+  background: transparent;
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-content.is-workshop,
@@ -7091,7 +7103,7 @@ button.is-secondary:hover,
 
 /* 3. Messages Stream & Chat Bubbles */
 .dd-snaplink__room-workbench .dd-snaplink__messages {
-  background: var(--snap-bg) !important;
+  background: transparent !important;
   padding: 20px !important;
   gap: 14px !important;
 }
