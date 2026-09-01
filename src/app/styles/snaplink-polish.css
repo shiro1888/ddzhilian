@@ -3335,7 +3335,7 @@
   display: flex !important;
   flex-direction: column !important;
   gap: 16px !important;
-  padding: 20px 22px !important;
+  padding: 20px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
   -webkit-backdrop-filter: var(--snap-glass-blur) !important;
@@ -3796,7 +3796,7 @@
   align-items: center !important;
   justify-content: space-between !important;
   gap: 16px !important;
-  padding: 18px 22px !important;
+  padding: 20px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
   -webkit-backdrop-filter: var(--snap-glass-blur) !important;
@@ -3878,7 +3878,7 @@
   flex-direction: column !important;
   justify-content: space-between !important;
   gap: 16px !important;
-  padding: 22px 24px !important;
+  padding: 20px 24px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
   -webkit-backdrop-filter: var(--snap-glass-blur) !important;
@@ -4179,7 +4179,7 @@
   display: grid !important;
   grid-template-columns: 1fr 1.3fr !important;
   gap: 20px !important;
-  padding: 20px 22px !important;
+  padding: 20px !important;
   border-bottom: 1px solid var(--snap-border) !important;
   overflow: visible !important;
 }
