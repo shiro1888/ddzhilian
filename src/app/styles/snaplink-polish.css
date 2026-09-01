@@ -2299,7 +2299,18 @@
 }
 
 .dd-snaplink__row.is-self .dd-snaplink__avatar {
-  background: #ef4444 !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+}
+
+.dd-snaplink__row.is-bot .dd-snaplink__avatar {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+:root.dark .dd-snaplink__row.is-bot .dd-snaplink__avatar,
+:root[data-theme-mode="dark"] .dd-snaplink__row.is-bot .dd-snaplink__avatar {
+  background: rgba(255, 255, 255, 0.14) !important;
   color: #ffffff !important;
 }
 
