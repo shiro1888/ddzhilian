@@ -2575,6 +2575,21 @@
   border-color: var(--snap-green) !important;
 }
 
+.dd-snaplink__queue,
+.dd-snaplink__queue-collapsed-rail {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-border) !important;
+}
+
+.dd-snaplink__queue-card.is-failed {
+  background: rgba(239, 68, 68, 0.05) !important;
+}
+
+:root.dark .dd-snaplink__queue-card.is-failed,
+:root[data-theme-mode="dark"] .dd-snaplink__queue-card.is-failed {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
