@@ -7047,14 +7047,22 @@ button.is-secondary:hover,
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 48px 20px !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(15, 23, 42, 0.05) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 20px 50px -24px rgba(15, 23, 42, 0.12) !important;
+  padding: 44px 36px !important;
   margin: auto !important;
   gap: 10px !important;
-  max-width: 380px !important;
+  max-width: 420px !important;
   text-align: center !important;
+}
+
+:root.dark .dd-snaplink__room-empty-card,
+:root[data-theme-mode="dark"] .dd-snaplink__room-empty-card {
+  background: rgba(20, 20, 30, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.5) !important;
 }
 
 .dd-snaplink__room-empty-icon.is-avatar {
