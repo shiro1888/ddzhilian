@@ -174,7 +174,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__device-name:hover {
@@ -197,7 +197,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__top-actions button:hover {
@@ -333,7 +333,7 @@
   font-size: 10px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button:hover,
@@ -406,7 +406,7 @@
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
-  transition: all 160ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar:hover {
@@ -509,7 +509,7 @@
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.035);
   color: var(--snap-muted);
-  transition: all 160ms ease;
+  transition: all 140ms ease;
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search {
@@ -846,7 +846,7 @@
   background: var(--snap-surface);
   color: var(--snap-ink-soft);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-more-trigger:hover,
@@ -1000,7 +1000,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-more-tools button:hover {
@@ -1139,7 +1139,7 @@
   border-radius: 20px;
   background: var(--snap-surface);
   box-shadow: var(--snap-shadow-sm);
-  transition: all 180ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__room-empty-card:hover {
@@ -1255,7 +1255,7 @@
   background: var(--snap-surface);
   color: var(--snap-ink-soft);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__attach:hover,
@@ -1278,7 +1278,7 @@
   color: var(--snap-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__emoji-trigger:hover,
@@ -1334,7 +1334,7 @@
   background: var(--snap-green-gradient);
   color: #ffffff;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__send:hover:not(:disabled) {
@@ -1477,7 +1477,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-cookie-notice__actions button.is-secondary {
@@ -1651,7 +1651,7 @@
   color: #6366f1 !important;
   border: 1px solid var(--snap-border) !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__settings-avatar:hover {
@@ -1691,7 +1691,7 @@
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
   box-shadow: var(--snap-shadow-sm) !important;
 }
 
@@ -1839,7 +1839,7 @@
   background: transparent !important;
   color: var(--snap-ink) !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
   text-align: center !important;
   user-select: none !important;
 }
@@ -1861,7 +1861,7 @@
   background: var(--snap-green-soft) !important;
   color: var(--snap-green-deep) !important;
   flex-shrink: 0 !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__plus-item:hover svg {
@@ -2034,7 +2034,7 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
   white-space: nowrap;
 }
 
@@ -2126,7 +2126,7 @@
   line-height: 1 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__emoji-backspace:hover {
@@ -2585,7 +2585,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__transfer-tabs button:hover {
@@ -2740,7 +2740,7 @@
   font-size: 13px !important;
   color: var(--snap-ink) !important;
   outline: none !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__search input:focus {
@@ -2760,7 +2760,7 @@
   color: var(--snap-ink-muted) !important;
   font-size: 12px !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__search button:hover {
@@ -2836,7 +2836,7 @@
   font-size: 13px !important;
   color: var(--snap-ink) !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__model-pill:hover {
@@ -2871,7 +2871,7 @@
   font-size: 12px !important;
   color: var(--snap-ink-soft) !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__search-pill:hover {
@@ -3052,7 +3052,7 @@
   font-size: 12px !important;
   font-weight: 500 !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__message pre header button:hover,
@@ -3092,7 +3092,7 @@
   font-size: 12px !important;
   color: var(--snap-ink-muted) !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ai-chat__message-actions button:hover {
@@ -3342,7 +3342,7 @@
   backdrop-filter: var(--snap-glass-blur) !important;
   border: 1px solid rgba(0, 0, 0, 0.06) !important;
   box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 :root.dark .dd-snaplink__settings-card,
@@ -3492,7 +3492,7 @@
   background: var(--snap-bg) !important;
   color: var(--snap-ink) !important;
   font-size: 13.5px !important;
-  transition: all 160ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__settings-field input:focus {
@@ -3543,7 +3543,7 @@
   font-size: 13.5px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
   box-shadow: 0 3px 12px rgba(99, 102, 241, 0.25) !important;
 }
 
@@ -3577,7 +3577,7 @@
   background: var(--snap-bg) !important;
   color: var(--snap-ink-soft) !important;
   cursor: pointer !important;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
   text-align: center !important;
 }
 
@@ -3603,7 +3603,7 @@
   border-radius: 10px !important;
   background: rgba(0, 0, 0, 0.04) !important;
   color: inherit !important;
-  transition: all 160ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__settings-mode-option.is-active .dd-snaplink__settings-mode-option-icon {
@@ -3689,7 +3689,7 @@
   background: var(--snap-bg) !important;
   cursor: pointer !important;
   text-align: left !important;
-  transition: all 160ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__settings-switch:hover {
@@ -3766,7 +3766,7 @@
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  transition: all 160ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__settings-admin-link button:hover {
@@ -3887,7 +3887,7 @@
   color: var(--snap-ink) !important;
   cursor: pointer !important;
   text-align: left !important;
-  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
   user-select: none !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03) !important;
 }
@@ -4166,7 +4166,7 @@
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ocr-panel__close:hover {
@@ -4401,7 +4401,7 @@
   font-size: 12px !important;
   font-weight: 500 !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-ocr-panel__actions button:hover {
@@ -4978,7 +4978,7 @@
   color: var(--snap-ink-soft) !important;
   font-size: 12px !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-web-command__mini-btn:hover {
@@ -5032,7 +5032,7 @@
   color: #f8fafc !important;
   font-size: 12px !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-web-command__terminal-actions button:hover {
@@ -5622,7 +5622,7 @@ button.is-secondary:hover,
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__trust-dialog-actions button:not(.is-primary),
@@ -5833,7 +5833,7 @@ button.is-secondary:hover,
   border: 1px solid var(--snap-border) !important;
   border-radius: 12px !important;
   background: var(--snap-surface) !important;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
 }
 
@@ -5881,7 +5881,7 @@ button.is-secondary:hover,
   color: var(--snap-ink-muted) !important;
   font-size: 13px !important;
   cursor: pointer !important;
-  transition: all 120ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__room-search-clear:hover {
@@ -6772,7 +6772,7 @@ button.is-secondary:hover,
   color: var(--snap-ink);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 150ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-snaplink__room-back-btn:hover {
@@ -6940,7 +6940,7 @@ button.is-secondary:hover,
   background: rgba(0, 0, 0, 0.03) !important;
   color: var(--snap-ink) !important;
   cursor: pointer !important;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 :root.dark .dd-snaplink__room-back-btn {
@@ -7006,7 +7006,7 @@ button.is-secondary:hover,
   background: rgba(0, 0, 0, 0.03) !important;
   color: var(--snap-ink-soft) !important;
   cursor: pointer !important;
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 :root.dark .dd-snaplink__room-more-trigger {
@@ -7121,7 +7121,7 @@ button.is-secondary:hover,
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
-  transition: all 180ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__compose:focus-within {
@@ -7142,7 +7142,7 @@ button.is-secondary:hover,
   background: rgba(0, 0, 0, 0.04) !important;
   color: var(--snap-ink-soft) !important;
   cursor: pointer !important;
-  transition: all 160ms ease !important;
+  transition: all 140ms ease !important;
 }
 
 :root.dark .dd-snaplink__room-workbench .dd-snaplink__attach {
@@ -7219,7 +7219,7 @@ button.is-secondary:hover,
   box-shadow: var(--snap-green-glow) !important;
   color: #ffffff !important;
   cursor: pointer !important;
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__send:hover {
@@ -7248,7 +7248,7 @@ button.is-secondary:hover,
   color: var(--snap-ink, inherit);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 150ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-web-command__back-btn:hover,
@@ -7272,7 +7272,7 @@ button.is-secondary:hover,
   cursor: pointer;
   margin-bottom: 12px;
   align-self: flex-start;
-  transition: all 150ms ease;
+  transition: all 140ms ease;
 }
 
 .dd-image-auth__back-btn:hover {
