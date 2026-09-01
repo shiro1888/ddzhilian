@@ -5347,6 +5347,80 @@ button.is-secondary:disabled,
   transform: none !important;
 }
 
+/* 17.1b Legacy action-button groups → universal button system */
+.dd-snaplink__device-detail-actions button:not(.is-primary),
+.dd-snaplink__drop-actions button,
+.dd-snaplink__drop-actions label:not(:first-child),
+.dd-snaplink__transfer-empty-actions button:not(:first-child),
+.dd-snaplink__empty-actions button:not(:first-child) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 16px !important;
+  border: 1px solid var(--snap-border) !important;
+  border-radius: 10px !important;
+  background: var(--snap-surface) !important;
+  color: var(--snap-ink) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__device-detail-actions button:not(.is-primary):hover:not(:disabled),
+.dd-snaplink__drop-actions button:hover:not(:disabled),
+.dd-snaplink__drop-actions label:not(:first-child):hover,
+.dd-snaplink__transfer-empty-actions button:not(:first-child):hover:not(:disabled),
+.dd-snaplink__empty-actions button:not(:first-child):hover:not(:disabled) {
+  background: var(--snap-panel) !important;
+  border-color: var(--snap-green) !important;
+  color: var(--snap-green-deep) !important;
+  transform: translateY(-1px) !important;
+}
+
+.dd-snaplink__transfer-empty-actions button:first-child,
+.dd-snaplink__empty-actions button:first-child,
+.dd-snaplink__drop-actions label:first-child {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25) !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__transfer-empty-actions button:first-child:hover:not(:disabled),
+.dd-snaplink__empty-actions button:first-child:hover:not(:disabled),
+.dd-snaplink__drop-actions label:first-child:hover {
+  background: #4f46e5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35) !important;
+}
+
+.dd-snaplink__device-detail-actions button:disabled,
+.dd-snaplink__drop-actions button:disabled,
+.dd-snaplink__transfer-empty-actions button:disabled,
+.dd-snaplink__empty-actions button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 /* 17.2 Starter Cards in Room Chat (/text?room=...) */
 .dd-snaplink__room-start-card {
   display: flex !important;
