@@ -2512,6 +2512,27 @@
   background: var(--snap-surface) !important;
 }
 
+/* Drop zone → token surfaces (dark-aware) */
+.dd-snaplink__drop-zone {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-border) !important;
+}
+
+.dd-snaplink__drop-zone.is-active {
+  background: rgba(99, 102, 241, 0.06) !important;
+  border-color: var(--snap-green) !important;
+}
+
+.dd-snaplink__drop-icon {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+:root.dark .dd-snaplink__drop-zone.is-active,
+:root[data-theme-mode="dark"] .dd-snaplink__drop-zone.is-active {
+  background: rgba(99, 102, 241, 0.12) !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
