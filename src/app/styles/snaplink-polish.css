@@ -557,9 +557,9 @@
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-height: 56px;
   padding: 7px 10px;
   margin: 1px 0;
@@ -670,7 +670,7 @@
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-title strong {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--snap-ink);
   overflow: hidden;
