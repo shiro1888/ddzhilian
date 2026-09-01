@@ -2493,6 +2493,25 @@
   color: #a5c0ee !important;
 }
 
+/* History page: replace hardcoded white/near-white surfaces with tokens */
+.dd-snaplink__history-search input:focus {
+  background: var(--snap-surface-solid) !important;
+}
+
+.dd-snaplink__history-search button {
+  background: var(--snap-surface) !important;
+}
+
+:root.dark .dd-snaplink__history-search button,
+:root[data-theme-mode="dark"] .dd-snaplink__history-search button {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: var(--snap-ink-soft) !important;
+}
+
+.dd-snaplink__recent-send {
+  background: var(--snap-surface) !important;
+}
+
 @keyframes slideUpFade {
   from {
     opacity: 0;
