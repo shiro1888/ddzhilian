@@ -2946,9 +2946,9 @@
 }
 
 .dd-ai-chat__message.is-assistant .dd-ai-chat__avatar {
-  background: linear-gradient(135deg, #3b82f6, #6366f1) !important;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25) !important;
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25) !important;
 }
 
 .dd-ai-chat__message-body {
@@ -3376,8 +3376,8 @@
 }
 
 .dd-snaplink__settings-head-icon.is-device {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.08)) !important;
-  color: #3b82f6 !important;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.08)) !important;
+  color: #6366f1 !important;
 }
 
 .dd-snaplink__settings-head-icon.is-appearance {
@@ -4756,8 +4756,8 @@
 }
 
 .dd-web-command__lang-badge.is-c {
-  background: rgba(59, 130, 246, 0.12) !important;
-  color: #3b82f6 !important;
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #6366f1 !important;
 }
 
 .dd-web-command__lang-badge.is-plantuml {

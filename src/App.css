@@ -14771,7 +14771,7 @@
 }
 
 .dd-snaplink__row.is-bot .dd-snaplink__bubble {
-  border: 1px solid color-mix(in srgb, var(--snap-theme-ai) 70%, #3b82f6);
+  border: 1px solid color-mix(in srgb, var(--snap-theme-ai) 70%, #6366f1);
   background: var(--snap-theme-ai);
   color: var(--snap-theme-ai-text);
 }
@@ -16063,8 +16063,8 @@
 }
 
 .dd-ocr-panel__status.is-running {
-  border-color: color-mix(in srgb, #2563eb 34%, var(--snap-border));
-  color: #2563eb;
+  border-color: color-mix(in srgb, #6366f1 34%, var(--snap-border));
+  color: #6366f1;
 }
 
 .dd-ocr-panel__status.is-complete {
@@ -16246,7 +16246,7 @@
   width: fit-content;
   align-items: center;
   gap: 7px;
-  color: #2563eb;
+  color: #6366f1;
   font-size: 12px;
 }
 
