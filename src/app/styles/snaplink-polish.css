@@ -2627,7 +2627,7 @@
 
 /* Tool Workbench Shell Clean Container */
 .dd-snaplink.is-workbench-shell .dd-snaplink__tool-workbench {
-  grid-template-columns: 64px 1fr !important;
+  grid-template-columns: 72px 1fr !important;
   width: 100% !important;
   height: 100vh !important;
   min-height: 0;
@@ -3183,7 +3183,7 @@
 .dd-snaplink.is-workbench-shell .dd-snaplink__tool-workbench,
 .dd-snaplink__tool-workbench {
   display: grid !important;
-  grid-template-columns: 64px 1fr !important;
+  grid-template-columns: 72px 1fr !important;
   width: 100% !important;
   height: 100vh !important;
   min-height: 0 !important;
