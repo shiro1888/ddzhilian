@@ -716,7 +716,7 @@ function OpenAiCompatiblePanel({
         <div className={cn(
           'rounded-xl border px-4 py-3 text-sm',
           detectionState.tone === 'success'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+            ? 'border-indigo-200 bg-indigo-50 text-indigo-900'
             : 'border-destructive/20 bg-destructive/5 text-destructive',
         )}>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -950,7 +950,7 @@ function AnthropicPanel({
       </div>
 
       {anthropicMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           {anthropicMessage}
         </div>
       ) : null}

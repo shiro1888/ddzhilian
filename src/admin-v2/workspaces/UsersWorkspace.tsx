@@ -142,7 +142,7 @@ function AdminUserRow({
             {isSaving ? '保存中...' : '保存'}
           </Button>
           {message ? (
-            <span className={`text-xs ${message === '已保存' ? 'text-emerald-600' : 'text-destructive'}`}>
+            <span className={`text-xs ${message === '已保存' ? 'text-indigo-600' : 'text-destructive'}`}>
               {message}
             </span>
           ) : null}

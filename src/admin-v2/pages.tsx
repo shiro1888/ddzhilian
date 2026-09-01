@@ -386,12 +386,12 @@ export function AdminV2LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <Badge>DD直连</Badge>
             <Badge variant="outline">管理台</Badge>
           </div>
-          <CardTitle className="mt-3 text-2xl">DD直连管理台</CardTitle>
+          <CardTitle className="mt-2 text-2xl">DD直连管理台</CardTitle>
           <CardDescription>
             管理模型、供应商、在线设备和用户额度。
           </CardDescription>
