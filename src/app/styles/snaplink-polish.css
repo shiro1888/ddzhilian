@@ -2153,6 +2153,14 @@
   border-color: var(--snap-green) !important;
 }
 
+.dd-snaplink__emoji-actions button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+  background: var(--snap-surface) !important;
+  color: var(--snap-muted) !important;
+  border-color: var(--snap-border) !important;
+}
+
 .dd-snaplink__emoji-clear:hover {
   background: var(--snap-surface-hover) !important;
   color: var(--snap-ink) !important;
@@ -5259,7 +5267,7 @@ button.is-primary,
   padding: 0 16px !important;
   border: 0 !important;
   border-radius: 10px !important;
-  background: #6366f1 !important;
+  background: var(--snap-green-gradient) !important;
   color: #ffffff !important;
   font-size: 13px !important;
   font-weight: 600 !important;
@@ -5269,12 +5277,12 @@ button.is-primary,
   user-select: none !important;
 }
 
-button.is-primary:hover,
-.dd-snaplink button.is-primary:hover,
-.dd-snaplink__room-start-card button:first-child:hover,
-.dd-snaplink__settings-card button[type="submit"]:hover,
-.dd-snaplink__receive-dialog-actions button.is-primary:hover,
-.dd-snaplink__trust-dialog-actions button.is-primary:hover {
+button.is-primary:hover:not(:disabled),
+.dd-snaplink button.is-primary:hover:not(:disabled),
+.dd-snaplink__room-start-card button:first-child:hover:not(:disabled),
+.dd-snaplink__settings-card button[type="submit"]:hover:not(:disabled),
+.dd-snaplink__receive-dialog-actions button.is-primary:hover:not(:disabled),
+.dd-snaplink__trust-dialog-actions button.is-primary:hover:not(:disabled) {
   background: #4f46e5 !important;
   transform: translateY(-1px) !important;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35) !important;
@@ -5285,6 +5293,20 @@ button.is-primary:active,
 .dd-snaplink__room-start-card button:first-child:active,
 .dd-snaplink__settings-card button[type="submit"]:active {
   transform: scale(0.98) !important;
+}
+
+button.is-primary:disabled,
+.dd-snaplink button.is-primary:disabled,
+.dd-snaplink__room-start-card button:first-child:disabled,
+.dd-snaplink__settings-card button[type="submit"]:disabled,
+.dd-snaplink__receive-dialog-actions button.is-primary:disabled,
+.dd-snaplink__trust-dialog-actions button.is-primary:disabled {
+  background: var(--snap-border-soft) !important;
+  color: var(--snap-muted) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 1 !important;
 }
 
 button.is-secondary,

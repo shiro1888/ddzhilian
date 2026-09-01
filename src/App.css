@@ -23595,8 +23595,8 @@
 }
 
 .dd-snaplink__emoji-actions button.is-primary:hover:not(:disabled) {
-  border-color: #10b95f;
-  background: #10b95f;
+  border-color: #4f46e5;
+  background: #4f46e5;
   color: #fff;
 }
 
