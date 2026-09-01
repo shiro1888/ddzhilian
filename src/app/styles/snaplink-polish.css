@@ -8,6 +8,7 @@
 
 .dd-snaplink,
 .dd-snaplink.is-workbench-shell {
+  position: relative;
   --snap-bg: #f4f4f8;
   --snap-surface: rgba(255, 255, 255, 0.78);
   --snap-surface-solid: #ffffff;
@@ -52,6 +53,23 @@
     radial-gradient(ellipse 42% 34% at 82% -6%, rgba(129, 140, 248, 0.1), transparent 60%),
     linear-gradient(180deg, #eceefb 0%, var(--snap-bg) 26%, var(--snap-bg) 100%),
     var(--snap-bg);
+}
+
+/* Signature: 2px indigo→violet hairline across the top of the shell */
+.dd-snaplink::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 100;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+  pointer-events: none;
+}
+
+:root.dark .dd-snaplink::before {
+  background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 50%, #4f46e5 100%);
 }
 
 :root.dark .dd-snaplink,
