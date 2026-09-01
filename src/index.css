@@ -195,3 +195,21 @@ textarea {
   background: var(--muted);
   background-clip: padding-box;
 }
+
+/* Consistent disabled affordance across all interactive controls */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+/* Branded text selection highlight */
+::selection {
+  background: rgba(99, 102, 241, 0.22);
+  color: inherit;
+}
+
+:root.dark ::selection {
+  background: rgba(129, 140, 248, 0.34);
+}
