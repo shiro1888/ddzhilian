@@ -12,12 +12,14 @@
   --snap-bg: #f4f4f8;
   --snap-surface: rgba(255, 255, 255, 0.78);
   --snap-surface-solid: #ffffff;
+  --snap-surface-hover: rgba(15, 23, 42, 0.06);
   --snap-panel: rgba(251, 251, 253, 0.7);
   --snap-sidebar: rgba(249, 249, 252, 0.68);
   --snap-glass-blur: blur(22px) saturate(160%);
   --snap-ink: #0f172a;
   --snap-ink-soft: #475569;
   --snap-muted: #64748b;
+  --snap-ink-muted: var(--snap-muted);
   --snap-placeholder: #64748b;
   --snap-border: rgba(226, 232, 240, 0.8);
   --snap-border-soft: rgba(241, 245, 249, 0.9);
@@ -77,6 +79,7 @@
   --snap-bg: #0a0a0f;
   --snap-surface: rgba(20, 20, 30, 0.72);
   --snap-surface-solid: #14141e;
+  --snap-surface-hover: rgba(255, 255, 255, 0.07);
   --snap-panel: rgba(16, 16, 24, 0.68);
   --snap-sidebar: rgba(14, 14, 20, 0.7);
   --snap-glass-blur: blur(22px) saturate(140%);
@@ -5332,16 +5335,30 @@ button.is-secondary,
   user-select: none !important;
 }
 
-button.is-secondary:hover,
-.dd-snaplink button.is-secondary:hover,
-.dd-snaplink__room-start-card button:not(:first-child):hover,
-.dd-snaplink__receive-dialog-actions button.is-secondary:hover,
-.dd-snaplink__trust-dialog-actions button.is-secondary:hover,
-.dd-snaplink__trust-dialog-actions button:not(.is-primary):hover {
+button.is-secondary:hover:not(:disabled),
+.dd-snaplink button.is-secondary:hover:not(:disabled),
+.dd-snaplink__room-start-card button:not(:first-child):hover:not(:disabled),
+.dd-snaplink__receive-dialog-actions button.is-secondary:hover:not(:disabled),
+.dd-snaplink__trust-dialog-actions button.is-secondary:hover:not(:disabled),
+.dd-snaplink__trust-dialog-actions button:not(.is-primary):hover:not(:disabled) {
   background: var(--snap-panel) !important;
   border-color: var(--snap-green) !important;
   color: var(--snap-green-deep) !important;
   transform: translateY(-1px) !important;
+}
+
+button.is-secondary:disabled,
+.dd-snaplink button.is-secondary:disabled,
+.dd-snaplink__room-start-card button:not(:first-child):disabled,
+.dd-snaplink__receive-dialog-actions button.is-secondary:disabled,
+.dd-snaplink__trust-dialog-actions button.is-secondary:disabled,
+.dd-snaplink__trust-dialog-actions button:not(.is-primary):disabled {
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+  background: var(--snap-surface) !important;
+  color: var(--snap-muted) !important;
+  border-color: var(--snap-border) !important;
+  transform: none !important;
 }
 
 /* 17.2 Starter Cards in Room Chat (/text?room=...) */
