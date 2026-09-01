@@ -4450,6 +4450,20 @@
   background: var(--snap-green-deep) !important;
 }
 
+.dd-ocr-panel__actions button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+  background: var(--snap-surface) !important;
+  color: var(--snap-muted) !important;
+  border-color: var(--snap-border) !important;
+}
+
+.dd-ocr-panel__actions button:disabled:hover {
+  border-color: var(--snap-border) !important;
+  color: var(--snap-muted) !important;
+  background: var(--snap-surface) !important;
+}
+
 .dd-ocr-panel__history {
   flex-shrink: 0 !important;
   padding: 10px 22px !important;
