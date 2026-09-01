@@ -7277,23 +7277,29 @@ button.is-secondary:disabled,
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
   padding: 0 !important;
   border: none !important;
-  background: transparent !important;
-  color: var(--snap-muted) !important;
+  border-radius: 50% !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--snap-ink-soft) !important;
   cursor: pointer !important;
   flex-shrink: 0 !important;
   transition: all 140ms ease !important;
 }
 
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__emoji-trigger {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
 .dd-snaplink__room-workbench .dd-snaplink__emoji-trigger:hover,
 .dd-snaplink__room-workbench .dd-snaplink__emoji-trigger.is-open {
-  color: var(--snap-green) !important;
-  transform: scale(1.1) !important;
+  color: var(--snap-green-deep) !important;
+  background: var(--snap-green-soft) !important;
+  transform: scale(1.08) !important;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__send {
