@@ -7252,9 +7252,18 @@ button.is-secondary:hover,
   transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.dd-snaplink__room-workbench .dd-snaplink__send:hover {
+.dd-snaplink__room-workbench .dd-snaplink__send:hover:not(:disabled) {
   transform: scale(1.08) translateY(-1px) !important;
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__send:disabled {
+  background: var(--snap-border-soft) !important;
+  color: var(--snap-muted) !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  opacity: 1 !important;
 }
 
 .dd-snaplink__room-workbench .dd-snaplink__send:active {
