@@ -287,6 +287,18 @@ button.is-primary:hover:not(:disabled),
   backdrop-filter: none !important;
 }
 
+/* 消息气泡：尾巴朝上（指向发送者名字），与 AI 对话一致 */
+.dd-snaplink__row.is-self .dd-snaplink__bubble {
+  border-bottom-right-radius: 14px !important;
+  border-top-right-radius: 4px !important;
+}
+
+.dd-snaplink__row.is-peer .dd-snaplink__bubble,
+.dd-snaplink__row.is-bot .dd-snaplink__bubble {
+  border-bottom-left-radius: 14px !important;
+  border-top-left-radius: 4px !important;
+}
+
 /* ------------------------------------------------------------------------- */
 /* 11. Portal 元素（不继承 --snap-* 作用域，用字面余烬值）                     */
 /* ------------------------------------------------------------------------- */
