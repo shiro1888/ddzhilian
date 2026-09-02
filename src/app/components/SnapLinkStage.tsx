@@ -4873,7 +4873,7 @@ export function SnapLinkStage({
   )
 
   const renderWorkbenchTransferBoard = () => {
-    const visibleTransferTab = workbenchTransferTab === 'history' ? 'active' : workbenchTransferTab
+    const visibleTransferTab = workbenchTransferTab
     const activeEntries = workbenchAllTransferEntries.filter((file) =>
       isSnapLinkTransferActive(resolveSnapLinkTransferStatus(file)),
     )
@@ -4887,6 +4887,7 @@ export function SnapLinkStage({
       { id: 'active', label: '进行中', count: activeEntries.length },
       { id: 'completed', label: '已完成', count: completedEntries.length },
       { id: 'failed', label: '失败', count: failedEntries.length },
+      { id: 'history', label: '历史记录', count: workbenchHistoryCount },
     ]
     const tabEntries = visibleTransferTab === 'completed'
       ? completedEntries
@@ -4915,13 +4916,11 @@ export function SnapLinkStage({
         activeCount={workbenchActiveTransferCount}
         completedCount={workbenchCompletedTransferCount}
         failedCount={workbenchFailedTransferCount}
+        historyCount={workbenchHistoryCount}
+        historyContent={renderWorkbenchHistoryPage(true)}
         incomingNotice={renderIncomingReceiveNotice('full')}
         renderTaskCard={renderWorkbenchTransferCard}
-        onTabChange={(tab) => {
-          if (tab !== 'history') {
-            setWorkbenchTransferTab(tab)
-          }
-        }}
+        onTabChange={(tab) => setWorkbenchTransferTab(tab)}
         onShowNearby={handleShowWorkbenchNearby}
         onShowFiles={handleShowWorkbenchFiles}
       />
