@@ -5072,8 +5072,8 @@ export function SnapLinkStage({
     },
     {
       id: 'transfer-queue',
-      label: '查看传输记录',
-      description: `${workbenchActiveTransferCount.toString()} 个进行中，${workbenchCompletedTransferCount.toString()} 个已完成`,
+      label: '查看传输',
+      description: `${workbenchActiveTransferCount.toString()} 个进行中 · ${workbenchCompletedTransferCount.toString()} 个已完成 · 历史记录可查`,
       icon: <Upload size={16} strokeWidth={2} />,
       action: handleShowWorkbenchQueue,
     },
@@ -5272,7 +5272,7 @@ export function SnapLinkStage({
       : isImageTool
         ? [
             { label: '发送图片文件', action: handleShowWorkbenchFiles },
-            { label: '查看传输记录', action: handleShowWorkbenchQueue },
+            { label: '查看传输', action: handleShowWorkbenchQueue },
             { label: '附近设备', action: handleShowWorkbenchNearby },
           ]
         : [
@@ -5285,7 +5285,7 @@ export function SnapLinkStage({
               disabled: !hasCommandResultText,
               title: hasCommandResultText ? '把当前运行输出填入文本发送页' : '先运行命令生成输出结果',
             },
-            { label: '查看传输记录', action: handleShowWorkbenchQueue },
+            { label: '查看传输', action: handleShowWorkbenchQueue },
             { label: '附近设备', action: handleShowWorkbenchNearby },
           ]
     const toolContextRows = isAiTool
