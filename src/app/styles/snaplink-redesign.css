@@ -55,9 +55,9 @@
     var(--snap-bg);
 }
 
-/* 签名发丝线：余烬 → 琥珀 */
+/* 顶部不再加签名发丝线，保持干净 */
 .dd-snaplink::before {
-  background: linear-gradient(90deg, #e8503a 0%, #d97706 50%, #e8503a 100%);
+  display: none !important;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -95,8 +95,8 @@
     var(--snap-bg);
 }
 
-:root.dark .dd-snaplink::before {
-  background: linear-gradient(90deg, #ff6b4d 0%, #d97706 50%, #ff6b4d 100%);
+.dd-snaplink::before {
+  display: none !important;
 }
 
 /* ------------------------------------------------------------------------- */
