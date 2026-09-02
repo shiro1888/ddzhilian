@@ -326,7 +326,7 @@
   border: 0 !important;
   box-shadow: none !important;
   background: transparent;
-  color: #64748b;
+  color: var(--snap-muted);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -468,7 +468,7 @@
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head small {
   font-size: 12px;
-  color: #64748b;
+  color: var(--snap-muted);
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head button {
@@ -477,7 +477,7 @@
   border: 1px solid var(--snap-border);
   border-radius: 12px;
   background: transparent;
-  color: #64748b;
+  color: var(--snap-muted);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -679,7 +679,7 @@
   padding: 1px 5px;
   border-radius: 4px;
   background: rgba(148, 163, 184, 0.15);
-  color: #64748b;
+  color: var(--snap-muted);
   font-size: 10px;
   font-style: normal;
   font-weight: 500;
@@ -3933,7 +3933,7 @@
 
 .dd-snaplink__settings-mode-note {
   font-size: 12px !important;
-  color: #64748b !important;
+  color: var(--snap-muted) !important;
   margin: 0 !important;
   line-height: 1.4 !important;
 }
@@ -4641,7 +4641,7 @@
 
 :root.dark .dd-ocr-panel__result textarea::placeholder,
 :root[data-theme-mode="dark"] .dd-ocr-panel__result textarea::placeholder {
-  color: #64748b !important;
+  color: #7c8a9a !important;
 }
 
 :root.dark .dd-ocr-panel__meta span,
