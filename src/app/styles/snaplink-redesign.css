@@ -48,11 +48,7 @@
   --snap-shadow-lg: 0 16px 32px -8px rgba(15, 23, 42, 0.12);
   --snap-shadow-glass: 0 10px 30px -6px rgba(15, 23, 42, 0.08);
   letter-spacing: -0.01em;
-  background:
-    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(37, 99, 235, 0.06), transparent 62%),
-    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(37, 99, 235, 0.04), transparent 58%),
-    linear-gradient(180deg, #eef2f7 0%, var(--snap-bg) 30%, var(--snap-bg) 100%),
-    var(--snap-bg);
+  background: var(--snap-bg);
 }
 
 /* 顶部不再加签名发丝线，保持干净 */
@@ -65,17 +61,17 @@
 /* ------------------------------------------------------------------------- */
 :root.dark .dd-snaplink,
 :root[data-theme-mode="dark"] .dd-snaplink {
-  --snap-bg: #171411;
-  --snap-surface: #201c19;
-  --snap-surface-solid: #201c19;
+  --snap-bg: #0f1115;
+  --snap-surface: #16181d;
+  --snap-surface-solid: #16181d;
   --snap-surface-hover: rgba(255, 255, 255, 0.055);
-  --snap-panel: #1a1714;
-  --snap-sidebar: #131009;
+  --snap-panel: #12151a;
+  --snap-sidebar: #0b0d11;
   --snap-glass-blur: blur(14px) saturate(120%);
-  --snap-ink: #f4f1ec;
-  --snap-ink-soft: #b8b0a6;
-  --snap-muted: #8a827a;
-  --snap-placeholder: #6e675f;
+  --snap-ink: #e6e8eb;
+  --snap-ink-soft: #9aa3ad;
+  --snap-muted: #6b7680;
+  --snap-placeholder: #4b5560;
   --snap-border: rgba(255, 255, 255, 0.1);
   --snap-border-soft: rgba(255, 255, 255, 0.06);
   --snap-line: rgba(255, 255, 255, 0.1);
@@ -89,10 +85,7 @@
   --snap-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.35);
   --snap-shadow-lg: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
   --snap-shadow-glass: 0 10px 30px -6px rgba(0, 0, 0, 0.45);
-  background:
-    radial-gradient(ellipse 80% 50% at 12% -8%, rgba(37, 99, 235, 0.1), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(59, 130, 246, 0.06), transparent 55%),
-    var(--snap-bg);
+  background: var(--snap-bg);
 }
 
 .dd-snaplink::before {
