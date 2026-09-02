@@ -6529,7 +6529,7 @@ button.is-secondary:disabled,
 }
 
 .dd-snaplink__file-ext.is-image {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
 }
 
 .dd-snaplink__file-ext.is-archive {
