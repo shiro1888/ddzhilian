@@ -5661,48 +5661,6 @@ export function SnapLinkStage({
                       回到列表
                     </button>
                   </div>
-                  <div className="dd-snaplink__room-member-tools" aria-label="常用工具">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRoomMembersOpen(false)
-                        handleOpenAiChat()
-                      }}
-                    >
-                      <Bot size={16} strokeWidth={2} aria-hidden="true" />
-                      <span>DD助手</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRoomMembersOpen(false)
-                        handleOpenImage()
-                      }}
-                    >
-                      <ImageIcon size={16} strokeWidth={2} aria-hidden="true" />
-                      <span>图片工具</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRoomMembersOpen(false)
-                        handleOcrTriggerClick()
-                      }}
-                    >
-                      <ScanText size={16} strokeWidth={2} aria-hidden="true" />
-                      <span>提取文字</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRoomMembersOpen(false)
-                        handleOpenCommand()
-                      }}
-                    >
-                      <Command size={16} strokeWidth={2} aria-hidden="true" />
-                      <span>命令行</span>
-                    </button>
-                  </div>
                   <div className="dd-snaplink__room-member-list">
                     {(selectedRoom?.members ?? []).map((member) => (
                       <span key={member.deviceId} className={member.online ? 'is-online' : ''}>
