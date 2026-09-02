@@ -280,6 +280,13 @@ button.is-primary:hover:not(:disabled),
   color: var(--snap-green) !important;
 }
 
+/* 输入条：胶囊改为圆角矩形（16px），去掉无意义的玻璃模糊 */
+.dd-snaplink__room-workbench .dd-snaplink__compose {
+  border-radius: 16px !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 /* ------------------------------------------------------------------------- */
 /* 11. Portal 元素（不继承 --snap-* 作用域，用字面余烬值）                     */
 /* ------------------------------------------------------------------------- */
