@@ -605,6 +605,7 @@ export function SnapLinkStage({
   const [conversationSearchQuery, setConversationSearchQuery] = useState('')
   const [roomJoinDraft, setRoomJoinDraft] = useState('')
   const [roomJoinError, setRoomJoinError] = useState<string | null>(null)
+  const [isRoomJoinOpen, setIsRoomJoinOpen] = useState(false)
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
@@ -4281,9 +4282,6 @@ export function SnapLinkStage({
     return (
       <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
         <div className="dd-snaplink__conversation-side-head">
-          {/* The list below already shows what it contains, so the subtitle
-              that named the categories has been dropped to give the rows the
-              vertical space instead. */}
           <span>
             <strong>消息</strong>
             <small>
@@ -4293,16 +4291,60 @@ export function SnapLinkStage({
                 : '暂无对端在线'}
             </small>
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              setConversationSearchQuery('')
-              handleShowWorkbenchRooms()
+          <div className="dd-snaplink__conversation-side-head-actions">
+            <button
+              type="button"
+              className={isRoomJoinOpen ? 'is-active' : ''}
+              aria-expanded={isRoomJoinOpen}
+              onClick={() => {
+                setIsRoomJoinOpen((current) => !current)
+                setRoomJoinError(null)
+              }}
+            >
+              加入房间
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConversationSearchQuery('')
+                handleShowWorkbenchRooms()
+              }}
+            >
+              全部
+            </button>
+          </div>
+        </div>
+        {isRoomJoinOpen ? (
+          <form
+            className="dd-snaplink__room-join-card"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!roomJoinDraft.trim()) {
+                setRoomJoinError('请输入房间短码')
+                return
+              }
+              setIsRoomJoinOpen(false)
+              handleJoinRoomFromWorkbench()
             }}
           >
-            全部
-          </button>
-        </div>
+            <label>
+              <span>加入房间</span>
+              <input
+                value={roomJoinDraft}
+                placeholder="输入房间短码"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-invalid={Boolean(roomJoinError)}
+                onChange={(event) => {
+                  setRoomJoinDraft(normalizeRoomJoinCode(event.target.value))
+                  setRoomJoinError(null)
+                }}
+              />
+            </label>
+            <button type="submit" disabled={!roomJoinDraft.trim()}>加入</button>
+            {roomJoinError ? <p>{roomJoinError}</p> : null}
+          </form>
+        ) : null}
         <label className="dd-snaplink__conversation-side-search">
           <span className="sr-only">搜索会话</span>
           <Search size={15} strokeWidth={1.9} aria-hidden="true" />

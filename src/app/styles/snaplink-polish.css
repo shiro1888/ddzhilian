@@ -2638,6 +2638,39 @@
   background: var(--snap-surface) !important;
 }
 
+/* Conversation side: header action buttons + inline room-join card */
+.dd-snaplink__conversation-side-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.dd-snaplink__conversation-side > .dd-snaplink__room-join-card {
+  margin: 10px 14px 0;
+}
+
+.dd-snaplink__room-join-card input {
+  background: var(--snap-surface-solid) !important;
+}
+
+.dd-snaplink__room-join-card input::placeholder {
+  color: var(--snap-muted) !important;
+}
+
+.dd-snaplink__room-join-card button {
+  background: var(--snap-surface-solid) !important;
+}
+
+.dd-snaplink__room-join-card button:disabled {
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+
+:root.dark .dd-snaplink__room-join-card button:disabled,
+:root[data-theme-mode="dark"] .dd-snaplink__room-join-card button:disabled {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
 .dd-snaplink__room-more-tools button {
   background: var(--snap-surface) !important;
   border-color: var(--snap-border) !important;
