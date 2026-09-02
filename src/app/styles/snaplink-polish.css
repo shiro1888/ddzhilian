@@ -920,6 +920,12 @@
   object-fit: cover;
 }
 
+.dd-snaplink__room-more-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .dd-snaplink__room-more-primary button {
   display: flex;
   align-items: center;
@@ -939,6 +945,18 @@
 
 .dd-snaplink__room-more-primary button:hover {
   background: var(--snap-green-deep);
+}
+
+.dd-snaplink__room-more-primary button.dd-snaplink__room-more-shared {
+  border: 1px solid var(--snap-border) !important;
+  background: var(--snap-surface) !important;
+  color: var(--snap-ink) !important;
+}
+
+.dd-snaplink__room-more-primary button.dd-snaplink__room-more-shared:hover {
+  background: var(--snap-panel) !important;
+  border-color: var(--snap-green) !important;
+  color: var(--snap-green-deep) !important;
 }
 
 .dd-snaplink__room-more-security {

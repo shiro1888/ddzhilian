@@ -5608,6 +5608,7 @@ export function SnapLinkStage({
                     connectionDetails={selectedRoomMoreDetails}
                     onCopyRoomId={handleCopyRoomId}
                     onBack={handleRoomHeaderBack}
+                    onOpenSharedContent={() => setActiveSharedTab('files')}
                   />
 
               {workbenchActiveTransferCount > 0 ? (

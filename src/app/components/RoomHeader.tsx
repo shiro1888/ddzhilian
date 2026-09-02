@@ -27,6 +27,7 @@ type RoomHeaderProps = {
   connectionDetails?: RoomHeaderConnectionDetail[]
   onCopyRoomId: () => void
   onBack?: () => void
+  onOpenSharedContent?: () => void
 }
 
 export function RoomHeader({
@@ -42,6 +43,7 @@ export function RoomHeader({
   connectionDetails = [],
   onCopyRoomId,
   onBack,
+  onOpenSharedContent,
 }: RoomHeaderProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -168,6 +170,18 @@ export function RoomHeader({
                     <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
                     {isCopied ? copiedLabel : copyLabel}
                   </button>
+                  {onOpenSharedContent ? (
+                    <button
+                      type="button"
+                      className="dd-snaplink__room-more-shared"
+                      onClick={() => {
+                        setIsMoreOpen(false)
+                        onOpenSharedContent()
+                      }}
+                    >
+                      共享内容
+                    </button>
+                  ) : null}
                 </div>
                 {detailRows.length > 0 ? (
                   <div className="dd-snaplink__room-more-security" aria-label="连接与安全">
