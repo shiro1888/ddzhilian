@@ -1,5 +1,5 @@
 import {
-  History,
+  ArrowLeftRight,
   MessageCircle,
   MonitorSmartphone,
   Sparkles,
@@ -85,7 +85,7 @@ export function SidebarNav({
           onClick={onShowQueue}
           title={transferLabel}
         >
-          <History size={19} strokeWidth={1.8} aria-hidden="true" />
+          <ArrowLeftRight size={19} strokeWidth={1.8} aria-hidden="true" />
           <span className="dd-snaplink__rail-label">传输</span>
           {activeTransferCount > 0 ? (
             <em className="dd-snaplink__rail-badge" aria-hidden="true">
