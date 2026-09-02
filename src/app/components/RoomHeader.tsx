@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 import {
-  Bot,
   ChevronLeft,
   Copy,
-  Image as ImageIcon,
   MoreHorizontal,
   QrCode,
-  ScanText,
-  SquareTerminal,
 } from 'lucide-react'
 
 type RoomHeaderConnectionDetail = {
@@ -16,13 +12,6 @@ type RoomHeaderConnectionDetail = {
   label: string
   value: ReactNode
   tone?: 'default' | 'safe' | 'warning'
-}
-
-type RoomToolItem = {
-  id: string
-  label: string
-  icon: ReactNode
-  action: () => void
 }
 
 type RoomHeaderProps = {
@@ -38,10 +27,6 @@ type RoomHeaderProps = {
   connectionDetails?: RoomHeaderConnectionDetail[]
   onCopyRoomId: () => void
   onBack?: () => void
-  onOpenAssistant?: () => void
-  onOpenImageTool?: () => void
-  onOpenOcr?: () => void
-  onOpenCommandTool?: () => void
 }
 
 export function RoomHeader({
@@ -57,10 +42,6 @@ export function RoomHeader({
   connectionDetails = [],
   onCopyRoomId,
   onBack,
-  onOpenAssistant,
-  onOpenImageTool,
-  onOpenOcr,
-  onOpenCommandTool,
 }: RoomHeaderProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -134,49 +115,6 @@ export function RoomHeader({
     }
   }, [qrPayload])
 
-  const handleMenuAction = (action: () => void) => {
-    setIsMoreOpen(false)
-    action()
-  }
-
-  const toolCandidates: (RoomToolItem | null)[] = [
-    onOpenAssistant
-      ? {
-          id: 'assistant',
-          label: 'DD助手',
-          icon: <Bot size={17} strokeWidth={2} aria-hidden="true" />,
-          action: onOpenAssistant,
-        }
-      : null,
-    onOpenImageTool
-      ? {
-          id: 'image',
-          label: '图片工具',
-          icon: <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />,
-          action: onOpenImageTool,
-        }
-      : null,
-    onOpenOcr
-      ? {
-          id: 'ocr',
-          label: '提取文字',
-          icon: <ScanText size={17} strokeWidth={2} aria-hidden="true" />,
-          action: onOpenOcr,
-        }
-      : null,
-    onOpenCommandTool
-      ? {
-          id: 'command',
-          label: '命令行',
-          icon: <SquareTerminal size={17} strokeWidth={2} aria-hidden="true" />,
-          action: onOpenCommandTool,
-        }
-      : null,
-  ]
-  const toolItems = toolCandidates.filter(
-    (item): item is RoomToolItem => item !== null,
-  )
-
   return (
     <div className="dd-snaplink__room-head">
       <div className="dd-snaplink__room-head-main">
@@ -246,16 +184,6 @@ export function RoomHeader({
                       ))}
                     </div>
                     <p>{technicalNote}</p>
-                  </div>
-                ) : null}
-                {toolItems.length > 0 ? (
-                  <div className="dd-snaplink__room-more-tools" aria-label="常用工具">
-                    {toolItems.map((item) => (
-                      <button key={item.id} type="button" onClick={() => handleMenuAction(item.action)}>
-                        {item.icon}
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
                   </div>
                 ) : null}
               </div>

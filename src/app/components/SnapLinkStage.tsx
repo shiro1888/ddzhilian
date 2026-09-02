@@ -4844,10 +4844,6 @@ export function SnapLinkStage({
         showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
       }}
       onOpenCustomTheme={toggleThemePanel}
-      onOpenAiChat={handleOpenAiChat}
-      onOpenImage={handleOpenImage}
-      onOpenCommand={handleOpenCommand}
-      onOpenOcr={() => setIsOcrPanelOpen(true)}
       onOpenAdmin={onOpenAdminView}
     />
   )
@@ -5570,10 +5566,6 @@ export function SnapLinkStage({
                     connectionDetails={selectedRoomMoreDetails}
                     onCopyRoomId={handleCopyRoomId}
                     onBack={handleRoomHeaderBack}
-                    onOpenAssistant={handleOpenAiChat}
-                    onOpenImageTool={handleOpenImage}
-                    onOpenOcr={handleOcrTriggerClick}
-                    onOpenCommandTool={handleOpenCommand}
                   />
 
               {workbenchActiveTransferCount > 0 ? (

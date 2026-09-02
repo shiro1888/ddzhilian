@@ -49,10 +49,6 @@ type SettingsPanelProps = {
   onSoundEffectsChange: (checked: boolean) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onOpenCustomTheme?: () => void
-  onOpenAiChat?: () => void
-  onOpenImage?: () => void
-  onOpenCommand?: () => void
-  onOpenOcr?: () => void
   onOpenAdmin?: () => void
 }
 
