@@ -26,14 +26,14 @@ export function SharedContentPanel({
   onClose,
 }: SharedContentPanelProps) {
   return (
-    <div className="dd-snaplink__shared-panel" aria-label={activeLabel ?? '传输记录'}>
+    <div className="dd-snaplink__shared-panel" aria-label={activeLabel ?? '共享内容'}>
       <div className="dd-snaplink__shared-head">
-        <strong>传输记录</strong>
+        <strong>共享内容</strong>
         <button type="button" onClick={onClose}>
           关闭
         </button>
       </div>
-      <div className="dd-snaplink__shared-tabs" role="tablist" aria-label="传输记录分类">
+      <div className="dd-snaplink__shared-tabs" role="tablist" aria-label="共享内容分类">
         {tabs.map((item) => (
           <button
             key={item.id}

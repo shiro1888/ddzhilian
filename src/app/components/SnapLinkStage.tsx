@@ -5645,7 +5645,7 @@ export function SnapLinkStage({
                         setActiveSharedTab('files')
                       }}
                     >
-                      传输记录 {sharedContentCount.toString()}
+                      共享内容 {sharedContentCount.toString()}
                     </button>
                     <button type="button" onClick={handleCopyRoomId}>
                       {copiedRoomId === selectedRoomId ? selectedRoomCopiedLabel : selectedRoomCopyLabel}
