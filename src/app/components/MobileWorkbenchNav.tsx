@@ -1,5 +1,5 @@
 import {
-  History,
+  ArrowLeftRight,
   MessageCircle,
   MonitorSmartphone,
   Sparkles,
@@ -49,7 +49,7 @@ export function MobileWorkbenchNav({
       label: '消息',
       icon: MessageCircle,
       onClick: onShowRooms,
-      isActive: activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files',
+      isActive: activeMode === 'rooms' || activeMode === 'text',
     },
     {
       mode: 'nearby',
@@ -61,10 +61,10 @@ export function MobileWorkbenchNav({
     {
       mode: 'transfers',
       label: '传输',
-      icon: History,
+      icon: ArrowLeftRight,
       onClick: onShowQueue,
       badgeCount: activeTransferCount,
-      isActive: activeMode === 'transfers',
+      isActive: activeMode === 'transfers' || activeMode === 'files',
     },
   ]
 
@@ -83,7 +83,7 @@ export function MobileWorkbenchNav({
     label: '我的',
     icon: User,
     onClick: onShowSettings,
-    isActive: activeMode === 'settings' || activeMode === 'history',
+    isActive: activeMode === 'settings',
   })
 
   return (
