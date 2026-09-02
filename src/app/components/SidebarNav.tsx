@@ -46,7 +46,7 @@ export function SidebarNav({
   const isDevicesActive = activeMode === 'nearby'
   const isTransfersActive = activeMode === 'transfers'
   const isWorkshopActive = activeMode === 'workshop' || Boolean(activeTool)
-  const isMeActive = activeMode === 'settings' || activeMode === 'history'
+  const isMeActive = activeMode === 'settings'
   const transferLabel = activeTransferCount > 0
     ? `传输 · ${activeTransferCount.toString()} 个进行中`
     : '传输'
