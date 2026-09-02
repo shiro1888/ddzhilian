@@ -1546,8 +1546,8 @@
   --snap-glass-blur: blur(22px) saturate(140%);
   --snap-ink: #f8fafc;
   --snap-ink-soft: #94a3b8;
-  --snap-muted: #64748b;
-  --snap-placeholder: #64748b;
+  --snap-muted: #7c8a9a;
+  --snap-placeholder: #7c8a9a;
   --snap-border: rgba(255, 255, 255, 0.1);
   --snap-border-soft: rgba(255, 255, 255, 0.06);
   --snap-line: rgba(148, 163, 184, 0.12);
