@@ -1,47 +1,28 @@
 /*
  * ============================================================================
- * 独立重设计 ·「暖纸 / 余烬」(Warm Paper / Ember)
+ * 独立重设计 ·「蓝 / 冷灰」(Blue / Cool Slate)
  * ============================================================================
- * 设计语言：暖象牙纸底、近黑暖墨、珊瑚「余烬」主色、实底细边框、收紧圆角。
- * 与上一版（冷靛蓝 / 紫罗兰玻璃拟态）刻意区分：更安静、更编辑部化、更克制。
+ * 设计语言：冷灰中性底、近黑墨、蓝色主色、实底细边框、收紧圆角。
+ * 与上一版（玻璃拟态多色）刻意区分：更安静、更克制、更工程化。
  * ----------------------------------------------------------------------------
  * 原则：
- *  1. 暖中性背景，不靠玻璃，靠纸感与留白。
- *  2. 单一珊瑚主色（余烬 ember），仅用于主行动与激活态。
- *  3. 实底卡片 + 1px 暖发丝线边框，投影极轻。
- *  4. 圆角收紧（卡片 14、按钮 8、列表 8），几何感更强。
- *  5. 深色同构：暖炭底 + 更亮余烬。
+ *  1. 冷中性背景，不靠玻璃，靠留白与实底。
+ *  2. 单一蓝色主色，仅用于主行动与激活态。
+ *  3. 实底卡片 + 1px 发丝线边框，投影极轻。
+ *  4. 圆角收紧（卡片 14、按钮 10、列表 8），几何感更强。
+ *  5. 深色同构：冷炭底 + 更亮蓝。
  * ============================================================================
  */
 
 /* ------------------------------------------------------------------------- */
-/* 1. 设计令牌（覆盖 snaplink-polish 的同名 --snap-* 变量）                    */
+/* 1. 设计令牌（仅在 snaplink-polish 之上覆盖差异值，其余沿用基础层）          */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink,
 .dd-snaplink.is-workbench-shell {
-  --snap-bg: #f6f7f9;
-  --snap-surface: #ffffff;
-  --snap-surface-solid: #ffffff;
   --snap-surface-hover: rgba(15, 23, 42, 0.04);
-  --snap-panel: #fbfcfd;
-  --snap-sidebar: #f1f3f5;
-  --snap-glass-blur: blur(14px) saturate(120%);
-  --snap-ink: #0f172a;
-  --snap-ink-soft: #475569;
-  --snap-muted: #64748b;
-  --snap-ink-muted: var(--snap-muted);
   --snap-placeholder: #94a3b8;
-  --snap-border: #e5e7eb;
-  --snap-border-soft: #f0f1f3;
-  --snap-line: #e5e7eb;
-  --snap-green: #2563eb;
-  --snap-green-deep: #1d4ed8;
-  --snap-green-action: #2563eb;
-  --snap-green-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   --snap-green-soft: rgba(37, 99, 235, 0.1);
-  --snap-green-glow: 0 4px 14px rgba(37, 99, 235, 0.26);
   --snap-warning: #d97706;
-  --snap-warning-text: #b45309;
   --snap-danger: #dc2626;
   --snap-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --snap-shadow-md: 0 6px 16px -4px rgba(15, 23, 42, 0.08);
@@ -49,11 +30,6 @@
   --snap-shadow-glass: 0 10px 30px -6px rgba(15, 23, 42, 0.08);
   letter-spacing: -0.01em;
   background: var(--snap-bg);
-}
-
-/* 顶部不再加签名发丝线，保持干净 */
-.dd-snaplink::before {
-  display: none !important;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -88,12 +64,8 @@
   background: var(--snap-bg);
 }
 
-.dd-snaplink::before {
-  display: none !important;
-}
-
 /* ------------------------------------------------------------------------- */
-/* 3. 侧栏导航（实底暖中性，激活态用余烬浅底而非渐变）                          */
+/* 3. 侧栏导航（实底冷中性，激活态用蓝浅底而非渐变）                            */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
 .dd-snaplink__rail-nav button.is-active {
@@ -111,12 +83,12 @@
 :root.dark .dd-snaplink__rail-nav button.is-active,
 :root[data-theme-mode="dark"] .dd-snaplink__rail-nav button.is-active {
   background: var(--snap-green-soft) !important;
-  color: #ffb4a3 !important;
+  color: #93c5fd !important;
   box-shadow: none !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 4. 主/次按钮（主按钮：实底余烬，去除渐变）                                  */
+/* 4. 主/次按钮（主按钮：实底蓝，去除渐变）                                    */
 /* ------------------------------------------------------------------------- */
 button.is-primary,
 .dd-snaplink button.is-primary,
@@ -135,7 +107,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 5. 卡片：去玻璃，改实底 + 暖发丝线 + 收紧圆角                                */
+/* 5. 卡片：去玻璃，改实底 + 冷发丝线 + 收紧圆角                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-card {
   border-radius: 14px !important;
@@ -165,7 +137,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 6. 消息气泡（自己：实底余烬；对端：白底）                                  */
+/* 6. 消息气泡（自己：实底蓝；对端：白底）                                    */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__row.is-self .dd-snaplink__bubble {
   background: var(--snap-green) !important;
@@ -188,14 +160,14 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 7. 焦点环 + 选中文本（余烬色）                                              */
+/* 7. 焦点环 + 选中文本（蓝色）                                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink :focus-visible {
   outline: 2px solid var(--snap-green);
   outline-offset: 2px;
 }
 
-/* 会话激活行 / 选中态：余烬浅底替代靛蓝浅底 */
+/* 会话激活行 / 选中态：蓝浅底 */
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active,
 .dd-snaplink__conversation-row.is-active {
   background: var(--snap-green-soft) !important;
@@ -207,7 +179,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 8. 输入框聚焦（余烬边框 + 余烬浅光环）                                      */
+/* 8. 输入框聚焦（蓝边框 + 蓝浅光环）                                          */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__settings-field input:focus {
   border-color: var(--snap-green) !important;
@@ -226,7 +198,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 9. 标签 / 徽章：余烬浅底 + 余烬字（替代靛蓝）                                */
+/* 9. 标签 / 徽章：蓝浅底 + 蓝字                                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-tag.is-green,
 .dd-snaplink__workshop-tag.is-purple {
@@ -241,7 +213,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 10. 工坊卡片图标：统一余烬系（替代靛蓝/粉/紫多色）                          */
+/* 10. 工坊卡片图标：统一蓝系（替代多色）                                      */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-card-icon.is-sandbox,
 .dd-snaplink__workshop-card-icon.is-ai {
@@ -300,7 +272,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 11. Portal 元素（不继承 --snap-* 作用域，用字面余烬值）                     */
+/* 11. Portal 元素（不继承 --snap-* 作用域，用字面蓝值）                       */
 /* ------------------------------------------------------------------------- */
 .dd-cookie-notice__actions button.is-primary {
   background: #2563eb !important;

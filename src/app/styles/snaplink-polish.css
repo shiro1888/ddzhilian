@@ -9,27 +9,27 @@
 .dd-snaplink,
 .dd-snaplink.is-workbench-shell {
   position: relative;
-  --snap-bg: #f4f4f8;
+  --snap-bg: #f6f7f9;
   --snap-surface: #ffffff;
   --snap-surface-solid: #ffffff;
   --snap-surface-hover: rgba(15, 23, 42, 0.06);
-  --snap-panel: rgba(251, 251, 253, 0.7);
-  --snap-sidebar: rgba(249, 249, 252, 0.68);
-  --snap-glass-blur: blur(22px) saturate(160%);
+  --snap-panel: #fbfcfd;
+  --snap-sidebar: #f1f3f5;
+  --snap-glass-blur: blur(14px) saturate(120%);
   --snap-ink: #0f172a;
   --snap-ink-soft: #475569;
   --snap-muted: #64748b;
   --snap-ink-muted: var(--snap-muted);
   --snap-placeholder: #64748b;
-  --snap-border: rgba(226, 232, 240, 0.8);
-  --snap-border-soft: rgba(241, 245, 249, 0.9);
-  --snap-line: rgba(226, 232, 240, 0.8);
+  --snap-border: #e5e7eb;
+  --snap-border-soft: #f0f1f3;
+  --snap-line: #e5e7eb;
   --snap-green: #2563eb;
   --snap-green-deep: #1d4ed8;
   --snap-green-action: #2563eb;
-  --snap-green-gradient: linear-gradient(135deg, #2563eb 0%, #d97706 100%);
+  --snap-green-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   --snap-green-soft: rgba(37, 99, 235, 0.12);
-  --snap-green-glow: 0 4px 16px rgba(217, 119, 6, 0.32);
+  --snap-green-glow: 0 4px 14px rgba(37, 99, 235, 0.26);
   --snap-warning: #f59e0b;
   --snap-warning-text: #b45309;
   --snap-danger: #ef4444;
@@ -51,27 +51,10 @@
   letter-spacing: -0.012em;
   background:
     radial-gradient(ellipse 90% 60% at 15% -10%, rgba(37, 99, 235, 0.16), transparent 62%),
-    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(217, 119, 6, 0.12), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(37, 99, 235, 0.12), transparent 58%),
     radial-gradient(ellipse 42% 34% at 82% -6%, rgba(96, 165, 250, 0.1), transparent 60%),
     linear-gradient(180deg, #eceefb 0%, var(--snap-bg) 26%, var(--snap-bg) 100%),
     var(--snap-bg);
-}
-
-/* Signature: 2px indigo→violet hairline across the top of the shell */
-.dd-snaplink::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  z-index: 100;
-  background: linear-gradient(90deg, #2563eb 0%, #d97706 50%, #2563eb 100%);
-  pointer-events: none;
-}
-
-:root.dark .dd-snaplink::before {
-  background: linear-gradient(90deg, #1d4ed8 0%, #b45309 50%, #1d4ed8 100%);
 }
 
 .dd-snaplink button,
@@ -578,13 +561,13 @@
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.13), rgba(217, 119, 6, 0.05));
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.13), rgba(37, 99, 235, 0.05));
   border-color: rgba(37, 99, 235, 0.32) !important;
   box-shadow: inset 3px 0 0 0 #2563eb, 0 2px 8px rgba(37, 99, 235, 0.12);
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(217, 119, 6, 0.08));
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(37, 99, 235, 0.08));
   border-color: rgba(96, 165, 250, 0.35) !important;
   box-shadow: inset 3px 0 0 0 #60a5fa, 0 2px 10px rgba(37, 99, 235, 0.2);
 }
@@ -799,7 +782,7 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #d97706);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   box-shadow: 0 0 8px rgba(37, 99, 235, 0.55);
 }
 
@@ -809,7 +792,7 @@
   position: absolute;
   inset: -4px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(217, 119, 6, 0.5), transparent 68%);
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.5), transparent 68%);
   animation: signalPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
@@ -1503,7 +1486,7 @@
 
 .dd-cookie-notice__actions button.is-primary {
   border: 0;
-  background: linear-gradient(135deg, #2563eb 0%, #d97706 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #ffffff;
 }
 
@@ -1575,7 +1558,7 @@
   --snap-shadow-glass: 0 16px 40px 0 rgba(0, 0, 0, 0.5);
   background:
     radial-gradient(ellipse 80% 50% at 12% -8%, rgba(37, 99, 235, 0.13), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(217, 119, 6, 0.09), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(37, 99, 235, 0.09), transparent 55%),
     var(--snap-bg);
 }
 
@@ -3261,7 +3244,7 @@
 }
 
 .dd-ai-chat__message.is-assistant .dd-ai-chat__avatar {
-  background: linear-gradient(135deg, #2563eb, #d97706) !important;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
   color: #ffffff !important;
   box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25) !important;
 }
@@ -3694,28 +3677,28 @@
 }
 
 .dd-snaplink__settings-head-icon.is-tools {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(217, 119, 6, 0.08)) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.08)) !important;
   color: #2563eb !important;
 }
 
 .dd-snaplink__settings-head-icon.is-device {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(217, 119, 6, 0.08)) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.08)) !important;
   color: #2563eb !important;
 }
 
 .dd-snaplink__settings-head-icon.is-appearance {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.08)) !important;
-  color: #f59e0b !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.08)) !important;
+  color: #2563eb !important;
 }
 
 .dd-snaplink__settings-head-icon.is-network {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(217, 119, 6, 0.08)) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.08)) !important;
   color: #2563eb !important;
 }
 
 .dd-snaplink__settings-head-icon.is-preference {
-  background: linear-gradient(135deg, rgba(217, 119, 6, 0.18), rgba(124, 58, 237, 0.08)) !important;
-  color: #d97706 !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.08)) !important;
+  color: #2563eb !important;
 }
 
 .dd-snaplink__settings-card-head-content,
@@ -3765,7 +3748,7 @@
   width: 44px !important;
   height: 44px !important;
   border-radius: 14px !important;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(217, 119, 6, 0.08)) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(37, 99, 235, 0.08)) !important;
   color: #2563eb !important;
   border: 1px solid rgba(37, 99, 235, 0.2) !important;
   cursor: pointer !important;
@@ -4083,9 +4066,9 @@
   width: 100% !important;
   padding: 12px 14px !important;
   border-radius: 12px !important;
-  border: 1px dashed rgba(217, 119, 6, 0.4) !important;
-  background: rgba(217, 119, 6, 0.06) !important;
-  color: #d97706 !important;
+  border: 1px dashed rgba(37, 99, 235, 0.4) !important;
+  background: rgba(37, 99, 235, 0.06) !important;
+  color: #2563eb !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
@@ -4093,8 +4076,8 @@
 }
 
 .dd-snaplink__settings-admin-link button:hover {
-  background: rgba(217, 119, 6, 0.12) !important;
-  border-color: #d97706 !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+  border-color: #2563eb !important;
   transform: translateY(-1px) !important;
 }
 
@@ -4150,7 +4133,7 @@
   width: 40px !important;
   height: 40px !important;
   border-radius: 12px !important;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(217, 119, 6, 0.1)) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(37, 99, 235, 0.1)) !important;
   color: #2563eb !important;
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
 }
@@ -4242,7 +4225,7 @@
 }
 
 .dd-snaplink__workshop-card.is-ocr:hover {
-  border-color: rgba(245, 158, 11, 0.5) !important;
+  border-color: rgba(37, 99, 235, 0.5) !important;
 }
 
 .dd-snaplink__workshop-card-top {
@@ -4268,7 +4251,7 @@
 }
 
 .dd-snaplink__workshop-card-icon.is-sandbox {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(217, 119, 6, 0.08) 100%) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
   color: #2563eb !important;
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
 }
@@ -4286,9 +4269,9 @@
 }
 
 .dd-snaplink__workshop-card-icon.is-ocr {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.08) 100%) !important;
-  color: #f59e0b !important;
-  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
+  color: #2563eb !important;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
 }
 
 .dd-snaplink__workshop-card-meta {
@@ -5088,8 +5071,8 @@
 }
 
 .dd-web-command__lang-badge.is-java {
-  background: rgba(245, 158, 11, 0.12) !important;
-  color: #f59e0b !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+  color: #2563eb !important;
 }
 
 .dd-web-command__lang-badge.is-c {
@@ -5098,8 +5081,8 @@
 }
 
 .dd-web-command__lang-badge.is-plantuml {
-  background: rgba(217, 119, 6, 0.12) !important;
-  color: #d97706 !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+  color: #2563eb !important;
 }
 
 .dd-web-command__lang-option-text {
@@ -6442,7 +6425,7 @@ button.is-secondary:disabled,
   width: 64px !important;
   height: 64px !important;
   border-radius: 20px !important;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(217, 119, 6, 0.24) 100%) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(29, 78, 216, 0.24) 100%) !important;
   color: #2563eb !important;
   font-size: 26px !important;
   font-weight: 700 !important;
