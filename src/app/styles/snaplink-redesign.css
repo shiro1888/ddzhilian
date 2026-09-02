@@ -1,0 +1,326 @@
+/*
+ * ============================================================================
+ * 独立重设计 ·「暖纸 / 余烬」(Warm Paper / Ember)
+ * ============================================================================
+ * 设计语言：暖象牙纸底、近黑暖墨、珊瑚「余烬」主色、实底细边框、收紧圆角。
+ * 与上一版（冷靛蓝 / 紫罗兰玻璃拟态）刻意区分：更安静、更编辑部化、更克制。
+ * ----------------------------------------------------------------------------
+ * 原则：
+ *  1. 暖中性背景，不靠玻璃，靠纸感与留白。
+ *  2. 单一珊瑚主色（余烬 ember），仅用于主行动与激活态。
+ *  3. 实底卡片 + 1px 暖发丝线边框，投影极轻。
+ *  4. 圆角收紧（卡片 14、按钮 8、列表 8），几何感更强。
+ *  5. 深色同构：暖炭底 + 更亮余烬。
+ * ============================================================================
+ */
+
+/* ------------------------------------------------------------------------- */
+/* 1. 设计令牌（覆盖 snaplink-polish 的同名 --snap-* 变量）                    */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink,
+.dd-snaplink.is-workbench-shell {
+  --snap-bg: #f5f1ea;
+  --snap-surface: #ffffff;
+  --snap-surface-solid: #ffffff;
+  --snap-surface-hover: rgba(28, 25, 23, 0.045);
+  --snap-panel: #faf7f2;
+  --snap-sidebar: #efebe4;
+  --snap-glass-blur: blur(14px) saturate(120%);
+  --snap-ink: #1c1917;
+  --snap-ink-soft: #57534e;
+  --snap-muted: #7d756c;
+  --snap-ink-muted: var(--snap-muted);
+  --snap-placeholder: #a8a29c;
+  --snap-border: #e6e0d8;
+  --snap-border-soft: #efeae3;
+  --snap-line: #e6e0d8;
+  --snap-green: #e8503a;
+  --snap-green-deep: #c5341f;
+  --snap-green-action: #e8503a;
+  --snap-green-gradient: linear-gradient(135deg, #eb5a3e 0%, #d43d1f 100%);
+  --snap-green-soft: rgba(232, 80, 58, 0.1);
+  --snap-green-glow: 0 4px 14px rgba(232, 80, 58, 0.26);
+  --snap-warning: #d97706;
+  --snap-warning-text: #b45309;
+  --snap-danger: #dc2626;
+  --snap-shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.05);
+  --snap-shadow-md: 0 6px 16px -4px rgba(28, 25, 23, 0.08);
+  --snap-shadow-lg: 0 16px 32px -8px rgba(28, 25, 23, 0.12);
+  --snap-shadow-glass: 0 10px 30px -6px rgba(28, 25, 23, 0.08);
+  letter-spacing: -0.01em;
+  background:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(232, 80, 58, 0.07), transparent 62%),
+    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(217, 119, 6, 0.05), transparent 58%),
+    linear-gradient(180deg, #f0ebe2 0%, var(--snap-bg) 28%, var(--snap-bg) 100%),
+    var(--snap-bg);
+}
+
+/* 签名发丝线：余烬 → 琥珀 */
+.dd-snaplink::before {
+  background: linear-gradient(90deg, #e8503a 0%, #d97706 50%, #e8503a 100%);
+}
+
+/* ------------------------------------------------------------------------- */
+/* 2. 深色令牌                                                               */
+/* ------------------------------------------------------------------------- */
+:root.dark .dd-snaplink,
+:root[data-theme-mode="dark"] .dd-snaplink {
+  --snap-bg: #171411;
+  --snap-surface: #201c19;
+  --snap-surface-solid: #201c19;
+  --snap-surface-hover: rgba(255, 255, 255, 0.055);
+  --snap-panel: #1a1714;
+  --snap-sidebar: #131009;
+  --snap-glass-blur: blur(14px) saturate(120%);
+  --snap-ink: #f4f1ec;
+  --snap-ink-soft: #b8b0a6;
+  --snap-muted: #8a827a;
+  --snap-placeholder: #6e675f;
+  --snap-border: rgba(255, 255, 255, 0.1);
+  --snap-border-soft: rgba(255, 255, 255, 0.06);
+  --snap-line: rgba(255, 255, 255, 0.1);
+  --snap-green: #ff6b4d;
+  --snap-green-deep: #ff8a6e;
+  --snap-green-action: #ff6b4d;
+  --snap-green-gradient: linear-gradient(135deg, #ff6b4d 0%, #e8503a 100%);
+  --snap-green-soft: rgba(255, 107, 77, 0.16);
+  --snap-green-glow: 0 4px 16px rgba(255, 107, 77, 0.28);
+  --snap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --snap-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.35);
+  --snap-shadow-lg: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
+  --snap-shadow-glass: 0 10px 30px -6px rgba(0, 0, 0, 0.45);
+  background:
+    radial-gradient(ellipse 80% 50% at 12% -8%, rgba(232, 80, 58, 0.1), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(217, 119, 6, 0.06), transparent 55%),
+    var(--snap-bg);
+}
+
+:root.dark .dd-snaplink::before {
+  background: linear-gradient(90deg, #ff6b4d 0%, #d97706 50%, #ff6b4d 100%);
+}
+
+/* ------------------------------------------------------------------------- */
+/* 3. 侧栏导航（实底暖中性，激活态用余烬浅底而非渐变）                          */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
+.dd-snaplink__rail-nav button.is-active {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  box-shadow: none !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button,
+.dd-snaplink__rail-nav button {
+  color: var(--snap-muted);
+}
+
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
+:root.dark .dd-snaplink__rail-nav button.is-active,
+:root[data-theme-mode="dark"] .dd-snaplink__rail-nav button.is-active {
+  background: var(--snap-green-soft) !important;
+  color: #ffb4a3 !important;
+  box-shadow: none !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 4. 主/次按钮（主按钮：实底余烬，去除渐变）                                  */
+/* ------------------------------------------------------------------------- */
+button.is-primary,
+.dd-snaplink button.is-primary,
+.dd-snaplink__room-start-card button:first-child,
+.dd-snaplink__settings-card button[type="submit"],
+.dd-snaplink__receive-dialog-actions button.is-primary,
+.dd-snaplink__trust-dialog-actions button.is-primary {
+  background: var(--snap-green) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+button.is-primary:hover:not(:disabled),
+.dd-snaplink button.is-primary:hover:not(:disabled) {
+  background: var(--snap-green-deep) !important;
+  box-shadow: var(--snap-green-glow) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 5. 卡片：去玻璃，改实底 + 暖发丝线 + 收紧圆角                                */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink__workshop-card {
+  border-radius: 14px !important;
+  background: var(--snap-surface) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+.dd-snaplink__settings-card {
+  border-radius: 14px !important;
+}
+
+.dd-snaplink__device-detail-card {
+  border-radius: 14px !important;
+}
+
+.dd-snaplink__device-radar-card {
+  border-radius: 16px !important;
+}
+
+/* 空态卡片 */
+.dd-snaplink__room-empty-card,
+.dd-snaplink__room-workbench .dd-snaplink__room-empty-card {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--snap-shadow-md) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 6. 消息气泡（自己：实底余烬；对端：白底）                                  */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink__row.is-self .dd-snaplink__bubble {
+  background: var(--snap-green) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+.dd-snaplink__row.is-peer .dd-snaplink__bubble,
+.dd-snaplink__row.is-bot .dd-snaplink__bubble {
+  background: var(--snap-surface-solid) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+.dd-snaplink__row.is-bot .dd-snaplink__bubble {
+  border-left: 3px solid var(--snap-green) !important;
+}
+
+.dd-ai-chat__message.is-user .dd-ai-chat__bubble {
+  background: var(--snap-green) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 7. 焦点环 + 选中文本（余烬色）                                              */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink :focus-visible {
+  outline: 2px solid var(--snap-green);
+  outline-offset: 2px;
+}
+
+/* 会话激活行 / 选中态：余烬浅底替代靛蓝浅底 */
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active,
+.dd-snaplink__conversation-row.is-active {
+  background: var(--snap-green-soft) !important;
+}
+
+.dd-snaplink__workbench-room.is-active,
+.dd-snaplink__workbench-room[aria-current="page"] {
+  background: var(--snap-green-soft) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 8. 输入框聚焦（余烬边框 + 余烬浅光环）                                      */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink__settings-field input:focus {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
+}
+
+.dd-snaplink__history-search input:focus,
+.dd-snaplink__text-send-input textarea:focus {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search:focus-within {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 9. 标签 / 徽章：余烬浅底 + 余烬字（替代靛蓝）                                */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink__workshop-tag.is-green,
+.dd-snaplink__workshop-tag.is-purple {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__transport-badge.is-lan,
+.dd-snaplink__trust-badge.is-trusted {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 10. 工坊卡片图标：统一余烬系（替代靛蓝/粉/紫多色）                          */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink__workshop-card-icon.is-sandbox,
+.dd-snaplink__workshop-card-icon.is-ai {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  box-shadow: 0 2px 10px rgba(232, 80, 58, 0.14) !important;
+}
+
+.dd-snaplink__workshop-card-icon.is-image {
+  background: rgba(217, 119, 6, 0.12) !important;
+  color: #b45309 !important;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.14) !important;
+}
+
+.dd-snaplink__workshop-card-icon.is-ocr {
+  background: rgba(28, 25, 23, 0.06) !important;
+  color: var(--snap-ink-soft) !important;
+  box-shadow: 0 2px 10px rgba(28, 25, 23, 0.08) !important;
+}
+
+/* 工坊卡片 hover 边框（余烬） */
+.dd-snaplink__workshop-card.is-sandbox:hover,
+.dd-snaplink__workshop-card.is-ai:hover {
+  border-color: var(--snap-green) !important;
+}
+
+.dd-snaplink__workshop-card.is-image:hover {
+  border-color: #d97706 !important;
+}
+
+.dd-snaplink__workshop-card.is-ocr:hover {
+  border-color: var(--snap-border) !important;
+}
+
+.dd-snaplink__workshop-card:hover .dd-snaplink__workshop-arrow {
+  color: var(--snap-green) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 11. Portal 元素（不继承 --snap-* 作用域，用字面余烬值）                     */
+/* ------------------------------------------------------------------------- */
+.dd-cookie-notice__actions button.is-primary {
+  background: #e8503a !important;
+  color: #ffffff !important;
+}
+
+.dd-cookie-notice__actions button.is-primary:hover {
+  background: #c5341f !important;
+}
+
+:root.dark .dd-cookie-notice__actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-cookie-notice__actions button.is-primary {
+  background: #ff6b4d !important;
+  color: #1c1917 !important;
+}
+
+/* 接收/信任弹窗主按钮 */
+.dd-snaplink__receive-dialog-actions button.is-primary,
+.dd-snaplink__trust-dialog-actions button.is-primary {
+  background: #e8503a !important;
+  color: #ffffff !important;
+}
+
+.dd-snaplink__receive-dialog-actions button.is-primary:hover,
+.dd-snaplink__trust-dialog-actions button.is-primary:hover {
+  background: #c5341f !important;
+}
+
+:root.dark .dd-snaplink__receive-dialog-actions button.is-primary,
+:root.dark .dd-snaplink__trust-dialog-actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-snaplink__receive-dialog-actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-snaplink__trust-dialog-actions button.is-primary {
+  background: #ff6b4d !important;
+  color: #1c1917 !important;
+}
