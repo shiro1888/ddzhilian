@@ -2403,10 +2403,25 @@
   border-color: var(--snap-border) !important;
   color: var(--snap-muted) !important;
   border-radius: 18px !important;
+  border-style: solid !important;
 }
 
 .dd-snaplink__workbench-room-empty strong {
   color: var(--snap-ink) !important;
+}
+
+/* Empty-state icon → tinted squircle (matches workshop/room icon language) */
+.dd-snaplink__workbench-room-empty > svg {
+  display: block !important;
+  width: 48px !important;
+  height: 48px !important;
+  padding: 12px !important;
+  box-sizing: border-box !important;
+  border-radius: 14px !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15) !important;
+  margin-bottom: 8px !important;
 }
 
 .dd-snaplink__transfer-empty-actions button,
