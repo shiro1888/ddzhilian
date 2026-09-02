@@ -42,9 +42,9 @@ export function SidebarNav({
   onShowWorkshop,
   onShowSettings,
 }: SidebarNavProps) {
-  const isMessagesActive = activeMode === 'rooms' || activeMode === 'text' || activeMode === 'files'
+  const isMessagesActive = activeMode === 'rooms' || activeMode === 'text'
   const isDevicesActive = activeMode === 'nearby'
-  const isTransfersActive = activeMode === 'transfers'
+  const isTransfersActive = activeMode === 'transfers' || activeMode === 'files'
   const isWorkshopActive = activeMode === 'workshop' || Boolean(activeTool)
   const isMeActive = activeMode === 'settings'
   const transferLabel = activeTransferCount > 0
