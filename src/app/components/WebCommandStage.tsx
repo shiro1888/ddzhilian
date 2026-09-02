@@ -304,7 +304,7 @@ export function WebCommandStage({
       theme: {
         background: '#09090b',
         foreground: '#f5f5f5',
-        cursor: '#6366f1',
+        cursor: '#e8503a',
         selectionBackground: 'rgba(16, 185, 129, 0.25)',
       },
     })

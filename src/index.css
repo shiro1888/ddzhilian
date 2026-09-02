@@ -14,14 +14,14 @@
   --ink: #0f172a;
   --ink-soft: #475569;
   --muted: #64748b;
-  --brand: #6366f1;
-  --brand-strong: #4f46e5;
-  --focus: rgba(99, 102, 241, 0.25);
-  --success: #6366f1;
-  --success-soft: rgba(99, 102, 241, 0.12);
+  --brand: #e8503a;
+  --brand-strong: #c5341f;
+  --focus: rgba(232, 80, 58, 0.25);
+  --success: #e8503a;
+  --success-soft: rgba(232, 80, 58, 0.12);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.1);
-  --link: #6366f1;
+  --link: #e8503a;
 
   --shell-bg: #f8fafc;
   --sidebar-bg: #ffffff;
@@ -37,11 +37,11 @@
   --row-active: #e2e8f0;
   --input-border-soft: #cbd5e1;
   --input-bg: #ffffff;
-  --button-primary-bg: #6366f1;
+  --button-primary-bg: #e8503a;
   --button-secondary-bg: #f1f5f9;
   --button-neutral-bg: #f8fafc;
   --button-contrast: #0a0e14;
-  --bubble-self: #6366f1;
+  --bubble-self: #e8503a;
   --bubble-self-text: #0a0e14;
   --bubble-peer: #ffffff;
   --bubble-peer-text: #0f172a;
@@ -81,14 +81,14 @@
   --ink: #e6edf3;
   --ink-soft: #9db0c0;
   --muted: #7c8a9a;
-  --brand: #6366f1;
-  --brand-strong: #4f46e5;
-  --focus: rgba(99, 102, 241, 0.3);
-  --success: #6366f1;
-  --success-soft: rgba(99, 102, 241, 0.15);
+  --brand: #e8503a;
+  --brand-strong: #c5341f;
+  --focus: rgba(232, 80, 58, 0.3);
+  --success: #e8503a;
+  --success-soft: rgba(232, 80, 58, 0.15);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.15);
-  --link: #818cf8;
+  --link: #ff6b4d;
 
   --shell-bg: #07090d;
   --sidebar-bg: #0a0e14;
@@ -104,11 +104,11 @@
   --row-active: #253040;
   --input-border-soft: #2a3745;
   --input-bg: #121922;
-  --button-primary-bg: #6366f1;
+  --button-primary-bg: #e8503a;
   --button-secondary-bg: #1a232e;
   --button-neutral-bg: #0f151d;
   --button-contrast: #07090d;
-  --bubble-self: #6366f1;
+  --bubble-self: #e8503a;
   --bubble-self-text: #07090d;
   --bubble-peer: #1a232e;
   --bubble-peer-text: #e6edf3;
@@ -206,7 +206,7 @@ textarea:disabled {
 
 /* Branded text selection highlight */
 ::selection {
-  background: rgba(99, 102, 241, 0.22);
+  background: rgba(232, 80, 58, 0.22);
   color: inherit;
 }
 
