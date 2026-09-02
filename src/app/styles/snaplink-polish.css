@@ -12,7 +12,7 @@
   --snap-bg: #f6f7f9;
   --snap-surface: #ffffff;
   --snap-surface-solid: #ffffff;
-  --snap-surface-hover: rgba(15, 23, 42, 0.06);
+  --snap-surface-hover: rgba(15, 23, 42, 0.04);
   --snap-panel: #fbfcfd;
   --snap-sidebar: #f1f3f5;
   --snap-glass-blur: blur(14px) saturate(120%);
@@ -20,7 +20,7 @@
   --snap-ink-soft: #475569;
   --snap-muted: #64748b;
   --snap-ink-muted: var(--snap-muted);
-  --snap-placeholder: #64748b;
+  --snap-placeholder: #94a3b8;
   --snap-border: #e5e7eb;
   --snap-border-soft: #f0f1f3;
   --snap-line: #e5e7eb;
@@ -28,15 +28,15 @@
   --snap-green-deep: #1d4ed8;
   --snap-green-action: #2563eb;
   --snap-green-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  --snap-green-soft: rgba(37, 99, 235, 0.12);
+  --snap-green-soft: rgba(37, 99, 235, 0.1);
   --snap-green-glow: 0 4px 14px rgba(37, 99, 235, 0.26);
-  --snap-warning: #f59e0b;
+  --snap-warning: #d97706;
   --snap-warning-text: #b45309;
-  --snap-danger: #ef4444;
-  --snap-shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.04);
-  --snap-shadow-md: 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
-  --snap-shadow-lg: 0 16px 32px -4px rgba(0, 0, 0, 0.08), 0 6px 12px -2px rgba(0, 0, 0, 0.04);
-  --snap-shadow-glass: 0 10px 30px 0 rgba(0, 0, 0, 0.05);
+  --snap-danger: #dc2626;
+  --snap-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --snap-shadow-md: 0 6px 16px -4px rgba(15, 23, 42, 0.08);
+  --snap-shadow-lg: 0 16px 32px -8px rgba(15, 23, 42, 0.12);
+  --snap-shadow-glass: 0 10px 30px -6px rgba(15, 23, 42, 0.08);
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -48,13 +48,8 @@
     Roboto,
     "Helvetica Neue",
     sans-serif;
-  letter-spacing: -0.012em;
-  background:
-    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(37, 99, 235, 0.16), transparent 62%),
-    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(37, 99, 235, 0.12), transparent 58%),
-    radial-gradient(ellipse 42% 34% at 82% -6%, rgba(96, 165, 250, 0.1), transparent 60%),
-    linear-gradient(180deg, #eceefb 0%, var(--snap-bg) 26%, var(--snap-bg) 100%),
-    var(--snap-bg);
+  letter-spacing: -0.01em;
+  background: var(--snap-bg);
 }
 
 .dd-snaplink button,
@@ -1538,28 +1533,32 @@
 
 :root.dark .dd-snaplink,
 :root[data-theme-mode="dark"] .dd-snaplink {
-  --snap-bg: #0a0a0f;
-  --snap-surface: rgba(20, 20, 30, 0.72);
-  --snap-surface-solid: #14141e;
-  --snap-surface-hover: rgba(255, 255, 255, 0.07);
-  --snap-panel: rgba(16, 16, 24, 0.68);
-  --snap-sidebar: rgba(14, 14, 20, 0.7);
-  --snap-glass-blur: blur(22px) saturate(140%);
-  --snap-ink: #f8fafc;
-  --snap-ink-soft: #94a3b8;
-  --snap-muted: #7c8a9a;
-  --snap-placeholder: #7c8a9a;
+  --snap-bg: #0f1115;
+  --snap-surface: #16181d;
+  --snap-surface-solid: #16181d;
+  --snap-surface-hover: rgba(255, 255, 255, 0.055);
+  --snap-panel: #12151a;
+  --snap-sidebar: #0b0d11;
+  --snap-glass-blur: blur(14px) saturate(120%);
+  --snap-ink: #e6e8eb;
+  --snap-ink-soft: #9aa3ad;
+  --snap-muted: #6b7680;
+  --snap-placeholder: #4b5560;
   --snap-border: rgba(255, 255, 255, 0.1);
   --snap-border-soft: rgba(255, 255, 255, 0.06);
-  --snap-line: rgba(148, 163, 184, 0.12);
-  --snap-green-soft: rgba(37, 99, 235, 0.16);
+  --snap-line: rgba(255, 255, 255, 0.1);
+  --snap-green: #60a5fa;
   --snap-green-deep: #93c5fd;
+  --snap-green-action: #60a5fa;
+  --snap-green-gradient: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  --snap-green-soft: rgba(96, 165, 250, 0.16);
+  --snap-green-glow: 0 4px 16px rgba(96, 165, 250, 0.28);
   --snap-warning-text: #fbbf24;
-  --snap-shadow-glass: 0 16px 40px 0 rgba(0, 0, 0, 0.5);
-  background:
-    radial-gradient(ellipse 80% 50% at 12% -8%, rgba(37, 99, 235, 0.13), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 96% 108%, rgba(37, 99, 235, 0.09), transparent 55%),
-    var(--snap-bg);
+  --snap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --snap-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.35);
+  --snap-shadow-lg: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
+  --snap-shadow-glass: 0 10px 30px -6px rgba(0, 0, 0, 0.45);
+  background: var(--snap-bg);
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row:hover,

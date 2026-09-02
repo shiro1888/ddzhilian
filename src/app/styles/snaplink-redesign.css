@@ -15,57 +15,7 @@
  */
 
 /* ------------------------------------------------------------------------- */
-/* 1. 设计令牌（仅在 snaplink-polish 之上覆盖差异值，其余沿用基础层）          */
-/* ------------------------------------------------------------------------- */
-.dd-snaplink,
-.dd-snaplink.is-workbench-shell {
-  --snap-surface-hover: rgba(15, 23, 42, 0.04);
-  --snap-placeholder: #94a3b8;
-  --snap-green-soft: rgba(37, 99, 235, 0.1);
-  --snap-warning: #d97706;
-  --snap-danger: #dc2626;
-  --snap-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --snap-shadow-md: 0 6px 16px -4px rgba(15, 23, 42, 0.08);
-  --snap-shadow-lg: 0 16px 32px -8px rgba(15, 23, 42, 0.12);
-  --snap-shadow-glass: 0 10px 30px -6px rgba(15, 23, 42, 0.08);
-  letter-spacing: -0.01em;
-  background: var(--snap-bg);
-}
-
-/* ------------------------------------------------------------------------- */
-/* 2. 深色令牌                                                               */
-/* ------------------------------------------------------------------------- */
-:root.dark .dd-snaplink,
-:root[data-theme-mode="dark"] .dd-snaplink {
-  --snap-bg: #0f1115;
-  --snap-surface: #16181d;
-  --snap-surface-solid: #16181d;
-  --snap-surface-hover: rgba(255, 255, 255, 0.055);
-  --snap-panel: #12151a;
-  --snap-sidebar: #0b0d11;
-  --snap-glass-blur: blur(14px) saturate(120%);
-  --snap-ink: #e6e8eb;
-  --snap-ink-soft: #9aa3ad;
-  --snap-muted: #6b7680;
-  --snap-placeholder: #4b5560;
-  --snap-border: rgba(255, 255, 255, 0.1);
-  --snap-border-soft: rgba(255, 255, 255, 0.06);
-  --snap-line: rgba(255, 255, 255, 0.1);
-  --snap-green: #60a5fa;
-  --snap-green-deep: #93c5fd;
-  --snap-green-action: #60a5fa;
-  --snap-green-gradient: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
-  --snap-green-soft: rgba(96, 165, 250, 0.16);
-  --snap-green-glow: 0 4px 16px rgba(96, 165, 250, 0.28);
-  --snap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --snap-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.35);
-  --snap-shadow-lg: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
-  --snap-shadow-glass: 0 10px 30px -6px rgba(0, 0, 0, 0.45);
-  background: var(--snap-bg);
-}
-
-/* ------------------------------------------------------------------------- */
-/* 3. 侧栏导航（实底冷中性，激活态用蓝浅底而非渐变）                            */
+/* 1. 侧栏导航（实底冷中性，激活态用蓝浅底而非渐变）                            */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
 .dd-snaplink__rail-nav button.is-active {
@@ -88,7 +38,7 @@
 }
 
 /* ------------------------------------------------------------------------- */
-/* 4. 主/次按钮（主按钮：实底蓝，去除渐变）                                    */
+/* 2. 主/次按钮（主按钮：实底蓝，去除渐变）                                    */
 /* ------------------------------------------------------------------------- */
 button.is-primary,
 .dd-snaplink button.is-primary,
@@ -107,7 +57,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 5. 卡片：去玻璃，改实底 + 冷发丝线 + 收紧圆角                                */
+/* 3. 卡片：去玻璃，改实底 + 冷发丝线 + 收紧圆角                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-card {
   border-radius: 14px !important;
@@ -137,7 +87,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 6. 消息气泡（自己：实底蓝；对端：白底）                                    */
+/* 4. 消息气泡（自己：实底蓝；对端：白底）                                    */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__row.is-self .dd-snaplink__bubble {
   background: var(--snap-green) !important;
@@ -160,7 +110,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 7. 焦点环 + 选中文本（蓝色）                                                */
+/* 5. 焦点环 + 选中文本（蓝色）                                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink :focus-visible {
   outline: 2px solid var(--snap-green);
@@ -179,7 +129,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 8. 输入框聚焦（蓝边框 + 蓝浅光环）                                          */
+/* 6. 输入框聚焦（蓝边框 + 蓝浅光环）                                          */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__settings-field input:focus {
   border-color: var(--snap-green) !important;
@@ -198,7 +148,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 9. 标签 / 徽章：蓝浅底 + 蓝字                                                */
+/* 7. 标签 / 徽章：蓝浅底 + 蓝字                                                */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-tag.is-green,
 .dd-snaplink__workshop-tag.is-purple {
@@ -213,7 +163,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 10. 工坊卡片图标：统一蓝系（替代多色）                                      */
+/* 8. 工坊卡片图标：统一蓝系（替代多色）                                      */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-card-icon.is-sandbox,
 .dd-snaplink__workshop-card-icon.is-ai {
@@ -272,7 +222,7 @@ button.is-primary:hover:not(:disabled),
 }
 
 /* ------------------------------------------------------------------------- */
-/* 11. Portal 元素（不继承 --snap-* 作用域，用字面蓝值）                       */
+/* 9. Portal 元素（不继承 --snap-* 作用域，用字面蓝值）                       */
 /* ------------------------------------------------------------------------- */
 .dd-cookie-notice__actions button.is-primary {
   background: #2563eb !important;
