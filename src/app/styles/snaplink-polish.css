@@ -2460,6 +2460,30 @@
   color: var(--snap-green-deep) !important;
 }
 
+/* Transfer success mini-banner + room tools hover → brand indigo (no green) */
+.dd-snaplink__transfer-mini-banner {
+  background: var(--snap-green-soft) !important;
+  border-bottom-color: var(--snap-border) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__transfer-mini-banner i {
+  background: var(--snap-green-gradient) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14) !important;
+}
+
+.dd-snaplink__transfer-mini-banner em {
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__room-more-tools button:hover,
+.dd-snaplink__room-more-tools button:focus-visible {
+  outline: none !important;
+  border-color: var(--snap-green) !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
 .dd-snaplink__transfer-empty-actions button,
 .dd-snaplink__empty-actions button {
   background: var(--snap-surface) !important;
