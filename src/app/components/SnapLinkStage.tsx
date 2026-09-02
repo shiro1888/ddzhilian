@@ -897,6 +897,14 @@ export function SnapLinkStage({
     }
 
     handledInitialDesktopRoomOpenRef.current = true
+
+    // 用户显式带 mode/tab 返回（例如从工具返回「工坊 / 设备 / 传输 / 我的」）时，
+    // 尊重该模式，不再自动恢复上次会话，避免被会话视图盖掉目标面板。
+    const explicitModeParams = new URLSearchParams(window.location.search)
+    if (explicitModeParams.get('mode') || explicitModeParams.get('tab')) {
+      return
+    }
+
     setIsLobbyOpen(false)
   }, [activeView, isLobbyOpen, selectedRoomId])
 
