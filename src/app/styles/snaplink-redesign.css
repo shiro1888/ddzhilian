@@ -19,21 +19,21 @@
 /* ------------------------------------------------------------------------- */
 .dd-snaplink,
 .dd-snaplink.is-workbench-shell {
-  --snap-bg: #f5f1ea;
+  --snap-bg: #f6f7f9;
   --snap-surface: #ffffff;
   --snap-surface-solid: #ffffff;
-  --snap-surface-hover: rgba(28, 25, 23, 0.045);
-  --snap-panel: #faf7f2;
-  --snap-sidebar: #efebe4;
+  --snap-surface-hover: rgba(15, 23, 42, 0.04);
+  --snap-panel: #fbfcfd;
+  --snap-sidebar: #f1f3f5;
   --snap-glass-blur: blur(14px) saturate(120%);
-  --snap-ink: #1c1917;
-  --snap-ink-soft: #57534e;
-  --snap-muted: #6e655c;
+  --snap-ink: #0f172a;
+  --snap-ink-soft: #475569;
+  --snap-muted: #64748b;
   --snap-ink-muted: var(--snap-muted);
-  --snap-placeholder: #a8a29c;
-  --snap-border: #e6e0d8;
-  --snap-border-soft: #efeae3;
-  --snap-line: #e6e0d8;
+  --snap-placeholder: #94a3b8;
+  --snap-border: #e5e7eb;
+  --snap-border-soft: #f0f1f3;
+  --snap-line: #e5e7eb;
   --snap-green: #2563eb;
   --snap-green-deep: #1d4ed8;
   --snap-green-action: #2563eb;
@@ -43,15 +43,15 @@
   --snap-warning: #d97706;
   --snap-warning-text: #b45309;
   --snap-danger: #dc2626;
-  --snap-shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.05);
-  --snap-shadow-md: 0 6px 16px -4px rgba(28, 25, 23, 0.08);
-  --snap-shadow-lg: 0 16px 32px -8px rgba(28, 25, 23, 0.12);
-  --snap-shadow-glass: 0 10px 30px -6px rgba(28, 25, 23, 0.08);
+  --snap-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --snap-shadow-md: 0 6px 16px -4px rgba(15, 23, 42, 0.08);
+  --snap-shadow-lg: 0 16px 32px -8px rgba(15, 23, 42, 0.12);
+  --snap-shadow-glass: 0 10px 30px -6px rgba(15, 23, 42, 0.08);
   letter-spacing: -0.01em;
   background:
-    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(37, 99, 235, 0.07), transparent 62%),
-    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(37, 99, 235, 0.05), transparent 58%),
-    linear-gradient(180deg, #f0ebe2 0%, var(--snap-bg) 28%, var(--snap-bg) 100%),
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(37, 99, 235, 0.06), transparent 62%),
+    radial-gradient(ellipse 70% 50% at 96% 108%, rgba(37, 99, 235, 0.04), transparent 58%),
+    linear-gradient(180deg, #eef2f7 0%, var(--snap-bg) 30%, var(--snap-bg) 100%),
     var(--snap-bg);
 }
 
