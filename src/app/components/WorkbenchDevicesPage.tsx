@@ -1,4 +1,5 @@
-import { Monitor, Search } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowRight, KeyRound, Monitor, Radio, Search, ShieldCheck, Wifi } from 'lucide-react'
 import type { OnlineDeviceListItem } from '../types'
 import {
   resolveSnapLinkDeviceKind,
@@ -37,6 +38,8 @@ export function WorkbenchDevicesPage({
   onSendFile,
   onTrustDevice,
 }: WorkbenchDevicesPageProps) {
+  const [manualCodeDraft, setManualCodeDraft] = useState('')
+  const [manualCodeError, setManualCodeError] = useState<string | null>(null)
   const activeDevice = selectedDevice
   const normalizedDeviceQuery = searchQuery.trim().toLowerCase()
   const filteredDeviceItems = devices.filter((device) => {
@@ -51,6 +54,21 @@ export function WorkbenchDevicesPage({
       device.shortCode,
     ].filter(Boolean).join(' ').toLowerCase().includes(normalizedDeviceQuery)
   })
+
+  const handleManualCodeSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const trimmed = manualCodeDraft.trim().toUpperCase()
+    if (!trimmed) {
+      setManualCodeError('请输入 6 位短码')
+      return
+    }
+    if (trimmed.length < 4) {
+      setManualCodeError('短码格式不正确')
+      return
+    }
+    setManualCodeError(null)
+    onSendText(trimmed)
+  }
 
   return (
     <section className="dd-snaplink__devices-shell" aria-label="设备工作台">
@@ -120,8 +138,10 @@ export function WorkbenchDevicesPage({
               )
             })}
           {devices.length === 0 ? (
-            <div className="dd-snaplink__conversation-empty">
-              暂无附近设备
+            <div className="dd-snaplink__conversation-empty dd-snaplink__devices-empty-placeholder">
+              <Radio size={20} strokeWidth={1.8} className="dd-snaplink__devices-empty-icon" />
+              <strong>暂无附近设备</strong>
+              <small>正在持续扫描局域网广播...</small>
             </div>
           ) : filteredDeviceItems.length === 0 ? (
             <div className="dd-snaplink__conversation-empty">
@@ -132,13 +152,16 @@ export function WorkbenchDevicesPage({
       </aside>
 
       <div className="dd-snaplink__devices-detail" aria-label="设备详情">
-        <DeviceRadar
-          devices={devices}
-          selectedDeviceId={activeDevice?.deviceId ?? null}
-          renderIcon={(device) => <WorkbenchDeviceIcon device={device} />}
-          onSelect={onSelectDevice}
-          onOpenConversation={onSendText}
-        />
+        <div className="dd-snaplink__devices-radar-wrapper">
+          <DeviceRadar
+            devices={devices}
+            selectedDeviceId={activeDevice?.deviceId ?? null}
+            renderIcon={(device) => <WorkbenchDeviceIcon device={device} />}
+            onSelect={onSelectDevice}
+            onOpenConversation={onSendText}
+          />
+        </div>
+
         {activeDevice ? (
           <section className="dd-snaplink__device-detail-card">
             <span className={`dd-snaplink__device-detail-icon is-${resolveSnapLinkDeviceKind(activeDevice.platform)}`} aria-hidden="true">
@@ -179,20 +202,66 @@ export function WorkbenchDevicesPage({
             </div>
           </section>
         ) : (
-          <section className="dd-snaplink__device-detail-card is-empty">
-            <span className="dd-snaplink__device-detail-icon is-empty" aria-hidden="true">
-              <Monitor size={24} strokeWidth={1.8} />
-            </span>
-            <span className="dd-snaplink__device-detail-copy">
-              <strong>等待附近设备</strong>
-              <small>让另一台设备打开 DD直连，保持在同一网络或登录同一账号。</small>
-            </span>
-            <div className="dd-snaplink__device-detail-actions">
-              <button type="button" className="is-primary" onClick={onRescan}>
-                重新查找
-              </button>
+          <div className="dd-snaplink__devices-station-stack">
+            {/* 1. 等待雷达发现 */}
+            <section className="dd-snaplink__device-detail-card is-empty">
+              <span className="dd-snaplink__device-detail-icon is-empty" aria-hidden="true">
+                <Monitor size={22} strokeWidth={1.8} />
+              </span>
+              <span className="dd-snaplink__device-detail-copy">
+                <strong>等待附近设备</strong>
+                <small>局域网雷达持续探测中，请确保对端设备保持连接在同一 Wi-Fi 或局域网。</small>
+              </span>
+              <div className="dd-snaplink__device-detail-actions">
+                <button type="button" className="is-primary" onClick={onRescan}>
+                  重新查找
+                </button>
+              </div>
+            </section>
+
+            {/* 2. 跨网段短码直连 */}
+            <section className="dd-snaplink__device-detail-card is-code-card">
+              <div className="dd-snaplink__device-code-head">
+                <span className="dd-snaplink__device-code-icon" aria-hidden="true">
+                  <KeyRound size={18} strokeWidth={2} />
+                </span>
+                <div>
+                  <strong>跨网段短码直连</strong>
+                  <small>若处于不同 Wi-Fi 或热点，输入对端 6 位短码即可秒速建立 P2P 隧道</small>
+                </div>
+              </div>
+              <form className="dd-snaplink__device-code-form" onSubmit={handleManualCodeSubmit}>
+                <input
+                  value={manualCodeDraft}
+                  placeholder="输入 6 位直连短码"
+                  maxLength={12}
+                  onChange={(e) => {
+                    setManualCodeDraft(e.target.value.toUpperCase())
+                    setManualCodeError(null)
+                  }}
+                />
+                <button type="submit" disabled={!manualCodeDraft.trim()}>
+                  直连
+                  <ArrowRight size={14} strokeWidth={2.4} />
+                </button>
+              </form>
+              {manualCodeError ? (
+                <p className="dd-snaplink__device-code-error">{manualCodeError}</p>
+              ) : null}
+            </section>
+
+            {/* 3. 局域网协议与安全保障 */}
+            <div className="dd-snaplink__device-station-badges">
+              <span>
+                <Wifi size={13} strokeWidth={2} />
+                局域网零流量直连
+              </span>
+              <span>
+                <ShieldCheck size={13} strokeWidth={2} />
+                DTLS-SRTP 物理加密
+              </span>
             </div>
-          </section>
+          </div>
         )}
       </div>
     </section>

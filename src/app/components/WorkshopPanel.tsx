@@ -163,6 +163,56 @@ export function WorkshopPanel({
         </button>
       </div>
 
+      <section className="dd-snaplink__workshop-workflows" aria-label="生产力联动特性">
+        <div className="dd-snaplink__workshop-workflows-head">
+          <Sparkles size={16} strokeWidth={2} aria-hidden="true" />
+          <strong>扩展工作流与直连生态联动</strong>
+          <small>工具产生的所有输出均与会话和文件流打通，无需来回切换</small>
+        </div>
+
+        <div className="dd-snaplink__workshop-workflows-grid">
+          <div className="dd-snaplink__workshop-workflow-card">
+            <div className="dd-snaplink__workshop-workflow-icon is-sandbox">
+              <Code2 size={16} strokeWidth={2} />
+            </div>
+            <div className="dd-snaplink__workshop-workflow-body">
+              <strong>沙箱运行结果一键回传</strong>
+              <p>终端运行产生的 Python/Java 运行日志或架构图渲染结果，可一键发送至当前聊天或对端设备。</p>
+            </div>
+          </div>
+
+          <div className="dd-snaplink__workshop-workflow-card">
+            <div className="dd-snaplink__workshop-workflow-icon is-ai">
+              <Cpu size={16} strokeWidth={2} />
+            </div>
+            <div className="dd-snaplink__workshop-workflow-body">
+              <strong>多模型 AI 深度思考问答</strong>
+              <p>支持 DeepSeek R1 深度思考推理，可直接读取传输进来的文件与代码，生成精细总结与分析。</p>
+            </div>
+          </div>
+
+          <div className="dd-snaplink__workshop-workflow-card">
+            <div className="dd-snaplink__workshop-workflow-icon is-image">
+              <ImageIcon size={16} strokeWidth={2} />
+            </div>
+            <div className="dd-snaplink__workshop-workflow-body">
+              <strong>AI 绘图高清画廊与直连分发</strong>
+              <p>Flux Schnell / SDXL 高精文生图，作品自动归档并生成局域网端到端无损秒传链接。</p>
+            </div>
+          </div>
+
+          <div className="dd-snaplink__workshop-workflow-card">
+            <div className="dd-snaplink__workshop-workflow-icon is-ocr">
+              <ScanText size={16} strokeWidth={2} />
+            </div>
+            <div className="dd-snaplink__workshop-workflow-body">
+              <strong>纯本地离线 OCR 高精提取</strong>
+              <p>基于浏览器端离线算力，截屏、表格与长文识别绝不上传云端，隐私绝对安全。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <footer className="dd-snaplink__workshop-footer">
         <div className="dd-snaplink__workshop-tip">
           <span className="dd-snaplink__workshop-tip-dot" />

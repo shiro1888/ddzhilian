@@ -15,7 +15,6 @@
   --snap-surface-hover: rgba(15, 23, 42, 0.04);
   --snap-panel: #fbfcfd;
   --snap-sidebar: #f1f3f5;
-  --snap-glass-blur: blur(14px) saturate(120%);
   --snap-ink: #0f172a;
   --snap-ink-soft: #475569;
   --snap-muted: #64748b;
@@ -24,12 +23,12 @@
   --snap-border: #e5e7eb;
   --snap-border-soft: #f0f1f3;
   --snap-line: #e5e7eb;
-  --snap-green: #2563eb;
-  --snap-green-deep: #1d4ed8;
-  --snap-green-action: #2563eb;
-  --snap-green-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  --snap-green-soft: rgba(37, 99, 235, 0.1);
-  --snap-green-glow: 0 4px 14px rgba(37, 99, 235, 0.26);
+  --snap-green: #10b981;
+  --snap-green-deep: #059669;
+  --snap-green-action: #10b981;
+  --snap-green-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --snap-green-soft: rgba(16, 185, 129, 0.12);
+  --snap-green-glow: 0 4px 16px rgba(16, 185, 129, 0.25);
   --snap-warning: #d97706;
   --snap-warning-text: #b45309;
   --snap-danger: #dc2626;
@@ -222,8 +221,6 @@
   padding: 0 16px;
   border-top: 1px solid var(--snap-border-soft);
   background: var(--snap-panel);
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
 }
 
 .dd-snaplink__legal-bar .dd-snaplink__legal-links {
@@ -248,8 +245,6 @@
   padding: 14px 0 14px;
   border-right: 1px solid var(--snap-border);
   background: var(--snap-sidebar);
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
   gap: 12px;
   z-index: 20;
 }
@@ -329,7 +324,7 @@
   background: var(--snap-green-gradient) !important;
   color: #ffffff !important;
   font-weight: 600 !important;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+  box-shadow: var(--snap-green-glow) !important;
   border: 0 !important;
 }
 
@@ -338,7 +333,7 @@
 :root[data-theme-mode="dark"] .dd-snaplink__rail-nav button.is-active {
   background: var(--snap-green-gradient) !important;
   color: #ffffff !important;
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4) !important;
   border: 0 !important;
 }
 
@@ -417,8 +412,6 @@
   min-width: 290px;
   border-right: 1px solid var(--snap-border);
   background: var(--snap-surface);
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
   overflow: hidden;
 }
 
@@ -535,12 +528,11 @@
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 56px;
-  padding: 7px 10px;
-  margin: 1px 0;
+  min-height: 58px;
+  padding: 8px 12px;
+  margin: 2px 6px;
   border: 1px solid transparent !important;
-  border-left: 1px solid transparent !important;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -548,23 +540,23 @@
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row:hover {
-  background: rgba(37, 99, 235, 0.06);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row:hover {
-  background: rgba(37, 99, 235, 0.09);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.13), rgba(37, 99, 235, 0.05));
-  border-color: rgba(37, 99, 235, 0.32) !important;
-  box-shadow: inset 3px 0 0 0 #2563eb, 0 2px 8px rgba(37, 99, 235, 0.12);
+  background: var(--snap-green-soft) !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.1) !important;
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(37, 99, 235, 0.08));
-  border-color: rgba(96, 165, 250, 0.35) !important;
-  box-shadow: inset 3px 0 0 0 #60a5fa, 0 2px 10px rgba(37, 99, 235, 0.2);
+  background: rgba(52, 211, 153, 0.14) !important;
+  border-color: rgba(52, 211, 153, 0.32) !important;
+  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.2) !important;
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-avatar {
@@ -833,7 +825,7 @@
 
 :root.dark .dd-snaplink__room-head,
 :root[data-theme-mode="dark"] .dd-snaplink__room-head {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -844,14 +836,14 @@
 
 :root.dark .dd-snaplink__room-more-trigger,
 :root[data-theme-mode="dark"] .dd-snaplink__room-more-trigger {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #94a3b8 !important;
 }
 
 :root.dark .dd-snaplink__room-more-panel,
 :root[data-theme-mode="dark"] .dd-snaplink__room-more-panel {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.6) !important;
 }
@@ -865,8 +857,6 @@
   border: 1px solid var(--snap-border);
   border-radius: 14px;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
   box-shadow: var(--snap-shadow-lg);
   z-index: 50;
   display: flex;
@@ -1003,41 +993,46 @@
 
 /* Streamlined Compact Connection Ribbon */
 .dd-snaplink__room-route {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding: 0 20px;
-  border-top: 1px solid var(--snap-border-soft);
-  background: var(--snap-panel);
-  font-size: 11px;
-  color: var(--snap-muted);
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  height: 36px !important;
+  padding: 0 18px !important;
+  background: var(--snap-surface) !important;
+  border-bottom: 1px solid var(--snap-border-soft) !important;
+  border-top: 0 !important;
+  font-size: 11.5px !important;
+  color: var(--snap-muted) !important;
 }
 
 .dd-snaplink__room-route-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 550;
-  color: var(--snap-ink-soft);
-  font-size: 11px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-weight: 500 !important;
+  color: var(--snap-ink-soft) !important;
+  font-size: 11.5px !important;
+  flex-shrink: 0 !important;
 }
 
 .dd-snaplink__room-route-node > i {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--snap-muted);
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: var(--snap-placeholder) !important;
 }
 
 .dd-snaplink__room-route.is-safe .dd-snaplink__room-route-node > i {
-  background: var(--snap-green-gradient);
+  background: var(--snap-green) !important;
+  box-shadow: 0 0 6px var(--snap-green-glow) !important;
 }
 
 .dd-snaplink__room-route-track {
   flex: 1 !important;
-  min-width: 16px !important;
-  border-top: 1px dashed color-mix(in srgb, var(--snap-green) 46%, var(--snap-border)) !important;
+  height: 1px !important;
+  margin: 0 12px !important;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.35), rgba(16, 185, 129, 0.1)) !important;
+  border-top: 0 !important;
 }
 
 .dd-snaplink__room-route-track > i {
@@ -1045,49 +1040,54 @@
 }
 
 .dd-snaplink__room-route-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--snap-border-soft);
-  margin: 0 8px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  background: var(--snap-bg) !important;
+  border: 1px solid var(--snap-border) !important;
+  margin: 0 4px !important;
+  flex-shrink: 0 !important;
 }
 
 .dd-snaplink__room-route-state small {
-  color: var(--snap-muted);
-  font-size: 10px;
+  color: var(--snap-muted) !important;
+  font-size: 10px !important;
 }
 
 .dd-snaplink__room-route-state strong {
-  color: var(--snap-ink-soft);
-  font-weight: 600;
-  font-size: 11px;
+  color: var(--snap-ink-soft) !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
 }
 
 .dd-snaplink__room-route.is-safe .dd-snaplink__room-route-state {
-  background: var(--snap-green-soft);
+  background: var(--snap-green-soft) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
 }
 
 .dd-snaplink__room-route.is-safe .dd-snaplink__room-route-state strong {
-  color: var(--snap-green-deep);
+  color: var(--snap-green-deep) !important;
 }
 
 .dd-snaplink__room-route-facts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
 }
 
 .dd-snaplink__room-route-facts span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--snap-border);
-  background: var(--snap-surface);
-  font-size: 11px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--snap-border-soft) !important;
+  background: var(--snap-bg) !important;
+  font-size: 11px !important;
+  color: var(--snap-ink-soft) !important;
 }
 
 .dd-snaplink__room-route-facts small {
@@ -1411,8 +1411,6 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
   background: #ffffff;
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
   box-shadow: 0 16px 40px -4px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.03);
   color: #0f172a;
 }
@@ -1485,16 +1483,10 @@
   color: #ffffff;
 }
 
-.dd-cookie-notice__actions button.is-primary:hover {
-  background: #1d4ed8;
-}
-
 :root.dark .dd-cookie-notice,
 :root[data-theme-mode="dark"] .dd-cookie-notice {
   border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(20, 20, 30, 0.72);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  backdrop-filter: blur(22px) saturate(140%);
+  background: var(--snap-surface);
   box-shadow: 0 16px 40px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
   color: #e6edf3;
 }
@@ -1539,7 +1531,6 @@
   --snap-surface-hover: rgba(255, 255, 255, 0.055);
   --snap-panel: #12151a;
   --snap-sidebar: #0b0d11;
-  --snap-glass-blur: blur(14px) saturate(120%);
   --snap-ink: #e6e8eb;
   --snap-ink-soft: #9aa3ad;
   --snap-muted: #6b7680;
@@ -1547,12 +1538,12 @@
   --snap-border: rgba(255, 255, 255, 0.1);
   --snap-border-soft: rgba(255, 255, 255, 0.06);
   --snap-line: rgba(255, 255, 255, 0.1);
-  --snap-green: #60a5fa;
-  --snap-green-deep: #93c5fd;
-  --snap-green-action: #60a5fa;
-  --snap-green-gradient: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
-  --snap-green-soft: rgba(96, 165, 250, 0.16);
-  --snap-green-glow: 0 4px 16px rgba(96, 165, 250, 0.28);
+  --snap-green: #34d399;
+  --snap-green-deep: #10b981;
+  --snap-green-action: #10b981;
+  --snap-green-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --snap-green-soft: rgba(52, 211, 153, 0.16);
+  --snap-green-glow: 0 4px 16px rgba(16, 185, 129, 0.28);
   --snap-warning-text: #fbbf24;
   --snap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --snap-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.35);
@@ -1574,7 +1565,7 @@
 /* Dark Mode Settings Cards & Fields */
 :root.dark .dd-snaplink__settings-card,
 :root[data-theme-mode="dark"] .dd-snaplink__settings-card {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -1632,7 +1623,7 @@
 :root[data-theme-mode="dark"] .dd-snaplink__settings-card:not(.is-my-shortcuts) .dd-snaplink__settings-switch {
   background: rgba(255, 255, 255, 0.04) !important;
   color: #f8fafc !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid var(--snap-border) !important;
   border-radius: 10px !important;
 }
 
@@ -1710,7 +1701,7 @@
 
 :root.dark .dd-snaplink__settings-avatar,
 :root[data-theme-mode="dark"] .dd-snaplink__settings-avatar {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -1828,7 +1819,6 @@
   border-radius: 18px !important;
   background: var(--snap-surface) !important;
   box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
-  backdrop-filter: blur(20px) !important;
   z-index: 70 !important;
   animation: slideUpFade 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -1998,7 +1988,6 @@
   border-radius: 20px;
   background: var(--snap-surface);
   box-shadow: 0 20px 40px -6px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  backdrop-filter: blur(24px);
   z-index: 70;
   animation: slideUpFade 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -2157,7 +2146,7 @@
 
 :root.dark .dd-snaplink__emoji-picker,
 :root[data-theme-mode="dark"] .dd-snaplink__emoji-picker {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 20px 40px -6px rgba(0, 0, 0, 0.6) !important;
 }
@@ -2176,7 +2165,7 @@
 
 :root.dark .dd-snaplink__emoji-backspace,
 :root[data-theme-mode="dark"] .dd-snaplink__emoji-backspace {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
 }
@@ -2525,12 +2514,6 @@
   color: var(--snap-muted) !important;
 }
 
-.dd-snaplink__transport-badge.is-lan,
-.dd-snaplink__trust-badge.is-trusted {
-  background: rgba(37, 99, 235, 0.12) !important;
-  color: #2563eb !important;
-}
-
 .dd-snaplink__transport-badge.is-remote {
   background: rgba(87, 107, 149, 0.12) !important;
   color: var(--snap-blue) !important;
@@ -2811,8 +2794,6 @@
   border: 1px solid var(--snap-border) !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.08) !important;
   padding: 24px !important;
   animation: slideUpFade 140ms ease;
@@ -2820,10 +2801,8 @@
 
 :root.dark .dd-snaplink__device-detail-card,
 :root[data-theme-mode="dark"] .dd-snaplink__device-detail-card {
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
-  backdrop-filter: blur(22px) saturate(140%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
   box-shadow: 0 10px 36px -4px rgba(0, 0, 0, 0.5) !important;
 }
 
@@ -2978,8 +2957,6 @@
   height: 100% !important;
   border-right: 1px solid var(--snap-border) !important;
   background: var(--snap-panel) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -3081,8 +3058,6 @@
   flex-direction: column !important;
   overflow: hidden !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
 }
 
 .dd-ai-chat__topbar {
@@ -3094,8 +3069,6 @@
   padding: 0 28px !important;
   border-bottom: 1px solid var(--snap-border) !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   gap: 16px !important;
 }
 
@@ -3429,8 +3402,6 @@
   border: 1px solid var(--snap-border) !important;
   border-radius: 18px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   box-shadow: var(--snap-shadow-md) !important;
   padding: 14px 18px !important;
 }
@@ -3643,8 +3614,6 @@
   padding: 20px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   border: 1px solid rgba(0, 0, 0, 0.06) !important;
   box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
   transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
@@ -3652,10 +3621,8 @@
 
 :root.dark .dd-snaplink__settings-card,
 :root[data-theme-mode="dark"] .dd-snaplink__settings-card {
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
-  backdrop-filter: blur(22px) saturate(140%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
   box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.4) !important;
 }
 
@@ -3813,7 +3780,8 @@
   gap: 8px !important;
 }
 
-.dd-snaplink__settings-device-facts span {
+.dd-snaplink__settings-device-facts span,
+.dd-snaplink__settings-fact-btn {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
@@ -3824,14 +3792,40 @@
   background: var(--snap-bg) !important;
   border: 1px solid var(--snap-border) !important;
   text-align: center !important;
+  cursor: default !important;
 }
 
-.dd-snaplink__settings-device-facts small {
+.dd-snaplink__settings-fact-btn {
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+  position: relative !important;
+}
+
+.dd-snaplink__settings-fact-btn:hover:not(:disabled) {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-green) !important;
+  transform: translateY(-1px) !important;
+}
+
+.dd-snaplink__settings-fact-btn.is-copied {
+  border-color: var(--snap-green) !important;
+  background: var(--snap-green-soft) !important;
+}
+
+.dd-snaplink__settings-fact-btn strong {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.dd-snaplink__settings-device-facts small,
+.dd-snaplink__settings-fact-btn small {
   font-size: 11px !important;
   color: var(--snap-ink-muted) !important;
 }
 
-.dd-snaplink__settings-device-facts strong {
+.dd-snaplink__settings-device-facts strong,
+.dd-snaplink__settings-fact-btn strong {
   font-size: 12px !important;
   font-weight: 600 !important;
   color: var(--snap-ink) !important;
@@ -3843,19 +3837,19 @@
   height: 40px !important;
   border-radius: 12px !important;
   border: none !important;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  background: var(--snap-green-gradient) !important;
   color: #ffffff !important;
   font-size: 13.5px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
   transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.25) !important;
+  box-shadow: var(--snap-green-glow) !important;
 }
 
 .dd-snaplink__settings-submit-btn:hover,
 .dd-snaplink__settings-card > button[type="submit"]:hover {
   transform: translateY(-1px) !important;
-  box-shadow: 0 5px 16px rgba(37, 99, 235, 0.35) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35) !important;
 }
 
 .dd-snaplink__settings-submit-btn:active,
@@ -3887,16 +3881,16 @@
 }
 
 .dd-snaplink__settings-mode-option:hover {
-  border-color: rgba(37, 99, 235, 0.4) !important;
+  border-color: var(--snap-green) !important;
   background: var(--snap-surface) !important;
   transform: translateY(-1px) !important;
 }
 
 .dd-snaplink__settings-mode-option.is-active {
-  border-color: #2563eb !important;
-  background: rgba(37, 99, 235, 0.08) !important;
-  color: #2563eb !important;
-  box-shadow: 0 0 0 1px #2563eb, 0 4px 14px rgba(37, 99, 235, 0.15) !important;
+  border-color: var(--snap-green) !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  box-shadow: 0 0 0 1px var(--snap-green), 0 4px 14px var(--snap-green-soft) !important;
 }
 
 .dd-snaplink__settings-mode-option-icon {
@@ -3912,7 +3906,7 @@
 }
 
 .dd-snaplink__settings-mode-option.is-active .dd-snaplink__settings-mode-option-icon {
-  background: #2563eb !important;
+  background: var(--snap-green-gradient) !important;
   color: #ffffff !important;
 }
 
@@ -3937,15 +3931,6 @@
   padding: 8px 12px !important;
   border-radius: 10px !important;
   background: rgba(0, 0, 0, 0.03) !important;
-}
-
-.dd-snaplink__settings-mode-note-badge {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  padding: 8px 12px !important;
-  border-radius: 10px !important;
-  background: rgba(0, 0, 0, 0.03) !important;
   border: 1px solid rgba(0, 0, 0, 0.04) !important;
 }
 
@@ -3959,8 +3944,8 @@
   width: 6px !important;
   height: 6px !important;
   border-radius: 50% !important;
-  background: #2563eb !important;
-  box-shadow: 0 0 8px rgba(37, 99, 235, 0.6) !important;
+  background: var(--snap-green) !important;
+  box-shadow: 0 0 8px var(--snap-green-glow) !important;
   flex-shrink: 0 !important;
 }
 
@@ -3973,7 +3958,7 @@
 
 :root.dark .dd-snaplink__settings-mode-note,
 :root[data-theme-mode="dark"] .dd-snaplink__settings-mode-note {
-  color: #94a3b8 !important;
+  color: var(--snap-ink-soft) !important;
 }
 
 /* Switches List */
@@ -3999,7 +3984,7 @@
 
 .dd-snaplink__settings-switch:hover {
   background: var(--snap-surface) !important;
-  border-color: rgba(37, 99, 235, 0.3) !important;
+  border-color: var(--snap-green-border) !important;
 }
 
 .dd-snaplink__settings-switch-text {
@@ -4039,8 +4024,8 @@
 }
 
 .dd-snaplink__settings-switch.is-on .dd-snaplink__settings-switch-track {
-  background: #2563eb !important;
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.4) !important;
+  background: var(--snap-green) !important;
+  box-shadow: 0 0 10px var(--snap-green-soft) !important;
 }
 
 .dd-snaplink__settings-switch-thumb {
@@ -4104,18 +4089,14 @@
   padding: 20px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   border: 1px solid var(--snap-border) !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03) !important;
 }
 
 :root.dark .dd-snaplink__workshop-hero,
 :root[data-theme-mode="dark"] .dd-snaplink__workshop-hero {
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
-  backdrop-filter: blur(22px) saturate(140%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
   box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.4) !important;
 }
 
@@ -4186,8 +4167,6 @@
   padding: 20px 24px !important;
   border-radius: 20px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   border: 1px solid var(--snap-border) !important;
   color: var(--snap-ink) !important;
   cursor: pointer !important;
@@ -4199,32 +4178,14 @@
 
 :root.dark .dd-snaplink__workshop-card,
 :root[data-theme-mode="dark"] .dd-snaplink__workshop-card {
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
-  backdrop-filter: blur(22px) saturate(140%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
   box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.35) !important;
 }
 
 .dd-snaplink__workshop-card:hover {
   transform: translateY(-3px) !important;
   box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
-}
-
-.dd-snaplink__workshop-card.is-sandbox:hover {
-  border-color: rgba(37, 99, 235, 0.5) !important;
-}
-
-.dd-snaplink__workshop-card.is-ai:hover {
-  border-color: rgba(37, 99, 235, 0.5) !important;
-}
-
-.dd-snaplink__workshop-card.is-image:hover {
-  border-color: rgba(236, 72, 153, 0.5) !important;
-}
-
-.dd-snaplink__workshop-card.is-ocr:hover {
-  border-color: rgba(37, 99, 235, 0.5) !important;
 }
 
 .dd-snaplink__workshop-card-top {
@@ -4247,30 +4208,6 @@
 
 .dd-snaplink__workshop-card:hover .dd-snaplink__workshop-card-icon {
   transform: scale(1.08) !important;
-}
-
-.dd-snaplink__workshop-card-icon.is-sandbox {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
-  color: #2563eb !important;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
-}
-
-.dd-snaplink__workshop-card-icon.is-ai {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(29, 78, 216, 0.08) 100%) !important;
-  color: #2563eb !important;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
-}
-
-.dd-snaplink__workshop-card-icon.is-image {
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(219, 39, 119, 0.08) 100%) !important;
-  color: #ec4899 !important;
-  box-shadow: 0 2px 10px rgba(236, 72, 153, 0.15) !important;
-}
-
-.dd-snaplink__workshop-card-icon.is-ocr {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
-  color: #2563eb !important;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15) !important;
 }
 
 .dd-snaplink__workshop-card-meta {
@@ -4299,16 +4236,6 @@
   font-weight: 600 !important;
   padding: 1px 7px !important;
   border-radius: 9999px !important;
-}
-
-.dd-snaplink__workshop-tag.is-green {
-  background: rgba(37, 99, 235, 0.12) !important;
-  color: #2563eb !important;
-}
-
-.dd-snaplink__workshop-tag.is-purple {
-  background: rgba(37, 99, 235, 0.12) !important;
-  color: #2563eb !important;
 }
 
 .dd-snaplink__workshop-tag.is-pink {
@@ -4408,8 +4335,6 @@
   border-radius: 20px !important;
   background: #ffffff !important;
   box-shadow: 0 24px 60px -8px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
-  backdrop-filter: blur(24px) saturate(160%) !important;
   z-index: 100 !important;
   display: flex !important;
   flex-direction: column !important;
@@ -4594,7 +4519,6 @@
   padding: 0 12px !important;
   border-radius: 999px !important;
   background: rgba(0, 0, 0, 0.7) !important;
-  backdrop-filter: blur(8px) !important;
   border: 0 !important;
   color: #ffffff !important;
   font-size: 11px !important;
@@ -4679,7 +4603,7 @@
 
 :root.dark .dd-ocr-panel__meta span,
 :root[data-theme-mode="dark"] .dd-ocr-panel__meta span {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #94a3b8 !important;
 }
@@ -4809,8 +4733,6 @@
   padding: 12px 24px !important;
   border-bottom: 1px solid var(--snap-border) !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   flex-shrink: 0 !important;
 }
 
@@ -4988,7 +4910,7 @@
 
 :root.dark .dd-web-command__lang-menu,
 :root[data-theme-mode="dark"] .dd-web-command__lang-menu {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 20px 48px -6px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
 }
@@ -5221,8 +5143,6 @@
   border: 1px solid var(--snap-border) !important;
   border-radius: 16px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   overflow: hidden !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
   min-height: 0 !important;
@@ -5306,7 +5226,7 @@
 }
 
 .dd-web-command__terminal-head {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
 }
@@ -5374,7 +5294,7 @@
   width: 100% !important;
   padding: 16px 20px !important;
   border: 0 !important;
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   color: #93c5fd !important;
   font-family: "JetBrains Mono", Consolas, Monaco, monospace !important;
   font-size: 13.5px !important;
@@ -5428,7 +5348,7 @@
 /* Dark Mode Fine-Tuning for Studio UI */
 :root.dark .dd-web-command__head,
 :root[data-theme-mode="dark"] .dd-web-command__head {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -5460,9 +5380,7 @@
 
 :root.dark .dd-ocr-panel,
 :root[data-theme-mode="dark"] .dd-ocr-panel {
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
-  backdrop-filter: blur(24px) saturate(140%) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -5491,7 +5409,7 @@
 
 :root.dark .dd-ocr-panel__empty-btn,
 :root[data-theme-mode="dark"] .dd-ocr-panel__empty-btn {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
 }
@@ -5512,7 +5430,7 @@
 
 :root.dark .dd-web-command__result-detail,
 :root[data-theme-mode="dark"] .dd-web-command__result-detail {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
 }
@@ -5805,8 +5723,6 @@ button.is-secondary:disabled,
   position: fixed !important;
   inset: 0 !important;
   background: rgba(8, 10, 18, 0.52) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
-  backdrop-filter: blur(14px) saturate(140%) !important;
   z-index: 9999 !important;
   display: flex !important;
   align-items: center !important;
@@ -5821,8 +5737,6 @@ button.is-secondary:disabled,
   border: 1px solid rgba(15, 23, 42, 0.08) !important;
   border-radius: 18px !important;
   background: #ffffff !important;
-  -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
-  backdrop-filter: blur(22px) saturate(160%) !important;
   box-shadow:
     0 25px 60px -12px rgba(15, 23, 42, 0.35),
     0 0 0 1px rgba(15, 23, 42, 0.03) !important;
@@ -5840,8 +5754,6 @@ button.is-secondary:disabled,
 
 .dd-command-palette__scrim {
   background: rgba(8, 10, 18, 0.46) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(130%) !important;
-  backdrop-filter: blur(12px) saturate(130%) !important;
 }
 
 .dd-command-palette__panel {
@@ -5856,8 +5768,6 @@ button.is-secondary:disabled,
   border: 1px solid var(--dd-command-border) !important;
   border-radius: 18px !important;
   background: var(--dd-command-bg) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
-  backdrop-filter: blur(22px) saturate(160%) !important;
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.32) !important;
 }
 
@@ -5875,8 +5785,6 @@ button.is-secondary:disabled,
 /* Document preview: keep a light reading surface, restyle to the product shell */
 .dd-document-preview-dialog__backdrop {
   background: rgba(8, 10, 18, 0.56) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
-  backdrop-filter: blur(14px) saturate(140%) !important;
 }
 
 .dd-document-preview-dialog__panel {
@@ -6143,7 +6051,7 @@ button.is-secondary:disabled,
 :root[data-theme-mode="dark"] .dd-command-palette__panel,
 :root.dark .dd-snaplink__room-start-card,
 :root[data-theme-mode="dark"] .dd-snaplink__room-start-card {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #e6edf3 !important;
   box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
@@ -6151,7 +6059,7 @@ button.is-secondary:disabled,
 
 :root.dark .dd-command-palette__panel,
 :root[data-theme-mode="dark"] .dd-command-palette__panel {
-  --dd-command-bg: rgba(20, 20, 30, 0.72);
+  --dd-command-bg: #16181d;
   --dd-command-bg-subtle: rgba(37, 99, 235, 0.1);
   --dd-command-border: rgba(255, 255, 255, 0.08);
   --dd-command-ink: #e6edf3;
@@ -6246,8 +6154,6 @@ button.is-secondary:disabled,
 .dd-snaplink__tool-mobile-nav,
 .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav,
 .dd-snaplink.is-workbench-shell .dd-snaplink__tool-mobile-nav {
-  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  backdrop-filter: blur(20px) saturate(180%) !important;
   border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
   background: rgba(255, 255, 255, 0.92) !important;
 }
@@ -6380,11 +6286,6 @@ button.is-secondary:disabled,
 .dd-snaplink__workbench-room:hover {
   background: var(--snap-surface-hover) !important;
   transform: translateY(-1px) !important;
-}
-
-.dd-snaplink__workbench-room.is-active,
-.dd-snaplink__workbench-room[aria-current="page"] {
-  background: rgba(37, 99, 235, 0.08) !important;
 }
 
 /* Lobby Hero Hub with Pulsing Aura */
@@ -6563,7 +6464,7 @@ button.is-secondary:disabled,
 
 :root.dark .dd-snaplink__room-empty-card,
 :root[data-theme-mode="dark"] .dd-snaplink__room-empty-card {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
 }
@@ -6577,7 +6478,7 @@ button.is-secondary:disabled,
 
 :root.dark .dd-snaplink__room-search,
 :root[data-theme-mode="dark"] .dd-snaplink__room-search {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -7162,7 +7063,7 @@ button.is-secondary:disabled,
 /* OCR Panel Dark Mode Theme */
 :root.dark .dd-ocr-panel,
 :root[data-theme-mode="dark"] .dd-ocr-panel {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f4f4f5 !important;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.6), 0 24px 60px -8px rgba(0, 0, 0, 0.5) !important;
@@ -7208,7 +7109,7 @@ button.is-secondary:disabled,
 
 :root.dark .dd-ocr-panel__empty-btn,
 :root[data-theme-mode="dark"] .dd-ocr-panel__empty-btn {
-  background: rgba(20, 20, 30, 0.72) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
   color: #f4f4f5 !important;
 }
@@ -7352,8 +7253,6 @@ button.is-secondary:disabled,
   border-top: 1px solid var(--snap-border-soft) !important;
   border-radius: 0 !important;
   background: var(--snap-panel) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   flex-shrink: 0 !important;
 }
 /* ==========================================================================
@@ -7375,8 +7274,6 @@ button.is-secondary:disabled,
   padding: 0 !important;
   border-bottom: 1px solid var(--snap-border) !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   box-sizing: border-box !important;
   position: relative !important;
   z-index: 20 !important;
@@ -7604,8 +7501,6 @@ button.is-secondary:disabled,
   padding: 6px 8px 6px 14px !important;
   border-radius: 26px !important;
   background: var(--snap-surface) !important;
-  -webkit-backdrop-filter: var(--snap-glass-blur) !important;
-  backdrop-filter: var(--snap-glass-blur) !important;
   border: 1px solid var(--snap-border) !important;
   box-shadow: var(--snap-shadow-glass) !important;
   display: flex !important;
@@ -7819,15 +7714,10 @@ button.is-secondary:disabled,
   }
 }
 
-.dd-snaplink :focus-visible {
-  outline: 2px solid var(--snap-green);
-  outline-offset: 2px;
-}
-
 /* Dark-mode error note: avoid white-tinted surfaces on dark backgrounds */
 :root.dark .dd-snaplink__workbench-note.is-error,
 :root[data-theme-mode="dark"] .dd-snaplink__workbench-note.is-error {
-  background: color-mix(in srgb, var(--danger) 14%, rgba(20, 20, 30, 0.72));
+  background: color-mix(in srgb, var(--danger) 14%, var(--snap-surface));
   border-color: color-mix(in srgb, var(--danger) 38%, transparent);
 }
 
@@ -7854,8 +7744,6 @@ button.is-secondary:disabled,
   place-items: center !important;
   padding: 16px !important;
   background: rgba(8, 10, 18, 0.52) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
-  backdrop-filter: blur(14px) saturate(140%) !important;
 }
 
 .dd-snaplink__theme-panel.is-dialog {
@@ -7867,8 +7755,6 @@ button.is-secondary:disabled,
   border: 1px solid rgba(15, 23, 42, 0.08) !important;
   border-radius: 16px !important;
   background: #ffffff !important;
-  -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
-  backdrop-filter: blur(22px) saturate(160%) !important;
   box-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.03) !important;
   z-index: 10002 !important;
   color: #0f172a !important;
@@ -7930,9 +7816,7 @@ button.is-secondary:disabled,
 :root.dark .dd-snaplink__theme-panel.is-dialog,
 :root[data-theme-mode="dark"] .dd-snaplink__theme-panel.is-dialog {
   border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(20, 20, 30, 0.72) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
-  backdrop-filter: blur(22px) saturate(140%) !important;
+  background: var(--snap-surface) !important;
   color: #e6edf3 !important;
 }
 
@@ -8014,3 +7898,883 @@ button.is-secondary:disabled,
     transition: background-color 320ms ease;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Modern Apple & macOS Flagship UX Refinements                                */
+/* -------------------------------------------------------------------------- */
+
+/* 1. Empty Room & Messages Detail Dropzone Card */
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-detail {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  padding: 40px !important;
+  background: var(--snap-bg) !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  padding: 44px 36px !important;
+  border-radius: 24px !important;
+  background: var(--snap-surface) !important;
+  border: 1.5px dashed var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-glass) !important;
+  text-align: center !important;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat:hover {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 12px 36px rgba(16, 185, 129, 0.12) !important;
+  transform: translateY(-2px) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat::before {
+  content: "" !important;
+  display: block !important;
+  width: 58px !important;
+  height: 58px !important;
+  border-radius: 18px !important;
+  background: var(--snap-green-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' x2='12' y1='3' y2='15'/%3E%3C/svg%3E") no-repeat center !important;
+  margin-bottom: 18px !important;
+  box-shadow: 0 4px 14px var(--snap-green-soft) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat strong {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: var(--snap-ink) !important;
+  margin-bottom: 8px !important;
+  letter-spacing: -0.015em !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat small,
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-empty-chat p {
+  font-size: 13px !important;
+  color: var(--snap-muted) !important;
+  line-height: 1.6 !important;
+  max-width: 360px !important;
+  margin: 0 !important;
+}
+
+/* 2. Transfers Board Centering & Segmented Controls */
+.dd-snaplink__workbench-transfer-board {
+  max-width: 880px !important;
+  margin: 0 auto !important;
+  padding: 32px 36px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink__transfer-tabs {
+  display: inline-flex !important;
+  padding: 4px !important;
+  border-radius: 12px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  gap: 4px !important;
+  margin-bottom: 24px !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+.dd-snaplink__transfer-tabs button {
+  height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--snap-muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__transfer-tabs button:hover {
+  color: var(--snap-ink) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.dark .dd-snaplink__transfer-tabs button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dd-snaplink__transfer-tabs button.is-active {
+  background: var(--snap-bg) !important;
+  color: var(--snap-green-deep) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.dark .dd-snaplink__transfer-tabs button.is-active {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #34d399 !important;
+}
+
+.dd-snaplink__workbench-room-empty.is-transfer-empty {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 56px 24px !important;
+  border-radius: 20px !important;
+  background: var(--snap-surface) !important;
+  border: 1.5px dashed var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+  text-align: center !important;
+  transition: all 180ms ease !important;
+}
+
+.dd-snaplink__workbench-room-empty.is-transfer-empty:hover {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 10px 28px rgba(16, 185, 129, 0.1) !important;
+  transform: translateY(-2px) !important;
+}
+
+.dd-snaplink__transfer-empty-actions button {
+  height: 34px !important;
+  padding: 0 18px !important;
+  border-radius: 10px !important;
+  border: 0 !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  box-shadow: var(--snap-green-glow) !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__transfer-empty-actions button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 3. Devices Radar Centered Balanced Layout */
+.dd-snaplink__devices-detail {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 36px !important;
+  padding: 40px !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  background: var(--snap-bg) !important;
+}
+
+.dd-snaplink__device-radar-card {
+  max-width: 460px !important;
+  aspect-ratio: 1 !important;
+  border-radius: 24px !important;
+  box-shadow: var(--snap-shadow-glass) !important;
+}
+
+.dd-snaplink__device-detail-card {
+  border-radius: 22px !important;
+  box-shadow: var(--snap-shadow-glass) !important;
+}
+
+.dd-snaplink__device-detail-actions button.is-primary {
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  box-shadow: var(--snap-green-glow) !important;
+}
+
+.dd-snaplink__device-detail-actions button.is-primary:hover {
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 4. Workshop Hover Elevation & Interactive Glow */
+.dd-snaplink__workshop-card {
+  transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dd-snaplink__workshop-card:hover {
+  transform: translateY(-3px) scale(1.01) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 12px 30px rgba(16, 185, 129, 0.12) !important;
+}
+
+.dd-snaplink__workshop-card:hover .dd-snaplink__workshop-arrow {
+  color: var(--snap-green) !important;
+  transform: translateX(3px) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Comprehensive Desktop Hub & Productivity Elevations                         */
+/* -------------------------------------------------------------------------- */
+
+/* 1. Messages Direct-Transfer Hub */
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-hub {
+  max-width: 640px !important;
+  padding: 38px 34px !important;
+  border-radius: 24px !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-hub::before {
+  display: none !important;
+}
+
+.dd-snaplink__messages-hub-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 5px 14px !important;
+  border-radius: 999px !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  margin-bottom: 16px !important;
+}
+
+.dd-snaplink__messages-hub-badge svg {
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink__messages-hub-badge span {
+  display: inline-block !important;
+  line-height: 1.2 !important;
+}
+
+.dd-snaplink__messages-hub-title {
+  font-size: 22px !important;
+  font-weight: 750 !important;
+  color: var(--snap-ink) !important;
+  letter-spacing: -0.02em !important;
+  margin-bottom: 8px !important;
+}
+
+.dd-snaplink__messages-hub-desc {
+  font-size: 13.5px !important;
+  color: var(--snap-muted) !important;
+  line-height: 1.6 !important;
+  max-width: 480px !important;
+  margin: 0 0 24px 0 !important;
+}
+
+.dd-snaplink__messages-hub-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 12px !important;
+  width: 100% !important;
+  margin-bottom: 20px !important;
+}
+
+.dd-snaplink__messages-hub-btn {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  gap: 8px !important;
+  padding: 18px 12px !important;
+  border-radius: 16px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+  cursor: pointer !important;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dd-snaplink__messages-hub-btn:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.14) !important;
+}
+
+.dd-snaplink__messages-hub-btn-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+}
+
+.dd-snaplink__messages-hub-btn.is-file .dd-snaplink__messages-hub-btn-icon {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__messages-hub-btn.is-nearby .dd-snaplink__messages-hub-btn-icon {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+}
+
+.dd-snaplink__messages-hub-btn.is-assistant .dd-snaplink__messages-hub-btn-icon {
+  background: rgba(139, 92, 246, 0.1) !important;
+  color: #8b5cf6 !important;
+}
+
+.dd-snaplink__messages-hub-btn-text strong {
+  display: block !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  color: var(--snap-ink) !important;
+  margin-bottom: 2px !important;
+}
+
+.dd-snaplink__messages-hub-btn-text small {
+  display: block !important;
+  font-size: 11px !important;
+  color: var(--snap-muted) !important;
+}
+
+.dd-snaplink__messages-hub-drop-tip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  background: var(--snap-border-soft) !important;
+  color: var(--snap-ink-soft) !important;
+  font-size: 11.5px !important;
+}
+
+/* 2. Devices Interconnection Station */
+.dd-snaplink__devices-station-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  width: 360px !important;
+  max-width: 400px !important;
+}
+
+.dd-snaplink__device-detail-card.is-code-card {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 20px !important;
+}
+
+.dd-snaplink__device-code-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+
+.dd-snaplink__device-code-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink__device-code-head strong {
+  display: block !important;
+  font-size: 14px !important;
+  font-weight: 650 !important;
+  color: var(--snap-ink) !important;
+}
+
+.dd-snaplink__device-code-head small {
+  display: block !important;
+  font-size: 11.5px !important;
+  color: var(--snap-muted) !important;
+  line-height: 1.4 !important;
+}
+
+.dd-snaplink__device-code-form {
+  display: flex !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink__device-code-form input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--snap-border) !important;
+  background: var(--snap-bg) !important;
+  color: var(--snap-ink) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink__device-code-form button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  border: 0 !important;
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  box-shadow: var(--snap-green-glow) !important;
+  transition: all 140ms ease !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink__device-code-form button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.dd-snaplink__device-code-error {
+  margin: 6px 0 0 0 !important;
+  font-size: 11.5px !important;
+  color: #ef4444 !important;
+}
+
+.dd-snaplink__device-station-badges {
+  display: flex !important;
+  gap: 10px !important;
+}
+
+.dd-snaplink__device-station-badges span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border-soft) !important;
+  color: var(--snap-ink-soft) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+}
+
+.dd-snaplink__devices-empty-placeholder {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 32px 16px !important;
+  text-align: center !important;
+  gap: 6px !important;
+}
+
+.dd-snaplink__devices-empty-icon {
+  color: var(--snap-green) !important;
+  animation: pulse 2s infinite !important;
+  margin-bottom: 4px !important;
+}
+
+/* 3. Transfer Board Dropzone & Capability Matrix */
+.dd-snaplink__transfer-empty-stage {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important;
+  width: 100% !important;
+  animation: ddFadeIn 200ms ease !important;
+}
+
+.dd-snaplink__transfer-dropzone-card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 48px 32px !important;
+  border-radius: 22px !important;
+  background: var(--snap-surface) !important;
+  border: 2px dashed var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+  text-align: center !important;
+  transition: all 180ms ease !important;
+}
+
+.dd-snaplink__transfer-dropzone-card:hover {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 10px 32px rgba(16, 185, 129, 0.12) !important;
+  transform: translateY(-2px) !important;
+}
+
+.dd-snaplink__transfer-dropzone-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 18px !important;
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  margin-bottom: 16px !important;
+  box-shadow: 0 4px 14px var(--snap-green-soft) !important;
+}
+
+.dd-snaplink__transfer-dropzone-card strong {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--snap-ink) !important;
+  margin-bottom: 6px !important;
+}
+
+.dd-snaplink__transfer-dropzone-card p {
+  font-size: 13.5px !important;
+  color: var(--snap-muted) !important;
+  max-width: 420px !important;
+  line-height: 1.5 !important;
+  margin: 0 0 20px 0 !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions button {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  padding: 0 18px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions button.is-primary {
+  background: var(--snap-green-gradient) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  box-shadow: var(--snap-green-glow) !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions button.is-primary:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions button:not(.is-primary) {
+  background: var(--snap-bg) !important;
+  color: var(--snap-ink-soft) !important;
+  border: 1px solid var(--snap-border) !important;
+}
+
+.dd-snaplink__transfer-dropzone-actions button:not(.is-primary):hover {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-green) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__transfer-specs-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 14px !important;
+}
+
+.dd-snaplink__transfer-spec-card {
+  display: flex !important;
+  gap: 12px !important;
+  padding: 16px 18px !important;
+  border-radius: 16px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+.dd-snaplink__transfer-spec-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink__transfer-spec-icon.is-speed {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__transfer-spec-icon.is-security {
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: #3b82f6 !important;
+}
+
+.dd-snaplink__transfer-spec-icon.is-stream {
+  background: rgba(139, 92, 246, 0.12) !important;
+  color: #8b5cf6 !important;
+}
+
+.dd-snaplink__transfer-spec-body strong {
+  display: block !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  color: var(--snap-ink) !important;
+  margin-bottom: 3px !important;
+}
+
+.dd-snaplink__transfer-spec-body p {
+  font-size: 11.5px !important;
+  color: var(--snap-muted) !important;
+  line-height: 1.4 !important;
+  margin: 0 !important;
+}
+
+/* 4. Workshop Workflows Ecosystem */
+.dd-snaplink__workshop-workflows {
+  margin-top: 24px !important;
+  padding: 22px 24px !important;
+  border-radius: 20px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  box-shadow: var(--snap-shadow-glass) !important;
+}
+
+.dd-snaplink__workshop-workflows-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 16px !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__workshop-workflows-head strong {
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  color: var(--snap-ink) !important;
+}
+
+.dd-snaplink__workshop-workflows-head small {
+  color: var(--snap-muted) !important;
+  font-size: 12px !important;
+}
+
+.dd-snaplink__workshop-workflows-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 12px !important;
+}
+
+.dd-snaplink__workshop-workflow-card {
+  display: flex !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+  border-radius: 14px !important;
+  background: var(--snap-bg) !important;
+  border: 1px solid var(--snap-border-soft) !important;
+}
+
+.dd-snaplink__workshop-workflow-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink__workshop-workflow-icon.is-sandbox {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__workshop-workflow-icon.is-ai {
+  background: rgba(139, 92, 246, 0.1) !important;
+  color: #8b5cf6 !important;
+}
+
+.dd-snaplink__workshop-workflow-icon.is-image {
+  background: rgba(244, 63, 94, 0.1) !important;
+  color: #f43f5e !important;
+}
+
+.dd-snaplink__workshop-workflow-icon.is-ocr {
+  background: rgba(245, 158, 11, 0.1) !important;
+  color: #f59e0b !important;
+}
+
+.dd-snaplink__workshop-workflow-body strong {
+  display: block !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  color: var(--snap-ink) !important;
+  margin-bottom: 2px !important;
+}
+
+.dd-snaplink__workshop-workflow-body p {
+  font-size: 11.5px !important;
+  color: var(--snap-muted) !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+
+/* 5. Settings Note Bug Fix & Diagnostics Cards */
+.dd-snaplink__devices-station-stack .dd-snaplink__device-detail-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.dd-snaplink__settings-mode-note-badge {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 7px 12px !important;
+  border-radius: 8px !important;
+  background: var(--snap-border-soft) !important;
+  margin: 12px 0 8px !important;
+}
+
+.dd-snaplink__settings-mode-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--snap-green) !important;
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink__settings-mode-note,
+.dd-snaplink__settings-card .dd-snaplink__settings-mode-note {
+  display: block !important;
+  margin: 0 !important;
+  color: var(--snap-ink-soft) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+
+.dd-snaplink__settings-card.is-diagnostics-card,
+.dd-snaplink__settings-card.is-shortcuts-card {
+  grid-column: span 1 !important;
+}
+
+.dd-snaplink__settings-diagnostics-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+
+.dd-snaplink__settings-diag-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  background: var(--snap-bg) !important;
+}
+
+.dd-snaplink__settings-diag-item strong {
+  display: block !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--snap-ink) !important;
+}
+
+.dd-snaplink__settings-diag-item small {
+  display: block !important;
+  font-size: 11px !important;
+  color: var(--snap-muted) !important;
+}
+
+.dd-snaplink__settings-diag-item em {
+  font-style: normal !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  background: var(--snap-border) !important;
+  color: var(--snap-ink-soft) !important;
+}
+
+.dd-snaplink__settings-diag-item em.is-ok {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__settings-diag-item em.is-safe {
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: #3b82f6 !important;
+}
+
+.dd-snaplink__settings-cache-action button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--snap-border) !important;
+  background: var(--snap-bg) !important;
+  color: var(--snap-ink-soft) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+}
+
+.dd-snaplink__settings-cache-action button:hover {
+  background: var(--snap-surface) !important;
+  border-color: var(--snap-green) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__settings-cache-action button.is-cleared {
+  background: var(--snap-green-soft) !important;
+  border-color: var(--snap-green) !important;
+  color: var(--snap-green-deep) !important;
+}
+
+.dd-snaplink__settings-shortcuts-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.dd-snaplink__settings-shortcut-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  background: var(--snap-bg) !important;
+  font-size: 12px !important;
+  color: var(--snap-ink-soft) !important;
+}
+
+.dd-snaplink__settings-shortcut-row kbd {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2px 7px !important;
+  border-radius: 6px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--snap-ink) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+

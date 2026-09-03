@@ -8416,9 +8416,9 @@
   --snap-border: #d9d9d9;
   --snap-border-soft: #e8e8e8;
   --snap-line: #d6dbe3;
-  --snap-green: #2563eb;
-  --snap-green-deep: #1d4ed8;
-  --snap-green-soft: rgba(37, 99, 235, 0.12);
+  --snap-green: #10b981;
+  --snap-green-deep: #059669;
+  --snap-green-soft: rgba(16, 185, 129, 0.12);
   --snap-blue: #576b95;
   --snap-warning: #fa9d3b;
   --snap-theme-self: #F9887F;
@@ -8455,9 +8455,9 @@
   --snap-border: #35353b;
   --snap-border-soft: #2d2d33;
   --snap-line: #44444b;
-  --snap-green: #93c5fd;
-  --snap-green-deep: #93c5fd;
-  --snap-green-soft: rgba(37, 99, 235, 0.16);
+  --snap-green: #34d399;
+  --snap-green-deep: #10b981;
+  --snap-green-soft: rgba(52, 211, 153, 0.16);
   --snap-blue: #7e9cd8;
   --snap-warning: #ffb454;
   --snap-theme-self: #4338ca;
@@ -12255,9 +12255,7 @@
   padding: 22px;
   border: 1px solid var(--snap-border-soft);
   border-radius: 16px;
-  background: var(--snap-surface);
-  backdrop-filter: var(--snap-glass-blur);
-  color: var(--snap-ink);
+  background: var(--snap-surface);  color: var(--snap-ink);
 }
 
 .dd-snaplink__receive-dialog-icon {
@@ -12427,9 +12425,7 @@
   padding: 22px;
   border: 1px solid var(--snap-border-soft);
   border-radius: 16px;
-  background: var(--snap-surface);
-  backdrop-filter: var(--snap-glass-blur);
-  color: var(--snap-ink);
+  background: var(--snap-surface);  color: var(--snap-ink);
 }
 
 .dd-snaplink__trust-dialog-icon {
@@ -17823,10 +17819,7 @@
   min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--image-studio-line);
-  background: var(--image-studio-surface);
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
-}
+  background: var(--image-studio-surface);}
 
 .dd-image-brand {
   display: grid;
@@ -18108,10 +18101,7 @@
   min-height: 60px;
   padding: 0 20px;
   border-bottom: 1px solid var(--image-studio-line);
-  background: var(--image-studio-surface);
-  -webkit-backdrop-filter: var(--snap-glass-blur);
-  backdrop-filter: var(--snap-glass-blur);
-}
+  background: var(--image-studio-surface);}
 
 .dd-image-stage__topbar > div:first-child {
   display: grid;

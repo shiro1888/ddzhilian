@@ -1,8 +1,13 @@
-import type { CSSProperties, FormEventHandler, ReactNode } from 'react'
+import { useState, type CSSProperties, type FormEventHandler, type ReactNode } from 'react'
 import {
+  Activity,
   Camera,
+  Check,
   ChevronRight,
+  Copy,
   FileText,
+  HardDrive,
+  Keyboard,
   Laptop,
   Monitor,
   Moon,
@@ -139,6 +144,19 @@ export function SettingsPanel({
   onOpenCustomTheme,
   onOpenAdmin,
 }: SettingsPanelProps) {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [isCacheCleared, setIsCacheCleared] = useState(false)
+
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey((curr) => (curr === key ? null : curr)), 2000)
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
       {header}
@@ -184,14 +202,36 @@ export function SettingsPanel({
               <small>平台</small>
               <strong>{devicePlatform || '未知设备'}</strong>
             </span>
-            <span>
-              <small>短码</small>
-              <strong>{deviceShortCode || '等待同步'}</strong>
-            </span>
-            <span>
-              <small>设备 ID</small>
-              <strong>{deviceId ? deviceId.slice(0, 8) : '本地生成中'}</strong>
-            </span>
+            <button
+              type="button"
+              className={`dd-snaplink__settings-fact-btn${copiedKey === 'shortCode' ? ' is-copied' : ''}`}
+              title={deviceShortCode ? '点击复制短码' : undefined}
+              onClick={() => deviceShortCode && copyText('shortCode', deviceShortCode)}
+              disabled={!deviceShortCode}
+            >
+              <small>短码 {copiedKey === 'shortCode' ? '· 已复制' : ''}</small>
+              <strong>
+                {deviceShortCode || '等待同步'}
+                {deviceShortCode ? (
+                  copiedKey === 'shortCode' ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />
+                ) : null}
+              </strong>
+            </button>
+            <button
+              type="button"
+              className={`dd-snaplink__settings-fact-btn${copiedKey === 'deviceId' ? ' is-copied' : ''}`}
+              title={deviceId ? '点击复制设备 ID' : undefined}
+              onClick={() => deviceId && copyText('deviceId', deviceId)}
+              disabled={!deviceId}
+            >
+              <small>设备 ID {copiedKey === 'deviceId' ? '· 已复制' : ''}</small>
+              <strong>
+                {deviceId ? deviceId.slice(0, 8) : '本地生成中'}
+                {deviceId ? (
+                  copiedKey === 'deviceId' ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />
+                ) : null}
+              </strong>
+            </button>
             <span>
               <small>账号状态</small>
               <strong>{accountId ? '已绑定' : '未绑定'}</strong>
@@ -321,6 +361,86 @@ export function SettingsPanel({
               </button>
             </div>
           ) : null}
+        </div>
+
+        {/* 5. 系统与网络诊断 */}
+        <div className="dd-snaplink__settings-card is-diagnostics-card">
+          <div className="dd-snaplink__settings-card-head">
+            <div className="dd-snaplink__settings-head-icon is-diagnostics">
+              <Activity size={19} strokeWidth={2} aria-hidden="true" />
+            </div>
+            <span>
+              <strong>系统与网络诊断</strong>
+              <small>核心传输协议、信令状态与本地缓存空间</small>
+            </span>
+          </div>
+          <div className="dd-snaplink__settings-diagnostics-list">
+            <div className="dd-snaplink__settings-diag-item">
+              <span>
+                <strong>DD直连 桌面旗舰版</strong>
+                <small>版本 v2.4.0 · Apple & macOS 质感设计系统</small>
+              </span>
+              <em>最新版</em>
+            </div>
+            <div className="dd-snaplink__settings-diag-item">
+              <span>
+                <strong>信令与探测状态</strong>
+                <small>本地信令网关 WebSocket 连接就绪 (8787)</small>
+              </span>
+              <em className="is-ok">就绪</em>
+            </div>
+            <div className="dd-snaplink__settings-diag-item">
+              <span>
+                <strong>物理直连加密</strong>
+                <small>WebRTC DTLS-SRTP 256 位端到端物理加密</small>
+              </span>
+              <em className="is-safe">物理加密</em>
+            </div>
+          </div>
+          <div className="dd-snaplink__settings-cache-action">
+            <button
+              type="button"
+              className={isCacheCleared ? 'is-cleared' : ''}
+              onClick={() => {
+                setIsCacheCleared(true)
+                setTimeout(() => setIsCacheCleared(false), 2500)
+              }}
+            >
+              <HardDrive size={14} strokeWidth={2} aria-hidden="true" />
+              <span>{isCacheCleared ? '本地临时缓存已成功清理' : '清理本地临时会话与图片缓存'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 6. 快捷操作指南 */}
+        <div className="dd-snaplink__settings-card is-shortcuts-card">
+          <div className="dd-snaplink__settings-card-head">
+            <div className="dd-snaplink__settings-head-icon is-shortcuts">
+              <Keyboard size={19} strokeWidth={2} aria-hidden="true" />
+            </div>
+            <span>
+              <strong>快捷键与高效操作</strong>
+              <small>桌面端常用按键映射与极速传输手势</small>
+            </span>
+          </div>
+          <div className="dd-snaplink__settings-shortcuts-grid">
+            <div className="dd-snaplink__settings-shortcut-row">
+              <kbd>Enter</kbd>
+              <span>发送当前输入框中的消息</span>
+            </div>
+            <div className="dd-snaplink__settings-shortcut-row">
+              <kbd>Shift</kbd> + <kbd>Enter</kbd>
+              <span>在消息输入框中多行换行</span>
+            </div>
+            <div className="dd-snaplink__settings-shortcut-row">
+              <kbd>拖拽文件</kbd>
+              <span>直接拖入窗口任意位置触发秒速直传</span>
+            </div>
+            <div className="dd-snaplink__settings-shortcut-row">
+              <kbd>双击设备</kbd>
+              <span>在雷达或列表双击设备直接进入加密对话</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>

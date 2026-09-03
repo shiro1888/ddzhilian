@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { FolderOpen } from 'lucide-react'
+import { FileUp, Layers, Radio, ShieldCheck, UploadCloud, Zap } from 'lucide-react'
 import type { FileConversationEntry } from '../types'
-import { EmptyState } from './EmptyState'
 
 export type TransferQueuePageSection = {
   id: string
@@ -85,19 +84,25 @@ export function TransferQueuePage({
       {isHistoryTab ? (
         <div className="dd-snaplink__transfer-history-tab">
           {historyContent ?? (
-            <EmptyState
-              className="dd-snaplink__workbench-room-empty is-transfer-empty"
-              icon={<FolderOpen size={24} strokeWidth={1.8} aria-hidden="true" />}
-              title="暂无传输记录"
-              description={<span>完成的文件、文本和链接会出现在这里。</span>}
-              actions={(
-                <div className="dd-snaplink__transfer-empty-actions">
-                  <button type="button" onClick={onShowFiles}>
-                    去发送
+            <div className="dd-snaplink__transfer-empty-stage">
+              <div className="dd-snaplink__transfer-dropzone-card">
+                <span className="dd-snaplink__transfer-dropzone-icon" aria-hidden="true">
+                  <UploadCloud size={32} strokeWidth={1.8} />
+                </span>
+                <strong>暂无传输历史记录</strong>
+                <p>完成的文件、文本和链接会出现在这里，可随时二次复用或下载。</p>
+                <div className="dd-snaplink__transfer-dropzone-actions">
+                  <button type="button" className="is-primary" onClick={onShowFiles}>
+                    <FileUp size={15} strokeWidth={2.2} />
+                    选择本地文件发送
+                  </button>
+                  <button type="button" onClick={onShowNearby}>
+                    <Radio size={15} strokeWidth={2.2} />
+                    查找附近接收设备
                   </button>
                 </div>
-              )}
-            />
+              </div>
+            </div>
           )}
         </div>
       ) : totalCount > 0 ? (
@@ -119,22 +124,57 @@ export function TransferQueuePage({
           ))}
         </div>
       ) : (
-        <EmptyState
-          className="dd-snaplink__workbench-room-empty is-transfer-empty"
-          icon={<FolderOpen size={24} strokeWidth={1.8} aria-hidden="true" />}
-          title="还没有传输任务"
-          description={<span>选择一个设备并发送文件，任务会出现在这里。</span>}
-          actions={(
-            <div className="dd-snaplink__transfer-empty-actions">
-              <button type="button" onClick={onShowNearby}>
-                选择附近设备
+        <div className="dd-snaplink__transfer-empty-stage">
+          <div className="dd-snaplink__transfer-dropzone-card">
+            <span className="dd-snaplink__transfer-dropzone-icon" aria-hidden="true">
+              <UploadCloud size={32} strokeWidth={1.8} />
+            </span>
+            <strong>将文件拖拽至此处直接投递</strong>
+            <p>支持多选拖拽大文件、超高清视频、压缩包，免压缩直接端到端秒速送达</p>
+            <div className="dd-snaplink__transfer-dropzone-actions">
+              <button type="button" className="is-primary" onClick={onShowFiles}>
+                <FileUp size={15} strokeWidth={2.2} />
+                选择本地文件发送
               </button>
-              <button type="button" onClick={onShowFiles}>
-                去发送
+              <button type="button" onClick={onShowNearby}>
+                <Radio size={15} strokeWidth={2.2} />
+                查找附近接收设备
               </button>
             </div>
-          )}
-        />
+          </div>
+
+          <div className="dd-snaplink__transfer-specs-grid">
+            <div className="dd-snaplink__transfer-spec-card">
+              <div className="dd-snaplink__transfer-spec-icon is-speed">
+                <Zap size={18} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__transfer-spec-body">
+                <strong>千兆局域网跑满</strong>
+                <p>WebRTC DataChannel 点对点直连，跳过任何云盘限速与排队</p>
+              </div>
+            </div>
+
+            <div className="dd-snaplink__transfer-spec-card">
+              <div className="dd-snaplink__transfer-spec-icon is-security">
+                <ShieldCheck size={18} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__transfer-spec-body">
+                <strong>端到端 DTLS 物理加密</strong>
+                <p>硬件级点对点加密流转，零服务器留存，商业与隐私更放心</p>
+              </div>
+            </div>
+
+            <div className="dd-snaplink__transfer-spec-card">
+              <div className="dd-snaplink__transfer-spec-icon is-stream">
+                <Layers size={18} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__transfer-spec-body">
+                <strong>超大文件流式切片</strong>
+                <p>支持数十 GB 级视频与工程归档包，内存低占用，断网自动续传</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   )

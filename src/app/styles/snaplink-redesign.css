@@ -258,3 +258,196 @@ button.is-primary:hover:not(:disabled),
   background: #60a5fa !important;
   color: #0f172a !important;
 }
+
+/* ========================================================================== */
+/* 10. 视觉增强：交互状态、排版、间距                                            */
+/* ========================================================================== */
+
+/* 卡片 hover：微缩放 + 增强投影 */
+.dd-snaplink__workshop-card:hover {
+  transform: translateY(-4px) scale(1.008) !important;
+  box-shadow: 0 16px 40px -8px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+}
+
+:root.dark .dd-snaplink__workshop-card:hover {
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 按钮 hover：微上移 + 蓝色光晕 */
+button.is-primary:hover:not(:disabled),
+.dd-snaplink button.is-primary:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.28) !important;
+}
+
+button.is-primary:active:not(:disabled),
+.dd-snaplink button.is-primary:active:not(:disabled) {
+  transform: translateY(0) !important;
+  box-shadow: var(--snap-shadow-sm) !important;
+}
+
+/* 焦点环：更清晰的蓝色轮廓 + 偏移 */
+.dd-snaplink :focus-visible {
+  outline: 2px solid var(--snap-green) !important;
+  outline-offset: 3px !important;
+  border-radius: 8px !important;
+}
+
+/* 输入框聚焦：更柔和的蓝色光晕 */
+.dd-snaplink__settings-field input:focus,
+.dd-snaplink__history-search input:focus,
+.dd-snaplink__text-send-input textarea:focus,
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search:focus-within {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 3px var(--snap-green-soft), 0 2px 8px rgba(37, 99, 235, 0.12) !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease !important;
+}
+
+/* 会话行 hover：柔和过渡 */
+.dd-snaplink__conversation-row {
+  transition: background 180ms ease, border-color 180ms ease !important;
+}
+
+/* 工坊卡片过渡更平滑 */
+.dd-snaplink__workshop-card {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease, border-color 180ms ease !important;
+}
+
+/* 工坊图标 hover 微放大 */
+.dd-snaplink__workshop-card:hover .dd-snaplink__workshop-card-icon {
+  transform: scale(1.06) !important;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* 导航按钮 hover：微上移 + 过渡 */
+.dd-snaplink__rail-nav button {
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dd-snaplink__rail-nav button:hover {
+  transform: translateY(-1px) !important;
+}
+
+/* 导航激活态：蓝底 + 轻投影 */
+.dd-snaplink__rail-nav button.is-active {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18) !important;
+}
+
+/* 气泡过渡 */
+.dd-snaplink__bubble {
+  transition: box-shadow 180ms ease !important;
+}
+
+/* 设置卡片 hover 微提升 */
+.dd-snaplink__settings-card {
+  transition: box-shadow 200ms ease, transform 200ms ease !important;
+}
+
+.dd-snaplink__settings-card:hover {
+  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+}
+
+:root.dark .dd-snaplink__settings-card:hover {
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ========================================================================== */
+/* 11. 排版增强：行高、字间距、可读性                                            */
+/* ========================================================================== */
+
+/* 正文行高更舒适 */
+.dd-snaplink__bubble,
+.dd-snaplink__conversation-text,
+.dd-ai-chat__bubble {
+  line-height: 1.65 !important;
+}
+
+/* 标题字间距收紧 */
+.dd-snaplink__workshop-hero-title h1,
+.dd-snaplink__room-head strong,
+.dd-snaplink__settings-card-head strong {
+  letter-spacing: -0.02em !important;
+}
+
+/* 小字行高更宽松 */
+.dd-snaplink__workshop-hero-title p,
+.dd-snaplink__workshop-chips span,
+.dd-snaplink__workshop-card-meta p {
+  line-height: 1.5 !important;
+}
+
+/* 代码/终端字体优化 */
+.dd-web-command__source textarea,
+.dd-web-command__result,
+.dd-snaplink__text-history-row code {
+  font-variant-ligatures: contextual !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ========================================================================== */
+/* 12. 间距增强：更充裕的留白                                                    */
+/* ========================================================================== */
+
+/* 工坊卡片内间距加大 */
+.dd-snaplink__workshop-card {
+  padding: 22px 26px !important;
+}
+
+/* 设置卡片内间距 */
+.dd-snaplink__settings-card {
+  padding: 22px !important;
+}
+
+/* 消息气泡内间距 */
+.dd-snaplink__bubble {
+  padding: 12px 16px !important;
+}
+
+/* 工坊 Hero 内间距 */
+.dd-snaplink__workshop-hero {
+  padding: 24px !important;
+}
+
+/* 工坊网格间距 */
+.dd-snaplink__workshop-grid {
+  gap: 20px !important;
+}
+
+/* ========================================================================== */
+/* 13. 深色模式微调：对比度与表面层次                                              */
+/* ========================================================================== */
+
+/* 深色模式下输入框更柔和 */
+:root.dark .dd-snaplink__settings-field input,
+:root.dark .dd-snaplink__history-search input,
+:root.dark .dd-snaplink__text-send-input textarea {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.dark .dd-snaplink__settings-field input:focus,
+:root.dark .dd-snaplink__history-search input:focus,
+:root.dark .dd-snaplink__text-send-input textarea:focus {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16), 0 2px 8px rgba(96, 165, 250, 0.12) !important;
+}
+
+/* 深色模式下卡片更柔和 */
+:root.dark .dd-snaplink__workshop-card:hover {
+  border-color: rgba(96, 165, 250, 0.3) !important;
+}
+
+:root.dark .dd-snaplink__settings-card:hover {
+  border-color: rgba(96, 165, 250, 0.2) !important;
+}
+
+/* 深色模式下导航激活态更柔和 */
+:root.dark .dd-snaplink__rail-nav button.is-active {
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2) !important;
+}
+
+/* 深色模式下按钮 hover 更柔和 */
+:root.dark button.is-primary:hover:not(:disabled),
+:root.dark .dd-snaplink button.is-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(96, 165, 250, 0.25) !important;
+}

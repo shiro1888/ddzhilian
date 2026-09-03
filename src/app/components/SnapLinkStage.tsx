@@ -4515,9 +4515,65 @@ export function SnapLinkStage({
     <section className="dd-snaplink__messages-shell" aria-label="消息工作台">
       {renderDesktopConversationSideList()}
       <div className="dd-snaplink__messages-detail" aria-label="消息详情占位">
-        <section className="dd-snaplink__messages-empty-chat" aria-label="空会话提示">
-          <strong>把文件拖到这里，或选择左侧的设备和会话</strong>
-          <small>直接拖入文件即可开始传输；也可以先打开一个设备、房间或世界对话，发消息、传文件都在同一个输入框完成。</small>
+        <section className="dd-snaplink__messages-empty-chat dd-snaplink__messages-hub" aria-label="极速直连中枢">
+          <div className="dd-snaplink__messages-hub-badge">
+            <ShieldCheck size={13} strokeWidth={2.4} aria-hidden="true" />
+            <span>局域网千兆直传 · 端到端物理加密</span>
+          </div>
+
+          <strong className="dd-snaplink__messages-hub-title">开启点对点极速流转</strong>
+          <p className="dd-snaplink__messages-hub-desc">
+            免云端存储 · 零服务器中转 · 文件、文本与剪贴板全端互通。选择左侧会话，或点击下方快捷入口开启直连。
+          </p>
+
+          <div className="dd-snaplink__messages-hub-actions">
+            <button
+              type="button"
+              className="dd-snaplink__messages-hub-btn is-file"
+              onClick={() => document.getElementById(`${fileInputId}-workbench`)?.click()}
+            >
+              <div className="dd-snaplink__messages-hub-btn-icon">
+                <FileUp size={20} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__messages-hub-btn-text">
+                <strong>发送大文件</strong>
+                <small>点击选择或直接拖入</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="dd-snaplink__messages-hub-btn is-nearby"
+              onClick={handleShowWorkbenchNearby}
+            >
+              <div className="dd-snaplink__messages-hub-btn-icon">
+                <Radio size={20} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__messages-hub-btn-text">
+                <strong>发现附近设备</strong>
+                <small>局域网同频雷达探测</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="dd-snaplink__messages-hub-btn is-assistant"
+              onClick={handleOpenAiChat}
+            >
+              <div className="dd-snaplink__messages-hub-btn-icon">
+                <Bot size={20} strokeWidth={2.2} />
+              </div>
+              <div className="dd-snaplink__messages-hub-btn-text">
+                <strong>DD 智能助手</strong>
+                <small>多模型深度思考问答</small>
+              </div>
+            </button>
+          </div>
+
+          <div className="dd-snaplink__messages-hub-drop-tip">
+            <Upload size={14} strokeWidth={2} aria-hidden="true" />
+            <span>支持拖入任意大小文件、压缩包或相册图片立即发送</span>
+          </div>
         </section>
       </div>
     </section>
