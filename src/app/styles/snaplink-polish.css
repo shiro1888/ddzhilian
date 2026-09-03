@@ -40,12 +40,9 @@
     -apple-system,
     BlinkMacSystemFont,
     "PingFang SC",
-    "Hiragino Sans GB",
     "Microsoft YaHei",
-    "Segoe UI Variable Text",
     "Segoe UI",
     Roboto,
-    "Helvetica Neue",
     sans-serif;
   letter-spacing: -0.01em;
   background: var(--snap-bg);
@@ -3338,7 +3335,7 @@
   display: block !important;
   padding: 14px 16px !important;
   color: #f8fafc !important;
-  font-family: "JetBrains Mono", Consolas, Menlo, Monaco, monospace !important;
+  font-family: var(--font-mono) !important;
   font-size: 13px !important;
   line-height: 1.65 !important;
   overflow-x: auto !important;
@@ -4568,7 +4565,7 @@
   border-radius: 12px !important;
   background: #ffffff !important;
   color: #0f172a !important;
-  font-family: "JetBrains Mono", Consolas, monospace !important;
+  font-family: var(--font-mono) !important;
   font-size: 13px !important;
   line-height: 1.6 !important;
   resize: none !important;
@@ -5296,7 +5293,7 @@
   border: 0 !important;
   background: var(--snap-surface) !important;
   color: #93c5fd !important;
-  font-family: "JetBrains Mono", Consolas, Monaco, monospace !important;
+  font-family: var(--font-mono) !important;
   font-size: 13.5px !important;
   line-height: 1.7 !important;
   resize: none !important;
@@ -5919,7 +5916,7 @@ button.is-secondary:disabled,
 }
 
 .dd-snaplink__trust-dialog-codes strong {
-  font-family: "JetBrains Mono", Consolas, monospace !important;
+  font-family: var(--font-mono) !important;
   font-size: 13px !important;
   font-weight: 700 !important;
   color: #0f172a !important;
@@ -5949,7 +5946,7 @@ button.is-secondary:disabled,
   border-radius: 10px !important;
   background: #ffffff !important;
   color: #0f172a !important;
-  font-family: "JetBrains Mono", Consolas, monospace !important;
+  font-family: var(--font-mono) !important;
   font-size: 13.5px !important;
   font-weight: 600 !important;
   letter-spacing: 0.06em !important;
