@@ -7416,7 +7416,7 @@ button.is-secondary:disabled,
 
 :root.dark .dd-snaplink__room-empty-card,
 :root[data-theme-mode="dark"] .dd-snaplink__room-empty-card {
-  background: rgba(20, 20, 30, 0.4) !important;
+  background: var(--snap-surface) !important;
   border-color: rgba(255, 255, 255, 0.05) !important;
   box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.5) !important;
 }

@@ -543,7 +543,6 @@ export function SnapLinkStage({
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [copiedHistoryActionId, setCopiedHistoryActionId] = useState<string | null>(null)
   const [settingsFeedbackMessage, setSettingsFeedbackMessage] = useState<string | null>(null)
-  const [isRenamingDevice, setIsRenamingDevice] = useState(false)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
@@ -725,7 +724,6 @@ export function SnapLinkStage({
   const ocrDropDepthRef = useRef(0)
   const emojiTriggerRef = useRef<HTMLButtonElement | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
-  const themeTriggerRef = useRef<HTMLButtonElement | null>(null)
   const themePanelRef = useRef<HTMLDivElement | null>(null)
   const themeSubmissionTimeoutRef = useRef<number | null>(null)
   const selectedRoom = useMemo(
@@ -1947,7 +1945,7 @@ export function SnapLinkStage({
         return
       }
 
-      if (themePanelRef.current?.contains(target) || themeTriggerRef.current?.contains(target)) {
+      if (themePanelRef.current?.contains(target)) {
         return
       }
 
@@ -2398,29 +2396,6 @@ export function SnapLinkStage({
     })
   }
 
-  const startDeviceRename = () => {
-    setDeviceNameDraft(deviceName)
-    setDeviceNameError(null)
-    setIsRenamingDevice(true)
-  }
-
-  const cancelDeviceRename = () => {
-    setIsRenamingDevice(false)
-    setDeviceNameDraft('')
-    setDeviceNameError(null)
-  }
-
-  const commitDeviceRename = () => {
-    const normalizedName = deviceNameDraft.trim()
-    if (!normalizedName) {
-      setDeviceNameError('设备名不能为空')
-      return
-    }
-
-    onDeviceNameChange(normalizedName.slice(0, 80))
-    cancelDeviceRename()
-  }
-
   const commitWorkbenchDeviceRename = () => {
     const normalizedName = deviceNameDraft.trim()
     if (!normalizedName) {
@@ -2432,7 +2407,6 @@ export function SnapLinkStage({
     onDeviceNameChange(nextName)
     setDeviceNameDraft(nextName)
     setDeviceNameError(null)
-    setIsRenamingDevice(false)
     return true
   }
 
@@ -5554,109 +5528,6 @@ export function SnapLinkStage({
           onDrop(event)
         }}
       >
-      <header className="dd-snaplink__topbar">
-        <div className="dd-snaplink__top-left">
-          <div className="dd-snaplink__brand">
-            <i aria-hidden="true" />
-            <span>DD直连</span>
-            <em>文件互传</em>
-          </div>
-          {isRenamingDevice ? (
-            <form
-              className="dd-snaplink__device-name-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                commitDeviceRename()
-              }}
-            >
-              <input
-                value={deviceNameDraft}
-                autoFocus
-                maxLength={80}
-                aria-label="设备名"
-                onChange={(event) => {
-                  setDeviceNameDraft(event.target.value)
-                  setDeviceNameError(null)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    cancelDeviceRename()
-                  }
-                }}
-              />
-              <button type="submit">保存</button>
-              <button type="button" onClick={cancelDeviceRename}>
-                取消
-              </button>
-              {deviceNameError ? <span>{deviceNameError}</span> : null}
-            </form>
-          ) : (
-            <button
-              type="button"
-              className="dd-snaplink__device-name"
-              title="修改设备名"
-              onClick={startDeviceRename}
-            >
-              设备：{deviceName}
-            </button>
-          )}
-        </div>
-        <div className="dd-snaplink__top-actions">
-          {hasActiveRoom && selectedRoom ? (
-            <span
-              className="dd-snaplink__online-count"
-              aria-label={`${selectedRoomOnlineMemberCount.toString()} 人在线，包含本机`}
-              title={`${selectedRoomOnlineMemberCount.toString()} 人在线（含本机）`}
-            >
-              <span>{selectedRoomOnlineMemberCount}</span>
-            </span>
-          ) : null}
-          <div className="dd-snaplink__theme">
-            <button
-              ref={themeTriggerRef}
-              type="button"
-              className={`dd-snaplink__theme-trigger${isThemePanelOpen ? ' is-active' : ''}`}
-              aria-label="自定义主题 Beta"
-              aria-expanded={isThemePanelOpen}
-              aria-haspopup="dialog"
-              title="自定义主题 Beta"
-              onClick={toggleThemePanel}
-            >
-              主题
-              <span>Beta</span>
-            </button>
-          </div>
-          <button
-            type="button"
-            className={!isAiChatOpen && !isImageOpen && !isAdminOpen && !isCommandOpen && workbenchMode === 'nearby' ? 'is-active' : ''}
-            onClick={handleShowWorkbenchNearby}
-          >
-            附近设备
-          </button>
-          <button
-            type="button"
-            className={isAiChatOpen ? 'is-active' : ''}
-            onClick={handleOpenAiChat}
-          >
-            AI
-          </button>
-          <button
-            type="button"
-            className={isImageOpen ? 'is-active' : ''}
-            onClick={handleOpenImage}
-          >
-            图片
-          </button>
-          <button
-            type="button"
-            className={isCommandOpen ? 'is-active' : ''}
-            onClick={handleOpenCommand}
-          >
-            命令行
-          </button>
-        </div>
-      </header>
-
       <main className={`dd-snaplink__canvas ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}>
         <div
           className={`dd-snaplink__app ${hasActiveRoom ? 'is-room' : isAiChatOpen ? 'is-ai-chat' : isImageOpen ? 'is-image' : isAdminOpen ? 'is-admin' : isCommandOpen ? 'is-command' : 'is-lobby'}`}
