@@ -463,7 +463,8 @@ function App() {
   const joinedRoomLinkRef = useRef<string | null>(null)
   const handledPublicRoomRef = useRef<string | null>(null)
   const handledPrivateRoomRef = useRef<string | null>(null)
-  const suppressNextPrivateRoomAutoOpenRef = useRef(false)
+  const suppressNextPrivateRoomAutoOpenRef = useRef<string | null>(null)
+  const creatingBotRoomRef = useRef(false)
   const transferTelemetrySamplesRef = useRef<Record<string, TransferTelemetrySample>>({})
   const updateViewportHeight = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -496,6 +497,7 @@ function App() {
     joinRoom,
     createPublicRoom,
     createBotRoom,
+    pairByShortCode,
     requestConnect,
     updateSettings,
     updateRoomState,
@@ -631,6 +633,14 @@ function App() {
     }
   }, [activeView, joinRoom, location.search, navigate, self])
 
+  // 链接参数消失后重置标记：同一 ?room= 链接再次访问时应重新触发加入，
+  // 而不是被上一次的处理标记永久拦下。
+  useEffect(() => {
+    if (!readRoomIdFromSearch(location.search)) {
+      joinedRoomLinkRef.current = null
+    }
+  }, [location.search])
+
   useEffect(() => {
     if (!lastCreatedPublicRoomId || handledPublicRoomRef.current === lastCreatedPublicRoomId) {
       return
@@ -654,10 +664,19 @@ function App() {
 
     handledPrivateRoomRef.current = lastCreatedPrivateRoomId
 
-    if (suppressNextPrivateRoomAutoOpenRef.current) {
-      suppressNextPrivateRoomAutoOpenRef.current = false
-      setLocalError(null)
-      return
+    // 仅当新建的私聊房间里包含被抑制自动打开的 peer 时才消费标记，
+    // 避免 bot 房间或其他私聊误吞标记，导致目标房间仍然弹开。
+    const suppressedPeerId = suppressNextPrivateRoomAutoOpenRef.current
+    if (suppressedPeerId) {
+      const createdRoom = rooms.find((room) => room.roomId === lastCreatedPrivateRoomId)
+      const isSuppressedRoom = Boolean(
+        createdRoom?.members.some((member) => member.deviceId === suppressedPeerId),
+      )
+      if (isSuppressedRoom) {
+        suppressNextPrivateRoomAutoOpenRef.current = null
+        setLocalError(null)
+        return
+      }
     }
 
     setPendingRoomSelectionId(lastCreatedPrivateRoomId)
@@ -668,7 +687,24 @@ function App() {
     if (activeView !== 'text') {
       navigate(pathForView('text'))
     }
-  }, [activeView, lastCreatedPrivateRoomId, navigate])
+  }, [activeView, lastCreatedPrivateRoomId, navigate, rooms])
+
+  // 连接失败/断开时解除短码/文件发送引起的自动打开抑制，
+  // 而不是等待 15s 兜底定时器，避免吞掉之后其他会话的自动打开。
+  useEffect(() => {
+    const suppressedPeerId = suppressNextPrivateRoomAutoOpenRef.current
+    if (!suppressedPeerId) {
+      return
+    }
+    const failedOrClosed = Object.values(connectionStates).some(
+      (state) =>
+        state.peerId === suppressedPeerId &&
+        (state.status === 'failed' || state.status === 'closed'),
+    )
+    if (failedOrClosed) {
+      suppressNextPrivateRoomAutoOpenRef.current = null
+    }
+  }, [connectionStates])
 
   const roomById = useMemo(
     () => new Map(rooms.map((room) => [room.roomId, room] as const)),
@@ -811,13 +847,16 @@ function App() {
         setSelectedPeerId(firstPeer.deviceId)
       }
 
+      // 自动选中/打开的房间也要标记已读，否则打开期间收到的消息
+      // 会继续累积未读角标（手动打开走 handleOpenRoomConversation 的 lastReadAt）。
+      updateRoomState({ roomId: room.roomId, lastReadAt: new Date().toISOString() })
       setPendingRoomSelectionId(null)
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [pendingRoomSelectionId, roomById, self, sessions])
+  }, [pendingRoomSelectionId, roomById, self, updateRoomState])
 
   const selfName = self?.deviceName ?? localIdentity.deviceName
 
@@ -1412,13 +1451,9 @@ function App() {
     extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
     hasRichTextImage(chatDraft) ||
     composerImageDrafts.length > 0
-  const hasChatTextDraft =
-    extractPlainTextFromRichText(chatDraft).trim().length > 0 ||
-    hasRichTextImage(chatDraft) ||
-    composerImageDrafts.length > 0
-  const canSendRoomContentWithoutConnection =
-    Boolean(selectedRoom) &&
-    hasChatTextDraft
+  const canSendRoomContentWithoutConnection = Boolean(
+    selectedRoom && (selectedRoom.isPublic || isSelectedBotRoom),
+  )
   const aiAvailability = aiAvailabilityError || aiQuotaStatus?.available === false
     ? 'unavailable'
     : aiQuotaStatus && aiModelOptions.length > 0
@@ -1755,6 +1790,12 @@ function App() {
       return
     }
 
+    // 离开 /chat 时清掉已消费的 AI 草稿请求，避免再次进入 ChatAiStage
+    // 时把旧草稿重新注入输入框。
+    if (view !== 'chat') {
+      setAiDraftRequest(null)
+    }
+
     startTransition(() => {
       const currentFull = `${location.pathname}${location.search || ''}`
       if (currentFull !== nextPath) {
@@ -1791,7 +1832,7 @@ function App() {
     }
 
     setAiDraftRequest({
-      id: Date.now(),
+      id: createBrowserId('ai-draft'),
       text: normalizedText,
       contextLabel: context?.contextLabel,
       contextItems: context?.contextItems,
@@ -1868,6 +1909,9 @@ function App() {
       setIsDragging(false)
       setSelectedPeerId(deviceId)
       setSelectedRoomId(null)
+      // 显式选择设备视图时取消挂起的房间选择，避免待处理选择
+      // 稍后落地时把用户从设备视图拽回房间。
+      setPendingRoomSelectionId(null)
       setLocalError(null)
 
       if (targetSessions.length === 0) {
@@ -1875,11 +1919,15 @@ function App() {
         if (existingPrivateRoom) {
           requestConnect(deviceId, { reason: 'manual' })
         } else {
-          suppressNextPrivateRoomAutoOpenRef.current = true
+          suppressNextPrivateRoomAutoOpenRef.current = deviceId
           requestConnect(deviceId, { reason: 'manual', createNewRoom: true })
           window.setTimeout(() => {
-            suppressNextPrivateRoomAutoOpenRef.current = false
-          }, 10_000)
+            // 15s 兜底：超时仍未收到房间事件时解除标记，
+            // 避免长期残留吞掉无关会话的自动打开。
+            if (suppressNextPrivateRoomAutoOpenRef.current === deviceId) {
+              suppressNextPrivateRoomAutoOpenRef.current = null
+            }
+          }, 15_000)
         }
       }
 
@@ -2200,6 +2248,7 @@ function App() {
     setLocalError(null)
 
     if (existingBotRoom) {
+      creatingBotRoomRef.current = false
       setPendingRoomSelectionId(existingBotRoom.roomId)
       setSelectedRoomId(existingBotRoom.roomId)
       setAutoOpenRoomId(existingBotRoom.roomId)
@@ -2211,12 +2260,25 @@ function App() {
       return
     }
 
+    // 创建 bot 房间没有幂等保障：连续快速点击会发出多个 create-bot-room
+    // 事件，生成重复的「DD助手」会话。用 in-flight 标记挡住重复创建。
+    if (creatingBotRoomRef.current) {
+      return
+    }
+
+    creatingBotRoomRef.current = true
     createBotRoom()
 
     if (activeView !== 'text') {
       navigate(pathForView('text'))
     }
   }
+
+  // 房间列表或错误信息变化时解除 bot 创建锁：
+  // 成功时 rooms 出现 bot 房间，失败时 errorMessage 更新，均可再次重试。
+  useEffect(() => {
+    creatingBotRoomRef.current = false
+  }, [rooms, errorMessage])
 
   const handleJoinRoomFromWorkbench = (roomId: string) => {
     const normalizedRoomId = roomId.trim().toUpperCase()
@@ -2368,6 +2430,7 @@ function App() {
       workbenchTextRequestId={workbenchTextRequestId}
       onCreatePublicRoom={handleCreatePublicRoom}
       onJoinRoom={handleJoinRoomFromWorkbench}
+      onPairByShortCode={pairByShortCode}
       onOpenRoomConversation={handleOpenRoomConversation}
       onUpdateRoomState={updateRoomState}
       onStartPrivateChat={handleStartPrivateChat}

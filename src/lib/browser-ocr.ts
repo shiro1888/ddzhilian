@@ -3,6 +3,8 @@ import { createBrowserId } from './create-browser-id'
 import type { OcrHistoryResponse, OcrJobResponse, OcrLine } from './ddzhilian-types'
 
 const BROWSER_OCR_HISTORY_STORAGE_KEY = 'ddzhilian.ocr.history.v1'
+
+export const BROWSER_OCR_HISTORY_CACHE_KEY = BROWSER_OCR_HISTORY_STORAGE_KEY
 const BROWSER_OCR_HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000
 const BROWSER_OCR_HISTORY_LIMIT = 20
 

@@ -22,6 +22,7 @@ type WorkbenchDevicesPageProps = {
   onSendText: (deviceId: string) => void
   onSendFile: (deviceId: string) => void
   onTrustDevice: (deviceId: string) => void
+  onPairByCode?: (shortCode: string) => void
 }
 
 export function WorkbenchDevicesPage({
@@ -37,6 +38,7 @@ export function WorkbenchDevicesPage({
   onSendText,
   onSendFile,
   onTrustDevice,
+  onPairByCode,
 }: WorkbenchDevicesPageProps) {
   const [manualCodeDraft, setManualCodeDraft] = useState('')
   const [manualCodeError, setManualCodeError] = useState<string | null>(null)
@@ -67,7 +69,7 @@ export function WorkbenchDevicesPage({
       return
     }
     setManualCodeError(null)
-    onSendText(trimmed)
+    onPairByCode?.(trimmed)
   }
 
   return (

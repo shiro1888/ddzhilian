@@ -17,6 +17,8 @@ import {
   Wifi,
 } from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
+import { AI_CHAT_STORAGE_KEY } from '../../lib/ai-chat-utils'
+import { BROWSER_OCR_HISTORY_CACHE_KEY } from '../../lib/browser-ocr'
 
 type SettingsPanelThemeModeOption = {
   label: string
@@ -155,6 +157,21 @@ export function SettingsPanel({
     } catch {
       // ignore
     }
+  }
+
+  const handleClearLocalCache = () => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    for (const key of [AI_CHAT_STORAGE_KEY, BROWSER_OCR_HISTORY_CACHE_KEY]) {
+      try {
+        window.localStorage.removeItem(key)
+      } catch {
+        // 隐私模式下 storage 可能不可用，忽略
+      }
+    }
+    setIsCacheCleared(true)
+    setTimeout(() => setIsCacheCleared(false), 2500)
   }
 
   return (
@@ -401,10 +418,7 @@ export function SettingsPanel({
             <button
               type="button"
               className={isCacheCleared ? 'is-cleared' : ''}
-              onClick={() => {
-                setIsCacheCleared(true)
-                setTimeout(() => setIsCacheCleared(false), 2500)
-              }}
+              onClick={handleClearLocalCache}
             >
               <HardDrive size={14} strokeWidth={2} aria-hidden="true" />
               <span>{isCacheCleared ? '本地临时缓存已成功清理' : '清理本地临时会话与图片缓存'}</span>

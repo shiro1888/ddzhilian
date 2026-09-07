@@ -57,7 +57,7 @@ export type AiDraftContextPayload = {
 }
 
 export type AiDraftRequest = AiDraftContextPayload & {
-  id: number
+  id: string
   text: string
 }
 

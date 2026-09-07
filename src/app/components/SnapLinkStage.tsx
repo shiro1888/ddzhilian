@@ -413,6 +413,7 @@ export type SnapLinkStageProps = {
   workbenchTextRequestId?: number
   onCreatePublicRoom: () => void
   onJoinRoom: (roomId: string) => void
+  onPairByShortCode?: (shortCode: string) => void
   onOpenRoomConversation: (roomId: string) => void
   onUpdateRoomState: (payload: { roomId: string; pinned?: boolean; lastReadAt?: string }) => void
   onStartPrivateChat: (deviceId: string) => void
@@ -499,6 +500,7 @@ export function SnapLinkStage({
   workbenchTextRequestId = 0,
   onCreatePublicRoom,
   onJoinRoom,
+  onPairByShortCode,
   onOpenRoomConversation,
   onUpdateRoomState,
   onStartPrivateChat,
@@ -657,6 +659,7 @@ export function SnapLinkStage({
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
   const handledAutoOpenRoomIdRef = useRef<string | null>(null)
   const handledInitialDesktopRoomOpenRef = useRef(false)
+  const aiChatOriginModeRef = useRef<SnapLinkWorkbenchMode | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null)
   const workbenchFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -1099,6 +1102,23 @@ export function SnapLinkStage({
   const pendingTrustDevice = pendingTrustAction
     ? onlineDeviceItems.find((device) => device.deviceId === pendingTrustAction.deviceId) ?? null
     : null
+
+  // 对端在信任弹窗打开期间掉线时，弹窗因 pendingTrustDevice 为空而消失，
+  // 但 pendingTrustAction 仍残留；设备重连后弹窗会带着旧操作突然重现。
+  // 这里在设备离线时主动清空挂起动作。
+  useEffect(() => {
+    if (!pendingTrustAction) {
+      return
+    }
+    const stillOnline = onlineDeviceItems.some(
+      (device) => device.deviceId === pendingTrustAction.deviceId,
+    )
+    if (!stillOnline) {
+      setPendingTrustAction(null)
+      setTrustPinDraft('')
+      setTrustPinError(null)
+    }
+  }, [pendingTrustAction, onlineDeviceItems])
   const workbenchOnlineDeviceCount = onlineDeviceItems.length
   const workbenchDiscoveryHint = workbenchOnlineDeviceCount > 0
     ? `${workbenchOnlineDeviceCount.toString()} 台设备在线 · 可互传`
@@ -2173,22 +2193,37 @@ export function SnapLinkStage({
   }, [activeView])
 
   const handleRoomHeaderBack = () => {
-    if (typeof window !== 'undefined') {
-      const savedReturnMode = sessionStorage.getItem('dd_tool_return_mode')
-      if (savedReturnMode === 'settings') {
-        sessionStorage.removeItem('dd_tool_return_mode')
-        handleShowWorkbenchSettings()
-        return
-      }
+    const originMode = aiChatOriginModeRef.current
+    aiChatOriginModeRef.current = null
+    if (originMode === 'settings') {
+      handleShowWorkbenchSettings()
+      return
+    }
+    if (originMode === 'workshop') {
+      handleShowWorkbenchWorkshop()
+      return
+    }
+    if (originMode === 'nearby') {
+      handleShowWorkbenchNearby()
+      return
+    }
+    if (originMode === 'transfers') {
+      handleShowWorkbenchQueue()
+      return
+    }
+    if (originMode === 'files') {
+      handleShowWorkbenchFiles()
+      return
     }
     handleShowWorkbenchRooms()
   }
 
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
-    }
+    // AI 助手在会话视图内打开，不经过 navigateBackToText，因此不能写
+    // dd_tool_return_mode（否则该值会残留到下一次页面加载，错误地覆盖启动模式）。
+    // 用内存 ref 记录来源模式，仅用于返回按钮回到「设置 / 工坊」。
+    aiChatOriginModeRef.current = workbenchMode
     if (workbenchMode !== 'settings') {
       setWorkbenchMode('rooms')
     }
@@ -2343,12 +2378,14 @@ export function SnapLinkStage({
 
     if (!roomId) {
       setActiveSharedTab(null)
+      aiChatOriginModeRef.current = null
       setIsLobbyOpen(true)
       onOpenRoomHome()
       return
     }
 
     setActiveSharedTab(null)
+    aiChatOriginModeRef.current = null
     setIsLobbyOpen(false)
     onOpenRoomHome()
     onOpenRoomConversation(roomId)
@@ -2401,6 +2438,7 @@ export function SnapLinkStage({
 
   const handleBackToLobby = () => {
     setActiveSharedTab(null)
+    aiChatOriginModeRef.current = null
     setIsLobbyOpen(true)
     onOpenRoomHome()
   }
@@ -2430,6 +2468,7 @@ export function SnapLinkStage({
 
   const handleShowWorkbenchRooms = () => {
     setActiveSharedTab(null)
+    aiChatOriginModeRef.current = null
     onOpenRoomHome()
     setIsLobbyOpen(!(selectedRoomId && shouldShowConversationOnDesktop()))
     setWorkbenchMode('rooms')
@@ -5048,6 +5087,7 @@ export function SnapLinkStage({
           onSelectDevice={handleWorkbenchDeviceListClick}
           onSendText={handleWorkbenchDeviceSendText}
           onSendFile={handleWorkbenchDeviceSendFile}
+          onPairByCode={onPairByShortCode}
           onTrustDevice={handleWorkbenchDeviceTrust}
         />
       )

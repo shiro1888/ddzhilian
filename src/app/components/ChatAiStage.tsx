@@ -178,7 +178,7 @@ export function ChatAiStage({
   const isApplyingRemoteRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const isDraftComposingRef = useRef(false)
-  const handledDraftRequestIdRef = useRef<number | null>(null)
+  const handledDraftRequestIdRef = useRef<string | null>(null)
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
