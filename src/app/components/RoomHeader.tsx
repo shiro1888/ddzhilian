@@ -199,7 +199,7 @@ export function RoomHeader({
                         </span>
                       ))}
                     </div>
-                    <p>{technicalNote}</p>
+                    {technicalNote ? <p>{technicalNote}</p> : null}
                   </div>
                 ) : null}
               </div>

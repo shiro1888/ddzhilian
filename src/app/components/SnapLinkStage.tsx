@@ -1283,7 +1283,7 @@ export function SnapLinkStage({
   const selectedRoomCopyLabel = isSelectedRoomPublic ? '复制房间码' : '复制链接'
   const selectedRoomCopiedLabel = isSelectedRoomPublic ? '已复制房间码' : '已复制链接'
   const selectedRoomTechnicalNote = isSelectedRoomAssistant
-    ? '技术信息：内容经后端代理处理 · 最多读取当前房间近 24 小时的对话上下文'
+    ? ''
     : isSelectedRoomPublic
       ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 24 小时'
       : '技术信息：通过 WebRTC 在设备间直连 · 文件不上传服务器历史副本'
@@ -3987,7 +3987,9 @@ export function SnapLinkStage({
             发送文件
           </button>
         </div>
-        <small className="dd-snaplink__room-empty-note">{selectedRoomTechnicalNote.replace(/^技术信息：/, '')}</small>
+        {selectedRoomTechnicalNote ? (
+          <small className="dd-snaplink__room-empty-note">{selectedRoomTechnicalNote.replace(/^技术信息：/, '')}</small>
+        ) : null}
       </div>
     )
   }
@@ -5794,7 +5796,7 @@ export function SnapLinkStage({
               {isDragging ? (
                 <RoomDragOverlay
                   targetName={selectedConversationName}
-                  deliveryNote={selectedRoomTechnicalNote.replace(/^技术信息：/, '')}
+                  deliveryNote={selectedRoomTechnicalNote ? selectedRoomTechnicalNote.replace(/^技术信息：/, '') : undefined}
                 />
               ) : null}
 
