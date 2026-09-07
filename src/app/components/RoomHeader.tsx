@@ -25,6 +25,7 @@ type RoomHeaderProps = {
   peerLabel: string
   peerTitle: string
   connectionDetails?: RoomHeaderConnectionDetail[]
+  hideRouteStrip?: boolean
   onCopyRoomId: () => void
   onBack?: () => void
   onOpenSharedContent?: () => void
@@ -41,6 +42,7 @@ export function RoomHeader({
   peerLabel,
   peerTitle,
   connectionDetails = [],
+  hideRouteStrip = false,
   onCopyRoomId,
   onBack,
   onOpenSharedContent,
@@ -205,7 +207,7 @@ export function RoomHeader({
           </div>
         </div>
       </div>
-      {primaryConnectionDetail ? (
+      {primaryConnectionDetail && !hideRouteStrip ? (
         <div
           className={`dd-snaplink__room-route is-${primaryConnectionDetail.tone ?? 'default'}`}
           role="status"

@@ -5710,6 +5710,7 @@ export function SnapLinkStage({
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}
+                    hideRouteStrip={isSelectedRoomAssistant}
                     onCopyRoomId={handleCopyRoomId}
                     onBack={handleRoomHeaderBack}
                     onOpenSharedContent={() => setActiveSharedTab('files')}

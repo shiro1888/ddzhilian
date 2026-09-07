@@ -129,7 +129,7 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
     expect(within(ribbon).getByText('2/3 在线（含本机）')).toBeInTheDocument()
   })
 
-  it('discloses that the assistant uses recent room context', async () => {
+  it('discloses that the assistant uses recent room context without a status ribbon', async () => {
     renderSelectedRoom(createSnapLinkRoom({
       roomId: 'ASSISTANT',
       title: 'DD助手',
@@ -141,11 +141,11 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
       status: 'online',
     }))
 
-    const ribbon = await screen.findByRole('status', { name: '当前连接状态' })
-    expect(within(ribbon).getByText('最多近 24 小时')).toBeInTheDocument()
-    expect(
-      screen.getByText('内容经后端代理处理 · 最多读取当前房间近 24 小时的对话上下文'),
-    ).toBeInTheDocument()
+    // 助手会话的连接横条（此设备/模型/联网/上下文）已按设计移除，
+    // 相关信息保留在更多面板的详情与空态提示中。
+    const disclosure = await screen.findByText('内容经后端代理处理 · 最多读取当前房间近 24 小时的对话上下文')
+    expect(disclosure).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: '当前连接状态' })).not.toBeInTheDocument()
     expect(screen.queryByText('只读取你发送的内容')).not.toBeInTheDocument()
   })
 })
