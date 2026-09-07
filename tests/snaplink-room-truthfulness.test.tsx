@@ -141,9 +141,12 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
       status: 'online',
     }))
 
-    // 助手会话不再展示连接横条，也不展示「后端代理处理」技术信息说明。
+    // 助手会话不再展示连接横条，也不展示「后端代理处理」技术信息说明，
+    // 更多面板中的模型/联网/上下文详情行同样移除。
     await screen.findByText('发消息')
     expect(screen.queryByText(/内容经后端代理处理/)).not.toBeInTheDocument()
+    expect(screen.queryByText('最多近 24 小时')).not.toBeInTheDocument()
+    expect(screen.queryByText('按需开启')).not.toBeInTheDocument()
     expect(screen.queryByRole('status', { name: '当前连接状态' })).not.toBeInTheDocument()
     expect(screen.queryByText('只读取你发送的内容')).not.toBeInTheDocument()
   })

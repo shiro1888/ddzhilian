@@ -1286,23 +1286,7 @@ export function SnapLinkStage({
       ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 24 小时'
       : '技术信息：通过 WebRTC 在设备间直连 · 文件不上传服务器历史副本'
   const selectedRoomMoreDetails = isSelectedRoomAssistant
-    ? [
-        {
-          id: 'model',
-          label: '模型',
-          value: selectedAiModelLabel || '默认模型',
-        },
-        {
-          id: 'search',
-          label: '联网',
-          value: '按需开启',
-        },
-        {
-          id: 'context',
-          label: '上下文',
-          value: '最多近 24 小时',
-        },
-      ]
+    ? []
     : isSelectedRoomPublic
       ? [
           {
@@ -5583,7 +5567,6 @@ export function SnapLinkStage({
                     peerLabel={roomStatusLabel || selectedConversationName}
                     peerTitle={selectedConversationName}
                     connectionDetails={selectedRoomMoreDetails}
-                    hideRouteStrip={isSelectedRoomAssistant}
                     onCopyRoomId={handleCopyRoomId}
                     onBack={handleRoomHeaderBack}
                     onOpenSharedContent={() => setActiveSharedTab('files')}
