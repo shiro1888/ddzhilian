@@ -22,12 +22,12 @@ env:
   DEPLOY_BACKEND_BACKUP_ROOT: ${{ vars.DEPLOY_BACKEND_BACKUP_ROOT || '/opt/ddzhilian-server-backups' }}
   DEPLOY_BACKEND_SERVICE: ${{ vars.DEPLOY_BACKEND_SERVICE || 'ddzhilian-server.service' }}
   DEPLOY_BACKEND_HEALTH_URL: ${{ vars.DEPLOY_BACKEND_HEALTH_URL || 'http://127.0.0.1:8787/health' }}
-  DEPLOY_PUBLIC_HEALTH_URL: ${{ vars.DEPLOY_PUBLIC_HEALTH_URL || 'https://ddzhilian.com/health' }}
+  DEPLOY_PUBLIC_HEALTH_URL: ${{ vars.DEPLOY_PUBLIC_HEALTH_URL || 'https://dd.shiro1888.com/health' }}
   DEPLOY_RELEASE_ROOT: ${{ vars.DEPLOY_RELEASE_ROOT || '/tmp/ddzhilian-actions' }}
 
 jobs:
   validate-and-deploy:
-    if: github.repository == '707LTeam/ddzhilian'
+    if: github.repository == 'shiro1888/ddzhilian' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: production
 

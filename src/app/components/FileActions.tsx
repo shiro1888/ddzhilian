@@ -13,7 +13,13 @@ type FileActionsProps = {
   variant?: 'file' | 'shared'
 }
 
-export function FileActions({
+export function FileActions(props: FileActionsProps) {
+  const recallIdentity = [props.file.id, props.file.historyId ?? ''].join(':')
+
+  return <FileActionsContent key={recallIdentity} {...props} />
+}
+
+function FileActionsContent({
   file,
   isLoadingPreview,
   onOpenDocumentPreview,
@@ -25,14 +31,6 @@ export function FileActions({
   const [isConfirmingRecall, setIsConfirmingRecall] = useState(false)
   const confirmGroupRef = useRef<HTMLDivElement | null>(null)
   const confirmTimeoutRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    setIsConfirmingRecall(false)
-    if (confirmTimeoutRef.current !== null) {
-      window.clearTimeout(confirmTimeoutRef.current)
-      confirmTimeoutRef.current = null
-    }
-  }, [file.id, file.historyId])
 
   useEffect(() => {
     return () => {

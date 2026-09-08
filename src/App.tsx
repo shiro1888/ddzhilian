@@ -498,6 +498,7 @@ function App() {
   }, [])
 
   const {
+    socketState,
     self,
     localIdentity,
     onlinePeers,
@@ -2433,6 +2434,7 @@ function App() {
       deviceName={selfName}
       devicePlatform={self?.platform ?? localIdentity.platform}
       deviceShortCode={self?.shortCode}
+      signalingState={socketState}
       deviceSettings={{
         autoConnect: self?.autoConnect ?? localIdentity.autoConnect,
         discoverable: self?.discoverable ?? localIdentity.discoverable,

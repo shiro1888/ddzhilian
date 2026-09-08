@@ -154,4 +154,38 @@ describe('FileActions recall confirmation', () => {
     expect(screen.getByRole('button', { name: /撤回/i })).toBeInTheDocument()
     expect(onRecallFile).not.toHaveBeenCalled()
   })
+
+  it('drops a pending confirmation when the rendered file identity changes', () => {
+    const onRecallFile = vi.fn()
+    const firstFile = createDummyFileEntry()
+    const secondFile = createDummyFileEntry({
+      id: 'file-2',
+      historyId: 'history-456',
+      fileName: 'release-notes.pdf',
+    })
+    const sharedProps = {
+      isLoadingPreview: false,
+      onOpenDocumentPreview: vi.fn(),
+      onRetryTransfer: vi.fn(),
+      onCancelTransfer: vi.fn(),
+      onRecallFile,
+    }
+
+    const { rerender } = render(<FileActions file={firstFile} {...sharedProps} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /撤回/i }))
+    expect(screen.getByText('确定撤回？')).toBeInTheDocument()
+
+    rerender(<FileActions file={secondFile} {...sharedProps} />)
+
+    expect(screen.queryByText('确定撤回？')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /撤回/i })).toBeInTheDocument()
+    expect(onRecallFile).not.toHaveBeenCalled()
+
+    rerender(<FileActions file={firstFile} {...sharedProps} />)
+
+    expect(screen.queryByText('确定撤回？')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /撤回/i })).toBeInTheDocument()
+    expect(onRecallFile).not.toHaveBeenCalled()
+  })
 })

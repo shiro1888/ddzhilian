@@ -40,6 +40,8 @@ export type SettingsPanelThemeModeOption = {
   icon: typeof Sun
 }
 
+export type SettingsPanelSignalingState = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
+
 export type SettingsPanelProps = {
   header?: ReactNode
   deviceName: string
@@ -50,6 +52,7 @@ export type SettingsPanelProps = {
   deviceShortCode?: string
   deviceId?: string
   accountId?: string
+  signalingState: SettingsPanelSignalingState
   discoverable: boolean
   allowShortCode: boolean
   autoConnect: boolean
@@ -68,6 +71,7 @@ export type SettingsPanelProps = {
   onEnterToSendChange: (checked: boolean) => void
   onSoundEffectsChange: (checked: boolean) => void
   onThemeModeChange: (mode: ThemeMode) => void
+  onMeasureNetworkLatency: () => Promise<number>
   onOpenCustomTheme?: () => void
   onOpenAdmin?: () => void
 }
@@ -175,6 +179,7 @@ export function SettingsPanel({
   deviceNameError,
   deviceShortCode,
   deviceId,
+  signalingState,
   discoverable,
   allowShortCode,
   autoConnect,
@@ -193,23 +198,51 @@ export function SettingsPanel({
   onEnterToSendChange,
   onSoundEffectsChange,
   onThemeModeChange,
+  onMeasureNetworkLatency,
   onOpenCustomTheme,
   onOpenAdmin,
 }: SettingsPanelProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isEditingName, setIsEditingName] = useState(false)
   const [cacheStatus, setCacheStatus] = useState<'idle' | 'clearing' | 'done'>('idle')
-  const [storageSizeLabel, setStorageSizeLabel] = useState<string>(() =>
-    typeof window !== 'undefined' ? formatStorageBytes(calculateClientStorageUsage()) : '< 1 KB'
-  )
-  const [pingSpeed, setPingSpeed] = useState<number>(12)
-  const [isTestingPing, setIsTestingPing] = useState<boolean>(false)
+  const [storageSizeLabel, setStorageSizeLabel] = useState('< 1 KB')
+  const [pingSpeed, setPingSpeed] = useState<number | null>(null)
+  const [isTestingPing, setIsTestingPing] = useState(true)
   const [showQrModal, setShowQrModal] = useState<boolean>(false)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    setStorageSizeLabel(formatStorageBytes(calculateClientStorageUsage()))
+    const frameId = window.requestAnimationFrame(() => {
+      setStorageSizeLabel(formatStorageBytes(calculateClientStorageUsage()))
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
   }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    void onMeasureNetworkLatency()
+      .then((latencyMs) => {
+        if (isActive) {
+          setPingSpeed(latencyMs)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setPingSpeed(null)
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsTestingPing(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [onMeasureNetworkLatency])
 
   const copyText = async (key: string, text: string) => {
     try {
@@ -316,14 +349,23 @@ export function SettingsPanel({
     }, 450)
   }
 
-  const handleTestPing = () => {
+  const handleTestPing = async () => {
     if (isTestingPing) return
     setIsTestingPing(true)
-    setTimeout(() => {
-      setPingSpeed(Math.floor(Math.random() * 8) + 8)
+    try {
+      setPingSpeed(await onMeasureNetworkLatency())
+    } catch {
+      setPingSpeed(null)
+    } finally {
       setIsTestingPing(false)
-    }, 600)
+    }
   }
+
+  const signalingStatusLabel = signalingState === 'open'
+    ? '正常运行'
+    : signalingState === 'connecting' || signalingState === 'idle'
+      ? '正在连接'
+      : '连接异常'
 
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
@@ -605,12 +647,12 @@ export function SettingsPanel({
                   <span>
                     <strong>局域网信令与网关</strong>
                   </span>
-                  <em className="is-ok">正常运行</em>
+                  <em className={signalingState === 'open' ? 'is-ok' : undefined}>{signalingStatusLabel}</em>
                 </div>
 
                 <div className="dd-snaplink__settings-diag-item">
                   <span>
-                    <strong>网络传输延迟</strong>
+                    <strong>信令服务延迟</strong>
                   </span>
                   <button
                     type="button"
@@ -624,15 +666,15 @@ export function SettingsPanel({
                     ) : (
                       <RefreshCw size={11} />
                     )}
-                    <span>{isTestingPing ? '测速中' : `${pingSpeed}ms`}</span>
+                    <span>{isTestingPing ? '测速中' : pingSpeed === null ? '不可用' : `${pingSpeed}ms`}</span>
                   </button>
                 </div>
 
                 <div className="dd-snaplink__settings-diag-item">
                   <span>
-                    <strong>物理直连加密</strong>
+                    <strong>传输通道加密</strong>
                   </span>
-                  <em className="is-safe">硬件级加密</em>
+                  <em className="is-safe">WebRTC DTLS</em>
                 </div>
 
                 <div className="dd-snaplink__settings-diag-item">

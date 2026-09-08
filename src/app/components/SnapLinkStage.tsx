@@ -175,6 +175,7 @@ import { RoomDragOverlay } from './RoomDragOverlay'
 import { RoomHeader } from './RoomHeader'
 import { RoomsPage } from './RoomsPage'
 import { SettingsPanel } from './SettingsPanel'
+import type { SettingsPanelSignalingState } from './SettingsPanel'
 import { SharedContentPanel } from './SharedContentPanel'
 import { SidebarNav } from './SidebarNav'
 import { StatusPillsCollapsible } from './StatusPillsCollapsible'
@@ -366,6 +367,34 @@ function resolveSnapLinkApiBaseUrl() {
   return `${protocol}//${host}`
 }
 
+async function measureSnapLinkNetworkLatency() {
+  const apiBaseUrl = resolveSnapLinkApiBaseUrl()
+  if (!apiBaseUrl) {
+    throw new Error('Signaling API URL is unavailable.')
+  }
+
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 5_000)
+  const startedAt = performance.now()
+
+  try {
+    const healthUrl = new URL('/health', `${apiBaseUrl}/`)
+    healthUrl.searchParams.set('_', Date.now().toString())
+    const response = await fetch(healthUrl, {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`Signaling health request failed with ${response.status.toString()}.`)
+    }
+
+    return Math.max(1, Math.round(performance.now() - startedAt))
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export type SnapLinkStageProps = {
   isDragging: boolean
   activeView: SnapLinkActiveView
@@ -373,6 +402,7 @@ export type SnapLinkStageProps = {
   deviceName: string
   devicePlatform: string
   deviceShortCode?: string
+  signalingState: SettingsPanelSignalingState
   deviceSettings?: Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>
   devicePreferences?: DevicePreferencesPayload
   accountId?: string
@@ -460,6 +490,7 @@ export function SnapLinkStage({
   deviceName,
   devicePlatform,
   deviceShortCode,
+  signalingState,
   deviceSettings = { autoConnect: true, discoverable: true, allowShortCode: true },
   devicePreferences = { enterToSend: true, soundEffects: true },
   accountId,
@@ -5023,6 +5054,7 @@ export function SnapLinkStage({
       deviceShortCode={deviceShortCode}
       deviceId={deviceId}
       accountId={accountId}
+      signalingState={signalingState}
       discoverable={deviceSettings.discoverable !== false}
       allowShortCode={deviceSettings.allowShortCode !== false}
       autoConnect={deviceSettings.autoConnect !== false}
@@ -5066,6 +5098,7 @@ export function SnapLinkStage({
       onThemeModeChange={(nextThemeMode) => {
         updateWorkbenchThemeMode(nextThemeMode)
       }}
+      onMeasureNetworkLatency={measureSnapLinkNetworkLatency}
       onOpenCustomTheme={toggleThemePanel}
       onOpenAdmin={onOpenAdminView}
     />

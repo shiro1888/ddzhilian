@@ -32,6 +32,7 @@ export function createSnapLinkBaseProps(
     deviceId: 'device-self',
     deviceName: 'windows-SELF',
     devicePlatform: 'windows',
+    signalingState: 'open',
     selectedRoomId: null,
     selectedConversationName: '设备对话',
     activeTransferLabel: '',
