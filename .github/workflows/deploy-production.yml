@@ -44,18 +44,20 @@ jobs:
             package-lock.json
             server/package-lock.json
 
-      - name: Validate frontend
+      - name: Install dependencies
         run: |
           npm ci
+          npm ci --include=dev --prefix server
+
+      - name: Validate frontend
+        run: |
           npm run lint
           npm run typecheck
           npm run test
           npm run build:compressed
 
       - name: Validate backend
-        run: |
-          npm ci --include=dev --prefix server
-          npm run build --prefix server
+        run: npm run build --prefix server
 
       - name: Audit production dependencies
         run: npm run audit:prod

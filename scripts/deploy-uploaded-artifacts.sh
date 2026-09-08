@@ -142,4 +142,7 @@ if [ -n "$PUBLIC_HEALTH_URL" ]; then
   retry_curl "$PUBLIC_HEALTH_URL" "Public"
 fi
 
+log "Removing successful deployment staging and rollback copies"
+run_as_root rm -rf -- "$backend_backup_dir" "$frontend_backup_dir" "$RELEASE_DIR"
+
 log "Production deploy completed"
