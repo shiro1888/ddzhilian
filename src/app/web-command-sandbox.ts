@@ -45,6 +45,7 @@ export type WebCommandSecurityViolation = {
 }
 
 const sourceMaxLength = 12000
+const arithmeticMaxDepth = 128
 
 export const webCommandDefaultSources: Record<WebCommandLanguage, string> = {
   python: [
@@ -577,12 +578,116 @@ function evaluateExpression(rawExpression: string): unknown {
 }
 
 function evaluateArithmetic(expression: string) {
-  try {
-    const value = Function(`"use strict"; return (${expression});`)() as unknown
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
-  } catch {
-    return null
+  let index = 0
+
+  const skipWhitespace = () => {
+    while (/\s/.test(expression[index] ?? '')) {
+      index += 1
+    }
   }
+
+  const parsePrimary = (depth: number): number | null => {
+    if (depth > arithmeticMaxDepth) {
+      return null
+    }
+
+    skipWhitespace()
+
+    if (expression[index] === '(') {
+      index += 1
+      const value = parseAdditive(depth + 1)
+      skipWhitespace()
+      if (value === null || expression[index] !== ')') {
+        return null
+      }
+      index += 1
+      return value
+    }
+
+    const numberMatch = /^(?:\d+(?:\.\d*)?|\.\d+)/.exec(expression.slice(index))
+    if (!numberMatch) {
+      return null
+    }
+
+    index += numberMatch[0].length
+    const value = Number(numberMatch[0])
+    return Number.isFinite(value) ? value : null
+  }
+
+  const parseUnary = (depth: number): number | null => {
+    if (depth > arithmeticMaxDepth) {
+      return null
+    }
+
+    skipWhitespace()
+    const operator = expression[index]
+    if (operator !== '+' && operator !== '-') {
+      return parsePrimary(depth)
+    }
+
+    index += 1
+    const value = parseUnary(depth + 1)
+    if (value === null) {
+      return null
+    }
+    return operator === '-' ? -value : value
+  }
+
+  const parseMultiplicative = (depth: number): number | null => {
+    let value = parseUnary(depth)
+    if (value === null) {
+      return null
+    }
+
+    while (true) {
+      skipWhitespace()
+      const operator = expression[index]
+      if (operator !== '*' && operator !== '/' && operator !== '%') {
+        return value
+      }
+
+      index += 1
+      const right = parseUnary(depth)
+      if (right === null) {
+        return null
+      }
+
+      value = operator === '*'
+        ? value * right
+        : operator === '/'
+          ? value / right
+          : value % right
+      if (!Number.isFinite(value)) {
+        return null
+      }
+    }
+  }
+
+  const parseAdditive = (depth: number): number | null => {
+    let value = parseMultiplicative(depth)
+    if (value === null) {
+      return null
+    }
+
+    while (true) {
+      skipWhitespace()
+      const operator = expression[index]
+      if (operator !== '+' && operator !== '-') {
+        return value
+      }
+
+      index += 1
+      const right = parseMultiplicative(depth)
+      if (right === null) {
+        return null
+      }
+      value = operator === '+' ? value + right : value - right
+    }
+  }
+
+  const value = parseAdditive(0)
+  skipWhitespace()
+  return value !== null && index === expression.length && Number.isFinite(value) ? value : null
 }
 
 function parseStringLiteral(expression: string) {

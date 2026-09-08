@@ -14,6 +14,35 @@ describe('web command sandbox', () => {
     expect(result.result.parsedJson).toEqual({ ok: true, value: 42 })
   })
 
+  it('evaluates arithmetic when the production CSP blocks dynamic code generation', () => {
+    const originalFunction = globalThis.Function
+    let result: ReturnType<typeof runWebCommandSandbox>
+
+    Object.defineProperty(globalThis, 'Function', {
+      configurable: true,
+      writable: true,
+      value: () => {
+        throw new EvalError('Blocked by Content Security Policy')
+      },
+    })
+
+    try {
+      result = runWebCommandSandbox({
+        language: 'python',
+        source: webCommandDefaultSources.python,
+      })
+    } finally {
+      Object.defineProperty(globalThis, 'Function', {
+        configurable: true,
+        writable: true,
+        value: originalFunction,
+      })
+    }
+
+    expect(result.ok).toBe(true)
+    expect(result.stdout).toBe('hello from python\nanswer = 42\n')
+  })
+
   it('collects Java System.out output', () => {
     const result = runWebCommandSandbox({
       language: 'java',
