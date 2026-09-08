@@ -1,7 +1,6 @@
 import {
   Suspense,
   lazy,
-  startTransition,
   useCallback,
   useEffect,
   useId,
@@ -276,7 +275,7 @@ function getPrivateRoomPeerKey(room: Pick<RoomListItem, 'isPublic' | 'isAssistan
 }
 
 function resolvePublicRoomTitle(publicIndex?: number) {
-  return publicIndex ? `世界对话 ${publicIndex.toString()}` : '世界对话'
+  return publicIndex && publicIndex > 1 ? `世界对话 ${publicIndex.toString()}` : '世界对话'
 }
 
 function parseAiBotPrompt(value: string) {
@@ -430,7 +429,30 @@ function App() {
   const [chatDraft, setChatDraft] = useState('')
   const [composerImageDrafts, setComposerImageDrafts] = useState<ComposerImageDraft[]>([])
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null)
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const fromSearch = readRoomIdFromSearch(window.location.search)
+      if (fromSearch) {
+        return fromSearch
+      }
+      try {
+        return window.localStorage.getItem('ddzhilian.last_room_id.v1')
+      } catch {
+        return null
+      }
+    }
+    return null
+  })
+  const cachedRoomTitle = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return window.localStorage.getItem('ddzhilian.last_room_title.v1')
+      } catch {
+        return null
+      }
+    }
+    return null
+  }, [])
   const [pendingRoomSelectionId, setPendingRoomSelectionId] = useState<string | null>(null)
   const [autoOpenRoomId, setAutoOpenRoomId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -785,10 +807,16 @@ function App() {
     return next
   }, [sessions])
 
+  const defaultRoom =
+    rooms.find((room) => room.isPublic && room.publicIndex === 1) ??
+    rooms.find((room) => room.isPublic) ??
+    rooms[0] ??
+    null
+
   const effectiveSelectedRoomId =
-    selectedRoomId && roomById.has(selectedRoomId)
+    selectedRoomId && (roomById.has(selectedRoomId) || rooms.length === 0)
       ? selectedRoomId
-      : (rooms[0]?.roomId ?? null)
+      : (defaultRoom?.roomId ?? null)
   const selectedRoom = effectiveSelectedRoomId ? roomById.get(effectiveSelectedRoomId) ?? null : null
   const isSelectedBotRoom = isBotChatRoom(selectedRoom)
   const selectedRoomMemberNames =
@@ -822,12 +850,12 @@ function App() {
   )
 
   useEffect(() => {
-    if (!selectedRoom) {
+    if (!effectiveSelectedRoomId) {
       return
     }
 
-    ensureRoomHistoryLoaded(selectedRoom.roomId)
-  }, [ensureRoomHistoryLoaded, selectedRoom])
+    ensureRoomHistoryLoaded(effectiveSelectedRoomId)
+  }, [ensureRoomHistoryLoaded, effectiveSelectedRoomId])
 
   useEffect(() => {
     if (!pendingRoomSelectionId || !self) {
@@ -857,6 +885,12 @@ function App() {
       window.cancelAnimationFrame(frameId)
     }
   }, [pendingRoomSelectionId, roomById, self, updateRoomState])
+
+  useEffect(() => {
+    if (activeView === 'text' && !selectedRoomId && defaultRoom?.roomId) {
+      setSelectedRoomId(defaultRoom.roomId)
+    }
+  }, [activeView, defaultRoom?.roomId, selectedRoomId])
 
   const selfName = self?.deviceName ?? localIdentity.deviceName
 
@@ -891,7 +925,20 @@ function App() {
       : `${selectedRoomMemberNames.slice(0, 3).join('、')} 等 ${selectedRoomMemberNames.length} 位成员`
     : selectedRoom
       ? `Room ${selectedRoom.roomId}`
-      : selectedDevicePeer?.deviceName ?? '设备对话'
+      : cachedRoomTitle ?? selectedDevicePeer?.deviceName ?? '世界对话'
+
+  useEffect(() => {
+    if (effectiveSelectedRoomId && typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('ddzhilian.last_room_id.v1', effectiveSelectedRoomId)
+        if (selectedConversationName && selectedConversationName !== '设备对话') {
+          window.localStorage.setItem('ddzhilian.last_room_title.v1', selectedConversationName)
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [effectiveSelectedRoomId, selectedConversationName])
 
   const connectingTargetCount = Object.values(connectionStates).filter(
     (state) => state.status === 'connecting',
@@ -1440,7 +1487,7 @@ function App() {
   const fileConversationEmptyState =
     selectedRoom
       ? isSelectedBotRoom
-        ? 'AI 私密助手，随时解答问题与辅助分析。'
+        ? ''
         : selectedRoom.isPublic
         ? '公共共享空间，随时收发消息与文件。'
         : selectedConnectedTarget
@@ -1621,9 +1668,9 @@ function App() {
       const previewText =
         latestEvent?.previewText ??
         (isAssistantRoom
-          ? 'DD助手'
+          ? 'DD助手 · 多模型对话与深度推理'
           : room.isPublic
-            ? `${publicRoomTitle}，可通过链接加入`
+            ? publicRoomTitle
             : '暂无消息')
       const onlineCount = room.members.filter(
         (member) => member.deviceId !== self?.deviceId && member.online,
@@ -1688,16 +1735,16 @@ function App() {
       return visibleRooms
     }, [])
     .sort((left, right) => {
-      if (left.isAssistant !== right.isAssistant) {
-        return left.isAssistant ? -1 : 1
-      }
-
       if (left.isPublic && right.isPublic) {
         return (left.publicIndex ?? Number.MAX_SAFE_INTEGER) - (right.publicIndex ?? Number.MAX_SAFE_INTEGER)
       }
 
       if (left.isPublic !== right.isPublic) {
         return left.isPublic ? -1 : 1
+      }
+
+      if (left.isAssistant !== right.isAssistant) {
+        return left.isAssistant ? -1 : 1
       }
 
       if (left.pinned !== right.pinned) {
@@ -1796,13 +1843,11 @@ function App() {
       setAiDraftRequest(null)
     }
 
-    startTransition(() => {
-      const currentFull = `${location.pathname}${location.search || ''}`
-      if (currentFull !== nextPath) {
-        navigate(nextPath)
-      }
-      setLocalError(null)
-    })
+    const currentFull = `${location.pathname}${location.search || ''}`
+    if (currentFull !== nextPath) {
+      navigate(nextPath)
+    }
+    setLocalError(null)
   }
 
   const handleShareCommandResult = (text = commandResultText) => {
@@ -2216,6 +2261,12 @@ function App() {
     setSelectedRoomId(roomId)
     setSelectedPeerId(firstPeer?.deviceId ?? null)
     updateRoomState({ roomId, lastReadAt: new Date().toISOString() })
+    if (activeView === 'text') {
+      const nextSearch = `?room=${encodeURIComponent(roomId)}`
+      if (location.search !== nextSearch) {
+        navigate(`${pathForView('text')}${nextSearch}`, { replace: true })
+      }
+    }
   }
 
   const handleStartPrivateChat = (deviceId: string) => {

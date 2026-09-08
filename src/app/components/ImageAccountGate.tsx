@@ -17,24 +17,18 @@ type ImageAccountGateProps = {
 
 type AccountMode = 'login' | 'register'
 
-const imageAuthHighlights = [
-  '历史与额度同步',
-  '参考图按需上传',
-    '传输仍走 DD直连记录',
-] as const
-
 const imageAuthSteps = [
   {
-    title: '生成图片',
-    description: '输入提示词或参考图，生成结果保存在账号历史中。',
+    title: '智能创作',
+    description: '输入提示词，快速生成多风格高质量图像',
   },
   {
-    title: '本地确认',
-    description: '下载、编辑或挑选图片后，再决定是否发送。',
+    title: '历史同步',
+    description: '跨设备实时同步作品与生成记录',
   },
   {
-    title: '直连分享',
-    description: '通过附近设备或房间发送，传输状态进入 DD直连记录。',
+    title: '一键分享',
+    description: '通过房间或附近设备极速投送直传',
   },
 ] as const
 
@@ -109,20 +103,12 @@ export function ImageAccountGate({
           <div className="dd-image-auth-card__intro">
             <div className="dd-image-auth-kicker">
               <div className="dd-image-stage__mark" aria-hidden="true" />
-              <span>AI 图片工作台</span>
+              <span>AI 生图</span>
             </div>
-            <h2>{mode === 'login' ? '登录后同步生图历史' : '创建图片账号'}</h2>
-            <p>
-            图片账号只同步生成额度和历史记录；图片文件的发送、接收和进度，仍由 DD直连的传输记录管理。
-            </p>
+            <h2>{mode === 'login' ? '登录后同步生图历史' : '注册 AI 生图账号'}</h2>
+            <p>输入创意提示词，即刻生成高品质艺术图像。</p>
 
-            <div className="dd-image-auth-facts" aria-label="图片工具说明">
-              {imageAuthHighlights.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-
-            <div className="dd-image-auth-flow" aria-label="图片生成到直连发送流程">
+            <div className="dd-image-auth-flow" aria-label="核心功能">
               {imageAuthSteps.map((item, index) => (
                 <span key={item.title}>
                   <small>{(index + 1).toString().padStart(2, '0')}</small>
@@ -150,9 +136,7 @@ export function ImageAccountGate({
                 <ChevronLeft size={18} strokeWidth={2.4} aria-hidden="true" />
                 <span>返回</span>
               </button>
-              <span>{mode === 'login' ? '账号登录' : '账号注册'}</span>
-              <strong>{mode === 'login' ? '继续使用图片工具' : '开启图片历史同步'}</strong>
-              <p>{mode === 'login' ? '登录后可读取图片额度、历史记录和参考图任务。' : '创建后需要按邮件提示完成确认，再回到这里登录。'}</p>
+              <strong>{mode === 'login' ? '登录账号' : '注册新账号'}</strong>
             </div>
 
             <div className="dd-image-auth-tabs" role="tablist" aria-label="账号操作">
@@ -229,14 +213,11 @@ export function ImageAccountGate({
                 className="dd-button dd-button--primary dd-image-auth-submit"
                 disabled={!canSubmit}
               >
-                {isSubmitting ? '处理中...' : mode === 'login' ? '登录图片工具' : '创建账号'}
+                {isSubmitting ? '处理中...' : mode === 'login' ? '登 录' : '注 册'}
               </button>
             </form>
             {localNotice ? <p className="dd-success-note">{localNotice}</p> : null}
             {localError || error ? <p className="dd-error-note">{localError ?? error}</p> : null}
-            <p className="dd-image-auth-safe-note">
-          图片生成需要账号；附近设备发现、文件直传和传输记录不依赖图片账号。
-            </p>
           </div>
         </div>
       </div>

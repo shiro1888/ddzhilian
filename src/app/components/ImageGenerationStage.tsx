@@ -1327,7 +1327,7 @@ export function ImageGenerationStage({
                 <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
               </button>
               <div>
-                <strong>AI 图片生成</strong>
+                <strong>AI 生图</strong>
                 <span>参考图、提示词和输出设置集中在一个工作台中。</span>
               </div>
             </div>

@@ -1,7 +1,6 @@
 import {
   ArrowLeftRight,
   MessageCircle,
-  MonitorSmartphone,
   Sparkles,
   User,
   type LucideIcon,
@@ -15,7 +14,7 @@ type MobileWorkbenchNavProps = {
   className?: string
   ariaLabel: string
   activeTransferCount?: number
-  onShowNearby: () => void
+  onShowNearby?: () => void
   onShowRooms: () => void
   onShowQueue: () => void
   onShowWorkshop?: () => void
@@ -38,43 +37,43 @@ export function MobileWorkbenchNav({
   ariaLabel,
   activeTransferCount = 0,
   onShowRooms,
-  onShowNearby,
   onShowQueue,
   onShowWorkshop,
   onShowSettings,
 }: MobileWorkbenchNavProps) {
+  const isMessagesActive = activeMode === 'rooms' || activeMode === 'text' || activeMode === 'nearby'
+  const isTransfersActive = activeMode === 'transfers' || activeMode === 'files'
+  const isWorkshopActive = activeMode === 'workshop' || Boolean(activeTool)
+  const isSettingsActive = activeMode === 'settings'
+
   const items: MobileWorkbenchNavItem[] = [
     {
       mode: 'rooms',
       label: '消息',
       icon: MessageCircle,
       onClick: onShowRooms,
-      isActive: activeMode === 'rooms' || activeMode === 'text',
+      isActive: isMessagesActive,
     },
-    {
-      mode: 'nearby',
-      label: '设备',
-      icon: MonitorSmartphone,
-      onClick: onShowNearby,
-      isActive: activeMode === 'nearby',
-    },
-    {
+  ]
+
+  if (activeTransferCount > 0 || isTransfersActive) {
+    items.push({
       mode: 'transfers',
       label: '传输',
       icon: ArrowLeftRight,
       onClick: onShowQueue,
       badgeCount: activeTransferCount,
-      isActive: activeMode === 'transfers' || activeMode === 'files',
-    },
-  ]
+      isActive: isTransfersActive,
+    })
+  }
 
   if (onShowWorkshop) {
     items.push({
       mode: 'workshop',
-      label: '工坊',
+      label: '工具',
       icon: Sparkles,
       onClick: onShowWorkshop,
-      isActive: activeMode === 'workshop' || Boolean(activeTool),
+      isActive: isWorkshopActive,
     })
   }
 
@@ -83,7 +82,7 @@ export function MobileWorkbenchNav({
     label: '我的',
     icon: User,
     onClick: onShowSettings,
-    isActive: activeMode === 'settings',
+    isActive: isSettingsActive,
   })
 
   return (

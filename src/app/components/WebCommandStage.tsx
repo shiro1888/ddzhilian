@@ -10,6 +10,7 @@ import {
   Play,
   RotateCcw,
   Send,
+  Sparkles,
   Terminal as TerminalIcon,
   Trash2,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import {
   runWebCommandSandbox,
   serverSandboxLanguages,
   webCommandDefaultSources,
+  webCommandPresets,
 } from '../web-command-sandbox'
 import { copyImageDataUrlToClipboard } from '../web-command-clipboard'
 import type {
@@ -58,6 +60,16 @@ export function WebCommandStage({
   const [isRunning, setIsRunning] = useState(false)
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false)
   const langMenuRef = useRef<HTMLDivElement | null>(null)
+  const [isPresetMenuOpen, setIsPresetMenuOpen] = useState(false)
+  const presetMenuRef = useRef<HTMLDivElement | null>(null)
+  const gutterRef = useRef<HTMLDivElement | null>(null)
+  const presets = useMemo(() => webCommandPresets[language] ?? [], [language])
+
+  const handleEditorScroll = (event: React.UIEvent<HTMLTextAreaElement>) => {
+    if (gutterRef.current) {
+      gutterRef.current.scrollTop = event.currentTarget.scrollTop
+    }
+  }
   const [copyLabel, setCopyLabel] = useState(getCopyDefaultLabel('python'))
   const [mobilePane, setMobilePane] = useState<WebCommandMobilePane>('source')
   const terminalHostRef = useRef<HTMLDivElement | null>(null)
@@ -97,6 +109,31 @@ export function WebCommandStage({
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isLangMenuOpen])
+
+  useEffect(() => {
+    if (!isPresetMenuOpen) {
+      return undefined
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (presetMenuRef.current && !presetMenuRef.current.contains(event.target as Node)) {
+        setIsPresetMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPresetMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isPresetMenuOpen])
 
   useEffect(() => {
     languageRef.current = language
@@ -169,11 +206,17 @@ export function WebCommandStage({
       writeOutputToTerminal(nextResult.stdout)
     }
     if (nextResult.stderr) {
-      writeOutputToTerminal(nextResult.stderr)
+      writeOutputToTerminal(`\x1b[38;2;239;68;68m${nextResult.stderr}\x1b[0m`)
     }
     if (!nextResult.stdout && !nextResult.stderr && !nextResult.image) {
-      writeOutputToTerminal('无输出。')
+      writeOutputToTerminal('\x1b[90m(无标准输出)\x1b[0m\r\n')
     }
+
+    const duration = nextResult.durationMs ? `${nextResult.durationMs}ms` : '<1ms'
+    const statusText = nextResult.ok
+      ? `\x1b[38;2;16;185;129m✔ 执行完成 (耗时 ${duration}, exit ${nextResult.exitCode})\x1b[0m`
+      : `\x1b[38;2;239;68;68m✖ 执行失败 (耗时 ${duration}, exit ${nextResult.exitCode})\x1b[0m`
+    writeOutputToTerminal(`\r\n\x1b[90m────────────────────────────────────────\x1b[0m\r\n${statusText}\r\n`)
   }, [writeOutputToTerminal])
 
   const executeCurrentSource = useCallback(() => {
@@ -302,9 +345,9 @@ export function WebCommandStage({
       fontSize: 13,
       scrollback: 600,
       theme: {
-        background: '#09090b',
-        foreground: '#f5f5f5',
-        cursor: '#2563eb',
+        background: '#0d1117',
+        foreground: '#e6edf3',
+        cursor: '#10b981',
         selectionBackground: 'rgba(16, 185, 129, 0.25)',
       },
     })
@@ -313,6 +356,11 @@ export function WebCommandStage({
     terminal.open(terminalHost)
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
+
+    // Welcome banner in terminal
+    terminal.write('\x1b[1;32m✔ DD直连 命令行沙箱终端就绪\x1b[0m\r\n')
+    terminal.write('\x1b[90m当前环境: WebAssembly / 服务端容器沙箱\x1b[0m\r\n')
+    terminal.write('\x1b[90m快捷键: 点击「运行」或按 Ctrl + Enter 执行代码\x1b[0m\r\n\r\n')
 
     const fitTerminal = () => {
       fitAddon.fit()
@@ -362,6 +410,7 @@ export function WebCommandStage({
 
     terminal.reset()
     terminal.clear()
+    terminal.write('\x1b[90m(终端已清空，待执行新指令...)\x1b[0m\r\n')
   }
 
   const handleResetSource = () => {
@@ -462,7 +511,10 @@ export function WebCommandStage({
             <ChevronLeft size={20} strokeWidth={2.4} aria-hidden="true" />
           </button>
           <div className="dd-web-command__head-text">
-            <h1>命令行</h1>
+            <div className="dd-web-command__title-row">
+              <h1>命令行</h1>
+              <span className="dd-web-command__badge">代码沙箱</span>
+            </div>
           </div>
         </div>
         <div className="dd-web-command__head-actions">
@@ -571,8 +623,46 @@ export function WebCommandStage({
                 <strong>{getEditorFilename(language)}</strong>
               </span>
               <span className="dd-web-command__panel-pill">{sourceLineCount.toString()} 行 · {source.length.toString()} 字符</span>
+              <span className="dd-web-command__kbd-hint">Ctrl+Enter 运行</span>
             </div>
             <div className="dd-web-command__panel-head-actions">
+              {presets.length > 0 ? (
+                <div className="dd-web-command__preset-selector" ref={presetMenuRef}>
+                  <button
+                    type="button"
+                    className="dd-web-command__mini-btn is-preset"
+                    aria-label="选择代码示例模版"
+                    title="选择代码示例模版"
+                    onClick={() => setIsPresetMenuOpen((v) => !v)}
+                  >
+                    <Sparkles size={12} aria-hidden="true" />
+                    <span>示例模版</span>
+                    <ChevronDown size={11} aria-hidden="true" />
+                  </button>
+                  {isPresetMenuOpen ? (
+                    <div className="dd-web-command__preset-menu" role="menu">
+                      <div className="dd-web-command__preset-menu-title">选择代码示例</div>
+                      {presets.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className="dd-web-command__preset-item"
+                          onClick={() => {
+                            setSource(preset.source)
+                            if (preset.stdin !== undefined) {
+                              setStdin(preset.stdin)
+                            }
+                            setIsPresetMenuOpen(false)
+                          }}
+                        >
+                          <div className="dd-web-command__preset-item-label">{preset.label}</div>
+                          <div className="dd-web-command__preset-item-desc">{preset.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="dd-web-command__mini-btn"
@@ -593,12 +683,21 @@ export function WebCommandStage({
               </button>
             </div>
           </div>
-          <textarea
-            value={source}
-            spellCheck={false}
-            onChange={(event) => setSource(event.target.value)}
-            onKeyDown={handleEditorKeyDown}
-          />
+          <div className="dd-web-command__editor-container">
+            <div className="dd-web-command__gutter" ref={gutterRef} aria-hidden="true">
+              {Array.from({ length: sourceLineCount }, (_, i) => (
+                <span key={i + 1} className="dd-web-command__gutter-num">{i + 1}</span>
+              ))}
+            </div>
+            <textarea
+              className="dd-web-command__editor-input"
+              value={source}
+              spellCheck={false}
+              onChange={(event) => setSource(event.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              onScroll={handleEditorScroll}
+            />
+          </div>
           {language === 'java' ? (
             <>
               <div className="dd-web-command__panel-head is-stdin">
@@ -675,6 +774,11 @@ export function WebCommandStage({
             <>
               <div className="dd-web-command__terminal-head">
                 <div className="dd-web-command__terminal-title">
+                  <div className="dd-web-command__term-dots" aria-hidden="true">
+                    <span className="dd-term-dot is-red" />
+                    <span className="dd-term-dot is-yellow" />
+                    <span className="dd-term-dot is-green" />
+                  </div>
                   <span className="dd-web-command__file-tab is-terminal">
                     <TerminalIcon size={14} className="dd-web-command__file-tab-icon" aria-hidden="true" />
                     <strong>终端</strong>

@@ -39,7 +39,6 @@ import type {
   TransferStatus,
 } from './ddzhilian-types'
 
-const DEFAULT_DEV_WS_URL = 'ws://localhost:8787/ws'
 const STORAGE_KEY = 'ddzhilian.identity.v1'
 const CHUNK_SIZE = 64 * 1024
 const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
@@ -80,9 +79,10 @@ function resolveWsUrl() {
     return configuredUrl
   }
 
-  const { protocol, hostname, host } = window.location
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return DEFAULT_DEV_WS_URL
+  const { protocol, hostname, host, port } = window.location
+  if (port === '3000' || hostname === 'localhost' || hostname === '127.0.0.1') {
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${wsProtocol}//${hostname || 'localhost'}:8787/ws`
   }
 
   const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
@@ -95,6 +95,12 @@ function resolveApiBaseUrl() {
   const configuredUrl = readPublicEnv('SIGNALING_HTTP_URL')
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '')
+  }
+
+  const { protocol, hostname, port } = window.location
+  if (port === '3000' || hostname === 'localhost' || hostname === '127.0.0.1') {
+    const httpProtocol = protocol === 'https:' ? 'https:' : 'http:'
+    return `${httpProtocol}//${hostname || 'localhost'}:8787`
   }
 
   const url = new URL(WS_URL, window.location.href)

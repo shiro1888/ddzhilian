@@ -10,10 +10,11 @@ import { useRef, useState } from 'react'
 import {
   Bot,
   Camera,
+  Clipboard,
   Command,
   Delete,
-  FileText,
   Image as ImageIcon,
+  Palette,
   Paperclip,
   Plus,
   ScanText,
@@ -186,7 +187,6 @@ export function RoomComposer({
   onEmojiToggle,
   onEmojiInsert,
   onEmojiBackspace,
-  onEmojiSend,
   onOpenImageTool,
   onOpenCommandTool,
 }: RoomComposerProps) {
@@ -206,6 +206,39 @@ export function RoomComposer({
   const handleFileInputChange: ChangeEventHandler<HTMLInputElement> = (event) => {
     setIsPlusMenuOpen(false)
     onDirectFileInputChange(event)
+  }
+
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText()
+        if (text && inputRef.current) {
+          const textarea = inputRef.current
+          const start = textarea.selectionStart ?? textarea.value.length
+          const end = textarea.selectionEnd ?? textarea.value.length
+          const currentVal = textarea.value
+          const newVal = currentVal.substring(0, start) + text + currentVal.substring(end)
+
+          const nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype,
+            'value'
+          )?.set
+          if (nativeSetter) {
+            nativeSetter.call(textarea, newVal)
+          } else {
+            textarea.value = newVal
+          }
+          textarea.dispatchEvent(new Event('input', { bubbles: true }))
+          const newPos = start + text.length
+          textarea.focus()
+          textarea.setSelectionRange(newPos, newPos)
+          return
+        }
+      }
+    } catch {
+      // clipboard access denied or unsupported
+    }
+    inputRef.current?.focus()
   }
 
   return (
@@ -259,11 +292,10 @@ export function RoomComposer({
                   role="menuitem"
                   onClick={() => runPlusAction(() => filePickerRef.current?.click())}
                 >
-                  <Paperclip size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>文件</strong>
-                    <small>文件、图片或压缩包</small>
+                  <span className="dd-snaplink__plus-icon is-file">
+                    <Paperclip size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">文件</strong>
                 </button>
                 <button
                   type="button"
@@ -271,11 +303,10 @@ export function RoomComposer({
                   role="menuitem"
                   onClick={() => runPlusAction(() => imagePickerRef.current?.click())}
                 >
-                  <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>照片</strong>
-                    <small>从相册选择图片</small>
+                  <span className="dd-snaplink__plus-icon is-album">
+                    <ImageIcon size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">相册</strong>
                 </button>
                 <button
                   type="button"
@@ -283,23 +314,21 @@ export function RoomComposer({
                   role="menuitem"
                   onClick={() => runPlusAction(() => cameraPickerRef.current?.click())}
                 >
-                  <Camera size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>拍照</strong>
-                    <small>手机端可直接调用相机</small>
+                  <span className="dd-snaplink__plus-icon is-camera">
+                    <Camera size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">拍照</strong>
                 </button>
                 <button
                   type="button"
                   className="dd-snaplink__plus-item"
                   role="menuitem"
-                  onClick={() => runPlusAction(() => inputRef.current?.focus())}
+                  onClick={() => runPlusAction(handlePasteClipboard)}
                 >
-                  <FileText size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>文本</strong>
-                    <small>回到输入框发送文字</small>
+                  <span className="dd-snaplink__plus-icon is-clipboard">
+                    <Clipboard size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">剪贴板</strong>
                 </button>
                 <button
                   ref={botTriggerRef}
@@ -311,11 +340,10 @@ export function RoomComposer({
                   aria-haspopup="dialog"
                   onClick={() => runPlusAction(onBotTriggerClick)}
                 >
-                  <Bot size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>DD助手</strong>
-                    <small>{isAiGenerating ? '正在回复中' : selectedAiModelLabel}</small>
+                  <span className="dd-snaplink__plus-icon is-assistant">
+                    <Bot size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">DD助手</strong>
                 </button>
                 {onOpenImageTool ? (
                   <button
@@ -324,11 +352,10 @@ export function RoomComposer({
                     role="menuitem"
                     onClick={() => runPlusAction(onOpenImageTool)}
                   >
-                    <ImageIcon size={17} strokeWidth={2} aria-hidden="true" />
-                    <span>
-                      <strong>图片工具</strong>
-                      <small>生成或处理图片</small>
+                    <span className="dd-snaplink__plus-icon is-palette">
+                      <Palette size={20} strokeWidth={2} aria-hidden="true" />
                     </span>
+                    <strong className="dd-snaplink__plus-label">AI生图</strong>
                   </button>
                 ) : null}
                 <button
@@ -340,11 +367,10 @@ export function RoomComposer({
                   aria-controls={ocrPanelId}
                   onClick={() => runPlusAction(onOcrTriggerClick)}
                 >
-                  <ScanText size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>
-                    <strong>提取文字</strong>
-                    <small>从图片提取文本再发送</small>
+                  <span className="dd-snaplink__plus-icon is-ocr">
+                    <ScanText size={20} strokeWidth={2} aria-hidden="true" />
                   </span>
+                  <strong className="dd-snaplink__plus-label">提取文字</strong>
                 </button>
                 {onOpenCommandTool ? (
                   <button
@@ -353,11 +379,10 @@ export function RoomComposer({
                     role="menuitem"
                     onClick={() => runPlusAction(onOpenCommandTool)}
                   >
-                    <Command size={17} strokeWidth={2} aria-hidden="true" />
-                    <span>
-                      <strong>命令行</strong>
-                      <small>运行命令并发送结果</small>
+                    <span className="dd-snaplink__plus-icon is-command">
+                      <Command size={20} strokeWidth={2} aria-hidden="true" />
                     </span>
+                    <strong className="dd-snaplink__plus-label">命令行</strong>
                   </button>
                 ) : null}
               </span>
@@ -465,22 +490,33 @@ export function RoomComposer({
               aria-label="Emoji 选择器"
             >
               <div className="dd-snaplink__emoji-picker-nav" role="tablist" aria-label="表情分类">
-                {emojiCategories.map((category) => {
-                  const isSelected = category.id === activeCategory
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={isSelected}
-                      className={`dd-snaplink__emoji-tab${isSelected ? ' is-active' : ''}`}
-                      onClick={() => setActiveCategory(category.id)}
-                    >
-                      <span aria-hidden="true">{category.icon}</span>
-                      <span>{category.name}</span>
-                    </button>
-                  )
-                })}
+                <div className="dd-snaplink__emoji-tabs">
+                  {emojiCategories.map((category) => {
+                    const isSelected = category.id === activeCategory
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isSelected}
+                        className={`dd-snaplink__emoji-tab${isSelected ? ' is-active' : ''}`}
+                        onClick={() => setActiveCategory(category.id)}
+                      >
+                        <span aria-hidden="true">{category.icon}</span>
+                        <span>{category.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="dd-snaplink__emoji-backspace-btn"
+                  aria-label="退格删除"
+                  title="退格删除"
+                  onClick={onEmojiBackspace}
+                >
+                  <Delete size={15} strokeWidth={2.2} aria-hidden="true" />
+                </button>
               </div>
               <div className="dd-snaplink__emoji-grid" role="tabpanel">
                 {currentCategory.emojis.map((emoji) => (
@@ -494,21 +530,6 @@ export function RoomComposer({
                     {emoji}
                   </button>
                 ))}
-              </div>
-              <div className="dd-snaplink__emoji-actions">
-                <button
-                  type="button"
-                  className="dd-snaplink__emoji-backspace"
-                  aria-label="删除"
-                  title="删除"
-                  onClick={onEmojiBackspace}
-                >
-                  <Delete size={17} strokeWidth={2} aria-hidden="true" />
-                  <span>删除</span>
-                </button>
-                <button type="button" className="is-primary" disabled={isSendDisabled} onClick={onEmojiSend}>
-                  发送
-                </button>
               </div>
             </div>
           ) : null}

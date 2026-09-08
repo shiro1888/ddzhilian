@@ -1,11 +1,10 @@
 import {
   ChevronRight,
-  Code2,
   Cpu,
-  Image as ImageIcon,
+  Palette,
   ScanText,
   Sparkles,
-  Zap,
+  Terminal,
 } from 'lucide-react'
 
 type WorkshopPanelProps = {
@@ -24,112 +23,72 @@ export function WorkshopPanel({
   isOcrPanelOpen = false,
 }: WorkshopPanelProps) {
   return (
-    <section className="dd-snaplink__workbench-page is-workshop" aria-label="工具工坊">
+    <section className="dd-snaplink__workbench-page is-workshop" aria-label="实用工具">
       <header className="dd-snaplink__workshop-hero">
         <div className="dd-snaplink__workshop-hero-title">
           <span className="dd-snaplink__workshop-hero-icon">
-            <Sparkles size={22} strokeWidth={2.2} />
+            <Sparkles size={20} strokeWidth={2.2} />
           </span>
-          <div>
-            <h1>工具与扩展工坊</h1>
-            <p>集成代码沙箱、AI 智能助手、多模态绘图与本地 OCR 文字提取</p>
-          </div>
+          <h1>实用工具</h1>
         </div>
-        <span className="dd-snaplink__workshop-badge">
-          <Zap size={13} strokeWidth={2.2} />
-          4 款生产力扩展
-        </span>
       </header>
 
       <div className="dd-snaplink__workshop-grid">
-        {/* 1. 命令行沙箱 */}
+        {/* 1. 命令行 */}
         <button
           type="button"
           className="dd-snaplink__workshop-card is-sandbox"
           onClick={onOpenCommand}
-          aria-label="打开命令行沙箱"
+          aria-label="打开命令行"
         >
-          <div className="dd-snaplink__workshop-card-top">
-            <span className="dd-snaplink__workshop-card-icon is-sandbox">
-              <Code2 size={24} strokeWidth={2} />
-            </span>
-            <div className="dd-snaplink__workshop-card-meta">
-              <div className="dd-snaplink__workshop-card-header">
-                <strong>命令行沙箱</strong>
-                <span className="dd-snaplink__workshop-tag is-green">沙箱隔离</span>
-              </div>
-              <p>Python / Java / PlantUML 终端代码运行与架构图渲染</p>
-            </div>
-            <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
-              <ChevronRight size={18} strokeWidth={2.2} />
-            </span>
+          <span className="dd-snaplink__workshop-card-icon is-sandbox">
+            <Terminal size={24} strokeWidth={2} />
+          </span>
+          <div className="dd-snaplink__workshop-card-meta">
+            <strong>命令行</strong>
+            <p>代码沙箱与终端运行</p>
           </div>
-          <div className="dd-snaplink__workshop-chips">
-            <span>Python 3</span>
-            <span>Java 21</span>
-            <span>PlantUML</span>
-            <span>Web 终端</span>
-          </div>
+          <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
+            <ChevronRight size={18} strokeWidth={2.2} />
+          </span>
         </button>
 
-        {/* 2. AI 智能助手 */}
+        {/* 2. DD助手 */}
         <button
           type="button"
           className="dd-snaplink__workshop-card is-ai"
           onClick={onOpenAiChat}
-          aria-label="打开 AI 智能助手"
+          aria-label="打开 DD助手"
         >
-          <div className="dd-snaplink__workshop-card-top">
-            <span className="dd-snaplink__workshop-card-icon is-ai">
-              <Cpu size={24} strokeWidth={2} />
-            </span>
-            <div className="dd-snaplink__workshop-card-meta">
-              <div className="dd-snaplink__workshop-card-header">
-                <strong>AI 智能助手</strong>
-                <span className="dd-snaplink__workshop-tag is-purple">多模型驱动</span>
-              </div>
-              <p>多模型会话、深度思考推理、上下文感知与智能问答</p>
-            </div>
-            <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
-              <ChevronRight size={18} strokeWidth={2.2} />
-            </span>
+          <span className="dd-snaplink__workshop-card-icon is-ai">
+            <Cpu size={24} strokeWidth={2} />
+          </span>
+          <div className="dd-snaplink__workshop-card-meta">
+            <strong>DD助手</strong>
+            <p>多模型对话与深度推理</p>
           </div>
-          <div className="dd-snaplink__workshop-chips">
-            <span>DeepSeek R1</span>
-            <span>Claude 3.5</span>
-            <span>GPT-4o</span>
-            <span>联网搜索</span>
-          </div>
+          <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
+            <ChevronRight size={18} strokeWidth={2.2} />
+          </span>
         </button>
 
-        {/* 3. 图片工坊 */}
+        {/* 3. AI 生图 */}
         <button
           type="button"
           className="dd-snaplink__workshop-card is-image"
           onClick={onOpenImage}
-          aria-label="打开图片工坊"
+          aria-label="打开 AI生图"
         >
-          <div className="dd-snaplink__workshop-card-top">
-            <span className="dd-snaplink__workshop-card-icon is-image">
-              <ImageIcon size={24} strokeWidth={2} />
-            </span>
-            <div className="dd-snaplink__workshop-card-meta">
-              <div className="dd-snaplink__workshop-card-header">
-                <strong>图片工坊</strong>
-                <span className="dd-snaplink__workshop-tag is-pink">AI 绘图</span>
-              </div>
-              <p>文生图、图生图、提示词润色与作品参考图画廊</p>
-            </div>
-            <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
-              <ChevronRight size={18} strokeWidth={2.2} />
-            </span>
+          <span className="dd-snaplink__workshop-card-icon is-image">
+            <Palette size={24} strokeWidth={2} />
+          </span>
+          <div className="dd-snaplink__workshop-card-meta">
+            <strong>AI 生图</strong>
+            <p>AI 图像生成与创作画廊</p>
           </div>
-          <div className="dd-snaplink__workshop-chips">
-            <span>Flux Schnell</span>
-            <span>SDXL</span>
-            <span>画廊存档</span>
-            <span>直连分享</span>
-          </div>
+          <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
+            <ChevronRight size={18} strokeWidth={2.2} />
+          </span>
         </button>
 
         {/* 4. 图片文字识别 (OCR) */}
@@ -139,86 +98,18 @@ export function WorkshopPanel({
           onClick={onOpenOcr}
           aria-label="打开图片文字识别"
         >
-          <div className="dd-snaplink__workshop-card-top">
-            <span className="dd-snaplink__workshop-card-icon is-ocr">
-              <ScanText size={24} strokeWidth={2} />
-            </span>
-            <div className="dd-snaplink__workshop-card-meta">
-              <div className="dd-snaplink__workshop-card-header">
-                <strong>图片文字识别 (OCR)</strong>
-                <span className="dd-snaplink__workshop-tag is-amber">本地高精</span>
-              </div>
-              <p>拖拽、截图或从相册选择图片，毫秒级提取中英文与表格数据</p>
-            </div>
-            <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
-              <ChevronRight size={18} strokeWidth={2.2} />
-            </span>
+          <span className="dd-snaplink__workshop-card-icon is-ocr">
+            <ScanText size={24} strokeWidth={2} />
+          </span>
+          <div className="dd-snaplink__workshop-card-meta">
+            <strong>文字识别 (OCR)</strong>
+            <p>本地提取图片文本与表格</p>
           </div>
-          <div className="dd-snaplink__workshop-chips">
-            <span>高精提取</span>
-            <span>表格识别</span>
-            <span>一键复制</span>
-            <span>即时发送</span>
-          </div>
+          <span className="dd-snaplink__workshop-arrow" aria-hidden="true">
+            <ChevronRight size={18} strokeWidth={2.2} />
+          </span>
         </button>
       </div>
-
-      <section className="dd-snaplink__workshop-workflows" aria-label="生产力联动特性">
-        <div className="dd-snaplink__workshop-workflows-head">
-          <Sparkles size={16} strokeWidth={2} aria-hidden="true" />
-          <strong>扩展工作流与直连生态联动</strong>
-          <small>工具产生的所有输出均与会话和文件流打通，无需来回切换</small>
-        </div>
-
-        <div className="dd-snaplink__workshop-workflows-grid">
-          <div className="dd-snaplink__workshop-workflow-card">
-            <div className="dd-snaplink__workshop-workflow-icon is-sandbox">
-              <Code2 size={16} strokeWidth={2} />
-            </div>
-            <div className="dd-snaplink__workshop-workflow-body">
-              <strong>沙箱运行结果一键回传</strong>
-              <p>终端运行产生的 Python/Java 运行日志或架构图渲染结果，可一键发送至当前聊天或对端设备。</p>
-            </div>
-          </div>
-
-          <div className="dd-snaplink__workshop-workflow-card">
-            <div className="dd-snaplink__workshop-workflow-icon is-ai">
-              <Cpu size={16} strokeWidth={2} />
-            </div>
-            <div className="dd-snaplink__workshop-workflow-body">
-              <strong>多模型 AI 深度思考问答</strong>
-              <p>支持 DeepSeek R1 深度思考推理，可直接读取传输进来的文件与代码，生成精细总结与分析。</p>
-            </div>
-          </div>
-
-          <div className="dd-snaplink__workshop-workflow-card">
-            <div className="dd-snaplink__workshop-workflow-icon is-image">
-              <ImageIcon size={16} strokeWidth={2} />
-            </div>
-            <div className="dd-snaplink__workshop-workflow-body">
-              <strong>AI 绘图高清画廊与直连分发</strong>
-              <p>Flux Schnell / SDXL 高精文生图，作品自动归档并生成局域网端到端无损秒传链接。</p>
-            </div>
-          </div>
-
-          <div className="dd-snaplink__workshop-workflow-card">
-            <div className="dd-snaplink__workshop-workflow-icon is-ocr">
-              <ScanText size={16} strokeWidth={2} />
-            </div>
-            <div className="dd-snaplink__workshop-workflow-body">
-              <strong>纯本地离线 OCR 高精提取</strong>
-              <p>基于浏览器端离线算力，截屏、表格与长文识别绝不上传云端，隐私绝对安全。</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="dd-snaplink__workshop-footer">
-        <div className="dd-snaplink__workshop-tip">
-          <span className="dd-snaplink__workshop-tip-dot" />
-          <span>所有扩展工具产生的数据与文件均可直接发送至当前聊天会话或附近设备。</span>
-        </div>
-      </footer>
     </section>
   )
 }

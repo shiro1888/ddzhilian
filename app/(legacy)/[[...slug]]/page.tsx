@@ -31,7 +31,7 @@ const marketingRoutes: Record<RouteKey, {
   canonical: string
 }> = {
   '': {
-    title: 'DD直连 - 局域网文件与文本互传工具',
+    title: 'DD直连',
     description:
       'DD直连支持浏览器之间的局域网文件传输、文本同步、房间对话、图片工具和 AI 助手，适合个人、团队和临时协作场景。',
     canonical: '/',
@@ -84,23 +84,23 @@ const appRoutes: Record<string, {
     canonical: '/text',
   },
   text: {
-    title: '文件与文本互传',
+    title: 'DD直连',
     description: '打开 DD直连的核心工具页，创建房间、同步文本、发送文件并管理传输记录。',
     canonical: '/text',
   },
   chat: {
-    title: 'AI 助手对话',
-    description: '使用 DD直连 AI 助手总结内容、回答问题、整理文本，并与文件传输工作流结合。',
+    title: 'DD助手',
+    description: '使用 DD直连 DD助手总结内容、回答问题、整理文本，并与文件传输工作流结合。',
     canonical: '/chat',
   },
   image: {
-    title: '图片工具',
-    description: '使用 DD直连图片工具处理图片生成、历史记录和账号相关能力。',
+    title: 'AI 生图',
+    description: '使用 DD直连 AI 生图工具处理图片生成、历史记录和账号相关能力。',
     canonical: '/image',
   },
   'web-command': {
-    title: '命令分享',
-    description: '使用 DD直连命令行工具分享命令结果，把终端输出快速带入协作对话。',
+    title: '命令行',
+    description: '使用 DD直连命令行工具运行代码与终端命令，把输出结果快速带入协作对话。',
     canonical: '/web-command',
   },
   sessions: {
@@ -279,8 +279,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       }
     }
 
+    const isMainTitle = appRoute.title === 'DD直连'
+
     return {
-      title: appRoute.title,
+      title: isMainTitle ? { absolute: 'DD直连' } : appRoute.title,
       description: appRoute.description,
       alternates: {
         canonical: toAbsoluteUrl(appRoute.canonical),
@@ -300,9 +302,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const route = marketingRoutes[routeKey]
+  const isMainTitle = route.title === 'DD直连'
 
   return {
-    title: route.title,
+    title: isMainTitle ? { absolute: 'DD直连' } : route.title,
     description: route.description,
     alternates: {
       canonical: toAbsoluteUrl(route.canonical),
@@ -428,11 +431,11 @@ function HomePage() {
           </h1>
           <p style={{ maxWidth: 620, margin: '20px 0 0', color: '#4b5563', fontSize: 18, lineHeight: 1.8 }}>
             DD直连面向个人、团队和临时协作场景，提供局域网文件互传、文本同步、世界对话、
-            图片工具、AI 助手和命令分享。打开浏览器即可使用，不需要复杂配置。
+            AI 生图、DD助手和命令行。打开浏览器即可使用，不需要复杂配置。
           </p>
           <div style={ctaRowStyle}>
             <Link href="/text" style={primaryButtonStyle}>立即开始传输</Link>
-            <Link href="/chat" style={secondaryButtonStyle}>打开 AI 对话</Link>
+            <Link href="/chat" style={secondaryButtonStyle}>打开 DD助手</Link>
           </div>
         </div>
         <aside style={{ ...infoCardStyle, display: 'grid', alignContent: 'center', gap: 18 }}>

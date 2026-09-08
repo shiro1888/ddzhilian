@@ -1,3 +1,4 @@
+import { Download, FileCode2, FileText, X } from 'lucide-react'
 import { getDocumentPreviewKindLabel } from '../../lib/document-preview'
 import type {
   DocumentPreviewKind,
@@ -65,11 +66,27 @@ export function DocumentPreviewDialog({ preview, onClose }: DocumentPreviewDialo
       />
       <div className="dd-document-preview-dialog__panel">
         <div className="dd-document-preview-dialog__titlebar">
-          <span title={fileName}>{fileName}</span>
+          <div className="dd-document-preview-dialog__title-group">
+            <span className={`dd-document-preview-dialog__file-badge is-${kind}`} aria-hidden="true">
+              {kind === 'markdown' ? (
+                <FileCode2 size={16} strokeWidth={2} />
+              ) : (
+                <FileText size={16} strokeWidth={2} />
+              )}
+            </span>
+            <span className="dd-document-preview-dialog__file-name" title={fileName}>
+              {fileName}
+            </span>
+          </div>
           <div className="dd-document-preview-dialog__actions">
             {downloadUrl ? (
-              <a href={downloadUrl} download={downloadName}>
-                下载
+              <a
+                href={downloadUrl}
+                download={downloadName}
+                className="dd-document-preview-dialog__download-btn"
+              >
+                <Download size={14} strokeWidth={2.2} aria-hidden="true" />
+                <span>下载</span>
               </a>
             ) : null}
             <button
@@ -78,7 +95,7 @@ export function DocumentPreviewDialog({ preview, onClose }: DocumentPreviewDialo
               aria-label="关闭文档预览"
               onClick={onClose}
             >
-              ×
+              <X size={17} strokeWidth={2.2} aria-hidden="true" />
             </button>
           </div>
         </div>

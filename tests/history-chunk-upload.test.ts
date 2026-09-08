@@ -19,8 +19,8 @@ async function createRegistry(maxBytes = 10 * 1024 * 1024) {
 
   return HistoryRegistry.create({
     storageRoot,
-    retentionMs: 24 * 60 * 60 * 1000,
-    textRetentionMs: 24 * 60 * 60 * 1000,
+    retentionMs: 7 * 24 * 60 * 60 * 1000,
+    textRetentionMs: 7 * 24 * 60 * 60 * 1000,
     maxBytes,
   })
 }

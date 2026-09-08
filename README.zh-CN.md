@@ -144,8 +144,8 @@ npm run dev
 
 - 文件保存在 `server/data/history/files/<roomId>/...`。
 - 元数据在配置 Supabase 后写入 Supabase；未配置时回退到 `server/data/history/index.json`。
-- `HISTORY_RETENTION_MS` 控制历史文件保留时长，默认 24 小时，最大 24 小时。
-- `HISTORY_TEXT_RETENTION_MS` 控制历史文本保留时长，默认 24 小时，最大 24 小时。
+- `HISTORY_RETENTION_MS` 控制历史文件保留时长，默认 7 天，最大 7 天。
+- `HISTORY_TEXT_RETENTION_MS` 控制历史文本保留时长，默认 7 天，最大 7 天。
 - `HISTORY_MAX_BYTES` 控制单个 room 的历史文件容量上限，默认 10 GiB。
 - 清理会在服务启动、查询历史、保存历史、上传文件和定期维护时触发。
 - 超过保留期的历史文本会从元数据索引中删除；超过保留期的历史文件会同时删除元数据和磁盘文件。

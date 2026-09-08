@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ddzhilian-v3';
+const CACHE_NAME = 'ddzhilian-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -7,6 +7,8 @@ const STATIC_ASSETS = [
   '/icon-512-maskable.png',
   '/apple-touch-icon.png',
   '/favicon.png',
+  '/favicon.ico',
+  '/favicon.svg',
 ];
 
 self.addEventListener('install', (event) => {

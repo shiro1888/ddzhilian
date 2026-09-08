@@ -459,7 +459,7 @@ const ocrReachabilityTimeoutMs = 2_000;
 const ocrRawStringMaxChars = 12_000;
 const ocrRawArrayMaxItems = 200;
 const ocrImagePayloadReplacement = '[omitted image payload]';
-const aiRoomContextWindowMs = 24 * 60 * 60 * 1000;
+const aiRoomContextWindowMs = 7 * 24 * 60 * 60 * 1000;
 const aiRoomContextMaxChars = 12_000;
 const aiBotDeviceId = 'bot_cloudflare_ai';
 const aiBotDeviceName = 'bot';
@@ -3882,7 +3882,7 @@ function buildAiPrompt(input: { prompt: string; roomId?: string; maxPromptChars:
   }
 
   const promptWrapper = [
-    '以下是当前房间最近24小时的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
+    '以下是当前房间最近7天的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
     '',
     '[房间上下文开始]',
     '[房间上下文结束]',
@@ -3897,7 +3897,7 @@ function buildAiPrompt(input: { prompt: string; roomId?: string; maxPromptChars:
   }
 
   return [
-    '以下是当前房间最近24小时的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
+    '以下是当前房间最近7天的文本上下文，请优先基于这些上下文理解对话延续关系；如果上下文不足，再仅根据最后的用户问题回答。',
     '',
     '[房间上下文开始]',
     roomContext,
@@ -7518,6 +7518,23 @@ function joinRoomById(input: {
   }
 
   if (!room) {
+    const targetDevice = devices.getByShortCode(input.roomId);
+    if (targetDevice && targetDevice.deviceId !== requester.deviceId) {
+      if (!targetDevice.allowShortCode) {
+        return {
+          ok: false as const,
+          code: 'SHORT_CODE_BLOCKED' as const,
+          message: 'That device currently does not accept short-code pairing.',
+        };
+      }
+
+      return joinRoomViaTarget({
+        requesterId: requester.deviceId,
+        targetId: targetDevice.deviceId,
+        reason: 'short-code',
+      });
+    }
+
     return {
       ok: false as const,
       code: 'ROOM_NOT_FOUND' as const,

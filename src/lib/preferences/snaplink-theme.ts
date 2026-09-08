@@ -26,6 +26,7 @@ export const snapLinkDefaultThemeColors: SnapLinkThemeColors = {
 }
 export const snapLinkThemeColorOptions: Array<{ label: string; colors: SnapLinkThemeColors }> = [
   { label: '品牌蓝紫', colors: { self: '#6366F1', peer: '#FFFFFF', ai: '#EEF2FF' } },
+  { label: '微信绿', colors: { self: '#07C160', peer: '#FFFFFF', ai: '#F2F8ED' } },
   { label: '珊瑚', colors: { self: '#F9887F', peer: '#FFF4F2', ai: '#FFE8E5' } },
   { label: '天空蓝', colors: { self: '#6EA8FE', peer: '#F3F7FF', ai: '#EAF2FF' } },
   { label: '青柠', colors: { self: '#B7E36D', peer: '#F6FAEE', ai: '#EEF8D8' } },

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SnapLinkStage } from '@/app/components/SnapLinkStage'
 
@@ -15,7 +15,7 @@ describe('SnapLinkStage initial room opening', () => {
     cleanup()
   })
 
-  it('keeps the lobby open when a default room becomes available until the user selects it', async () => {
+  it('opens the default room conversation automatically when selectedRoomId is provided', async () => {
     const onOpenRoomConversation = vi.fn()
     const { rerender } = render(<SnapLinkStage {...createBaseProps()} />)
 
@@ -26,12 +26,12 @@ describe('SnapLinkStage initial room opening', () => {
         {...createBaseProps({
           onOpenRoomConversation,
           selectedRoomId: 'ROOM123',
-          selectedConversationName: '世界对话 1',
-          activeTransferLabel: '世界对话 1 · 等待连接',
+          selectedConversationName: '世界对话',
+          activeTransferLabel: '世界对话 · 等待连接',
           roomListItems: [
             {
               roomId: 'ROOM123',
-              title: '世界对话 1',
+              title: '世界对话',
               previewText: '[文本] 空消息',
               updatedAt: '2026-06-16T10:00:00.000Z',
               updatedAtLabel: '刚刚',
@@ -42,7 +42,7 @@ describe('SnapLinkStage initial room opening', () => {
               status: 'history',
               pinned: false,
               unreadCount: 0,
-    members: [],
+              members: [],
             },
           ],
           unifiedConversationEntries: [
@@ -60,17 +60,6 @@ describe('SnapLinkStage initial room opening', () => {
       />,
     )
 
-    await waitFor(() => {
-      expect(screen.getByRole('region', { name: 'DD直连文件互传工作台' })).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: /世界对话 1/ })).toBeInTheDocument()
-    })
-
-    expect(screen.queryByText(/历史内容/)).not.toBeInTheDocument()
-    expect(onOpenRoomConversation).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('link', { name: /世界对话 1/ }))
-
-    expect(onOpenRoomConversation).toHaveBeenCalledWith('ROOM123')
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'DD直连文件互传工作台' })).not.toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'DD直连房间会话工作台' })).toBeInTheDocument()

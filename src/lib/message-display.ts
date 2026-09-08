@@ -2,7 +2,6 @@ import type { RoomListItem, UnifiedConversationEntry } from '../app/types'
 import {
   getRoomOnlineMemberCount,
   getRoomPeerOnlineCount,
-  resolveRoomPeerPresenceLabel,
 } from '../app/room-presence'
 import type { AiModelOption } from './ddzhilian-types'
 
@@ -21,14 +20,14 @@ export function resolveRoomLabel(room: RoomListItem | undefined, fallbackName: s
   }
 
   if (room.isAssistant) {
-    return 'AI 助手'
+    return 'DD助手'
   }
 
   const peerOnlineCount = getRoomPeerOnlineCount(room)
   const onlineMemberCount = getRoomOnlineMemberCount(room)
 
   if (room.isPublic) {
-    return resolveRoomPeerPresenceLabel(room)
+    return '公共空间'
   }
 
   if (room.memberCount > 2) {

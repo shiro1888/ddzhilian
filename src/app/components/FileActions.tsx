@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from 'react'
+import { Check, Download, Eye, RotateCcw, RotateCw, X } from 'lucide-react'
+
 import type { FileConversationEntry } from '../types'
 
 type FileActionsProps = {
@@ -19,6 +22,87 @@ export function FileActions({
   onRecallFile,
   variant = 'file',
 }: FileActionsProps) {
+  const [isConfirmingRecall, setIsConfirmingRecall] = useState(false)
+  const confirmGroupRef = useRef<HTMLDivElement | null>(null)
+  const confirmTimeoutRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    setIsConfirmingRecall(false)
+    if (confirmTimeoutRef.current !== null) {
+      window.clearTimeout(confirmTimeoutRef.current)
+      confirmTimeoutRef.current = null
+    }
+  }, [file.id, file.historyId])
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimeoutRef.current !== null) {
+        window.clearTimeout(confirmTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isConfirmingRecall) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (confirmGroupRef.current && !confirmGroupRef.current.contains(event.target as Node)) {
+        setIsConfirmingRecall(false)
+        if (confirmTimeoutRef.current !== null) {
+          window.clearTimeout(confirmTimeoutRef.current)
+          confirmTimeoutRef.current = null
+        }
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsConfirmingRecall(false)
+        if (confirmTimeoutRef.current !== null) {
+          window.clearTimeout(confirmTimeoutRef.current)
+          confirmTimeoutRef.current = null
+        }
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isConfirmingRecall])
+
+  const handleStartRecallConfirm = () => {
+    setIsConfirmingRecall(true)
+    if (confirmTimeoutRef.current !== null) {
+      window.clearTimeout(confirmTimeoutRef.current)
+    }
+    confirmTimeoutRef.current = window.setTimeout(() => {
+      setIsConfirmingRecall(false)
+      confirmTimeoutRef.current = null
+    }, 6000)
+  }
+
+  const handleCancelRecall = () => {
+    if (confirmTimeoutRef.current !== null) {
+      window.clearTimeout(confirmTimeoutRef.current)
+      confirmTimeoutRef.current = null
+    }
+    setIsConfirmingRecall(false)
+  }
+
+  const handleConfirmRecall = () => {
+    if (confirmTimeoutRef.current !== null) {
+      window.clearTimeout(confirmTimeoutRef.current)
+      confirmTimeoutRef.current = null
+    }
+    setIsConfirmingRecall(false)
+    onRecallFile(file)
+  }
+
   const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
   const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
 
@@ -30,7 +114,8 @@ export function FileActions({
     <div className={variant === 'shared' ? 'dd-snaplink__shared-actions' : 'dd-snaplink__file-actions'}>
       {documentPreviewHref ? (
         <a href={documentPreviewHref} aria-label={`预览 ${file.fileName}`}>
-          预览
+          <Eye size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>预览</span>
         </a>
       ) : canPreviewDocument ? (
         <button
@@ -39,34 +124,74 @@ export function FileActions({
           onClick={() => onOpenDocumentPreview(file)}
           disabled={file.isDocumentPreviewDisabled || isLoadingPreview}
         >
-          {isLoadingPreview ? '载入中' : '预览'}
+          <Eye size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>{isLoadingPreview ? '载入中' : '预览'}</span>
         </button>
       ) : null}
       {file.onDownload ? (
         <button type="button" onClick={file.onDownload} disabled={file.isDownloadDisabled}>
-          {file.isDownloadDisabled ? '下载中' : '下载'}
+          <Download size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>{file.isDownloadDisabled ? '下载中' : '下载'}</span>
         </button>
       ) : null}
       {file.downloadUrl ? (
         <a href={file.downloadUrl} download={file.downloadName}>
-          下载
+          <Download size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>下载</span>
         </a>
       ) : null}
       {file.action === 'retry' ? (
         <button type="button" onClick={() => onRetryTransfer(file.id)}>
-          重试
+          <RotateCw size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>重试</span>
         </button>
       ) : null}
       {file.action === 'cancel' ? (
         <button type="button" onClick={() => onCancelTransfer(file.id)}>
-          取消
+          <X size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+          <span>取消</span>
         </button>
       ) : null}
       {file.historyId && file.canRecall ? (
-        <button type="button" className="is-danger" onClick={() => onRecallFile(file)}>
-          撤回
-        </button>
+        isConfirmingRecall ? (
+          <div
+            ref={confirmGroupRef}
+            className="dd-snaplink__file-recall-confirm-group"
+            role="group"
+            aria-label={`确认撤回 ${file.fileName}`}
+          >
+            <span className="dd-snaplink__file-recall-confirm-text">确定撤回？</span>
+            <button
+              type="button"
+              className="is-danger is-confirm"
+              onClick={handleConfirmRecall}
+              aria-label="确认撤回"
+            >
+              <Check size={11} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+              <span>确认</span>
+            </button>
+            <button
+              type="button"
+              className="is-cancel"
+              onClick={handleCancelRecall}
+              aria-label="取消撤回"
+            >
+              <span>取消</span>
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="is-danger"
+            onClick={handleStartRecallConfirm}
+            aria-label={`撤回 ${file.fileName}`}
+          >
+            <RotateCcw size={11} className="dd-snaplink__file-action-icon" aria-hidden="true" />
+            <span>撤回</span>
+          </button>
+        )
       ) : null}
     </div>
   )
 }
+

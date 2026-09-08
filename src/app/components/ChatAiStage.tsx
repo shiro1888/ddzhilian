@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Plus, Send, X } from 'lucide-react'
 import { navigateBackToText } from '../../lib/navigate-back-to-text'
 import type {
   ChangeEvent,
@@ -1061,7 +1061,9 @@ export function ChatAiStage({
         {isDraggingFiles ? (
           <div className="dd-ai-chat__drag-overlay" role="status" aria-live="polite">
             <div className="dd-ai-chat__drag-panel">
-              <span className="dd-ai-chat__drag-icon" aria-hidden="true">+</span>
+              <span className="dd-ai-chat__drag-icon" aria-hidden="true">
+                <Plus size={24} strokeWidth={2.5} aria-hidden="true" />
+              </span>
               <strong>{isGenerating ? '生成中暂不能添加附件' : '松开添加附件'}</strong>
               <span>{isGenerating ? '请先停止当前生成' : '支持图片、文本和代码文件'}</span>
             </div>
@@ -1369,7 +1371,7 @@ export function ChatAiStage({
             onClick={() => fileInputRef.current?.click()}
             disabled={!isAiAvailable || isGenerating}
           >
-            +
+            <Plus size={18} strokeWidth={2.2} aria-hidden="true" />
           </button>
           <div className="dd-ai-chat__composer-main">
             {attachments.length > 0 ? (
@@ -1388,7 +1390,7 @@ export function ChatAiStage({
                         setAttachments((previous) => previous.filter((item) => item.id !== attachment.id))
                       }}
                     >
-                      x
+                      <X size={12} strokeWidth={2.5} aria-hidden="true" />
                     </button>
                   </span>
                 ))}
@@ -1419,8 +1421,9 @@ export function ChatAiStage({
                   停止生成
                 </button>
               ) : null}
-              <button type="submit" disabled={!canSubmit}>
-                发送
+              <button type="submit" disabled={!canSubmit} className="dd-ai-chat__submit-btn">
+                <Send size={13} strokeWidth={2.2} aria-hidden="true" />
+                <span>发送</span>
               </button>
             </div>
           </div>

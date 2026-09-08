@@ -11,7 +11,7 @@ async function createTempRegistry(options: { retentionMs?: number; maxJobs?: num
   tempDir = await mkdtemp(join(tmpdir(), 'ddzhilian-ocr-jobs-'))
   const registry = await OcrJobRegistry.create({
     filePath: join(tempDir, 'jobs.json'),
-    retentionMs: options.retentionMs ?? 24 * 60 * 60 * 1000,
+    retentionMs: options.retentionMs ?? 7 * 24 * 60 * 60 * 1000,
     maxJobs: options.maxJobs ?? 20,
   })
   registries.push(registry)
@@ -71,7 +71,7 @@ describe('OcrJobRegistry', () => {
     await registry.flush()
     const restored = await OcrJobRegistry.create({
       filePath: join(tempDir ?? '', 'jobs.json'),
-      retentionMs: 24 * 60 * 60 * 1000,
+      retentionMs: 7 * 24 * 60 * 60 * 1000,
       maxJobs: 20,
     })
     registries.push(restored)

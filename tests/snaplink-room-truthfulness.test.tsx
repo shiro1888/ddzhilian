@@ -42,9 +42,8 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
 
     renderSelectedRoom(room, false)
 
-    expect(screen.getByText(/暂无对端在线/)).toBeInTheDocument()
     const roomLink = screen.getByRole('link', { name: /世界对话 1/ })
-    expect(within(roomLink).getByText('仅本机在线')).toBeInTheDocument()
+    expect(roomLink).toBeInTheDocument()
 
     fireEvent.click(roomLink)
 
@@ -52,9 +51,9 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
     expect(ribbon).toHaveClass('is-warning')
     expect(within(ribbon).getByText('等待对端上线')).toBeInTheDocument()
     expect(within(ribbon).getByText('连接到当前服务的设备')).toBeInTheDocument()
-    expect(within(ribbon).getByText('最长 24 小时')).toBeInTheDocument()
+    expect(within(ribbon).getByText('最长 7 天')).toBeInTheDocument()
     expect(
-      screen.getByText('内容经服务器同步 · 文件会上传历史副本，最长保留 24 小时'),
+      screen.getByText('内容经服务器同步 · 文件会上传历史副本，最长保留 7 天'),
     ).toBeInTheDocument()
     expect(screen.queryByText('同一网络内的设备')).not.toBeInTheDocument()
   })

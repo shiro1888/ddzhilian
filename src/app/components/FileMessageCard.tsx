@@ -55,18 +55,20 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
     : rawProgressPercent
   const isCompleted = file.transferStatus === 'completed' || file.tone === 'completed'
   const isActive = file.transferStatus === 'transferring' || file.tone === 'active'
+  const isFailed = file.transferStatus === 'failed' || file.tone === 'failed'
   const completedLabel = file.fromSelf ? '发送成功' : '接收完成'
 
   return (
-    <div className={`dd-snaplink__file-card${isCompleted ? ' is-completed' : isActive ? ' is-active' : ''}`}>
+    <div className={`dd-snaplink__file-card${isCompleted ? ' is-completed' : isActive ? ' is-active' : isFailed ? ' is-failed' : ''}`}>
       <div className="dd-snaplink__file-top">
         <span className={`dd-snaplink__file-ext ${getFileKindClass(file.fileName)}`}>
           {getFileExtension(file.fileName)}
         </span>
-        <div>
+        <div className="dd-snaplink__file-meta">
           <strong title={file.fileName}>{file.fileName}</strong>
-          <span>
-            {formatFileSize(file.fileSize)} · {file.statusLabel}
+          <span className="dd-snaplink__file-size-info">
+            {formatFileSize(file.fileSize)}
+            {isActive && file.statusLabel ? ` · ${file.statusLabel}` : ''}
           </span>
         </div>
       </div>
@@ -75,12 +77,7 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
           <img src={file.previewUrl} alt={file.fileName} loading="lazy" />
         </div>
       ) : null}
-      {isCompleted ? (
-        <div className="dd-snaplink__file-done" aria-label={completedLabel}>
-          <span aria-hidden="true">✓</span>
-          {completedLabel}
-        </div>
-      ) : isActive ? (
+      {isActive ? (
         <div
           className="dd-snaplink__file-progress"
           role="progressbar"
@@ -91,7 +88,27 @@ export function FileMessageCard({ file, actions }: FileMessageCardProps) {
           <div style={{ width: `${progressPercent}%` }} />
         </div>
       ) : null}
-      {actions}
+      <div className="dd-snaplink__file-footer">
+        <div className="dd-snaplink__file-status-wrap">
+          {isCompleted ? (
+            <div className="dd-snaplink__file-done" aria-label={completedLabel}>
+              <span className="dd-snaplink__file-done-check" aria-hidden="true">✓</span>
+              <span>{completedLabel}</span>
+            </div>
+          ) : isActive ? (
+            <div className="dd-snaplink__file-transferring">
+              <span className="dd-snaplink__file-spin-dot" aria-hidden="true" />
+              <span>传输中 {progressPercent}%</span>
+            </div>
+          ) : isFailed ? (
+            <div className="dd-snaplink__file-failed-badge">
+              <span aria-hidden="true">!</span>
+              <span>发送失败</span>
+            </div>
+          ) : null}
+        </div>
+        {actions}
+      </div>
     </div>
   )
 }

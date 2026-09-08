@@ -8,6 +8,7 @@ type DeviceRadarProps = {
   renderIcon: (device: OnlineDeviceListItem) => ReactNode
   onSelect: (deviceId: string) => void
   onOpenConversation: (deviceId: string) => void
+  myDeviceName?: string
 }
 
 const fallbackPositions = [
@@ -49,21 +50,34 @@ export function DeviceRadar({
   renderIcon,
   onSelect,
   onOpenConversation,
+  myDeviceName,
 }: DeviceRadarProps) {
   const visibleDevices = devices.slice(0, 8)
 
   return (
-    <section className="dd-snaplink__device-radar-card" aria-label="附近设备">
+    <section className="dd-snaplink__device-radar-card" aria-label="附近设备雷达">
       <div className="dd-snaplink__device-radar-head">
-        <strong>附近设备</strong>
-        <small>{devices.length.toString()} 台设备在线</small>
+        <div className="dd-snaplink__device-radar-head-left">
+          <strong>附近雷达</strong>
+          <span className="dd-snaplink__device-radar-live-badge">
+            <span className="dd-snaplink__radar-live-dot" />
+            持续监听
+          </span>
+        </div>
+        <small className="dd-snaplink__device-radar-count">{devices.length.toString()} 台设备在线</small>
       </div>
       <div className="dd-snaplink__device-radar" role="list">
+        <span className="dd-snaplink__device-radar-axis is-horizontal" aria-hidden="true" />
+        <span className="dd-snaplink__device-radar-axis is-vertical" aria-hidden="true" />
         <span className="dd-snaplink__device-radar-sweep" aria-hidden="true" />
         <span className="dd-snaplink__device-radar-ring is-outer" aria-hidden="true" />
         <span className="dd-snaplink__device-radar-ring is-middle" aria-hidden="true" />
         <span className="dd-snaplink__device-radar-ring is-inner" aria-hidden="true" />
-        <span className="dd-snaplink__device-radar-self" aria-label="我的设备">
+        <span
+          className="dd-snaplink__device-radar-self"
+          aria-label="我的设备"
+          title={`本机: ${myDeviceName || '我'}`}
+        >
           我
         </span>
         {visibleDevices.map((device, index) => {
@@ -80,7 +94,7 @@ export function DeviceRadar({
                 top: `${position.top}%`,
               }}
               aria-pressed={isSelected}
-              title={`${device.deviceName} · ${device.platform || '设备'}`}
+              title={`${device.deviceName} · ${device.platform || '设备'}（单击查看详情，双击进入会话）`}
               onClick={() => onSelect(device.deviceId)}
               onDoubleClick={() => onOpenConversation(device.deviceId)}
               role="listitem"
@@ -97,7 +111,7 @@ export function DeviceRadar({
         })}
       </div>
       <p className="dd-snaplink__device-radar-note">
-        点选设备查看详情，双击进入会话。
+        点选雷达设备查看详情，双击进入即时会话。
       </p>
     </section>
   )

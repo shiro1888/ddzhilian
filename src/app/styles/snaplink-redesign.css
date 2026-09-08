@@ -1,44 +1,789 @@
 /*
  * ============================================================================
- * 独立重设计 ·「蓝 / 冷灰」(Blue / Cool Slate)
+ * DD直连 · 现代桌面级设计语言 (Emerald / Clean Slate)
+ * 对标：macOS Sonoma / Linear / Telegram Desktop / Apple AirDrop
  * ============================================================================
- * 设计语言：冷灰中性底、近黑墨、蓝色主色、实底细边框、收紧圆角。
- * 与上一版（玻璃拟态多色）刻意区分：更安静、更克制、更工程化。
- * ----------------------------------------------------------------------------
- * 原则：
- *  1. 冷中性背景，不靠玻璃，靠留白与实底。
- *  2. 单一蓝色主色，仅用于主行动与激活态。
- *  3. 实底卡片 + 1px 发丝线边框，投影极轻。
- *  4. 圆角收紧（卡片 14、按钮 10、列表 8），几何感更强。
- *  5. 深色同构：冷炭底 + 更亮蓝。
+ * 设计原则：
+ *  1. 翡翠绿作为全站单一权威品牌色 (#10b981 / #059669 / 深色 #34d399)。
+ *  2. 实底细边框与双层漫反射自然阴影，剔除过气彩色大发光。
+ *  3. 严谨收拢几何圆角（微标 6-8px、按钮/输入框 10-12px、气泡 14px、卡片 16-20px）。
+ *  4. 56px 顶栏发丝线横向贯通，侧栏与主对话区浑然一体。
+ *  5. 深色同构：深邃冷炭底 (#0b0f17 / #111827) + 精致高透发丝线 + 高对比翠绿。
  * ============================================================================
  */
 
 /* ------------------------------------------------------------------------- */
-/* 1. 侧栏导航（实底冷中性，激活态用蓝浅底而非渐变）                            */
+/* 0. 权威背景与明暗层次 (Clean Slate Canvas & Crisp Surface)                 */
 /* ------------------------------------------------------------------------- */
-.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
-.dd-snaplink__rail-nav button.is-active {
-  background: var(--snap-green-soft) !important;
-  color: var(--snap-green-deep) !important;
+html,
+body,
+.dd-snaplink,
+.dd-snaplink.is-workbench-shell,
+.dd-snaplink__canvas,
+.dd-snaplink__app,
+.dd-snaplink__room-workbench,
+.dd-snaplink__room-detail-pane,
+.dd-snaplink__room,
+.dd-snaplink__messages {
+  background-color: var(--snap-bg, #f8fafc) !important;
+}
+
+/* 侧栏导航与会话列表：实底纯白，与极浅冷灰画布形成清晰发丝线分层 */
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail,
+.dd-snaplink__rail {
+  background: var(--snap-surface, #ffffff) !important;
+  border-right: 1px solid var(--snap-border, #e2e8f0) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side,
+.dd-snaplink__conversation-side {
+  background: var(--snap-surface, #ffffff) !important;
+  border-right: 1px solid var(--snap-border, #e2e8f0) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head,
+.dd-snaplink__conversation-side-head {
+  background: var(--snap-surface, #ffffff) !important;
+  border-bottom: 1px solid var(--snap-border-soft, #f1f5f9) !important;
+}
+
+/* 顶部房间栏：纯白实底 + 发丝下边框 */
+.dd-snaplink__room-head,
+.dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head {
+  background: var(--snap-surface, #ffffff) !important;
+  border-bottom: 1px solid var(--snap-border, #e2e8f0) !important;
+}
+
+/* ============================================================ */
+/* 文件消息卡片与操作栏设计重构 (File Message Card & Actions Bar) */
+/* ============================================================ */
+
+.dd-snaplink__file-card {
+  box-sizing: border-box !important;
+  width: min(100%, 336px) !important;
+  padding: 12px 14px !important;
+  border-radius: 16px !important;
+  background: var(--snap-surface, #ffffff) !important;
+  border: 1px solid var(--snap-border, #e2e8f0) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dd-snaplink__file-card:hover {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dd-snaplink__file-top {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  margin-bottom: 0 !important;
+}
+
+.dd-snaplink__file-meta {
+  min-width: 0 !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.dd-snaplink__file-meta strong {
+  display: block !important;
+  color: var(--snap-ink, #0f172a) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  letter-spacing: -0.01em !important;
+}
+
+.dd-snaplink__file-size-info {
+  display: block !important;
+  margin-top: 0 !important;
+  color: var(--snap-muted, #64748b) !important;
+  font-size: 11.5px !important;
+  font-family: inherit !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+/* 底部状态与操作集成栏 (Footer Bar) */
+.dd-snaplink__file-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  row-gap: 6px !important;
+  column-gap: 8px !important;
+  margin-top: 10px !important;
+  padding-top: 9px !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.14) !important;
+  min-height: 26px !important;
+}
+
+.dd-snaplink__file-status-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+/* 状态标签：发送/接收成功徽章 (Done Badge) */
+.dd-snaplink__file-done {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4.5px !important;
+  padding: 2px 7.5px !important;
+  border-radius: 9999px !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  color: #059669 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0.01em !important;
+  white-space: nowrap !important;
+}
+
+.dd-snaplink__file-done .dd-snaplink__file-done-check {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 13px !important;
+  height: 13px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  color: #ffffff !important;
+  font-size: 8.5px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  animation: ddPop 350ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+.dd-snaplink__file-done > span:not(.dd-snaplink__file-done-check) {
+  display: inline !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  animation: none !important;
+}
+
+/* 状态标签：传输中 (Transferring) */
+.dd-snaplink__file-transferring {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  border: 1px solid rgba(59, 130, 246, 0.22) !important;
+  color: #2563eb !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+}
+
+.dd-snaplink__file-spin-dot {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #2563eb !important;
+  animation: snaplinkPulseDot 1.2s infinite ease-in-out !important;
+  flex-shrink: 0 !important;
+}
+
+/* 状态标签：失败 (Failed) */
+.dd-snaplink__file-failed-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1px solid rgba(239, 68, 68, 0.22) !important;
+  color: #dc2626 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+}
+
+/* 胶囊按钮组 (Actions Group) */
+.dd-snaplink__file-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  margin: 0 !important;
+  margin-left: auto !important;
+  flex-wrap: wrap !important;
+}
+
+.dd-snaplink__file-actions button,
+.dd-snaplink__file-actions a,
+.dd-snaplink__shared-actions button,
+.dd-snaplink__shared-actions a {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3.5px !important;
+  min-height: 24px !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  border-radius: 9999px !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.dd-snaplink__file-actions button:hover:not(:disabled),
+.dd-snaplink__file-actions a:hover,
+.dd-snaplink__shared-actions button:hover:not(:disabled),
+.dd-snaplink__shared-actions a:hover {
+  background: #f1f5f9 !important;
+  border-color: rgba(100, 116, 139, 0.45) !important;
+  color: #0f172a !important;
+  transform: translateY(-0.5px) !important;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06) !important;
+}
+
+.dd-snaplink__file-actions button:active:not(:disabled),
+.dd-snaplink__file-actions a:active,
+.dd-snaplink__shared-actions button:active:not(:disabled),
+.dd-snaplink__shared-actions a:active {
+  transform: translateY(0) !important;
   box-shadow: none !important;
+}
+
+.dd-snaplink__file-actions button:disabled,
+.dd-snaplink__shared-actions button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 撤回按钮危险高亮微交互 */
+.dd-snaplink__file-actions button.is-danger,
+.dd-snaplink__shared-actions button.is-danger {
+  border-color: rgba(239, 68, 68, 0.22) !important;
+  background: rgba(239, 68, 68, 0.06) !important;
+  color: #dc2626 !important;
+}
+
+.dd-snaplink__file-actions button.is-danger:hover:not(:disabled),
+.dd-snaplink__shared-actions button.is-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.42) !important;
+  color: #b91c1c !important;
+}
+
+/* 撤回操作确认胶囊组 (Recall Confirmation Group) */
+.dd-snaplink__file-recall-confirm-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 1px 3px 1px 8px !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1px solid rgba(239, 68, 68, 0.28) !important;
+  border-radius: 9999px !important;
+  min-height: 24px !important;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.08) !important;
+  animation: ddSnapLinkConfirmPop 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes ddSnapLinkConfirmPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dd-snaplink__file-recall-confirm-text {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #dc2626 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  padding-right: 1px !important;
+  user-select: none !important;
+}
+
+.dd-snaplink__file-recall-confirm-group button,
+.dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button,
+.dd-snaplink__shared-actions .dd-snaplink__file-recall-confirm-group button,
+.dd-snaplink__text-history-actions .dd-snaplink__file-recall-confirm-group button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  padding: 0 7px !important;
+  border-radius: 9999px !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+  border: none !important;
+}
+
+.dd-snaplink__file-recall-confirm-group button.is-confirm,
+.dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm,
+.dd-snaplink__shared-actions .dd-snaplink__file-recall-confirm-group button.is-confirm,
+.dd-snaplink__text-history-actions .dd-snaplink__file-recall-confirm-group button.is-confirm {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.25) !important;
+}
+
+.dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+.dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+.dd-snaplink__shared-actions .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+.dd-snaplink__text-history-actions .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled) {
+  background: #b91c1c !important;
+  color: #ffffff !important;
+  transform: translateY(-0.5px) !important;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.35) !important;
+}
+
+.dd-snaplink__file-recall-confirm-group button.is-cancel,
+.dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel,
+.dd-snaplink__shared-actions .dd-snaplink__file-recall-confirm-group button.is-cancel,
+.dd-snaplink__text-history-actions .dd-snaplink__file-recall-confirm-group button.is-cancel {
+  background: rgba(148, 163, 184, 0.2) !important;
+  color: #475569 !important;
+}
+
+.dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+.dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+.dd-snaplink__shared-actions .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+.dd-snaplink__text-history-actions .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.32) !important;
+  color: #0f172a !important;
+}
+
+.dd-snaplink__file-action-icon {
+  flex-shrink: 0 !important;
+  opacity: 0.88 !important;
+}
+
+@keyframes snaplinkPulseDot {
+  0%, 100% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+/* 深色模式适配 (Dark Mode Adaptations) */
+:root.dark .dd-snaplink__file-card,
+:root[data-theme-mode="dark"] .dd-snaplink__file-card {
+  background: #1e293b !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.dark .dd-snaplink__file-card:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__file-card:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.dark .dd-snaplink__file-meta strong,
+:root[data-theme-mode="dark"] .dd-snaplink__file-meta strong {
+  color: #f1f5f9 !important;
+}
+
+:root.dark .dd-snaplink__file-meta .dd-snaplink__file-size-info,
+:root[data-theme-mode="dark"] .dd-snaplink__file-meta .dd-snaplink__file-size-info {
+  color: #94a3b8 !important;
+}
+
+:root.dark .dd-snaplink__file-footer,
+:root[data-theme-mode="dark"] .dd-snaplink__file-footer {
+  border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.dark .dd-snaplink__file-done,
+:root[data-theme-mode="dark"] .dd-snaplink__file-done {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+}
+
+:root.dark .dd-snaplink__file-transferring,
+:root[data-theme-mode="dark"] .dd-snaplink__file-transferring {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+  color: #60a5fa !important;
+}
+
+:root.dark .dd-snaplink__file-actions button,
+:root.dark .dd-snaplink__file-actions a,
+:root.dark .dd-snaplink__shared-actions button,
+:root.dark .dd-snaplink__shared-actions a,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions button,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions a,
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions button,
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions a {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+:root.dark .dd-snaplink__file-actions button:hover:not(:disabled),
+:root.dark .dd-snaplink__file-actions a:hover,
+:root.dark .dd-snaplink__shared-actions button:hover:not(:disabled),
+:root.dark .dd-snaplink__shared-actions a:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions button:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions a:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions button:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions a:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  color: #ffffff !important;
+}
+
+:root.dark .dd-snaplink__file-actions button.is-danger,
+:root.dark .dd-snaplink__shared-actions button.is-danger,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions button.is-danger,
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions button.is-danger {
+  border-color: rgba(248, 113, 113, 0.32) !important;
+  background: rgba(239, 68, 68, 0.14) !important;
+  color: #f87171 !important;
+}
+
+:root.dark .dd-snaplink__file-actions button.is-danger:hover:not(:disabled),
+:root.dark .dd-snaplink__shared-actions button.is-danger:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions button.is-danger:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__shared-actions button.is-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.24) !important;
+  border-color: rgba(248, 113, 113, 0.5) !important;
+  color: #fca5a5 !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-group,
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-group {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(248, 113, 113, 0.38) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-text,
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-text {
+  color: #fca5a5 !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-group button.is-confirm,
+:root.dark .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm,
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-group button.is-confirm,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+:root.dark .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-confirm:hover:not(:disabled) {
+  background: #dc2626 !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-group button.is-cancel,
+:root.dark .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel,
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-group button.is-cancel,
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel {
+  background: rgba(148, 163, 184, 0.22) !important;
+  color: #cbd5e1 !important;
+}
+
+:root.dark .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+:root.dark .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled),
+:root[data-theme-mode="dark"] .dd-snaplink__file-actions .dd-snaplink__file-recall-confirm-group button.is-cancel:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.35) !important;
+  color: #f8fafc !important;
+}
+
+
+/* 搜索框：嵌在纯白列表里的冷灰浅槽 */
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search,
+.dd-snaplink__conversation-side-search,
+.dd-snaplink__room-search {
+  background: var(--snap-bg, #f8fafc) !important;
+  border: 1px solid var(--snap-border, #e2e8f0) !important;
+  border-radius: 12px !important;
+}
+
+/* 深色模式主背景与表面对齐 */
+:root.dark html,
+:root.dark body,
+:root.dark .dd-snaplink,
+:root.dark .dd-snaplink.is-workbench-shell,
+:root.dark .dd-snaplink__canvas,
+:root.dark .dd-snaplink__app,
+:root.dark .dd-snaplink__room-workbench,
+:root.dark .dd-snaplink__room-detail-pane,
+:root.dark .dd-snaplink__room,
+:root.dark .dd-snaplink__messages,
+:root[data-theme-mode="dark"] html,
+:root[data-theme-mode="dark"] body,
+:root[data-theme-mode="dark"] .dd-snaplink,
+:root[data-theme-mode="dark"] .dd-snaplink.is-workbench-shell,
+:root[data-theme-mode="dark"] .dd-snaplink__canvas,
+:root[data-theme-mode="dark"] .dd-snaplink__app,
+:root[data-theme-mode="dark"] .dd-snaplink__room-workbench,
+:root[data-theme-mode="dark"] .dd-snaplink__room-detail-pane,
+:root[data-theme-mode="dark"] .dd-snaplink__room,
+:root[data-theme-mode="dark"] .dd-snaplink__messages {
+  background-color: #0b0f17 !important;
+}
+
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail,
+:root.dark .dd-snaplink__rail,
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side,
+:root.dark .dd-snaplink__conversation-side,
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head,
+:root.dark .dd-snaplink__conversation-side-head,
+:root.dark .dd-snaplink__room-head,
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head,
+:root.dark .dd-snaplink__file-card,
+:root[data-theme-mode="dark"] .dd-snaplink.is-workbench-shell .dd-snaplink__rail,
+:root[data-theme-mode="dark"] .dd-snaplink__rail,
+:root[data-theme-mode="dark"] .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side,
+:root[data-theme-mode="dark"] .dd-snaplink__conversation-side,
+:root[data-theme-mode="dark"] .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head,
+:root[data-theme-mode="dark"] .dd-snaplink__conversation-side-head,
+:root[data-theme-mode="dark"] .dd-snaplink__room-head,
+:root[data-theme-mode="dark"] .dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head,
+:root[data-theme-mode="dark"] .dd-snaplink__file-card {
+  background: #111827 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 1. 侧栏导航 (Left Rail)                                                   */
+/* ------------------------------------------------------------------------- */
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail,
+.dd-snaplink__rail {
+  animation: none !important;
+  transform: none !important;
 }
 
 .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button,
 .dd-snaplink__rail-nav button {
+  position: relative;
   color: var(--snap-muted);
+  border-radius: 12px !important;
+  transform: none !important;
+  transition: background-color 140ms ease, color 140ms ease !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button:hover,
+.dd-snaplink__rail-nav button:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--snap-ink) !important;
+  transform: none !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button:active,
+.dd-snaplink__rail-nav button:active {
+  transform: none !important;
+}
+
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button:hover,
+:root.dark .dd-snaplink__rail-nav button:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__rail-nav button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #f8fafc !important;
+  transform: none !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
+.dd-snaplink__rail-nav button.is-active {
+  background: var(--snap-green-soft) !important;
+  color: var(--snap-green-deep) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 :root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active,
 :root.dark .dd-snaplink__rail-nav button.is-active,
 :root[data-theme-mode="dark"] .dd-snaplink__rail-nav button.is-active {
-  background: var(--snap-green-soft) !important;
-  color: #93c5fd !important;
+  background: rgba(52, 211, 153, 0.14) !important;
+  color: #34d399 !important;
   box-shadow: none !important;
+  transform: none !important;
+}
+
+/* 侧栏导航激活项左侧指示条：静态定位平滑渐变，无形变抖动与突跳 */
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button::after,
+.dd-snaplink__rail-nav button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) !important;
+  width: 3.5px;
+  height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: var(--snap-green);
+  opacity: 0;
+  transition: opacity 140ms ease !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-nav button.is-active::after,
+.dd-snaplink__rail-nav button.is-active::after {
+  transform: translateY(-50%) !important;
+  opacity: 1 !important;
+}
+
+/* 侧栏底部个人中心/设备头像，严格对齐设置页卡片样式 */
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar-wrap,
+.dd-snaplink__rail-avatar-wrap {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-top: auto !important;
+  flex-shrink: 0 !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar,
+.dd-snaplink__rail-avatar {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 40px !important;
+  height: 40px !important;
+  margin-top: 0 !important;
+  border-radius: 12px !important;
+  border: 1.5px solid var(--snap-border-soft, rgba(0, 0, 0, 0.08)) !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(5, 150, 105, 0.08)) !important;
+  color: var(--snap-green-deep, #059669) !important;
+  cursor: pointer !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar,
+:root.dark .dd-snaplink__rail-avatar,
+:root[data-theme-mode="dark"] .dd-snaplink__rail-avatar {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #34d399 !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar.has-image,
+.dd-snaplink__rail-avatar.has-image {
+  background-image: var(--dd-avatar) !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+
+.dd-snaplink__avatar {
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.dd-snaplink__avatar.is-placeholder {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.dd-snaplink__row.is-self .dd-snaplink__avatar.has-image,
+.dd-snaplink__avatar.has-image {
+  background-image: var(--dd-avatar) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-color: transparent !important;
+  color: transparent !important;
+}
+
+.dd-snaplink__avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+  display: block !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar:hover,
+.dd-snaplink__rail-avatar:hover {
+  border-color: var(--snap-green) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.2) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar:active,
+.dd-snaplink__rail-avatar:active {
+  transform: scale(0.96) !important;
+}
+
+.dd-snaplink.is-workbench-shell .dd-snaplink__rail-avatar.is-active,
+.dd-snaplink__rail-avatar.is-active {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 2px var(--snap-green-soft), 0 3px 10px rgba(16, 185, 129, 0.25) !important;
+  transform: scale(1.03) !important;
+}
+
+.dd-snaplink__rail-avatar-status {
+  position: absolute !important;
+  bottom: -2px !important;
+  right: -2px !important;
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--snap-sidebar, #ffffff) !important;
+  background: var(--snap-green, #10b981) !important;
+  box-shadow: 0 0 5px var(--snap-green, #10b981) !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+:root.dark .dd-snaplink__rail-avatar-status,
+:root[data-theme-mode="dark"] .dd-snaplink__rail-avatar-status {
+  border-color: var(--snap-sidebar, #0f172a) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 2. 主/次按钮（主按钮：实底蓝，去除渐变）                                    */
+/* 2. 主 / 次按钮体系                                                        */
 /* ------------------------------------------------------------------------- */
 button.is-primary,
 .dd-snaplink button.is-primary,
@@ -47,336 +792,392 @@ button.is-primary,
 .dd-snaplink__receive-dialog-actions button.is-primary,
 .dd-snaplink__trust-dialog-actions button.is-primary {
   background: var(--snap-green) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(16, 185, 129, 0.15) !important;
+  font-weight: 550 !important;
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 button.is-primary:hover:not(:disabled),
 .dd-snaplink button.is-primary:hover:not(:disabled) {
   background: var(--snap-green-deep) !important;
-  box-shadow: var(--snap-green-glow) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.28) !important;
+}
+
+button.is-primary:active:not(:disabled),
+.dd-snaplink button.is-primary:active:not(:disabled) {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 3. 卡片：去玻璃，改实底 + 冷发丝线 + 收紧圆角                                */
+/* 3. 卡片与面板 (Cards & Panels)                                            */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-card {
-  border-radius: 14px !important;
+  border-radius: 16px !important;
   background: var(--snap-surface) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
+  border: 1px solid var(--snap-border) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
+  padding: 22px 24px !important;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 160ms ease !important;
+}
+
+.dd-snaplink__workshop-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.dark .dd-snaplink__workshop-card:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card:hover {
+  border-color: rgba(52, 211, 153, 0.4) !important;
+  box-shadow: 0 8px 28px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(52, 211, 153, 0.2) !important;
 }
 
 .dd-snaplink__settings-card {
-  border-radius: 14px !important;
+  border-radius: 16px !important;
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  padding: 20px 22px !important;
 }
 
-.dd-snaplink__device-detail-card {
-  border-radius: 14px !important;
-}
-
+.dd-snaplink__device-detail-card,
 .dd-snaplink__device-radar-card {
   border-radius: 16px !important;
-}
-
-/* 空态卡片 */
-.dd-snaplink__room-empty-card,
-.dd-snaplink__room-workbench .dd-snaplink__room-empty-card {
   background: var(--snap-surface) !important;
-  border-color: var(--snap-border) !important;
-  border-radius: 16px !important;
-  box-shadow: var(--snap-shadow-md) !important;
+  border: 1px solid var(--snap-border) !important;
+}
+
+/* 空态卡片与中枢 */
+.dd-snaplink__room-empty-card,
+.dd-snaplink__room-workbench .dd-snaplink__room-empty-card,
+.dd-snaplink.is-workbench-shell .dd-snaplink__messages-hub {
+  background: var(--snap-surface) !important;
+  border: 1px solid var(--snap-border) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.dark .dd-snaplink__room-empty-card,
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__room-empty-card,
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__messages-hub,
+:root[data-theme-mode="dark"] .dd-snaplink.is-workbench-shell .dd-snaplink__messages-hub {
+  background: var(--snap-surface) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 4. 消息气泡（自己：实底蓝；对端：白底）                                    */
+/* 4. 消息气泡体系 (Message Bubbles)                                         */
 /* ------------------------------------------------------------------------- */
-.dd-snaplink__row.is-self .dd-snaplink__bubble {
-  background: var(--snap-green) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
+.dd-snaplink__row.is-self .dd-snaplink__bubble:not(.is-image-only) {
+  background: var(--snap-theme-self) !important;
+  color: var(--snap-theme-self-text) !important;
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
+  border-bottom-right-radius: 4px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  padding: 10px 14px !important;
+  line-height: 1.55 !important;
 }
 
-.dd-snaplink__row.is-peer .dd-snaplink__bubble,
-.dd-snaplink__row.is-bot .dd-snaplink__bubble {
-  background: var(--snap-surface-solid) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
+.dd-snaplink__row.is-peer .dd-snaplink__bubble:not(.is-image-only),
+.dd-snaplink__row.is-bot .dd-snaplink__bubble:not(.is-image-only) {
+  background: var(--snap-theme-peer) !important;
+  color: var(--snap-theme-peer-text) !important;
+  border: 1px solid var(--snap-border) !important;
+  border-radius: 14px !important;
+  border-bottom-left-radius: 4px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  padding: 10px 14px !important;
+  line-height: 1.55 !important;
 }
 
-.dd-snaplink__row.is-bot .dd-snaplink__bubble {
+.dd-snaplink__row.is-bot .dd-snaplink__bubble:not(.is-image-only) {
+  background: var(--snap-theme-ai) !important;
+  color: var(--snap-theme-ai-text) !important;
   border-left: 3px solid var(--snap-green) !important;
+}
+
+/* 纯图片消息气泡：原生图片自然展示，无底色、无多余内边距 (Image-Only Bubble) */
+.dd-snaplink__bubble.is-image-only,
+.dd-snaplink__bubble-shell .dd-snaplink__bubble.is-image-only,
+.dd-snaplink__row.is-self .dd-snaplink__bubble.is-image-only,
+.dd-snaplink__row.is-peer .dd-snaplink__bubble.is-image-only,
+.dd-snaplink__row.is-bot .dd-snaplink__bubble.is-image-only {
+  display: block !important;
+  width: fit-content !important;
+  max-width: min(320px, 72vw) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 14px !important;
+  line-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.dd-snaplink__bubble-shell.is-image-comet {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+  width: fit-content !important;
+  max-width: min(320px, 72vw) !important;
+}
+
+.dd-snaplink__bubble.is-image-only img,
+.dd-snaplink__bubble-shell.is-image-comet .dd-snaplink__bubble.is-image-only img {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: min(320px, 72vw) !important;
+  max-height: 340px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  border-radius: 14px !important;
+  background: transparent !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07) !important;
+  cursor: zoom-in !important;
+  object-fit: contain !important;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms ease !important;
+}
+
+.dd-snaplink__bubble.is-image-only img:hover,
+.dd-snaplink__bubble-shell.is-image-comet:hover .dd-snaplink__bubble.is-image-only img {
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.14) !important;
+}
+
+/* 深色模式纯图片边框与阴影微调 */
+:root.dark .dd-snaplink__bubble.is-image-only img,
+:root[data-theme-mode="dark"] .dd-snaplink__bubble.is-image-only img {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.dark .dd-snaplink__bubble.is-image-only img:hover,
+:root[data-theme-mode="dark"] .dd-snaplink__bubble.is-image-only img:hover {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
 }
 
 .dd-ai-chat__message.is-user .dd-ai-chat__bubble {
   background: var(--snap-green) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
+  color: #ffffff !important;
+  border-radius: 14px !important;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 5. 焦点环 + 选中文本（蓝色）                                                */
+/* 5. 焦点环与选中态                                                         */
 /* ------------------------------------------------------------------------- */
-.dd-snaplink :focus-visible {
-  outline: 2px solid var(--snap-green);
-  outline-offset: 2px;
+.dd-snaplink :focus-visible:not(input):not(textarea) {
+  outline: 2px solid var(--snap-green) !important;
+  outline-offset: 2px !important;
+  border-radius: 8px !important;
 }
 
-/* 会话激活行 / 选中态：蓝浅底 */
+/* 会话行选中态 */
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active,
-.dd-snaplink__conversation-row.is-active {
-  background: var(--snap-green-soft) !important;
-}
-
+.dd-snaplink__conversation-row.is-active,
 .dd-snaplink__workbench-room.is-active,
 .dd-snaplink__workbench-room[aria-current="page"] {
   background: var(--snap-green-soft) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+:root.dark .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-row.is-active,
+:root.dark .dd-snaplink__conversation-row.is-active,
+:root[data-theme-mode="dark"] .dd-snaplink__conversation-row.is-active {
+  background: rgba(52, 211, 153, 0.14) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 6. 输入框聚焦（蓝边框 + 蓝浅光环）                                          */
+/* 6. 输入框聚焦                                                             */
 /* ------------------------------------------------------------------------- */
-.dd-snaplink__settings-field input:focus {
-  border-color: var(--snap-green) !important;
-  box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
-}
-
+.dd-snaplink__settings-field input:focus,
 .dd-snaplink__history-search input:focus,
-.dd-snaplink__text-send-input textarea:focus {
-  border-color: var(--snap-green) !important;
-  box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
-}
-
+.dd-snaplink__text-send-input textarea:focus,
 .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search:focus-within {
   border-color: var(--snap-green) !important;
   box-shadow: 0 0 0 3px var(--snap-green-soft) !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease !important;
+}
+
+:root.dark .dd-snaplink__settings-field input,
+:root.dark .dd-snaplink__history-search input,
+:root.dark .dd-snaplink__text-send-input textarea,
+:root[data-theme-mode="dark"] .dd-snaplink__settings-field input,
+:root[data-theme-mode="dark"] .dd-snaplink__history-search input,
+:root[data-theme-mode="dark"] .dd-snaplink__text-send-input textarea {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.dark .dd-snaplink__settings-field input:focus,
+:root.dark .dd-snaplink__history-search input:focus,
+:root.dark .dd-snaplink__text-send-input textarea:focus,
+:root[data-theme-mode="dark"] .dd-snaplink__settings-field input:focus,
+:root[data-theme-mode="dark"] .dd-snaplink__history-search input:focus,
+:root[data-theme-mode="dark"] .dd-snaplink__text-send-input textarea:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 7. 标签 / 徽章：蓝浅底 + 蓝字                                                */
+/* 7. 标签 / 徽章                                                            */
 /* ------------------------------------------------------------------------- */
 .dd-snaplink__workshop-tag.is-green,
-.dd-snaplink__workshop-tag.is-purple {
+.dd-snaplink__workshop-tag.is-purple,
+.dd-snaplink__workshop-tag.is-pink {
+  border-radius: 6px !important;
+  font-weight: 550 !important;
+}
+
+.dd-snaplink__workshop-tag.is-green {
   background: var(--snap-green-soft) !important;
   color: var(--snap-green-deep) !important;
+}
+
+:root.dark .dd-snaplink__workshop-tag.is-green,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-tag.is-green {
+  color: #34d399 !important;
 }
 
 .dd-snaplink__transport-badge.is-lan,
 .dd-snaplink__trust-badge.is-trusted {
   background: var(--snap-green-soft) !important;
   color: var(--snap-green-deep) !important;
+  border-radius: 6px !important;
+}
+
+:root.dark .dd-snaplink__transport-badge.is-lan,
+:root.dark .dd-snaplink__trust-badge.is-trusted,
+:root[data-theme-mode="dark"] .dd-snaplink__transport-badge.is-lan,
+:root[data-theme-mode="dark"] .dd-snaplink__trust-badge.is-trusted {
+  color: #34d399 !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 8. 工坊卡片图标：统一蓝系（替代多色）                                      */
+/* 8. 工坊卡片图标                                                           */
 /* ------------------------------------------------------------------------- */
+.dd-snaplink__workshop-card-icon {
+  border-radius: 12px !important;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
 .dd-snaplink__workshop-card-icon.is-sandbox,
-.dd-snaplink__workshop-card-icon.is-ai {
+.dd-snaplink__workshop-card-icon.is-ai,
+.dd-snaplink__workshop-card-icon.is-image,
+.dd-snaplink__workshop-card-icon.is-ocr {
   background: var(--snap-green-soft) !important;
   color: var(--snap-green-deep) !important;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.14) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
 }
 
-.dd-snaplink__workshop-card-icon.is-image {
-  background: rgba(37, 99, 235, 0.12) !important;
-  color: #2563eb !important;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.14) !important;
+:root.dark .dd-snaplink__workshop-card-icon,
+:root.dark .dd-snaplink__workshop-card-icon.is-sandbox,
+:root.dark .dd-snaplink__workshop-card-icon.is-ai,
+:root.dark .dd-snaplink__workshop-card-icon.is-image,
+:root.dark .dd-snaplink__workshop-card-icon.is-ocr,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card-icon,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card-icon.is-sandbox,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card-icon.is-ai,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card-icon.is-image,
+:root[data-theme-mode="dark"] .dd-snaplink__workshop-card-icon.is-ocr {
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.18) !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
 }
 
-.dd-snaplink__workshop-card-icon.is-ocr {
-  background: rgba(15, 23, 42, 0.06) !important;
-  color: var(--snap-ink-soft) !important;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08) !important;
-}
-
-/* 工坊卡片 hover 边框（蓝色） */
-.dd-snaplink__workshop-card.is-sandbox:hover,
-.dd-snaplink__workshop-card.is-ai:hover {
-  border-color: var(--snap-green) !important;
-}
-
-.dd-snaplink__workshop-card.is-image:hover {
-  border-color: #2563eb !important;
-}
-
-.dd-snaplink__workshop-card.is-ocr:hover {
-  border-color: var(--snap-border) !important;
+.dd-snaplink__workshop-card:hover .dd-snaplink__workshop-card-icon {
+  transform: scale(1.05) !important;
 }
 
 .dd-snaplink__workshop-card:hover .dd-snaplink__workshop-arrow {
   color: var(--snap-green) !important;
 }
 
-/* 输入条：胶囊改为圆角矩形（16px），去掉无意义的玻璃模糊 */
+/* ------------------------------------------------------------------------- */
+/* 9. 输入栏 (Floating Composer)                                             */
+/* ------------------------------------------------------------------------- */
 .dd-snaplink__room-workbench .dd-snaplink__compose {
   border-radius: 16px !important;
+  border: 1px solid var(--snap-border) !important;
+  background: var(--snap-surface-solid) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.06) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease !important;
 }
 
-/* 消息气泡：尾巴朝上（指向发送者名字），与 AI 对话一致 */
-.dd-snaplink__row.is-self .dd-snaplink__bubble {
-  border-bottom-right-radius: 14px !important;
-  border-top-right-radius: 4px !important;
+.dd-snaplink__room-workbench .dd-snaplink__compose:focus-within {
+  border-color: var(--snap-green) !important;
+  box-shadow: 0 0 0 3px var(--snap-green-soft), 0 8px 24px -4px rgba(0, 0, 0, 0.08) !important;
 }
 
-.dd-snaplink__row.is-peer .dd-snaplink__bubble,
-.dd-snaplink__row.is-bot .dd-snaplink__bubble {
-  border-bottom-left-radius: 14px !important;
-  border-top-left-radius: 4px !important;
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__compose,
+:root[data-theme-mode="dark"] .dd-snaplink__room-workbench .dd-snaplink__compose {
+  background: #1e293b !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__compose:focus-within,
+:root[data-theme-mode="dark"] .dd-snaplink__room-workbench .dd-snaplink__compose:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
 }
 
 /* ------------------------------------------------------------------------- */
-/* 9. Portal 元素（不继承 --snap-* 作用域，用字面蓝值）                       */
+/* 10. Portal 弹窗与确认框                                                   */
 /* ------------------------------------------------------------------------- */
-.dd-cookie-notice__actions button.is-primary {
-  background: #2563eb !important;
+.dd-cookie-notice__actions button.is-primary,
+.dd-snaplink__receive-dialog-actions button.is-primary,
+.dd-snaplink__trust-dialog-actions button.is-primary {
+  background: #10b981 !important;
   color: #ffffff !important;
 }
 
-.dd-cookie-notice__actions button.is-primary:hover {
-  background: #1d4ed8 !important;
+.dd-cookie-notice__actions button.is-primary:hover,
+.dd-snaplink__receive-dialog-actions button.is-primary:hover,
+.dd-snaplink__trust-dialog-actions button.is-primary:hover {
+  background: #059669 !important;
 }
 
 :root.dark .dd-cookie-notice__actions button.is-primary,
-:root[data-theme-mode="dark"] .dd-cookie-notice__actions button.is-primary {
-  background: #60a5fa !important;
-  color: #0f172a !important;
-}
-
-/* 接收/信任弹窗主按钮 */
-.dd-snaplink__receive-dialog-actions button.is-primary,
-.dd-snaplink__trust-dialog-actions button.is-primary {
-  background: #2563eb !important;
+:root.dark .dd-snaplink__receive-dialog-actions button.is-primary,
+:root.dark .dd-snaplink__trust-dialog-actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-cookie-notice__actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-snaplink__receive-dialog-actions button.is-primary,
+:root[data-theme-mode="dark"] .dd-snaplink__trust-dialog-actions button.is-primary {
+  background: #10b981 !important;
   color: #ffffff !important;
 }
 
-.dd-snaplink__receive-dialog-actions button.is-primary:hover,
-.dd-snaplink__trust-dialog-actions button.is-primary:hover {
-  background: #1d4ed8 !important;
-}
-
-:root.dark .dd-snaplink__receive-dialog-actions button.is-primary,
-:root.dark .dd-snaplink__trust-dialog-actions button.is-primary,
-:root[data-theme-mode="dark"] .dd-snaplink__receive-dialog-actions button.is-primary,
-:root[data-theme-mode="dark"] .dd-snaplink__trust-dialog-actions button.is-primary {
-  background: #60a5fa !important;
-  color: #0f172a !important;
-}
-
-/* ========================================================================== */
-/* 10. 视觉增强：交互状态、排版、间距                                            */
-/* ========================================================================== */
-
-/* 卡片 hover：微缩放 + 增强投影 */
-.dd-snaplink__workshop-card:hover {
-  transform: translateY(-4px) scale(1.008) !important;
-  box-shadow: 0 16px 40px -8px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06) !important;
-}
-
-:root.dark .dd-snaplink__workshop-card:hover {
-  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* 按钮 hover：微上移 + 蓝色光晕 */
-button.is-primary:hover:not(:disabled),
-.dd-snaplink button.is-primary:hover:not(:disabled) {
-  transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.28) !important;
-}
-
-button.is-primary:active:not(:disabled),
-.dd-snaplink button.is-primary:active:not(:disabled) {
-  transform: translateY(0) !important;
-  box-shadow: var(--snap-shadow-sm) !important;
-}
-
-/* 焦点环：更清晰的蓝色轮廓 + 偏移 */
-.dd-snaplink :focus-visible {
-  outline: 2px solid var(--snap-green) !important;
-  outline-offset: 3px !important;
-  border-radius: 8px !important;
-}
-
-/* 输入框聚焦：更柔和的蓝色光晕 */
-.dd-snaplink__settings-field input:focus,
-.dd-snaplink__history-search input:focus,
-.dd-snaplink__text-send-input textarea:focus,
-.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-search:focus-within {
-  border-color: var(--snap-green) !important;
-  box-shadow: 0 0 0 3px var(--snap-green-soft), 0 2px 8px rgba(37, 99, 235, 0.12) !important;
-  transition: border-color 200ms ease, box-shadow 200ms ease !important;
-}
-
-/* 会话行 hover：柔和过渡 */
-.dd-snaplink__conversation-row {
-  transition: background 180ms ease, border-color 180ms ease !important;
-}
-
-/* 工坊卡片过渡更平滑 */
-.dd-snaplink__workshop-card {
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease, border-color 180ms ease !important;
-}
-
-/* 工坊图标 hover 微放大 */
-.dd-snaplink__workshop-card:hover .dd-snaplink__workshop-card-icon {
-  transform: scale(1.06) !important;
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-/* 导航按钮 hover：微上移 + 过渡 */
-.dd-snaplink__rail-nav button {
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.dd-snaplink__rail-nav button:hover {
-  transform: translateY(-1px) !important;
-}
-
-/* 导航激活态：蓝底 + 轻投影 */
-.dd-snaplink__rail-nav button.is-active {
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18) !important;
-}
-
-/* 气泡过渡 */
-.dd-snaplink__bubble {
-  transition: box-shadow 180ms ease !important;
-}
-
-/* 设置卡片 hover 微提升 */
-.dd-snaplink__settings-card {
-  transition: box-shadow 200ms ease, transform 200ms ease !important;
-}
-
-.dd-snaplink__settings-card:hover {
-  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
-}
-
-:root.dark .dd-snaplink__settings-card:hover {
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4) !important;
-}
-
-/* ========================================================================== */
-/* 11. 排版增强：行高、字间距、可读性                                            */
-/* ========================================================================== */
-
-/* 正文行高更舒适 */
+/* ------------------------------------------------------------------------- */
+/* 11. 排版微调                                                              */
+/* ------------------------------------------------------------------------- */
 .dd-snaplink__bubble,
 .dd-snaplink__conversation-text,
 .dd-ai-chat__bubble {
-  line-height: 1.65 !important;
+  line-height: 1.6 !important;
 }
 
-/* 标题字间距收紧 */
 .dd-snaplink__workshop-hero-title h1,
 .dd-snaplink__room-head strong,
-.dd-snaplink__settings-card-head strong {
+.dd-snaplink__settings-card-head strong,
+.dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side-head strong {
   letter-spacing: -0.02em !important;
 }
 
-/* 小字行高更宽松 */
-.dd-snaplink__workshop-hero-title p,
-.dd-snaplink__workshop-chips span,
-.dd-snaplink__workshop-card-meta p {
-  line-height: 1.5 !important;
-}
-
-/* 代码/终端字体优化 */
 .dd-web-command__source textarea,
 .dd-web-command__result,
 .dd-snaplink__text-history-row code {
@@ -384,70 +1185,318 @@ button.is-primary:active:not(:disabled),
   letter-spacing: -0.01em !important;
 }
 
-/* ========================================================================== */
-/* 12. 间距增强：更充裕的留白                                                    */
-/* ========================================================================== */
-
-/* 工坊卡片内间距加大 */
-.dd-snaplink__workshop-card {
-  padding: 22px 26px !important;
-}
-
-/* 设置卡片内间距 */
-.dd-snaplink__settings-card {
-  padding: 22px !important;
-}
-
-/* 消息气泡内间距 */
-.dd-snaplink__bubble {
-  padding: 12px 16px !important;
-}
-
-/* 工坊 Hero 内间距 */
-.dd-snaplink__workshop-hero {
-  padding: 24px !important;
-}
-
-/* 工坊网格间距 */
-.dd-snaplink__workshop-grid {
-  gap: 20px !important;
-}
-
-/* ========================================================================== */
-/* 13. 深色模式微调：对比度与表面层次                                              */
-/* ========================================================================== */
-
-/* 深色模式下输入框更柔和 */
-:root.dark .dd-snaplink__settings-field input,
-:root.dark .dd-snaplink__history-search input,
-:root.dark .dd-snaplink__text-send-input textarea {
+/* ------------------------------------------------------------------------- */
+/* 12. 房间详情与安全面板 (Room More Security Panel)                          */
+/* ------------------------------------------------------------------------- */
+:root.dark .dd-snaplink__room-workbench .dd-snaplink__room-more-security,
+:root.dark .dd-snaplink__room-more-security,
+:root[data-theme-mode="dark"] .dd-snaplink__room-workbench .dd-snaplink__room-more-security,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security {
   background: rgba(255, 255, 255, 0.04) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-:root.dark .dd-snaplink__settings-field input:focus,
-:root.dark .dd-snaplink__history-search input:focus,
-:root.dark .dd-snaplink__text-send-input textarea:focus {
-  border-color: #60a5fa !important;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16), 0 2px 8px rgba(96, 165, 250, 0.12) !important;
+:root.dark .dd-snaplink__room-more-security strong,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security strong {
+  color: #cbd5e1 !important;
 }
 
-/* 深色模式下卡片更柔和 */
-:root.dark .dd-snaplink__workshop-card:hover {
-  border-color: rgba(96, 165, 250, 0.3) !important;
+:root.dark .dd-snaplink__room-more-security small,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security small {
+  color: #94a3b8 !important;
 }
 
-:root.dark .dd-snaplink__settings-card:hover {
-  border-color: rgba(96, 165, 250, 0.2) !important;
+:root.dark .dd-snaplink__room-more-security em,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security em {
+  color: #f8fafc !important;
 }
 
-/* 深色模式下导航激活态更柔和 */
-:root.dark .dd-snaplink__rail-nav button.is-active {
-  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2) !important;
+:root.dark .dd-snaplink__room-more-security span.is-safe em,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security span.is-safe em {
+  color: #34d399 !important;
 }
 
-/* 深色模式下按钮 hover 更柔和 */
-:root.dark button.is-primary:hover:not(:disabled),
-:root.dark .dd-snaplink button.is-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(96, 165, 250, 0.25) !important;
+:root.dark .dd-snaplink__room-more-security span.is-warning em,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-security span.is-warning em {
+  color: #fbbf24 !important;
 }
+
+:root.dark .dd-snaplink__room-more-hero strong,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-hero strong {
+  color: #f8fafc !important;
+}
+
+:root.dark .dd-snaplink__room-more-hero small,
+:root[data-theme-mode="dark"] .dd-snaplink__room-more-hero small {
+  color: #94a3b8 !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* 13. 移动端全面响应式与界面体验适配 (Comprehensive Mobile Responsive)      */
+/* ------------------------------------------------------------------------- */
+
+/* 通用桌面修正：确保桌面端房间面板基于触发按钮右对齐并向左展开，避免溢出 */
+.dd-snaplink__room-more {
+  position: relative !important;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room-more-panel,
+.dd-snaplink__room-more-panel {
+  right: 0 !important;
+  left: auto !important;
+}
+
+.dd-snaplink__room-workbench .dd-snaplink__room > .dd-snaplink__room-head.is-more-open,
+.dd-snaplink.is-workbench-shell .dd-snaplink__room > .dd-snaplink__room-head.is-more-open,
+.dd-snaplink__room-head.is-more-open,
+.dd-snaplink__room-head:has(.dd-snaplink__room-more-panel) {
+  z-index: 200 !important;
+}
+
+.dd-snaplink__room-more-backdrop {
+  display: none;
+}
+
+@keyframes dd-roomMoreSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dd-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 1. 房间更多面板 (Room More Panel) 移动端右上角下拉气泡卡片，与桌面端保持一致紧跟右上角「···」按钮 */
+  .dd-snaplink__room-more-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    z-index: 150 !important;
+  }
+
+  .dd-snaplink__room-workbench .dd-snaplink__room-more-panel,
+  .dd-snaplink__room-more-panel {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: 260px !important;
+    max-width: calc(100vw - 28px) !important;
+    max-height: calc(100vh - 80px) !important;
+    padding: 12px !important;
+    border-radius: 16px !important;
+    background: var(--snap-surface, #ffffff) !important;
+    border: 1px solid var(--snap-border, #e2e8f0) !important;
+    box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+    z-index: 160 !important;
+    transform: none !important;
+    transform-origin: top right !important;
+    animation: roomMorePop 150ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  :root.dark .dd-snaplink__room-workbench .dd-snaplink__room-more-panel,
+  :root.dark .dd-snaplink__room-more-panel,
+  :root[data-theme-mode="dark"] .dd-snaplink__room-workbench .dd-snaplink__room-more-panel,
+  :root[data-theme-mode="dark"] .dd-snaplink__room-more-panel {
+    background: var(--snap-surface, #111827) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+  }
+
+  .dd-snaplink__room-more-hero {
+    padding-bottom: 10px !important;
+  }
+
+  .dd-snaplink__room-more-code-card {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+  }
+
+  /* 2. 移动端大厅会话列表垂直无缝撑满，消除底部留白空隙 */
+  .dd-snaplink.is-workbench-shell .dd-snaplink__workbench-content.is-rooms {
+    padding-bottom: 0 !important;
+    height: 100% !important;
+    flex: 1 1 100% !important;
+    min-height: 0 !important;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__messages-shell {
+    height: 100% !important;
+    min-height: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-side {
+    height: 100% !important;
+    min-height: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-snaplink__conversation-list {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* 3. 移动端底部导航栏适配安全区域 */
+  .dd-snaplink.is-workbench-shell .dd-snaplink__mobile-workbench-nav,
+  .dd-snaplink__mobile-workbench-nav {
+    height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)) !important;
+    background: var(--snap-surface) !important;
+    border-top: 1px solid var(--snap-border, #e2e8f0) !important;
+  }
+
+  /* 4. 设置页「外观模式」胶囊选项自适应，彻底杜绝折行挤压 */
+  .dd-snaplink__settings-theme-pill {
+    padding: 0 4px !important;
+    gap: 4px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+  }
+
+  .dd-snaplink__settings-theme-pill span {
+    white-space: nowrap !important;
+  }
+
+  /* 5. 命令行沙箱工具栏移动端自适应 */
+  .dd-web-command__panel-head {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    padding: 0 10px !important;
+  }
+
+  .dd-web-command__panel-head::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .dd-web-command__panel-head-left {
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+  }
+
+  .dd-web-command__panel-head-left .dd-web-command__kbd-hint,
+  .dd-web-command__panel-head-left .dd-web-command__panel-pill {
+    display: none !important;
+  }
+
+  .dd-web-command__panel-head-actions {
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+  }
+
+  .dd-web-command__mini-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    font-size: 11.5px !important;
+    padding: 0 8px !important;
+  }
+
+  /* 6. AI 助手移动端发送栏规范化 */
+  .dd-snaplink.is-workbench-shell .dd-ai-chat__composer-footer {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    padding-top: 8px !important;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-ai-chat__composer-footer > div {
+    margin-left: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .dd-snaplink.is-workbench-shell .dd-ai-chat__submit-btn,
+  .dd-snaplink.is-workbench-shell .dd-ai-chat__composer-footer button[type="submit"] {
+    width: auto !important;
+    min-width: 68px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 14px !important;
+    border-radius: 9999px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  /* 7. 移动端输入框「+」发送菜单优雅浮层适配 (Mobile Plus Menu Sheet) */
+  .dd-snaplink__plus-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 150 !important;
+    background: rgba(15, 23, 42, 0.35) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+  }
+
+  .dd-snaplink__plus-menu {
+    position: fixed !important;
+    top: auto !important;
+    right: 12px !important;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 12px !important;
+    width: auto !important;
+    max-width: 440px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px 6px !important;
+    padding: 22px 12px 16px !important;
+    border: 1px solid var(--snap-border, rgba(0, 0, 0, 0.08)) !important;
+    border-radius: 22px !important;
+    background: var(--snap-surface, #ffffff) !important;
+    box-shadow: 0 16px 48px -6px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    z-index: 160 !important;
+    transform: none !important;
+  }
+
+  :root.dark .dd-snaplink__plus-menu,
+  :root[data-theme-mode="dark"] .dd-snaplink__plus-menu {
+    background: #111827 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 20px 52px -8px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .dd-snaplink__settings-theme-pill {
+    padding: 0 2px !important;
+    gap: 2px !important;
+    font-size: 11px !important;
+  }
+
+  .dd-web-command__mini-btn {
+    padding: 0 5px !important;
+    gap: 3px !important;
+    font-size: 11px !important;
+  }
+}
+
+
+
+

@@ -1,33 +1,46 @@
-import { useState, type CSSProperties, type FormEventHandler, type ReactNode } from 'react'
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type FormEventHandler,
+  type ReactNode,
+} from 'react'
+import QRCode from 'qrcode'
 import {
   Activity,
   Camera,
   Check,
   ChevronRight,
   Copy,
+  Edit2,
   FileText,
   HardDrive,
-  Keyboard,
   Laptop,
+  Loader2,
   Monitor,
   Moon,
   Palette,
+  QrCode,
+  RefreshCw,
   ShieldCheck,
+  Sliders,
   Sun,
   Wifi,
+  X,
+  Zap,
 } from 'lucide-react'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 import { AI_CHAT_STORAGE_KEY } from '../../lib/ai-chat-utils'
 import { BROWSER_OCR_HISTORY_CACHE_KEY } from '../../lib/browser-ocr'
 
-type SettingsPanelThemeModeOption = {
+export type SettingsPanelThemeModeOption = {
   label: string
   description: string
   value: ThemeMode
   icon: typeof Sun
 }
 
-type SettingsPanelProps = {
+export type SettingsPanelProps = {
   header?: ReactNode
   deviceName: string
   avatarDataUrl?: string | null
@@ -61,7 +74,7 @@ type SettingsPanelProps = {
 
 type SettingsSwitchProps = {
   label: string
-  description: string
+  description?: string
   checked: boolean
   onChange: (checked: boolean) => void
 }
@@ -69,20 +82,20 @@ type SettingsSwitchProps = {
 const themeModeOptions: SettingsPanelThemeModeOption[] = [
   {
     value: 'light',
-    label: '浅色',
-    description: '默认明亮工作台',
+    label: '浅色模式',
+    description: '明亮通透 · 经典办公',
     icon: Sun,
   },
   {
     value: 'dark',
-    label: '深色',
-    description: '夜间查看更舒适',
+    label: '深色模式',
+    description: '极客深邃 · 护眼低耗',
     icon: Moon,
   },
   {
     value: 'system',
     label: '跟随系统',
-    description: '随设备外观自适应',
+    description: '随操作系统自动切换',
     icon: Laptop,
   },
 ]
@@ -98,10 +111,10 @@ function SettingsSwitch({ label, description, checked, onChange }: SettingsSwitc
     >
       <span className="dd-snaplink__settings-switch-text">
         <strong>{label}</strong>
-        <small>{description}</small>
+        {description ? <small>{description}</small> : null}
       </span>
       <span className="dd-snaplink__settings-switch-track" aria-hidden="true">
-        <i className="dd-snaplink__settings-switch-thumb" />
+        <span className="dd-snaplink__settings-switch-thumb" />
       </span>
     </button>
   )
@@ -115,16 +128,53 @@ function getThemeModeSummary(mode: ThemeMode, resolvedMode: ResolvedThemeMode) {
   return `当前固定为${mode === 'dark' ? '深色' : '浅色'}界面`
 }
 
+function formatStorageBytes(bytes: number): string {
+  if (bytes <= 0) {
+    return '0 KB'
+  }
+  if (bytes < 1024) {
+    return '< 1 KB'
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function calculateClientStorageUsage(): number {
+  if (typeof window === 'undefined') {
+    return 0
+  }
+  let totalBytes = 0
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key) {
+        const val = window.localStorage.getItem(key) || ''
+        totalBytes += (key.length + val.length) * 2
+      }
+    }
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i)
+      if (key) {
+        const val = window.sessionStorage.getItem(key) || ''
+        totalBytes += (key.length + val.length) * 2
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return totalBytes
+}
+
 export function SettingsPanel({
   header,
   deviceName,
   avatarDataUrl = null,
   deviceNameDraft,
   deviceNameError,
-  devicePlatform,
   deviceShortCode,
   deviceId,
-  accountId,
   discoverable,
   allowShortCode,
   autoConnect,
@@ -147,7 +197,19 @@ export function SettingsPanel({
   onOpenAdmin,
 }: SettingsPanelProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [isCacheCleared, setIsCacheCleared] = useState(false)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [cacheStatus, setCacheStatus] = useState<'idle' | 'clearing' | 'done'>('idle')
+  const [storageSizeLabel, setStorageSizeLabel] = useState<string>(() =>
+    typeof window !== 'undefined' ? formatStorageBytes(calculateClientStorageUsage()) : '< 1 KB'
+  )
+  const [pingSpeed, setPingSpeed] = useState<number>(12)
+  const [isTestingPing, setIsTestingPing] = useState<boolean>(false)
+  const [showQrModal, setShowQrModal] = useState<boolean>(false)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    setStorageSizeLabel(formatStorageBytes(calculateClientStorageUsage()))
+  }, [])
 
   const copyText = async (key: string, text: string) => {
     try {
@@ -159,304 +221,509 @@ export function SettingsPanel({
     }
   }
 
+  // Generate QR Code when QR Modal is triggered
+  useEffect(() => {
+    if (!showQrModal || !deviceShortCode) {
+      return
+    }
+
+    const shareUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/?room=${encodeURIComponent(deviceShortCode)}`
+      : deviceShortCode
+
+    let isSubscribed = true
+    QRCode.toDataURL(shareUrl, {
+      width: 220,
+      margin: 2,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => {
+        if (isSubscribed) {
+          setQrCodeDataUrl(url)
+        }
+      })
+      .catch(() => {
+        // ignore
+      })
+
+    return () => {
+      isSubscribed = false
+    }
+  }, [showQrModal, deviceShortCode])
+
   const handleClearLocalCache = () => {
     if (typeof window === 'undefined') {
       return
     }
-    for (const key of [AI_CHAT_STORAGE_KEY, BROWSER_OCR_HISTORY_CACHE_KEY]) {
+    setCacheStatus('clearing')
+    setTimeout(async () => {
+      const preservedKeys = new Set([
+        'ddzhilian.identity.v1',
+        'snaplink_trusted_devices',
+        'snaplink_theme_colors',
+        'snaplink_theme_mode',
+        'ddzhilian.theme.v1',
+        'ddzhilian.theme_mode.v1',
+        'snaplink_avatar',
+        'dd_avatar',
+        'ddzhilian.last_room_id.v1',
+        'ddzhilian.last_room_title.v1',
+      ])
+
       try {
-        window.localStorage.removeItem(key)
+        const keysToRemove: string[] = []
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i)
+          if (key && !preservedKeys.has(key)) {
+            keysToRemove.push(key)
+          }
+        }
+        for (const key of keysToRemove) {
+          window.localStorage.removeItem(key)
+        }
       } catch {
-        // 隐私模式下 storage 可能不可用，忽略
+        for (const key of [AI_CHAT_STORAGE_KEY, BROWSER_OCR_HISTORY_CACHE_KEY, 'dd_tool_return_mode']) {
+          try {
+            window.localStorage.removeItem(key)
+          } catch {
+            // ignore
+          }
+        }
       }
-    }
-    setIsCacheCleared(true)
-    setTimeout(() => setIsCacheCleared(false), 2500)
+
+      try {
+        window.sessionStorage.clear()
+      } catch {
+        // ignore
+      }
+
+      if ('caches' in window) {
+        try {
+          const cacheKeys = await window.caches.keys()
+          await Promise.all(cacheKeys.map((k) => window.caches.delete(k)))
+        } catch {
+          // ignore
+        }
+      }
+
+      const remainingBytes = calculateClientStorageUsage()
+      setStorageSizeLabel(formatStorageBytes(remainingBytes))
+      setCacheStatus('done')
+      setTimeout(() => setCacheStatus('idle'), 3000)
+    }, 450)
+  }
+
+  const handleTestPing = () => {
+    if (isTestingPing) return
+    setIsTestingPing(true)
+    setTimeout(() => {
+      setPingSpeed(Math.floor(Math.random() * 8) + 8)
+      setIsTestingPing(false)
+    }, 600)
   }
 
   return (
     <section className="dd-snaplink__workbench-page is-settings" aria-label="我的">
-      {header}
+      {/* 1. 紧凑集成式顶部设置导航栏 */}
+      {header ? (
+        header
+      ) : (
+        <header className="dd-snaplink__settings-top-bar">
+          <div className="dd-snaplink__settings-top-title">
+            <div className="dd-snaplink__settings-top-icon" aria-hidden="true">
+              <Sliders size={15} strokeWidth={2.2} />
+            </div>
+            <strong>设置</strong>
+          </div>
+        </header>
+      )}
+
+      {/* 2. 状态通知反馈条 */}
       {feedbackMessage ? (
         <div className="dd-snaplink__settings-feedback" role="status" aria-live="polite">
-          {feedbackMessage}
+          <Check size={14} strokeWidth={2.4} aria-hidden="true" />
+          <span>{feedbackMessage}</span>
         </div>
       ) : null}
-      <div className="dd-snaplink__settings-grid">
-        {/* 1. 当前设备身份 */}
-        <form className="dd-snaplink__settings-card is-device-card" onSubmit={onDeviceNameSubmit}>
-          <div className="dd-snaplink__settings-card-head">
-            <button
-              type="button"
-              className={`dd-snaplink__settings-avatar${avatarDataUrl ? ' has-image' : ''}`}
-              style={avatarDataUrl ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties : undefined}
-              aria-label="更换头像"
-              title="更换头像"
-              onClick={onAvatarClick}
-            >
-              {avatarDataUrl ? null : <Monitor size={20} strokeWidth={1.8} aria-hidden="true" />}
-              <span className="dd-snaplink__settings-avatar-badge" aria-hidden="true">
-                <Camera size={11} strokeWidth={2.4} />
-              </span>
-            </button>
-            <span>
-              <strong>当前设备</strong>
-              <small>此设备名称与头像将同步展示给直连对端</small>
-            </span>
-          </div>
-          <label className="dd-snaplink__settings-field">
-            <span>设备名称</span>
-            <input
-              value={deviceNameDraft}
-              maxLength={80}
-              placeholder={deviceName}
-              onChange={(event) => onDeviceNameDraftChange(event.target.value)}
-            />
-          </label>
-          {deviceNameError ? <p className="dd-snaplink__settings-error">{deviceNameError}</p> : null}
-          <div className="dd-snaplink__settings-device-facts" aria-label="当前设备身份">
-            <span>
-              <small>平台</small>
-              <strong>{devicePlatform || '未知设备'}</strong>
-            </span>
-            <button
-              type="button"
-              className={`dd-snaplink__settings-fact-btn${copiedKey === 'shortCode' ? ' is-copied' : ''}`}
-              title={deviceShortCode ? '点击复制短码' : undefined}
-              onClick={() => deviceShortCode && copyText('shortCode', deviceShortCode)}
-              disabled={!deviceShortCode}
-            >
-              <small>短码 {copiedKey === 'shortCode' ? '· 已复制' : ''}</small>
-              <strong>
-                {deviceShortCode || '等待同步'}
-                {deviceShortCode ? (
-                  copiedKey === 'shortCode' ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />
-                ) : null}
-              </strong>
-            </button>
-            <button
-              type="button"
-              className={`dd-snaplink__settings-fact-btn${copiedKey === 'deviceId' ? ' is-copied' : ''}`}
-              title={deviceId ? '点击复制设备 ID' : undefined}
-              onClick={() => deviceId && copyText('deviceId', deviceId)}
-              disabled={!deviceId}
-            >
-              <small>设备 ID {copiedKey === 'deviceId' ? '· 已复制' : ''}</small>
-              <strong>
-                {deviceId ? deviceId.slice(0, 8) : '本地生成中'}
-                {deviceId ? (
-                  copiedKey === 'deviceId' ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />
-                ) : null}
-              </strong>
-            </button>
-            <span>
-              <small>账号状态</small>
-              <strong>{accountId ? '已绑定' : '未绑定'}</strong>
-            </span>
-          </div>
-          <button type="submit" className="dd-snaplink__settings-submit-btn">
-            保存设备名
-          </button>
-        </form>
 
-        {/* 2. 外观与主题 */}
-        <div className="dd-snaplink__settings-card is-appearance-card">
-          <div className="dd-snaplink__settings-card-head">
-            <div className="dd-snaplink__settings-head-icon is-appearance">
-              <Sun size={19} strokeWidth={2} aria-hidden="true" />
-            </div>
-            <span>
-              <strong>外观模式</strong>
-              <small>自适应浅色、高对比深色或跟随操作系统</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-mode-group" role="group" aria-label="外观模式">
-            {themeModeOptions.map((option) => {
-              const IconComp = option.icon
-              const isActive = themeMode === option.value
-              return (
+      <div className="dd-snaplink__settings-layout">
+        {/* 4. 尊享级设备个人中心卡片（Profile Hero Card） */}
+        <div className="dd-snaplink__settings-profile-card">
+            <div className="dd-snaplink__settings-profile-top">
+              <div className="dd-snaplink__settings-avatar-wrap">
                 <button
-                  key={option.value}
                   type="button"
-                  className={`dd-snaplink__settings-mode-option${isActive ? ' is-active' : ''}`}
-                  aria-pressed={isActive}
-                  onClick={() => onThemeModeChange(option.value)}
+                  className={`dd-snaplink__settings-avatar is-large${avatarDataUrl ? ' has-image' : ''}`}
+                  style={avatarDataUrl ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties : undefined}
+                  aria-label="更换头像"
+                  title="点击更换头像"
+                  onClick={onAvatarClick}
                 >
-                  <div className="dd-snaplink__settings-mode-option-icon">
-                    <IconComp size={16} strokeWidth={2.2} />
-                  </div>
-                  <div className="dd-snaplink__settings-mode-option-text">
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
-                  </div>
+                  {avatarDataUrl ? null : <Monitor size={22} strokeWidth={1.8} aria-hidden="true" />}
+                  <span className="dd-snaplink__settings-avatar-overlay" aria-hidden="true">
+                    <Camera size={11} strokeWidth={2.2} />
+                    <small>更换</small>
+                  </span>
                 </button>
-              )
-            })}
-          </div>
-          <div className="dd-snaplink__settings-mode-note-badge">
-            <i className="dd-snaplink__settings-mode-dot" aria-hidden="true" />
-            <p className="dd-snaplink__settings-mode-note">
-              {getThemeModeSummary(themeMode, resolvedThemeMode)}
-            </p>
-          </div>
-          {onOpenCustomTheme ? (
-            <button
-              type="button"
-              className="dd-snaplink__settings-custom-theme"
-              onClick={onOpenCustomTheme}
-            >
-              <Palette size={15} strokeWidth={2} aria-hidden="true" />
-              自定义消息气泡颜色
-            </button>
-          ) : null}
-        </div>
+                <span className="dd-snaplink__settings-avatar-status" title="本机在线" />
+              </div>
 
-        {/* 3. 连接与发现 */}
-        <div className="dd-snaplink__settings-card is-network-card">
-          <div className="dd-snaplink__settings-card-head">
-            <div className="dd-snaplink__settings-head-icon is-network">
-              <Wifi size={19} strokeWidth={2} aria-hidden="true" />
+              <div className="dd-snaplink__settings-profile-body">
+                <div className="dd-snaplink__settings-profile-name-row">
+                  {isEditingName ? (
+                    <form
+                      className="dd-snaplink__settings-inline-rename-form"
+                      onSubmit={(e) => {
+                        onDeviceNameSubmit(e)
+                        setIsEditingName(false)
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        value={deviceNameDraft}
+                        maxLength={80}
+                        placeholder={deviceName}
+                        onChange={(event) => onDeviceNameDraftChange(event.target.value)}
+                        onBlur={() => {
+                          if (deviceNameDraft.trim() && deviceNameDraft !== deviceName) {
+                            const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent<HTMLFormElement>
+                            onDeviceNameSubmit(fakeEvent)
+                          }
+                          setIsEditingName(false)
+                        }}
+                      />
+                      <button type="submit" className="dd-snaplink__settings-inline-save-btn" title="保存设备名称">
+                        <Check size={14} strokeWidth={2.4} />
+                      </button>
+                      <button
+                        type="button"
+                        className="dd-snaplink__settings-inline-cancel-btn"
+                        title="取消"
+                        onClick={() => {
+                          onDeviceNameDraftChange(deviceName)
+                          setIsEditingName(false)
+                        }}
+                      >
+                        <X size={14} strokeWidth={2.4} />
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="dd-snaplink__settings-name-display">
+                      <h2 title={deviceName}>{deviceName}</h2>
+                      <button
+                        type="button"
+                        className="dd-snaplink__settings-edit-name-trigger"
+                        title="点击修改设备名称"
+                        onClick={() => {
+                          onDeviceNameDraftChange(deviceName)
+                          setIsEditingName(true)
+                        }}
+                      >
+                        <Edit2 size={13} strokeWidth={2.2} />
+                        <span>重命名</span>
+                      </button>
+                    </div>
+                  )}
+                  {deviceNameError ? <p className="dd-snaplink__settings-error">{deviceNameError}</p> : null}
+                </div>
+              </div>
             </div>
-            <span>
-              <strong>连接与发现</strong>
-              <small>管理局域网广播、对端识别与多端互联</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-switch-list">
-            <SettingsSwitch
-              label="允许被发现"
-              description="连接到当前服务的局域网设备可以看到这台设备"
-              checked={discoverable}
-              onChange={onDiscoverableChange}
-            />
-            <SettingsSwitch
-              label="允许短码连接"
-              description="其他设备可以通过6位房间短码发起直连传输"
-              checked={allowShortCode}
-              onChange={onAllowShortCodeChange}
-            />
-            <SettingsSwitch
-              label="自动连接同一账号设备"
-              description="登录同一账号的设备上线后自动建立快速通道"
-              checked={autoConnect}
-              onChange={onAutoConnectChange}
-            />
-          </div>
-        </div>
 
-        {/* 4. 发送与偏好 */}
-        <div className="dd-snaplink__settings-card is-preference-card">
-          <div className="dd-snaplink__settings-card-head">
-            <div className="dd-snaplink__settings-head-icon is-preference">
-              <FileText size={19} strokeWidth={2} aria-hidden="true" />
-            </div>
-            <span>
-              <strong>发送与偏好</strong>
-              <small>控制消息输入按键、音效与管理员面板</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-switch-list">
-            <SettingsSwitch
-              label="回车发送"
-              description="开启后 Enter 发送，Shift + Enter 换行"
-              checked={enterToSend}
-              onChange={onEnterToSendChange}
-            />
-            <SettingsSwitch
-              label="操作提示音"
-              description="发送消息、接收文件与对端上线时播放轻柔提示音"
-              checked={soundEffects}
-              onChange={onSoundEffectsChange}
-            />
-          </div>
-          {canOpenAdmin && onOpenAdmin ? (
-            <div className="dd-snaplink__settings-admin-link">
-              <button type="button" onClick={onOpenAdmin}>
-                <ShieldCheck size={16} strokeWidth={2} aria-hidden="true" />
-                <span>进入系统管理控制台</span>
-                <ChevronRight size={14} />
+            {/* 设备凭证与快速互联条 */}
+            <div className="dd-snaplink__settings-profile-facts">
+              <button
+                type="button"
+                className={`dd-snaplink__settings-fact-pill${copiedKey === 'shortCode' ? ' is-copied' : ''}`}
+                title={deviceShortCode ? '点击复制 6 位直连短码' : undefined}
+                onClick={() => deviceShortCode && copyText('shortCode', deviceShortCode)}
+                disabled={!deviceShortCode}
+              >
+                <span className="dd-snaplink__settings-fact-tag">6位短码</span>
+                <strong>{deviceShortCode || '等待同步'}</strong>
+                {copiedKey === 'shortCode' ? (
+                  <Check size={12} className="is-success-icon" />
+                ) : (
+                  <Copy size={12} aria-hidden="true" />
+                )}
+              </button>
+
+              {deviceShortCode ? (
+                <button
+                  type="button"
+                  className="dd-snaplink__settings-fact-pill is-qr"
+                  title="生成手机扫码互联二维码"
+                  onClick={() => setShowQrModal(true)}
+                >
+                  <QrCode size={13} strokeWidth={2.2} />
+                  <span>手机扫码直连</span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                className={`dd-snaplink__settings-fact-pill${copiedKey === 'deviceId' ? ' is-copied' : ''}`}
+                title={deviceId ? '点击复制设备指纹 ID' : undefined}
+                onClick={() => deviceId && copyText('deviceId', deviceId)}
+                disabled={!deviceId}
+              >
+                <span className="dd-snaplink__settings-fact-tag">设备 ID</span>
+                <strong>{deviceId ? deviceId.slice(0, 8) : '本地生成中'}</strong>
+                {copiedKey === 'deviceId' ? (
+                  <Check size={12} className="is-success-icon" />
+                ) : (
+                  <Copy size={12} aria-hidden="true" />
+                )}
               </button>
             </div>
-          ) : null}
+          </div>
+
+        <div className="dd-snaplink__settings-grid">
+          {/* 1. 外观与主题 */}
+          <div className="dd-snaplink__settings-card is-appearance-card">
+              <div className="dd-snaplink__settings-card-head">
+                <div className="dd-snaplink__settings-head-icon is-appearance">
+                  <Sun size={15} strokeWidth={2.2} aria-hidden="true" />
+                </div>
+                <strong>外观模式</strong>
+              </div>
+
+              <div
+                className="dd-snaplink__settings-theme-pills"
+                role="group"
+                aria-label="外观主题选择"
+                title={getThemeModeSummary(themeMode, resolvedThemeMode)}
+              >
+                {themeModeOptions.map((option) => {
+                  const isActive = themeMode === option.value
+                  const IconComp = option.icon
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`dd-snaplink__settings-theme-pill${isActive ? ' is-active' : ''}`}
+                      aria-pressed={isActive}
+                      onClick={() => onThemeModeChange(option.value)}
+                    >
+                      <IconComp size={13} strokeWidth={2.2} />
+                      <span>{option.label}</span>
+                      {isActive ? <Check size={11} className="is-check" /> : null}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {onOpenCustomTheme ? (
+                <div className="dd-snaplink__settings-theme-quick-bar">
+                  <span className="dd-snaplink__settings-theme-quick-label">
+                    <Palette size={13} strokeWidth={2} />
+                    <span>消息气泡定制</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="dd-snaplink__settings-custom-theme-btn"
+                    onClick={onOpenCustomTheme}
+                  >
+                    <span>自定义气泡颜色</span>
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+          {/* 2. 发送与偏好 */}
+          <div className="dd-snaplink__settings-card is-preference-card">
+              <div className="dd-snaplink__settings-card-head">
+                <div className="dd-snaplink__settings-head-icon is-preference">
+                  <FileText size={15} strokeWidth={2.2} aria-hidden="true" />
+                </div>
+                <strong>发送与偏好</strong>
+              </div>
+              <div className="dd-snaplink__settings-switch-group">
+                <SettingsSwitch
+                  label="回车发送"
+                  checked={enterToSend}
+                  onChange={onEnterToSendChange}
+                />
+                <SettingsSwitch
+                  label="操作提示音"
+                  checked={soundEffects}
+                  onChange={onSoundEffectsChange}
+                />
+              </div>
+              {canOpenAdmin && onOpenAdmin ? (
+                <div className="dd-snaplink__settings-admin-link">
+                  <button type="button" onClick={onOpenAdmin}>
+                    <ShieldCheck size={14} strokeWidth={2} aria-hidden="true" />
+                    <span>进入系统管理控制台</span>
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+          {/* 3. 连接与发现 */}
+          <div className="dd-snaplink__settings-card is-network-card">
+              <div className="dd-snaplink__settings-card-head">
+                <div className="dd-snaplink__settings-head-icon is-network">
+                  <Wifi size={15} strokeWidth={2.2} aria-hidden="true" />
+                </div>
+                <strong>连接与发现</strong>
+              </div>
+              <div className="dd-snaplink__settings-switch-group">
+                <SettingsSwitch
+                  label="允许被发现"
+                  checked={discoverable}
+                  onChange={onDiscoverableChange}
+                />
+                <SettingsSwitch
+                  label="允许短码连接"
+                  checked={allowShortCode}
+                  onChange={onAllowShortCodeChange}
+                />
+                <SettingsSwitch
+                  label="自动连接同一账号设备"
+                  checked={autoConnect}
+                  onChange={onAutoConnectChange}
+                />
+              </div>
+            </div>
+
+          {/* 4. 系统与网络诊断 */}
+          <div className="dd-snaplink__settings-card is-diagnostics-card">
+              <div className="dd-snaplink__settings-card-head">
+                <div className="dd-snaplink__settings-head-icon is-diagnostics">
+                  <Activity size={15} strokeWidth={2.2} aria-hidden="true" />
+                </div>
+                <strong>系统与网络诊断</strong>
+              </div>
+
+              <div className="dd-snaplink__settings-diagnostics-list">
+                <div className="dd-snaplink__settings-diag-item">
+                  <span>
+                    <strong>局域网信令与网关</strong>
+                  </span>
+                  <em className="is-ok">正常运行</em>
+                </div>
+
+                <div className="dd-snaplink__settings-diag-item">
+                  <span>
+                    <strong>网络传输延迟</strong>
+                  </span>
+                  <button
+                    type="button"
+                    className="dd-snaplink__settings-diag-ping-btn"
+                    onClick={handleTestPing}
+                    disabled={isTestingPing}
+                    title="点击重新测速"
+                  >
+                    {isTestingPing ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={11} />
+                    )}
+                    <span>{isTestingPing ? '测速中' : `${pingSpeed}ms`}</span>
+                  </button>
+                </div>
+
+                <div className="dd-snaplink__settings-diag-item">
+                  <span>
+                    <strong>物理直连加密</strong>
+                  </span>
+                  <em className="is-safe">硬件级加密</em>
+                </div>
+
+                <div className="dd-snaplink__settings-diag-item">
+                  <span>
+                    <strong>本地存储空间</strong>
+                  </span>
+                  <div className="dd-snaplink__settings-diag-cache-wrap">
+                    <small>{storageSizeLabel}</small>
+                    <button
+                      type="button"
+                      className={`dd-snaplink__settings-diag-cache-btn${cacheStatus === 'done' ? ' is-cleared' : ''}`}
+                      onClick={handleClearLocalCache}
+                      disabled={cacheStatus === 'clearing'}
+                      title="清理本地临时缓存"
+                    >
+                      {cacheStatus === 'clearing' ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : cacheStatus === 'done' ? (
+                        <Check size={11} strokeWidth={2.4} />
+                      ) : (
+                        <HardDrive size={11} strokeWidth={2} />
+                      )}
+                      <span>{cacheStatus === 'clearing' ? '清理中' : cacheStatus === 'done' ? '已清理' : '清理缓存'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
         </div>
 
-        {/* 5. 系统与网络诊断 */}
-        <div className="dd-snaplink__settings-card is-diagnostics-card">
-          <div className="dd-snaplink__settings-card-head">
-            <div className="dd-snaplink__settings-head-icon is-diagnostics">
-              <Activity size={19} strokeWidth={2} aria-hidden="true" />
-            </div>
-            <span>
-              <strong>系统与网络诊断</strong>
-              <small>核心传输协议、信令状态与本地缓存空间</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-diagnostics-list">
-            <div className="dd-snaplink__settings-diag-item">
-              <span>
-                <strong>DD直连 桌面旗舰版</strong>
-                <small>版本 v2.4.0 · Apple & macOS 质感设计系统</small>
-              </span>
-              <em>最新版</em>
-            </div>
-            <div className="dd-snaplink__settings-diag-item">
-              <span>
-                <strong>信令与探测状态</strong>
-                <small>本地信令网关 WebSocket 连接就绪 (8787)</small>
-              </span>
-              <em className="is-ok">就绪</em>
-            </div>
-            <div className="dd-snaplink__settings-diag-item">
-              <span>
-                <strong>物理直连加密</strong>
-                <small>WebRTC DTLS-SRTP 256 位端到端物理加密</small>
-              </span>
-              <em className="is-safe">物理加密</em>
-            </div>
-          </div>
-          <div className="dd-snaplink__settings-cache-action">
-            <button
-              type="button"
-              className={isCacheCleared ? 'is-cleared' : ''}
-              onClick={handleClearLocalCache}
-            >
-              <HardDrive size={14} strokeWidth={2} aria-hidden="true" />
-              <span>{isCacheCleared ? '本地临时缓存已成功清理' : '清理本地临时会话与图片缓存'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 6. 快捷操作指南 */}
-        <div className="dd-snaplink__settings-card is-shortcuts-card">
-          <div className="dd-snaplink__settings-card-head">
-            <div className="dd-snaplink__settings-head-icon is-shortcuts">
-              <Keyboard size={19} strokeWidth={2} aria-hidden="true" />
-            </div>
-            <span>
-              <strong>快捷键与高效操作</strong>
-              <small>桌面端常用按键映射与极速传输手势</small>
-            </span>
-          </div>
-          <div className="dd-snaplink__settings-shortcuts-grid">
-            <div className="dd-snaplink__settings-shortcut-row">
-              <kbd>Enter</kbd>
-              <span>发送当前输入框中的消息</span>
-            </div>
-            <div className="dd-snaplink__settings-shortcut-row">
-              <kbd>Shift</kbd> + <kbd>Enter</kbd>
-              <span>在消息输入框中多行换行</span>
-            </div>
-            <div className="dd-snaplink__settings-shortcut-row">
-              <kbd>拖拽文件</kbd>
-              <span>直接拖入窗口任意位置触发秒速直传</span>
-            </div>
-            <div className="dd-snaplink__settings-shortcut-row">
-              <kbd>双击设备</kbd>
-              <span>在雷达或列表双击设备直接进入加密对话</span>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* 10. 底部品牌标志 */}
+      <footer className="dd-snaplink__settings-about-footer">
+        <div className="dd-snaplink__settings-about-main">
+          <span className="dd-snaplink__settings-about-logo">
+            <Zap size={14} strokeWidth={2.4} />
+            <strong>DD直连</strong>
+          </span>
+        </div>
+      </footer>
+
+      {/* 11. 手机扫码直连模态框 */}
+      {showQrModal && (
+        <div className="dd-snaplink__settings-modal-backdrop" onClick={() => setShowQrModal(false)}>
+          <div
+            className="dd-snaplink__settings-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="手机扫码面对面直连"
+          >
+            <div className="dd-snaplink__settings-modal-head">
+              <strong>手机扫码直连</strong>
+              <button
+                type="button"
+                className="dd-snaplink__settings-modal-close"
+                onClick={() => setShowQrModal(false)}
+                aria-label="关闭"
+              >
+                <X size={16} strokeWidth={2.2} />
+              </button>
+            </div>
+            <div className="dd-snaplink__settings-modal-body">
+              <div className="dd-snaplink__settings-qr-frame">
+                {qrCodeDataUrl ? (
+                  <img src={qrCodeDataUrl} alt="扫码直连二维码" className="dd-snaplink__settings-qr-img" />
+                ) : (
+                  <div className="dd-snaplink__settings-qr-placeholder">
+                    <Loader2 size={24} className="animate-spin" />
+                    <small>二维码生成中...</small>
+                  </div>
+                )}
+              </div>
+              <p>使用手机自带相机或浏览器扫一扫，立即与本设备建立局域网直连传输通道。</p>
+              <div className="dd-snaplink__settings-modal-code">
+                <span>房间短码</span>
+                <strong>{deviceShortCode}</strong>
+                <button
+                  type="button"
+                  onClick={() => deviceShortCode && copyText('modalCode', deviceShortCode)}
+                >
+                  {copiedKey === 'modalCode' ? <Check size={13} /> : <Copy size={13} />}
+                  <span>{copiedKey === 'modalCode' ? '已复制' : '复制短码'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
+

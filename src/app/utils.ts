@@ -484,6 +484,40 @@ function renderMarkdownFenceHtml(codeText: string, language: string) {
   return renderCodeBlockHtml(codeText, language)
 }
 
+function parseMarkdownTableRow(row: string): string[] {
+  const trimmed = row.trim()
+  const content = trimmed.replace(/^\|/, '').replace(/\|$/, '')
+  return content.split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, '|').trim())
+}
+
+function isMarkdownTableDelimiterRow(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed.includes('-')) {
+    return false
+  }
+  const cells = parseMarkdownTableRow(trimmed)
+  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell))
+}
+
+function parseMarkdownTableAlignments(delimiterRow: string): Array<'left' | 'center' | 'right' | null> {
+  const cells = parseMarkdownTableRow(delimiterRow)
+  return cells.map((cell) => {
+    const trimmed = cell.trim()
+    const hasLeftColon = trimmed.startsWith(':')
+    const hasRightColon = trimmed.endsWith(':')
+    if (hasLeftColon && hasRightColon) {
+      return 'center'
+    }
+    if (hasRightColon) {
+      return 'right'
+    }
+    if (hasLeftColon) {
+      return 'left'
+    }
+    return null
+  })
+}
+
 function renderMarkdownBlocks(value: string) {
   const lines = value.replace(/\r\n?/g, '\n').split('\n')
   const blocks: string[] = []
@@ -493,7 +527,8 @@ function renderMarkdownBlocks(value: string) {
     /^ {0,3}(```|~~~)[\w#+.-]*\s*$/.test(line) ||
     /^ {0,3}#{1,3}\s+\S/.test(line) ||
     /^ {0,3}>\s?/.test(line) ||
-    /^ {0,3}(?:[-*+]\s+|\d+[.)]\s+)/.test(line)
+    /^ {0,3}(?:[-*+]\s+|\d+[.)]\s+)/.test(line) ||
+    /^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)
 
   while (index < lines.length) {
     const currentLine = lines[index] ?? ''
@@ -526,6 +561,65 @@ function renderMarkdownBlocks(value: string) {
     if (headingMatch) {
       const level = headingMatch[1].length
       blocks.push(`<h${level}>${renderMarkdownInline(headingMatch[2].trim())}</h${level}>`)
+      index += 1
+      continue
+    }
+
+    // Markdown GFM Table
+    if (
+      currentLine.includes('|') &&
+      index + 1 < lines.length &&
+      isMarkdownTableDelimiterRow(lines[index + 1] ?? '')
+    ) {
+      const headerRow = currentLine
+      const delimiterRow = lines[index + 1] ?? ''
+      const alignments = parseMarkdownTableAlignments(delimiterRow)
+      const headerCells = parseMarkdownTableRow(headerRow)
+      index += 2
+
+      const bodyRows: string[][] = []
+      while (
+        index < lines.length &&
+        lines[index]?.trim() &&
+        lines[index]!.includes('|') &&
+        !isBlockStart(lines[index]!)
+      ) {
+        bodyRows.push(parseMarkdownTableRow(lines[index]!))
+        index += 1
+      }
+
+      const theadHtml = `<thead><tr>${headerCells
+        .map((cell, i) => {
+          const align = alignments[i]
+          const alignStyle = align ? ` style="text-align: ${align}"` : ''
+          return `<th${alignStyle}>${renderMarkdownInline(cell)}</th>`
+        })
+        .join('')}</tr></thead>`
+
+      const tbodyHtml = bodyRows.length > 0
+        ? `<tbody>${bodyRows
+            .map(
+              (row) =>
+                `<tr>${headerCells
+                  .map((_, i) => {
+                    const cell = row[i] ?? ''
+                    const align = alignments[i]
+                    const alignStyle = align ? ` style="text-align: ${align}"` : ''
+                    return `<td${alignStyle}>${renderMarkdownInline(cell)}</td>`
+                  })
+                  .join('')}</tr>`,
+            )
+            .join('')}</tbody>`
+        : ''
+
+      blocks.push(`<div class="dd-markdown-table-wrap"><table>${theadHtml}${tbodyHtml}</table></div>`)
+      continue
+    }
+
+    // Horizontal Rule
+    const hrMatch = currentLine.match(/^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/)
+    if (hrMatch) {
+      blocks.push('<hr />')
       index += 1
       continue
     }
@@ -563,6 +657,13 @@ function renderMarkdownBlocks(value: string) {
 
     const paragraphLines: string[] = []
     while (index < lines.length && lines[index]?.trim() && !isBlockStart(lines[index] ?? '')) {
+      if (
+        lines[index]?.includes('|') &&
+        index + 1 < lines.length &&
+        isMarkdownTableDelimiterRow(lines[index + 1] ?? '')
+      ) {
+        break
+      }
       paragraphLines.push(lines[index] ?? '')
       index += 1
     }

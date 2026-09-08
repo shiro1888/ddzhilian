@@ -539,9 +539,23 @@ export function SnapLinkStage({
   onDragLeave,
   onDrop,
 }: SnapLinkStageProps) {
-  const [isLobbyOpen, setIsLobbyOpen] = useState(activeView === 'conversation')
+  const [isLobbyOpen, setIsLobbyOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const targetMode = params.get('mode') || params.get('tab') || sessionStorage.getItem('dd_tool_return_mode')
+      if (targetMode && targetMode !== 'rooms') {
+        return true
+      }
+      if (!params.get('room') && typeof window.matchMedia === 'function' && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+        return true
+      }
+    }
+    return false
+  })
   const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null)
   const [copiedHistoryActionId, setCopiedHistoryActionId] = useState<string | null>(null)
+  const [confirmingHistoryFileRecallId, setConfirmingHistoryFileRecallId] = useState<string | null>(null)
+  const [confirmingHistoryTextRecallId, setConfirmingHistoryTextRecallId] = useState<string | null>(null)
   const [settingsFeedbackMessage, setSettingsFeedbackMessage] = useState<string | null>(null)
   const [deviceNameDraft, setDeviceNameDraft] = useState('')
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null)
@@ -588,7 +602,7 @@ export function SnapLinkStage({
         return targetMode as SnapLinkWorkbenchMode
       }
     }
-    return 'nearby'
+    return 'rooms'
   })
   const [workbenchTransferTab, setWorkbenchTransferTab] = useState<SnapLinkWorkbenchTransferTab>('active')
   const [isWorkbenchScanning, setIsWorkbenchScanning] = useState(false)
@@ -607,6 +621,37 @@ export function SnapLinkStage({
   const [roomJoinDraft, setRoomJoinDraft] = useState('')
   const [roomJoinError, setRoomJoinError] = useState<string | null>(null)
   const [isRoomJoinOpen, setIsRoomJoinOpen] = useState(false)
+  const roomJoinInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (isRoomJoinOpen) {
+      const timer = setTimeout(() => {
+        roomJoinInputRef.current?.focus()
+      }, 120)
+      return () => clearTimeout(timer)
+    }
+  }, [isRoomJoinOpen])
+
+  useEffect(() => {
+    if (selectedRoomId) {
+      setIsRoomJoinOpen(false)
+      setRoomJoinError(null)
+    }
+  }, [selectedRoomId])
+
+  useEffect(() => {
+    if (errorMessage && isRoomJoinOpen) {
+      const translated =
+        errorMessage === 'No active room matches that room ID.'
+          ? '未找到该房间或设备已离线'
+          : errorMessage === 'That device currently does not accept short-code pairing.'
+          ? '对方设备未开启短码连接'
+          : errorMessage === 'No online device matches that short code.'
+          ? '未找到该短码对应的在线设备'
+          : errorMessage
+      setRoomJoinError(translated)
+    }
+  }, [errorMessage, isRoomJoinOpen])
   const [messageContextMenu, setMessageContextMenu] = useState<SnapLinkMessageContextMenuState | null>(null)
   const [quoteDraft, setQuoteDraft] = useState<SnapLinkQuoteDraftState | null>(null)
   const [imagePreview, setImagePreview] = useState<SnapLinkImagePreviewState | null>(null)
@@ -658,6 +703,7 @@ export function SnapLinkStage({
   const pendingOutgoingEntryAnimationTimeoutRef = useRef<number | null>(null)
   const handledAutoOpenRoomIdRef = useRef<string | null>(null)
   const handledInitialDesktopRoomOpenRef = useRef(false)
+  const isNavigatingHomeRef = useRef(false)
   const aiChatOriginModeRef = useRef<SnapLinkWorkbenchMode | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -886,28 +932,41 @@ export function SnapLinkStage({
   }, [activeView, autoOpenRoomId, selectedRoomId])
 
   useEffect(() => {
-    if (
-      handledInitialDesktopRoomOpenRef.current ||
-      activeView !== 'conversation' ||
-      !isLobbyOpen ||
-      !selectedRoomId ||
-      typeof window === 'undefined' ||
-      !window.matchMedia(DESKTOP_MEDIA_QUERY).matches
-    ) {
+    if (typeof window === 'undefined' || !window.matchMedia(DESKTOP_MEDIA_QUERY).matches) {
       return
     }
 
-    handledInitialDesktopRoomOpenRef.current = true
+    if (handledInitialDesktopRoomOpenRef.current) {
+      return
+    }
+
+    // 若当前会话已经处于打开状态（非大厅状态），说明首次自动进入会话已达成，无需重复执行
+    if (!isLobbyOpen && selectedRoomId) {
+      handledInitialDesktopRoomOpenRef.current = true
+      return
+    }
+
+    if (
+      isNavigatingHomeRef.current ||
+      activeView !== 'conversation' ||
+      workbenchMode !== 'rooms' ||
+      !isLobbyOpen ||
+      !selectedRoomId
+    ) {
+      return
+    }
 
     // 用户显式带 mode/tab 返回（例如从工具返回「工坊 / 设备 / 传输 / 我的」）时，
     // 尊重该模式，不再自动恢复上次会话，避免被会话视图盖掉目标面板。
     const explicitModeParams = new URLSearchParams(window.location.search)
     if (explicitModeParams.get('mode') || explicitModeParams.get('tab')) {
+      handledInitialDesktopRoomOpenRef.current = true
       return
     }
 
+    handledInitialDesktopRoomOpenRef.current = true
     setIsLobbyOpen(false)
-  }, [activeView, isLobbyOpen, selectedRoomId])
+  }, [activeView, isLobbyOpen, selectedRoomId, workbenchMode])
 
   const lobbyRoomListItems = useMemo(
     () =>
@@ -1088,11 +1147,13 @@ export function SnapLinkStage({
   )
   const latestIncomingReceiveEntry = activeIncomingReceiveEntries[0] ?? null
   const latestIncomingFileOffer = pendingIncomingFileOffers[0] ?? null
+  const isInsideRoomConversation = workbenchMode === 'rooms' && Boolean(selectedRoomId)
   const shouldAutoExpandDesktopQueue =
-    workbenchActiveTransferCount > 0 ||
-    workbenchFailedTransferCount > 0 ||
-    activeIncomingReceiveEntries.length > 0 ||
-    pendingIncomingFileOffers.length > 0
+    !isInsideRoomConversation &&
+    (workbenchActiveTransferCount > 0 ||
+      workbenchFailedTransferCount > 0 ||
+      activeIncomingReceiveEntries.length > 0 ||
+      pendingIncomingFileOffers.length > 0)
   const selectedWorkbenchDevice =
     onlineDeviceItems.find((device) => device.deviceId === selectedWorkbenchDeviceId) ??
     onlineDeviceItems[0] ??
@@ -1283,7 +1344,7 @@ export function SnapLinkStage({
   const selectedRoomTechnicalNote = isSelectedRoomAssistant
     ? ''
     : isSelectedRoomPublic
-      ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 24 小时'
+      ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 7 天'
       : '技术信息：通过 WebRTC 在设备间直连 · 文件不上传服务器历史副本'
   const selectedRoomMoreDetails = isSelectedRoomAssistant
     ? []
@@ -1305,7 +1366,7 @@ export function SnapLinkStage({
           {
             id: 'retention',
             label: '历史副本',
-            value: '最长 24 小时',
+            value: '最长 7 天',
           },
         ]
       : isSelectedGroupRoom
@@ -1717,7 +1778,10 @@ export function SnapLinkStage({
     }
 
     if (workbenchVisibleTransferQueueCount === 0) {
-      setIsDesktopQueueCollapsed(true)
+      const timer = window.setTimeout(() => {
+        setIsDesktopQueueCollapsed(true)
+      }, 2500)
+      return () => window.clearTimeout(timer)
     }
   }, [shouldAutoExpandDesktopQueue, workbenchVisibleTransferQueueCount])
 
@@ -2153,7 +2217,18 @@ export function SnapLinkStage({
   }, [imagePreview, isImagePreviewClosing])
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || activeView !== 'conversation') {
+      return
+    }
+    if (isNavigatingHomeRef.current) {
+      isNavigatingHomeRef.current = false
+      setWorkbenchMode('rooms')
+      setIsLobbyOpen(true)
+      try {
+        sessionStorage.removeItem('dd_tool_return_mode')
+      } catch {
+        // ignore
+      }
       return
     }
     const params = new URLSearchParams(window.location.search)
@@ -2162,6 +2237,7 @@ export function SnapLinkStage({
     const targetMode = modeParam || savedReturnMode
     if (
       targetMode === 'settings' ||
+      targetMode === 'workshop' ||
       targetMode === 'nearby' ||
       targetMode === 'transfers' ||
       targetMode === 'files' ||
@@ -2170,6 +2246,10 @@ export function SnapLinkStage({
     ) {
       setWorkbenchMode(targetMode as SnapLinkWorkbenchMode)
       setIsLobbyOpen(true)
+      sessionStorage.removeItem('dd_tool_return_mode')
+    } else if (targetMode === 'rooms') {
+      setWorkbenchMode('rooms')
+      setIsLobbyOpen(false)
       sessionStorage.removeItem('dd_tool_return_mode')
     }
   }, [activeView])
@@ -2197,11 +2277,14 @@ export function SnapLinkStage({
       handleShowWorkbenchFiles()
       return
     }
-    handleShowWorkbenchRooms()
+    setWorkbenchMode('rooms')
+    handleBackToLobby()
   }
 
   const handleOpenAiChat = () => {
     setActiveSharedTab(null)
+    setIsLobbyOpen(false)
+    handledAutoOpenRoomIdRef.current = null
     // AI 助手在会话视图内打开，不经过 navigateBackToText，因此不能写
     // dd_tool_return_mode（否则该值会残留到下一次页面加载，错误地覆盖启动模式）。
     // 用内存 ref 记录来源模式，仅用于返回按钮回到「设置 / 工坊」。
@@ -2214,7 +2297,6 @@ export function SnapLinkStage({
 
   const handleOpenImage = () => {
     setActiveSharedTab(null)
-    setIsLobbyOpen(false)
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
     }
@@ -2223,7 +2305,6 @@ export function SnapLinkStage({
 
   const handleOpenCommand = () => {
     setActiveSharedTab(null)
-    setIsLobbyOpen(false)
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('dd_tool_return_mode', workbenchMode)
     }
@@ -2276,7 +2357,6 @@ export function SnapLinkStage({
   const toggleResolvedThemeMode = () => {
     const nextThemeMode: ThemeMode = resolvedThemeMode === 'dark' ? 'light' : 'dark'
     updateWorkbenchThemeMode(nextThemeMode)
-    showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
   }
 
   const submitThemeColors = useCallback((colors: SnapLinkThemeColors) => {
@@ -2366,6 +2446,7 @@ export function SnapLinkStage({
       return
     }
 
+    isNavigatingHomeRef.current = false
     setActiveSharedTab(null)
     aiChatOriginModeRef.current = null
     setIsLobbyOpen(false)
@@ -2398,13 +2479,26 @@ export function SnapLinkStage({
     setActiveSharedTab(null)
     aiChatOriginModeRef.current = null
     setIsLobbyOpen(true)
+    setSelectedWorkbenchDeviceId(null)
     onOpenRoomHome()
   }
 
-  const shouldShowConversationOnDesktop = () =>
-    typeof window !== 'undefined' && window.matchMedia(DESKTOP_MEDIA_QUERY).matches
+  const handleShowWorkbenchHome = () => {
+    handledInitialDesktopRoomOpenRef.current = true
+    isNavigatingHomeRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('dd_tool_return_mode')
+      } catch {
+        // ignore
+      }
+    }
+    handleBackToLobby()
+    setWorkbenchMode('rooms')
+  }
 
   const handleShowWorkbenchNearby = () => {
+    handledInitialDesktopRoomOpenRef.current = true
     handleBackToLobby()
     setWorkbenchMode('nearby')
   }
@@ -2425,25 +2519,41 @@ export function SnapLinkStage({
   }
 
   const handleShowWorkbenchRooms = () => {
+    handledInitialDesktopRoomOpenRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('dd_tool_return_mode')
+      } catch {
+        // ignore
+      }
+    }
     setActiveSharedTab(null)
     aiChatOriginModeRef.current = null
+    setSelectedWorkbenchDeviceId(null)
     onOpenRoomHome()
-    setIsLobbyOpen(!(selectedRoomId && shouldShowConversationOnDesktop()))
+    const isMobile =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia(MOBILE_MEDIA_QUERY).matches
+    setIsLobbyOpen(isMobile ? true : !selectedRoomId)
     setWorkbenchMode('rooms')
   }
 
   const handleShowWorkbenchQueue = () => {
+    handledInitialDesktopRoomOpenRef.current = true
     handleBackToLobby()
     setWorkbenchTransferTab((current) => (current === 'history' ? 'active' : current))
     setWorkbenchMode('transfers')
   }
 
   const handleShowWorkbenchFiles = () => {
+    handledInitialDesktopRoomOpenRef.current = true
     handleBackToLobby()
     setWorkbenchMode('files')
   }
 
   const handleShowWorkbenchText = () => {
+    handledInitialDesktopRoomOpenRef.current = true
     handleBackToLobby()
     setWorkbenchMode('text')
   }
@@ -2454,6 +2564,7 @@ export function SnapLinkStage({
     }
 
     previousWorkbenchTextRequestIdRef.current = workbenchTextRequestId
+    handledInitialDesktopRoomOpenRef.current = true
     setActiveSharedTab(null)
     setIsLobbyOpen(true)
     onOpenRoomHome()
@@ -2461,6 +2572,14 @@ export function SnapLinkStage({
   }, [onOpenRoomHome, workbenchTextRequestId])
 
   const handleShowWorkbenchSettings = () => {
+    handledInitialDesktopRoomOpenRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('dd_tool_return_mode')
+      } catch {
+        // ignore
+      }
+    }
     handleBackToLobby()
     setDeviceNameDraft(deviceName)
     setDeviceNameError(null)
@@ -2468,6 +2587,14 @@ export function SnapLinkStage({
   }
 
   const handleShowWorkbenchWorkshop = () => {
+    handledInitialDesktopRoomOpenRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('dd_tool_return_mode')
+      } catch {
+        // ignore
+      }
+    }
     handleBackToLobby()
     setWorkbenchMode('workshop')
   }
@@ -3933,7 +4060,7 @@ export function SnapLinkStage({
           <i className={isSelectedRoomReachable ? 'is-online' : ''} />
         </span>
         <strong>{emptyStateTitle}</strong>
-        <p>{fileConversationEmptyState}</p>
+        {fileConversationEmptyState ? <p>{fileConversationEmptyState}</p> : null}
         <div className="dd-snaplink__room-empty-actions">
           <button type="button" onClick={() => inputRef.current?.focus()}>
             发消息
@@ -4241,11 +4368,7 @@ export function SnapLinkStage({
 
   const renderDesktopConversationSideList = () => {
     const normalizedQuery = conversationSearchQuery.trim().toLowerCase()
-    const assistantRoom = lobbyRoomListItems.find((room) => room.isAssistant)
-    const buildRoomHref = (roomId: string) => `/text?room=${encodeURIComponent(roomId)}`
-    const shouldShowAssistant =
-      normalizedQuery.length === 0 ||
-      'dd助手 ai 辅助 总结 传输 说明'.includes(normalizedQuery)
+    const buildRoomHref = (roomId: string) => `/?room=${encodeURIComponent(roomId)}`
     const visibleLobbyRooms = lobbyRoomListItems.filter((room) => !room.isAssistant)
     const privateConversationPeerIds = new Set(
       visibleLobbyRooms
@@ -4272,7 +4395,7 @@ export function SnapLinkStage({
       (device) => !privateConversationPeerIds.has(device.deviceId),
     )
     const filteredDevices = normalizedQuery.length === 0
-      ? firstContactDevices
+      ? []
       : firstContactDevices.filter((device) => {
           const searchableText = [
             device.deviceName,
@@ -4284,74 +4407,73 @@ export function SnapLinkStage({
 
           return searchableText.includes(normalizedQuery)
         })
-    const hasSearchResult = shouldShowAssistant || filteredRooms.length > 0 || filteredDevices.length > 0
+    const hasSearchResult = filteredRooms.length > 0 || filteredDevices.length > 0
 
     return (
       <aside className="dd-snaplink__conversation-side" aria-label="消息列表">
         <div className="dd-snaplink__conversation-side-head">
           <span>
             <strong>消息</strong>
-            <small>
-              {lobbyRoomListItems.length.toString()} 个会话 ·{' '}
-              {workbenchOnlineDeviceCount > 0
-                ? `${workbenchOnlineDeviceCount.toString()} 台对端在线`
-                : '暂无对端在线'}
-            </small>
           </span>
           <div className="dd-snaplink__conversation-side-head-actions">
             <button
               type="button"
               className={isRoomJoinOpen ? 'is-active' : ''}
               aria-expanded={isRoomJoinOpen}
+              title="输入短码加入特定房间"
               onClick={() => {
                 setIsRoomJoinOpen((current) => !current)
                 setRoomJoinError(null)
               }}
             >
-              加入房间
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setConversationSearchQuery('')
-                handleShowWorkbenchRooms()
-              }}
-            >
-              全部
+              + 加入房间
             </button>
           </div>
         </div>
-        {isRoomJoinOpen ? (
-          <form
-            className="dd-snaplink__room-join-card"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!roomJoinDraft.trim()) {
-                setRoomJoinError('请输入房间短码')
-                return
-              }
-              setIsRoomJoinOpen(false)
-              handleJoinRoomFromWorkbench()
-            }}
-          >
-            <label>
-              <span>加入房间</span>
-              <input
-                value={roomJoinDraft}
-                placeholder="输入房间短码"
-                autoCapitalize="characters"
-                spellCheck={false}
-                aria-invalid={Boolean(roomJoinError)}
-                onChange={(event) => {
-                  setRoomJoinDraft(normalizeRoomJoinCode(event.target.value))
-                  setRoomJoinError(null)
-                }}
-              />
-            </label>
-            <button type="submit" disabled={!roomJoinDraft.trim()}>加入</button>
-            {roomJoinError ? <p>{roomJoinError}</p> : null}
-          </form>
-        ) : null}
+        <div
+          className={`dd-snaplink__room-join-wrapper${isRoomJoinOpen ? ' is-open' : ''}`}
+          aria-hidden={!isRoomJoinOpen}
+        >
+          <div className="dd-snaplink__room-join-inner">
+            <form
+              className="dd-snaplink__room-join-card"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!roomJoinDraft.trim()) {
+                  setRoomJoinError('请输入房间短码')
+                  return
+                }
+                setRoomJoinError(null)
+                handleJoinRoomFromWorkbench()
+              }}
+            >
+              <label>
+                <span>加入房间</span>
+                <input
+                  ref={roomJoinInputRef}
+                  value={roomJoinDraft}
+                  placeholder="输入房间短码"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  tabIndex={isRoomJoinOpen ? 0 : -1}
+                  aria-invalid={Boolean(roomJoinError)}
+                  onChange={(event) => {
+                    setRoomJoinDraft(normalizeRoomJoinCode(event.target.value))
+                    setRoomJoinError(null)
+                  }}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={!roomJoinDraft.trim()}
+                tabIndex={isRoomJoinOpen ? 0 : -1}
+              >
+                加入
+              </button>
+              {roomJoinError ? <p>{roomJoinError}</p> : null}
+            </form>
+          </div>
+        </div>
         <label className="dd-snaplink__conversation-side-search">
           <span className="sr-only">搜索会话</span>
           <Search size={15} strokeWidth={1.9} aria-hidden="true" />
@@ -4371,53 +4493,7 @@ export function SnapLinkStage({
           ) : null}
         </label>
         <div className="dd-snaplink__conversation-side-list">
-          {shouldShowAssistant ? (
-            <a
-              href={assistantRoom ? buildRoomHref(assistantRoom.roomId) : '/chat'}
-              className={[
-                'dd-snaplink__conversation-row',
-                'is-assistant',
-                assistantRoom?.roomId === selectedRoomId ? 'is-active' : '',
-              ].filter(Boolean).join(' ')}
-              aria-current={assistantRoom?.roomId === selectedRoomId ? 'page' : undefined}
-              onClick={(event) => {
-                if (assistantRoom) {
-                  event.preventDefault()
-                  handleRoomSelection(assistantRoom.roomId)
-                  return
-                }
 
-                handleOpenAiChat()
-              }}
-              title={aiAvailability === 'available' ? '打开 DD助手' : aiAvailabilityMessage}
-            >
-              <span className="dd-snaplink__conversation-avatar is-assistant" aria-hidden="true">
-                <Bot size={17} strokeWidth={1.9} />
-              </span>
-              <span className="dd-snaplink__conversation-main">
-                <span className="dd-snaplink__conversation-title">
-                  <strong>DD助手</strong>
-                  <em>
-                    {aiAvailability === 'available'
-                      ? '置顶'
-                      : aiAvailability === 'checking'
-                        ? '检查中'
-                        : '未配置'}
-                  </em>
-                </span>
-                <small>
-                  {assistantRoom?.previewText || (
-                    aiAvailability === 'available'
-                      ? '总结传输记录，生成文件说明'
-                      : aiAvailabilityMessage || 'AI 服务暂不可用'
-                  )}
-                </small>
-              </span>
-              <span className="dd-snaplink__conversation-meta">
-                {assistantRoom?.updatedAtLabel || '刚刚'}
-              </span>
-            </a>
-          ) : null}
           {filteredRooms.map((room) => {
             const isActive = room.roomId === selectedRoomId
 
@@ -4450,7 +4526,6 @@ export function SnapLinkStage({
                 <span className="dd-snaplink__conversation-main">
                   <span className="dd-snaplink__conversation-title">
                     <strong>{room.title}</strong>
-                    <em>{room.isPublic ? '公共' : '房间'}</em>
                     {room.pinned ? <em>置顶</em> : null}
                   </span>
                   <small>{room.previewText || '暂无消息'}</small>
@@ -4459,9 +4534,7 @@ export function SnapLinkStage({
                   <small>{room.updatedAtLabel}</small>
                   {room.unreadCount > 0 ? (
                     <strong>{room.unreadCount > 99 ? '99+' : room.unreadCount}</strong>
-                  ) : (
-                    <em>{resolveRoomPeerPresenceLabel(room)}</em>
-                  )}
+                  ) : null}
                 </span>
               </a>
             )
@@ -4489,7 +4562,6 @@ export function SnapLinkStage({
                 <span className="dd-snaplink__conversation-main">
                   <span className="dd-snaplink__conversation-title">
                     <strong>{device.deviceName}</strong>
-                    <em>设备</em>
                   </span>
                   <small>{device.scopeLabel || device.platform || '附近设备'} · {device.lastSeenLabel || '在线'}</small>
                 </span>
@@ -4502,7 +4574,7 @@ export function SnapLinkStage({
           })}
           {!hasSearchResult ? (
             <div className="dd-snaplink__conversation-empty">
-              没有找到相关会话
+              {normalizedQuery.length > 0 ? '没有找到相关会话' : '正在同步会话列表...'}
             </div>
           ) : null}
         </div>
@@ -4517,13 +4589,10 @@ export function SnapLinkStage({
         <section className="dd-snaplink__messages-empty-chat dd-snaplink__messages-hub" aria-label="极速直连中枢">
           <div className="dd-snaplink__messages-hub-badge">
             <ShieldCheck size={13} strokeWidth={2.4} aria-hidden="true" />
-            <span>局域网千兆直传 · 端到端物理加密</span>
+            <span>局域网加密直连</span>
           </div>
 
           <strong className="dd-snaplink__messages-hub-title">开启点对点极速流转</strong>
-          <p className="dd-snaplink__messages-hub-desc">
-            免云端存储 · 零服务器中转 · 文件、文本与剪贴板全端互通。选择左侧会话，或点击下方快捷入口开启直连。
-          </p>
 
           <div className="dd-snaplink__messages-hub-actions">
             <button
@@ -4535,8 +4604,7 @@ export function SnapLinkStage({
                 <FileUp size={20} strokeWidth={2.2} />
               </div>
               <div className="dd-snaplink__messages-hub-btn-text">
-                <strong>发送大文件</strong>
-                <small>点击选择或直接拖入</small>
+                <strong>发送文件</strong>
               </div>
             </button>
 
@@ -4549,8 +4617,7 @@ export function SnapLinkStage({
                 <Radio size={20} strokeWidth={2.2} />
               </div>
               <div className="dd-snaplink__messages-hub-btn-text">
-                <strong>发现附近设备</strong>
-                <small>局域网同频雷达探测</small>
+                <strong>附近设备</strong>
               </div>
             </button>
 
@@ -4563,15 +4630,14 @@ export function SnapLinkStage({
                 <Bot size={20} strokeWidth={2.2} />
               </div>
               <div className="dd-snaplink__messages-hub-btn-text">
-                <strong>DD 智能助手</strong>
-                <small>多模型深度思考问答</small>
+                <strong>DD助手</strong>
               </div>
             </button>
           </div>
 
           <div className="dd-snaplink__messages-hub-drop-tip">
             <Upload size={14} strokeWidth={2} aria-hidden="true" />
-            <span>支持拖入任意大小文件、压缩包或相册图片立即发送</span>
+            <span>拖拽文件至此直接发送</span>
           </div>
         </section>
       </div>
@@ -4725,9 +4791,38 @@ export function SnapLinkStage({
             下载
           </button>
           {canRecallFile ? (
-            <button type="button" onClick={() => void Promise.resolve(onRecallFile(file.historyId))}>
-              撤回
-            </button>
+            confirmingHistoryFileRecallId === file.historyId ? (
+              <span className="dd-snaplink__file-recall-confirm-group" role="group" aria-label={`确认撤回 ${file.fileName}`}>
+                <span className="dd-snaplink__file-recall-confirm-text">确定？</span>
+                <button
+                  type="button"
+                  className="is-danger is-confirm"
+                  onClick={() => {
+                    setConfirmingHistoryFileRecallId(null)
+                    void Promise.resolve(onRecallFile(file.historyId))
+                  }}
+                  aria-label="确认撤回"
+                >
+                  确认
+                </button>
+                <button
+                  type="button"
+                  className="is-cancel"
+                  onClick={() => setConfirmingHistoryFileRecallId(null)}
+                  aria-label="取消撤回"
+                >
+                  取消
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="is-danger"
+                onClick={() => setConfirmingHistoryFileRecallId(file.historyId)}
+              >
+                撤回
+              </button>
+            )
           ) : null}
         </div>
       </article>
@@ -4792,9 +4887,38 @@ export function SnapLinkStage({
             再发一次
           </button>
           {canRecallHistoryText ? (
-            <button type="button" onClick={() => void Promise.resolve(onRecallText(entry.historyId))}>
-              撤回
-            </button>
+            confirmingHistoryTextRecallId === entry.historyId ? (
+              <span className="dd-snaplink__file-recall-confirm-group" role="group" aria-label="确认撤回文本">
+                <span className="dd-snaplink__file-recall-confirm-text">确定？</span>
+                <button
+                  type="button"
+                  className="is-danger is-confirm"
+                  onClick={() => {
+                    setConfirmingHistoryTextRecallId(null)
+                    void Promise.resolve(onRecallText(entry.historyId))
+                  }}
+                  aria-label="确认撤回"
+                >
+                  确认
+                </button>
+                <button
+                  type="button"
+                  className="is-cancel"
+                  onClick={() => setConfirmingHistoryTextRecallId(null)}
+                  aria-label="取消撤回"
+                >
+                  取消
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="is-danger"
+                onClick={() => setConfirmingHistoryTextRecallId(entry.historyId)}
+              >
+                撤回
+              </button>
+            )
           ) : null}
         </div>
       </article>
@@ -4941,12 +5065,6 @@ export function SnapLinkStage({
       }}
       onThemeModeChange={(nextThemeMode) => {
         updateWorkbenchThemeMode(nextThemeMode)
-        if (nextThemeMode === 'system') {
-          showSettingsFeedback('已跟随系统外观')
-          return
-        }
-
-        showSettingsFeedback(nextThemeMode === 'dark' ? '已切换深色模式' : '已切换浅色模式')
       }}
       onOpenCustomTheme={toggleThemePanel}
       onOpenAdmin={onOpenAdminView}
@@ -5049,6 +5167,8 @@ export function SnapLinkStage({
           onSendFile={handleWorkbenchDeviceSendFile}
           onPairByCode={onPairByShortCode}
           onTrustDevice={handleWorkbenchDeviceTrust}
+          myDeviceName={deviceName}
+          myShortCode={deviceShortCode}
         />
       )
     }
@@ -5222,29 +5342,14 @@ export function SnapLinkStage({
       ].filter(Boolean).join(' ')}
       aria-label="DD直连文件互传工作台"
     >
-      <input
-        ref={workbenchFileInputRef}
-        id={`${fileInputId}-workbench`}
-        type="file"
-        multiple
-        hidden
-        onChange={handleWorkbenchDirectFileInputChange}
-      />
-      <input
-        ref={workbenchCameraInputRef}
-        id={`${fileInputId}-workbench-camera`}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={handleWorkbenchDirectFileInputChange}
-      />
       <SidebarNav
+        key="snaplink-main-sidebar-rail"
         deviceName={deviceName}
         avatarDataUrl={deviceAvatarDataUrl}
         activeMode={workbenchMode}
         activeTransferCount={workbenchActiveTransferCount}
         onAvatarClick={openAvatarPicker}
+        onShowHome={handleShowWorkbenchHome}
         onShowNearby={handleShowWorkbenchNearby}
         onShowRooms={handleShowWorkbenchRooms}
         onShowQueue={handleShowWorkbenchQueue}
@@ -5296,7 +5401,7 @@ export function SnapLinkStage({
   const renderToolWorkbenchView = (content: ReactNode, tool: 'ai-chat' | 'image' | 'command') => {
     const isAiTool = tool === 'ai-chat'
     const isImageTool = tool === 'image'
-    const toolTitle = isAiTool ? 'DD助手' : isImageTool ? '图片工具' : '命令行'
+    const toolTitle = isAiTool ? 'DD助手' : isImageTool ? 'AI 生图' : '命令行'
     const toolSubtitle = isAiTool
       ? aiAvailability === 'available'
         ? '本地优先 · 仅发送你明确提交的内容'
@@ -5307,7 +5412,7 @@ export function SnapLinkStage({
     const toolLabel = isAiTool
       ? 'DD直连 DD助手会话'
       : isImageTool
-        ? 'DD直连图片工具'
+        ? 'DD直连 AI 生图'
         : 'DD直连 命令行'
     const toolSideNote = isAiTool
       ? aiAvailability === 'available'
@@ -5373,12 +5478,14 @@ export function SnapLinkStage({
     return (
       <section className={`dd-snaplink__tool-workbench is-${tool}`} aria-label={toolLabel}>
         <SidebarNav
+          key="snaplink-main-sidebar-rail"
           deviceName={deviceName}
           avatarDataUrl={deviceAvatarDataUrl}
           activeMode={isAiTool ? 'rooms' : undefined}
           activeTool={isAiTool ? undefined : tool}
           activeTransferCount={workbenchActiveTransferCount}
           onAvatarClick={openAvatarPicker}
+          onShowHome={handleShowWorkbenchHome}
           onShowNearby={handleShowWorkbenchNearby}
           onShowRooms={handleShowWorkbenchRooms}
           onShowQueue={handleShowWorkbenchQueue}
@@ -5499,6 +5606,23 @@ export function SnapLinkStage({
         hidden
         onChange={handleAvatarFileSelection}
       />
+      <input
+        ref={workbenchFileInputRef}
+        id={`${fileInputId}-workbench`}
+        type="file"
+        multiple
+        hidden
+        onChange={handleWorkbenchDirectFileInputChange}
+      />
+      <input
+        ref={workbenchCameraInputRef}
+        id={`${fileInputId}-workbench-camera`}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={handleWorkbenchDirectFileInputChange}
+      />
       <section
         className={snapLinkShellClassName}
         style={themeStyle}
@@ -5539,11 +5663,13 @@ export function SnapLinkStage({
               aria-label="DD直连房间会话工作台"
             >
               <SidebarNav
+                key="snaplink-main-sidebar-rail"
                 deviceName={deviceName}
                 avatarDataUrl={deviceAvatarDataUrl}
                 activeMode="rooms"
                 activeTransferCount={workbenchActiveTransferCount}
                 onAvatarClick={openAvatarPicker}
+                onShowHome={handleShowWorkbenchHome}
                 onShowNearby={handleShowWorkbenchNearby}
                 onShowRooms={handleShowWorkbenchRooms}
                 onShowQueue={handleShowWorkbenchQueue}
@@ -5766,7 +5892,16 @@ export function SnapLinkStage({
                           </div>
                           {renderedEntry.fromSelf ? (
                             <span className={avatarClassName} style={selfAvatarStyle} aria-hidden="true">
-                              {selfAvatarStyle ? null : actorIdentity.avatarLabel}
+                              {shouldUseSelfAvatarImage ? (
+                                <img
+                                  src={deviceAvatarDataUrl!}
+                                  alt=""
+                                  className="dd-snaplink__avatar-img"
+                                  draggable={false}
+                                />
+                              ) : (
+                                actorIdentity.avatarLabel
+                              )}
                             </span>
                           ) : null}
                         </div>
@@ -5954,7 +6089,7 @@ export function SnapLinkStage({
               <span className="dd-ocr-panel__title-icon">
                 <ScanText size={18} strokeWidth={2} />
               </span>
-              <strong>图片文字识别 (OCR)</strong>
+              <strong>文字识别 (OCR)</strong>
               <span className={`dd-ocr-panel__status is-${ocrStatus}`} aria-live="polite">
                 {getSnapLinkOcrStatusLabel(ocrStatus)}
               </span>

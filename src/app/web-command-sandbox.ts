@@ -95,6 +95,130 @@ export const webCommandDefaultSources: Record<WebCommandLanguage, string> = {
   ].join('\n'),
 }
 
+export type WebCommandPreset = {
+  id: string
+  label: string
+  source: string
+  description?: string
+  stdin?: string
+}
+
+export const webCommandPresets: Record<WebCommandLanguage, WebCommandPreset[]> = {
+  python: [
+    { id: 'default', label: '基础示例', description: '简单的打印与四则运算', source: webCommandDefaultSources.python },
+    {
+      id: 'fibonacci',
+      label: '斐波那契计算',
+      description: '生成前 10 项斐波那契数列',
+      source: [
+        '# 计算斐波那契数列',
+        'def fib(n):',
+        '    seq = [0, 1]',
+        '    for _ in range(2, n):',
+        '        seq.append(seq[-1] + seq[-2])',
+        '    return seq[:n]',
+        '',
+        'print("前 10 项斐波那契数:")',
+        'print(fib(10))',
+      ].join('\n'),
+    },
+    {
+      id: 'json',
+      label: 'JSON 数据处理',
+      description: '格式化输出结构化字典数据',
+      source: [
+        'import json',
+        '',
+        'data = {',
+        '    "app": "DD直连",',
+        '    "version": "1.0.0",',
+        '    "tools": ["命令行沙箱", "AI助手", "文件互传"],',
+        '    "status": "ready"',
+        '}',
+        '',
+        'print(json.dumps(data, ensure_ascii=False, indent=2))',
+      ].join('\n'),
+    },
+  ],
+  c: [
+    { id: 'default', label: '基础示例', description: '基础打印与数值运算', source: webCommandDefaultSources.c },
+    {
+      id: 'sort',
+      label: '数组冒泡排序',
+      description: '整数数组升序排列算法',
+      source: [
+        '#include <stdio.h>',
+        '',
+        'int main(void) {',
+        '  int nums[] = {5, 2, 8, 1, 9};',
+        '  int n = 5;',
+        '  for (int i = 0; i < n - 1; i++) {',
+        '    for (int j = 0; j < n - i - 1; j++) {',
+        '      if (nums[j] > nums[j + 1]) {',
+        '        int t = nums[j]; nums[j] = nums[j + 1]; nums[j + 1] = t;',
+        '      }',
+        '    }',
+        '  }',
+        '  printf("排序结果: ");',
+        '  for (int i = 0; i < n; i++) printf("%d ", nums[i]);',
+        '  printf("\\n");',
+        '  return 0;',
+        '}',
+      ].join('\n'),
+    },
+  ],
+  java: [
+    { id: 'default', label: 'HashSet 遍历', description: '集合去重与迭代器遍历', source: webCommandDefaultSources.java },
+    {
+      id: 'stream',
+      label: 'Stream 集合处理',
+      description: 'List 转换与 Stream 流式操作',
+      source: [
+        'import java.util.List;',
+        'import java.util.stream.Collectors;',
+        '',
+        'public class StreamDemo {',
+        '  public static void main(String[] args) {',
+        '    List<String> items = List.of("DD直连", "快传", "点对点加密", "无服务器");',
+        '    List<String> result = items.stream()',
+        '      .map(s -> "★ " + s)',
+        '      .collect(Collectors.toList());',
+        '    System.out.println("处理结果：");',
+        '    result.forEach(System.out::println);',
+        '  }',
+        '}',
+      ].join('\n'),
+    },
+  ],
+  plantuml: [
+    { id: 'default', label: '交互时序图', description: '用户、前端与服务端交互时序', source: webCommandDefaultSources.plantuml },
+    {
+      id: 'architecture',
+      label: '组件架构图',
+      description: 'DD直连系统组件架构模型',
+      source: [
+        '@startuml',
+        'skinparam componentStyle rectangle',
+        '',
+        'package "前端应用" {',
+        '  [Web UI 界面] as UI',
+        '  [P2P 数据通道] as Channel',
+        '}',
+        '',
+        'package "后端服务" {',
+        '  [WebSocket 信令] as Signaling',
+        '  [代码沙箱引擎] as Engine',
+        '}',
+        '',
+        'UI -> Channel : 局域网直连传输',
+        'Channel <..> Signaling : 建立连接',
+        'UI --> Engine : 执行代码与图表渲染',
+        '@enduml',
+      ].join('\n'),
+    },
+  ],
+}
+
 const securityRules: Record<WebCommandLanguage, SecurityRule[]> = {
   python: [
     {

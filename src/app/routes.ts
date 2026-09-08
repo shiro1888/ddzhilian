@@ -3,14 +3,14 @@ import type { NavView } from './types'
 export const DEFAULT_VIEW: NavView = 'text'
 
 export const viewPaths: Record<NavView, string> = {
-  text: '/text',
+  text: '/',
   chat: '/chat',
   image: '/image',
   admin: '/admin',
   command: '/web-command',
 }
 
-const legacyTextPaths = new Set(['/', '/connect', '/send', '/receive', '/sessions'])
+const legacyTextPaths = new Set(['/text', '/connect', '/send', '/receive', '/sessions'])
 
 export function pathForView(view: NavView) {
   return viewPaths[view]

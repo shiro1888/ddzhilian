@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 import {
+  Check,
   ChevronLeft,
   Copy,
+  FolderOpen,
   MoreHorizontal,
   QrCode,
 } from 'lucide-react'
@@ -37,7 +39,6 @@ export function RoomHeader({
   shareSubtitle,
   copyLabel = '复制房间码',
   copiedLabel = '已复制',
-  technicalNote = '技术信息：连接方式与历史留存取决于房间类型',
   peerLabel,
   peerTitle,
   connectionDetails = [],
@@ -118,7 +119,7 @@ export function RoomHeader({
   }, [qrPayload])
 
   return (
-    <div className="dd-snaplink__room-head">
+    <div className={`dd-snaplink__room-head${isMoreOpen ? ' is-more-open' : ''}`}>
       <div className="dd-snaplink__room-head-main">
         <div className="dd-snaplink__room-left">
           {onBack ? (
@@ -151,56 +152,55 @@ export function RoomHeader({
               <MoreHorizontal size={20} strokeWidth={2.2} aria-hidden="true" />
             </button>
             {isMoreOpen ? (
-              <div className="dd-snaplink__room-more-panel" role="dialog" aria-label="更多功能">
-                <div className="dd-snaplink__room-more-hero">
-                  <span className="dd-snaplink__room-more-code-card">
-                    {qrPayload && qrDataUrl ? (
-                      <img src={qrDataUrl} alt={`房间码 ${displayRoomCode || '当前会话'} 的二维码`} />
-                    ) : (
-                      <QrCode size={22} strokeWidth={2.2} aria-hidden="true" />
-                    )}
-                  </span>
-                  <span>
-                    <strong>{peerTitle || peerLabel}</strong>
-                    <small>{shareSubtitle ?? (displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel)}</small>
-                  </span>
-                </div>
-                <div className="dd-snaplink__room-more-primary">
-                  <button type="button" className="is-primary" onClick={onCopyRoomId}>
-                    <Copy size={16} strokeWidth={2.2} aria-hidden="true" />
-                    {isCopied ? copiedLabel : copyLabel}
-                  </button>
-                  {onOpenSharedContent ? (
+              <>
+                <div
+                  className="dd-snaplink__room-more-backdrop"
+                  onClick={() => setIsMoreOpen(false)}
+                  aria-hidden="true"
+                />
+                <div className="dd-snaplink__room-more-panel" role="dialog" aria-label="更多功能">
+                  <div className="dd-snaplink__room-more-hero">
+                    <span className="dd-snaplink__room-more-code-card">
+                      {qrPayload && qrDataUrl ? (
+                        <img src={qrDataUrl} alt={`房间码 ${displayRoomCode || '当前会话'} 的二维码`} />
+                      ) : (
+                        <QrCode size={20} strokeWidth={2} aria-hidden="true" />
+                      )}
+                    </span>
+                    <div className="dd-snaplink__room-more-hero-info">
+                      <strong>{peerTitle || peerLabel}</strong>
+                      <small>{shareSubtitle ?? (displayRoomCode ? `房间码 ${displayRoomCode}` : peerLabel)}</small>
+                    </div>
+                  </div>
+                  <div className="dd-snaplink__room-more-primary">
                     <button
                       type="button"
-                      className="dd-snaplink__room-more-shared"
-                      onClick={() => {
-                        setIsMoreOpen(false)
-                        onOpenSharedContent()
-                      }}
+                      className={`dd-snaplink__room-more-btn is-copy${isCopied ? ' is-copied' : ''}`}
+                      onClick={onCopyRoomId}
                     >
-                      共享内容
+                      {isCopied ? (
+                        <Check size={16} strokeWidth={2.4} aria-hidden="true" />
+                      ) : (
+                        <Copy size={16} strokeWidth={2} aria-hidden="true" />
+                      )}
+                      <span>{isCopied ? copiedLabel : copyLabel}</span>
                     </button>
-                  ) : null}
-                </div>
-                {detailRows.length > 0 ? (
-                  <div className="dd-snaplink__room-more-security" aria-label="连接与安全">
-                    <strong>详情</strong>
-                    <div>
-                      {detailRows.map((item) => (
-                        <span
-                          key={item.id}
-                          className={item.tone ? `is-${item.tone}` : undefined}
-                        >
-                          <small>{item.label}</small>
-                          <em>{item.value}</em>
-                        </span>
-                      ))}
-                    </div>
-                    {technicalNote ? <p>{technicalNote}</p> : null}
+                    {onOpenSharedContent ? (
+                      <button
+                        type="button"
+                        className="dd-snaplink__room-more-btn dd-snaplink__room-more-shared is-shared"
+                        onClick={() => {
+                          setIsMoreOpen(false)
+                          onOpenSharedContent()
+                        }}
+                      >
+                        <FolderOpen size={16} strokeWidth={2} aria-hidden="true" />
+                        <span>共享内容</span>
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
+                </div>
+              </>
             ) : null}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Bot, Search, Users } from 'lucide-react'
+import { Search, Users } from 'lucide-react'
 
 import type { OnlineDeviceListItem, RoomListItem } from '../types'
 import { EmptyState } from './EmptyState'
@@ -41,7 +41,6 @@ export function RoomsPage({
   onJoinRoomSubmit,
   onOpenRoom,
   onToggleRoomPinned,
-  onOpenAssistant,
   deviceConversations = [],
   onOpenDeviceConversation,
 }: RoomsPageProps) {
@@ -79,16 +78,9 @@ export function RoomsPage({
       ].filter(Boolean).join(' ').toLowerCase().includes(normalizedConversationQuery),
     )
   }, [deviceConversations, normalizedConversationQuery])
-  const shouldShowAssistant = Boolean(
-    onOpenAssistant &&
-    (
-      !normalizedConversationQuery ||
-      'dd助手 ai 辅助 总结 传输 说明 文件 生成'.includes(normalizedConversationQuery)
-    ),
-  )
   const hasDeviceConversations = filteredDeviceConversations.length > 0 && Boolean(onOpenDeviceConversation)
-  const hasRawConversationRows = rooms.length > 0 || Boolean(onOpenAssistant) || (deviceConversations.length > 0 && Boolean(onOpenDeviceConversation))
-  const hasConversationRows = filteredRooms.length > 0 || shouldShowAssistant || hasDeviceConversations
+  const hasRawConversationRows = rooms.length > 0 || (deviceConversations.length > 0 && Boolean(onOpenDeviceConversation))
+  const hasConversationRows = filteredRooms.length > 0 || hasDeviceConversations
 
   return (
     <section
@@ -184,30 +176,6 @@ export function RoomsPage({
       ) : null}
       {hasConversationRows ? (
         <div className="dd-snaplink__workbench-room-list">
-          {shouldShowAssistant ? (
-            <article className="dd-snaplink__workbench-room is-assistant is-pinned has-avatar">
-              <button
-                type="button"
-                className="dd-snaplink__workbench-room-open"
-                onClick={onOpenAssistant}
-                title="打开 DD助手"
-              >
-                <span className="dd-snaplink__workbench-room-avatar is-assistant" aria-hidden="true">
-                  <Bot size={18} strokeWidth={1.9} />
-                </span>
-                <span className="dd-snaplink__workbench-room-main">
-                  <span className="dd-snaplink__workbench-room-title">
-                    <strong>DD助手</strong>
-                    <em>置顶</em>
-                  </span>
-                  <span className="dd-snaplink__workbench-room-preview">总结传输记录，生成文件说明</span>
-                </span>
-                <span className="dd-snaplink__workbench-room-side">
-                  <small>刚刚</small>
-                </span>
-              </button>
-            </article>
-          ) : null}
           {filteredRooms.map((room) => (
             <RoomCard
               key={room.roomId}
@@ -232,7 +200,6 @@ export function RoomsPage({
                     <span className="dd-snaplink__workbench-room-main">
                       <span className="dd-snaplink__workbench-room-title">
                         <strong>{device.deviceName}</strong>
-                        <em>设备</em>
                       </span>
                       <span className="dd-snaplink__workbench-room-preview">
                         {device.scopeLabel || device.platform || '附近设备'} · {device.lastSeenLabel || '在线'}

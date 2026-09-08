@@ -31,7 +31,7 @@ type ConfirmViewState =
     }
 
 const authConfirmLandingPath = '/auth/confirm'
-const authPostConfirmPath = '/text'
+const authPostConfirmPath = '/'
 
 function appendForwardedParam(url: URL, params: URLSearchParams, name: string) {
   const value = params.get(name)
@@ -263,7 +263,7 @@ export function AuthConfirmPage() {
     <main className="dd-auth-confirm" aria-live="polite">
       <section className="dd-auth-confirm__panel" aria-labelledby="auth-confirm-title">
         <div className="dd-auth-confirm__brand">
-          <img src="/logo-dd-link.svg" alt="" />
+          <img src="/logo-dd-link.png" alt="" />
           <span>ddzhilian</span>
         </div>
 
@@ -288,7 +288,7 @@ export function AuthConfirmPage() {
               立即继续
             </a>
           ) : null}
-          <a className="dd-auth-confirm__secondary" href="/text">
+          <a className="dd-auth-confirm__secondary" href="/">
             前往登录
           </a>
           <a className="dd-auth-confirm__link" href="/">

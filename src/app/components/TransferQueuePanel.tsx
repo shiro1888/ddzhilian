@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { FileConversationEntry } from '../types'
 
@@ -26,10 +27,46 @@ export function TransferQueuePanel({
   onToggleDesktopCollapsed,
   onShowAllTransfers,
 }: TransferQueuePanelProps) {
-  const visibleEntries = entries.filter((entry) => entry.tone !== 'completed')
+  const [recentlyCompletedIds, setRecentlyCompletedIds] = useState<string[]>([])
+  const prevEntryTonesRef = useRef<Map<string, string>>(new Map())
+  const timersRef = useRef<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    const prevTones = prevEntryTonesRef.current
+    const currentTones = new Map<string, string>()
+
+    entries.forEach((entry) => {
+      currentTones.set(entry.id, entry.tone)
+      const prevTone = prevTones.get(entry.id)
+      if (entry.tone === 'completed' && prevTone && prevTone !== 'completed') {
+        setRecentlyCompletedIds((current) => Array.from(new Set([...current, entry.id])))
+        if (timersRef.current.has(entry.id)) {
+          window.clearTimeout(timersRef.current.get(entry.id)!)
+        }
+        const timerId = window.setTimeout(() => {
+          setRecentlyCompletedIds((current) => current.filter((id) => id !== entry.id))
+          timersRef.current.delete(entry.id)
+        }, 2500)
+        timersRef.current.set(entry.id, timerId)
+      }
+    })
+
+    prevEntryTonesRef.current = currentTones
+  }, [entries])
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      timersRef.current.clear()
+    }
+  }, [])
+
+  const visibleEntries = entries.filter(
+    (entry) => entry.tone !== 'completed' || recentlyCompletedIds.includes(entry.id),
+  )
   const desktopToggleLabel = isDesktopCollapsed ? '展开传输' : '收起传输'
   const hasIncomingNotice = Boolean(incomingNotice)
-  const hasTransferBadge = visibleEntries.length > 0
+  const hasTransferBadge = activeCount > 0
 
   if (visibleEntries.length === 0 && !hasIncomingNotice) {
     return null
@@ -55,13 +92,13 @@ export function TransferQueuePanel({
           onClick={onToggleDesktopCollapsed}
         >
           <span>传输</span>
-          {visibleEntries.length > 0 ? <em>{visibleEntries.length.toString()}</em> : null}
+          {activeCount > 0 ? <em>{activeCount.toString()}</em> : null}
         </button>
       ) : null}
       <div className="dd-snaplink__queue-head">
         <span>
-          <strong>正在传输</strong>
-          <em>{visibleEntries.length.toString()}</em>
+          <strong>{activeCount > 0 ? '正在传输' : '传输已完成'}</strong>
+          {activeCount > 0 ? <em>{activeCount.toString()}</em> : null}
         </span>
         <small>{activeCount.toString()} 进行中 · {completedCount.toString()} 已完成</small>
         {onToggleDesktopCollapsed ? (

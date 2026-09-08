@@ -145,8 +145,8 @@ Public rooms and regular rooms share the same temporary file-history rules:
 
 - Files are stored under `server/data/history/files/<roomId>/...`.
 - Metadata is stored in Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured; otherwise it falls back to `server/data/history/index.json`.
-- `HISTORY_RETENTION_MS` controls file-history retention. The default is 24 hours, capped at 24 hours.
-- `HISTORY_TEXT_RETENTION_MS` controls text-history retention. The default is 24 hours, capped at 24 hours.
+- `HISTORY_RETENTION_MS` controls file-history retention. The default is 7 days, capped at 7 days.
+- `HISTORY_TEXT_RETENTION_MS` controls text-history retention. The default is 7 days, capped at 7 days.
 - `HISTORY_MAX_BYTES` controls the per-room historical file cap. The default is 10 GiB.
 - `HISTORY_PAGE_SIZE` controls the room-history lazy-load page size. The default is 50.
 - Cleanup runs during startup, history reads, history writes, uploads, and scheduled maintenance.

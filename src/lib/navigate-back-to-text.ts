@@ -6,7 +6,9 @@ export function navigateBackToText() {
   const returnMode = sessionStorage.getItem('dd_tool_return_mode')
   if (returnMode) {
     sessionStorage.removeItem('dd_tool_return_mode')
-    window.location.href = `/text?mode=${encodeURIComponent(returnMode)}`
+    const targetUrl = `/?mode=${encodeURIComponent(returnMode)}`
+    window.history.pushState(window.history.state, '', targetUrl)
+    window.dispatchEvent(new PopStateEvent('popstate'))
     return
   }
 
@@ -15,5 +17,6 @@ export function navigateBackToText() {
     return
   }
 
-  window.location.href = '/text'
+  window.history.pushState(window.history.state, '', '/')
+  window.dispatchEvent(new PopStateEvent('popstate'))
 }

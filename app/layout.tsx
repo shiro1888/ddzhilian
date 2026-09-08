@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
-const siteUrl = new URL('https://dd.shiro1888.com')
-const siteTitle = 'DD直连 - 局域网文件与文本互传工具'
+const siteUrl = new URL(
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3000'
+    : (process.env.NEXT_PUBLIC_SITE_URL || 'https://dd.shiro1888.com')
+)
+const siteTitle = 'DD直连'
 const siteDescription =
   'DD直连是一款面向个人和团队的局域网文件传输、文本同步与 AI 助手工具，支持浏览器直接使用、房间对话、图片工具和命令分享。'
 
@@ -27,7 +31,7 @@ export const metadata: Metadata = {
   creator: 'DD直连团队',
   publisher: 'DD直连',
   category: 'productivity',
-  manifest: new URL('/manifest.json', siteUrl).toString(),
+  manifest: '/manifest.json',
   alternates: {
     canonical: siteUrl.toString(),
   },
@@ -68,9 +72,12 @@ export const metadata: Metadata = {
     'google-adsense-account': 'ca-pub-6789129259270412',
   },
   icons: {
-    icon: [{ url: new URL('/favicon.png', siteUrl).toString(), type: 'image/png' }],
-    shortcut: [{ url: new URL('/favicon.png', siteUrl).toString(), type: 'image/png' }],
-    apple: [{ url: new URL('/apple-touch-icon.png', siteUrl).toString(), sizes: '180x180', type: 'image/png' }],
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    shortcut: ['/favicon.ico'],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,
@@ -146,6 +153,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.png" type="image/png" sizes="128x128" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

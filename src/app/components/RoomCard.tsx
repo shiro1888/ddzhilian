@@ -39,7 +39,6 @@ export function RoomCard({ room, onOpen, onTogglePinned }: RoomCardProps) {
         <span className="dd-snaplink__workbench-room-main">
           <span className="dd-snaplink__workbench-room-title">
             <strong>{room.title}</strong>
-            <em>{room.isPublic ? '公共' : '房间'}</em>
             {room.pinned ? <em className="is-pinned">置顶</em> : null}
           </span>
           <span className="dd-snaplink__workbench-room-preview">{room.previewText || '暂无消息'}</span>

@@ -14,14 +14,14 @@
   --ink: #0f172a;
   --ink-soft: #475569;
   --muted: #64748b;
-  --brand: #2563eb;
-  --brand-strong: #1d4ed8;
-  --focus: rgba(37, 99, 235, 0.25);
-  --success: #2563eb;
-  --success-soft: rgba(37, 99, 235, 0.12);
+  --brand: #10b981;
+  --brand-strong: #059669;
+  --focus: rgba(16, 185, 129, 0.25);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.12);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.1);
-  --link: #2563eb;
+  --link: #059669;
 
   --shell-bg: #f8fafc;
   --sidebar-bg: #ffffff;
@@ -37,12 +37,12 @@
   --row-active: #e2e8f0;
   --input-border-soft: #cbd5e1;
   --input-bg: #ffffff;
-  --button-primary-bg: #2563eb;
+  --button-primary-bg: #10b981;
   --button-secondary-bg: #f1f5f9;
   --button-neutral-bg: #f8fafc;
   --button-contrast: #0a0e14;
-  --bubble-self: #2563eb;
-  --bubble-self-text: #0a0e14;
+  --bubble-self: #10b981;
+  --bubble-self-text: #ffffff;
   --bubble-peer: #ffffff;
   --bubble-peer-text: #0f172a;
   --cc-window: var(--shell-bg);
@@ -81,14 +81,14 @@
   --ink: #e6edf3;
   --ink-soft: #9db0c0;
   --muted: #7c8a9a;
-  --brand: #2563eb;
-  --brand-strong: #1d4ed8;
-  --focus: rgba(37, 99, 235, 0.3);
-  --success: #2563eb;
-  --success-soft: rgba(37, 99, 235, 0.15);
+  --brand: #10b981;
+  --brand-strong: #059669;
+  --focus: rgba(16, 185, 129, 0.3);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.15);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.15);
-  --link: #60a5fa;
+  --link: #34d399;
 
   --shell-bg: #07090d;
   --sidebar-bg: #0a0e14;
@@ -104,12 +104,12 @@
   --row-active: #253040;
   --input-border-soft: #2a3745;
   --input-bg: #121922;
-  --button-primary-bg: #2563eb;
+  --button-primary-bg: #10b981;
   --button-secondary-bg: #1a232e;
   --button-neutral-bg: #0f151d;
   --button-contrast: #07090d;
-  --bubble-self: #2563eb;
-  --bubble-self-text: #07090d;
+  --bubble-self: #10b981;
+  --bubble-self-text: #ffffff;
   --bubble-peer: #1a232e;
   --bubble-peer-text: #e6edf3;
 }
@@ -206,10 +206,10 @@ textarea:disabled {
 
 /* Branded text selection highlight */
 ::selection {
-  background: rgba(37, 99, 235, 0.22);
+  background: rgba(16, 185, 129, 0.22);
   color: inherit;
 }
 
 :root.dark ::selection {
-  background: rgba(129, 140, 248, 0.34);
+  background: rgba(16, 185, 129, 0.34);
 }

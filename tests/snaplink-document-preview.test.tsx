@@ -240,4 +240,65 @@ describe('SnapLinkStage document preview', () => {
     expect(dialog.querySelector('code')?.textContent).toContain('const enabled = true')
     expect(dialog.querySelector('script')).toBeNull()
   })
+
+  it('renders Markdown tables and structured rows in document preview', async () => {
+    const onOpenDocumentPreview = vi.fn().mockReturnValue({
+      kind: 'markdown',
+      fileName: 'results.md',
+      mimeType: 'text/markdown',
+      source: new Blob(
+        [
+          '# 测试报告\n\n',
+          '| Server | Status |\n',
+          '| --- | :---: |\n',
+          '| Node 1 | OK |\n',
+        ],
+        { type: 'text/markdown' },
+      ),
+      downloadUrl: 'blob:results-download',
+    })
+
+    render(
+      <SnapLinkStage
+        {...createBaseProps({
+          unifiedConversationEntries: [
+            {
+              id: 'file-entry-table',
+              entryType: 'file',
+              sessionId: 'session-1',
+              fromSelf: false,
+              senderName: 'Alice',
+              createdAt: '2026-06-22T08:00:00.000Z',
+              file: {
+                id: 'file-table',
+                kind: 'incoming',
+                fromSelf: false,
+                createdAt: '2026-06-22T08:00:00.000Z',
+                fileName: 'results.md',
+                fileSize: 256,
+                mimeType: 'text/markdown',
+                subtitle: 'Alice',
+                detail: '256 B · 已接收',
+                statusLabel: '已接收',
+                tone: 'completed',
+                progress: 1,
+                documentPreviewKind: 'markdown',
+                onOpenDocumentPreview,
+              },
+            },
+          ],
+        })}
+      />,
+    )
+
+    openSelectedConversation()
+    fireEvent.click(screen.getByRole('button', { name: '预览 results.md' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Markdown 预览' })
+    expect(dialog).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '测试报告' })).toBeInTheDocument()
+    expect(dialog.querySelector('table')).not.toBeNull()
+    expect(dialog.querySelector('th')?.textContent).toBe('Server')
+    expect(dialog.querySelector('td')?.textContent).toBe('Node 1')
+  })
 })

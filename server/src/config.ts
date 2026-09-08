@@ -9,7 +9,7 @@ const defaultAllowedOrigins = [
   'http://localhost:4173',
   'http://127.0.0.1:4173',
 ];
-const maxHistoryRetentionMs = 24 * 60 * 60 * 1000;
+const maxHistoryRetentionMs = 7 * 24 * 60 * 60 * 1000;
 const defaultCloudflareAiModels = [
   {
     id: '@cf/zai-org/glm-5.2',
@@ -614,7 +614,7 @@ export function loadConfig(): ServerConfig {
       ),
       requestTimeoutMs: readIntegerInRange('OCR_REQUEST_TIMEOUT_MS', 60_000, 1000, 120_000),
       maxUploadBytes: readIntegerInRange('OCR_MAX_UPLOAD_BYTES', 8 * 1024 * 1024, 1, 32 * 1024 * 1024),
-      historyRetentionMs: readIntegerInRange('OCR_HISTORY_RETENTION_MS', 24 * 60 * 60 * 1000, 60_000, maxHistoryRetentionMs),
+      historyRetentionMs: readIntegerInRange('OCR_HISTORY_RETENTION_MS', 7 * 24 * 60 * 60 * 1000, 60_000, maxHistoryRetentionMs),
       maxJobs: readIntegerInRange('OCR_MAX_JOBS', 200, 10, 1000),
     },
   };
