@@ -713,9 +713,31 @@ body,
   background-position: center !important;
 }
 
+.dd-snaplink__rail-avatar-img {
+  position: relative !important;
+  z-index: 1 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: inherit !important;
+  object-fit: cover !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
 .dd-snaplink__avatar {
   overflow: hidden !important;
   position: relative !important;
+}
+
+.dd-snaplink__sender-meta {
+  min-height: 16px !important;
+}
+
+/* Keep every visible avatar anchored to the first bubble/file-card edge. */
+.dd-snaplink__row > .dd-snaplink__avatar:not(.is-placeholder) {
+  align-self: flex-start !important;
+  margin-top: 21px !important;
 }
 
 .dd-snaplink__avatar.is-placeholder {

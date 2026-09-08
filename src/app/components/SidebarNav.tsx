@@ -4,7 +4,6 @@ import {
   Monitor,
   Sparkles,
 } from 'lucide-react'
-import type { CSSProperties } from 'react'
 
 export type SidebarNavMode = 'nearby' | 'rooms' | 'files' | 'transfers' | 'text' | 'history' | 'workshop' | 'settings'
 export type SidebarNavTool = 'ai-chat' | 'image' | 'command'
@@ -111,13 +110,21 @@ export function SidebarNav({
         <button
           type="button"
           className={`dd-snaplink__rail-avatar${avatarDataUrl ? ' has-image' : ''}${isMeActive ? ' is-active' : ''}`}
-          style={avatarDataUrl ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties : undefined}
           aria-label="我的"
           aria-pressed={isMeActive}
           title={`我的设置 · ${deviceName}`}
           onClick={onShowSettings}
         >
-          {avatarDataUrl ? null : <Monitor size={18} strokeWidth={1.8} aria-hidden="true" />}
+          {avatarDataUrl ? (
+            <img
+              src={avatarDataUrl}
+              alt=""
+              className="dd-snaplink__rail-avatar-img"
+              draggable={false}
+            />
+          ) : (
+            <Monitor size={18} strokeWidth={1.8} aria-hidden="true" />
+          )}
         </button>
         <span className="dd-snaplink__rail-avatar-status" title="本机在线" aria-hidden="true" />
       </div>
