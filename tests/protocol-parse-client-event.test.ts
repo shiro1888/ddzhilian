@@ -67,6 +67,35 @@ describe('parseClientEvent', () => {
     })
   })
 
+  it('accepts image avatars without a product-level size cap', () => {
+    const avatarDataUrl = `data:image/jpeg;base64,${'A'.repeat(256 * 1024)}`
+
+    expect(
+      parseClientEvent(
+        JSON.stringify({ type: 'update-settings', payload: { avatarDataUrl } }),
+      ),
+    ).toEqual({ type: 'update-settings', payload: { avatarDataUrl } })
+  })
+
+  it('rejects non-image and scriptable avatar sources', () => {
+    expect(
+      parseClientEvent(
+        JSON.stringify({
+          type: 'update-settings',
+          payload: { avatarDataUrl: 'https://example.com/avatar.jpg' },
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      parseClientEvent(
+        JSON.stringify({
+          type: 'update-settings',
+          payload: { avatarDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' },
+        }),
+      ),
+    ).toBeNull()
+  })
+
   it('accepts boolean preference updates, including sound effects', () => {
     expect(
       parseClientEvent(

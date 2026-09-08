@@ -1,5 +1,18 @@
 const snapLinkTrustedDevicesStorageKey = 'ddzhilian:trusted-devices:v1'
 const snapLinkAvatarStorageKey = 'dd_avatar'
+const snapLinkAvatarDataUrlPattern = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/
+
+export function normalizeSnapLinkAvatarDataUrl(value: string | null | undefined) {
+  const normalizedValue = value?.trim() ?? ''
+  if (
+    !normalizedValue ||
+    !snapLinkAvatarDataUrlPattern.test(normalizedValue)
+  ) {
+    return null
+  }
+
+  return normalizedValue
+}
 
 export function readStoredSnapLinkTrustedDeviceIds() {
   if (typeof window === 'undefined') {
@@ -43,7 +56,12 @@ export function readStoredSnapLinkAvatar() {
   }
 
   try {
-    return window.localStorage.getItem(snapLinkAvatarStorageKey)
+    const storedValue = window.localStorage.getItem(snapLinkAvatarStorageKey)
+    const normalizedValue = normalizeSnapLinkAvatarDataUrl(storedValue)
+    if (storedValue && !normalizedValue) {
+      window.localStorage.removeItem(snapLinkAvatarStorageKey)
+    }
+    return normalizedValue
   } catch {
     return null
   }
@@ -55,8 +73,9 @@ export function writeStoredSnapLinkAvatar(value: string | null) {
   }
 
   try {
-    if (value) {
-      window.localStorage.setItem(snapLinkAvatarStorageKey, value)
+    const normalizedValue = normalizeSnapLinkAvatarDataUrl(value)
+    if (normalizedValue) {
+      window.localStorage.setItem(snapLinkAvatarStorageKey, normalizedValue)
     } else {
       window.localStorage.removeItem(snapLinkAvatarStorageKey)
     }
@@ -74,7 +93,7 @@ export function createSnapLinkAvatarDataUrl(file: File) {
       image.onerror = () => reject(new Error('头像图片解析失败'))
       image.onload = () => {
         const canvas = document.createElement('canvas')
-        const size = 128
+        const size = 256
         canvas.width = size
         canvas.height = size
         const context = canvas.getContext('2d')
@@ -87,7 +106,7 @@ export function createSnapLinkAvatarDataUrl(file: File) {
         const width = image.width * scale
         const height = image.height * scale
         context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.85))
+        resolve(canvas.toDataURL('image/jpeg', 0.9))
       }
       image.src = String(reader.result ?? '')
     }

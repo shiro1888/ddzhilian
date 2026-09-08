@@ -10,6 +10,7 @@ export type FileConversationEntry = {
   id: string
   historyId?: string
   sessionId?: string
+  sourceDeviceId?: string
   kind: 'outgoing' | 'incoming'
   fromSelf: boolean
   createdAt: string
@@ -75,6 +76,7 @@ export type UnifiedConversationEntry =
       entryType: 'text'
       sessionId: string
       sourceDeviceId?: string
+      avatarDataUrl?: string
       fromSelf: boolean
       senderName: string
       status?: 'sending' | 'failed'
@@ -93,6 +95,8 @@ export type UnifiedConversationEntry =
       id: string
       entryType: 'file'
       sessionId: string
+      sourceDeviceId?: string
+      avatarDataUrl?: string
       fromSelf: boolean
       senderName: string
       createdAt: string
@@ -102,6 +106,7 @@ export type UnifiedConversationEntry =
 export type RoomListMemberItem = {
   deviceId: string
   deviceName: string
+  avatarDataUrl?: string
   platform: string
   online: boolean
   isSelf: boolean
@@ -127,6 +132,7 @@ export type RoomListItem = {
 export type OnlineDeviceListItem = {
   deviceId: string
   deviceName: string
+  avatarDataUrl?: string
   platform: string
   shortCode?: string
   pairToken?: string

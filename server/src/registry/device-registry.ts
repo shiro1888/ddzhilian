@@ -6,6 +6,7 @@ import { dirname } from 'node:path';
 import type WebSocket from 'ws';
 
 import {
+  normalizeDeviceAvatarDataUrl,
   type DeviceHelloPayload,
   type DeviceSettingsPayload,
   type DirectorySnapshotPayload,
@@ -35,6 +36,7 @@ export interface ConnectedDevice {
   socket: WebSocket;
   deviceId: string;
   deviceName: string;
+  avatarDataUrl?: string;
   platform: string;
   accountId?: string;
   autoConnect: boolean;
@@ -318,6 +320,7 @@ export class DeviceRegistry {
         payload.deviceName,
         `Device-${deviceId.slice(-4).toUpperCase()}`,
       ),
+      avatarDataUrl: normalizeDeviceAvatarDataUrl(payload.avatarDataUrl),
       platform: normalizeText(payload.platform, 'web'),
       accountId: normalizeAccountId(payload.accountId),
       autoConnect: payload.autoConnect ?? true,
@@ -361,6 +364,10 @@ export class DeviceRegistry {
 
     if (payload.deviceName !== undefined) {
       device.deviceName = normalizeDeviceName(payload.deviceName, device.deviceName);
+    }
+
+    if (payload.avatarDataUrl !== undefined) {
+      device.avatarDataUrl = normalizeDeviceAvatarDataUrl(payload.avatarDataUrl);
     }
 
     if (payload.platform !== undefined) {
@@ -472,6 +479,7 @@ export class DeviceRegistry {
           .map((member) => ({
             deviceId: member.deviceId,
             deviceName: member.deviceName,
+            avatarDataUrl: member.avatarDataUrl,
             platform: member.platform,
             online: true,
           })),
@@ -514,6 +522,7 @@ export class DeviceRegistry {
       self: {
         deviceId: viewer.deviceId,
         deviceName: viewer.deviceName,
+        avatarDataUrl: viewer.avatarDataUrl,
         shortCode: viewer.shortCode,
         pairToken: viewer.pairToken,
         historyAuthToken: viewer.historyAuthToken,
@@ -578,6 +587,7 @@ export class DeviceRegistry {
     return {
       deviceId: candidate.deviceId,
       deviceName: candidate.deviceName,
+      avatarDataUrl: candidate.avatarDataUrl,
       platform: candidate.platform,
       shortCode: candidate.shortCode,
       online: true,

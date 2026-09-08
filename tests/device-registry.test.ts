@@ -48,4 +48,29 @@ describe('DeviceRegistry device name rules', () => {
 
     expect(updated?.deviceName).toBe('陈冠嵘')
   })
+
+  it('publishes a device avatar to peers and supports clearing it', () => {
+    const registry = new DeviceRegistry()
+    const avatarDataUrl = 'data:image/jpeg;base64,ZmFrZQ=='
+    const viewer = registry.register(
+      createSocket(),
+      { deviceId: 'device-avatar-viewer', deviceName: '查看者' },
+      testNetwork,
+    )
+    const candidate = registry.register(
+      createSocket(),
+      {
+        deviceId: 'device-avatar-candidate',
+        deviceName: '陈冠嵘',
+        avatarDataUrl,
+      },
+      testNetwork,
+    )
+
+    expect(candidate.avatarDataUrl).toBe(avatarDataUrl)
+    expect(registry.toPeerSummary(viewer, candidate).avatarDataUrl).toBe(avatarDataUrl)
+
+    const updated = registry.update(candidate.deviceId, { avatarDataUrl: '' })
+    expect(updated?.avatarDataUrl).toBeUndefined()
+  })
 })

@@ -51,9 +51,9 @@ describe('SnapLinkStage truthful room status and retention copy', () => {
     expect(ribbon).toHaveClass('is-warning')
     expect(within(ribbon).getByText('等待对端上线')).toBeInTheDocument()
     expect(within(ribbon).getByText('连接到当前服务的设备')).toBeInTheDocument()
-    expect(within(ribbon).getByText('最长 7 天')).toBeInTheDocument()
+    expect(within(ribbon).getByText('最长 3 个月')).toBeInTheDocument()
     expect(
-      screen.getByText('内容经服务器同步 · 文件会上传历史副本，最长保留 7 天'),
+      screen.getByText('内容经服务器同步 · 文件和图片会上传历史副本，最长保留 3 个月'),
     ).toBeInTheDocument()
     expect(screen.queryByText('同一网络内的设备')).not.toBeInTheDocument()
   })

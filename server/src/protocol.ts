@@ -10,6 +10,20 @@ export type SessionState = 'connecting' | 'connected' | 'failed' | 'closed';
 
 export type TransportMode = 'lan-webrtc' | 'remote-webrtc';
 
+const deviceAvatarDataUrlPattern = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export function normalizeDeviceAvatarDataUrl(value: string | undefined) {
+  const normalizedValue = value?.trim() ?? '';
+  if (
+    !normalizedValue ||
+    !deviceAvatarDataUrlPattern.test(normalizedValue)
+  ) {
+    return undefined;
+  }
+
+  return normalizedValue;
+}
+
 export interface NativeLanCapabilityPayload {
   lanNativeEnabled: boolean;
   lanDiscoveryEnabled: boolean;
@@ -43,6 +57,7 @@ export interface DeviceHelloPayload {
   /** Proof of possession for `deviceId`; issued by the server on first hello. */
   deviceSecret?: string;
   deviceName?: string;
+  avatarDataUrl?: string;
   platform?: string;
   accountId?: string;
   autoConnect?: boolean;
@@ -54,6 +69,7 @@ export interface DeviceHelloPayload {
 
 export interface DeviceSettingsPayload {
   deviceName?: string;
+  avatarDataUrl?: string;
   platform?: string;
   accountId?: string;
   autoConnect?: boolean;
@@ -65,6 +81,7 @@ export interface DeviceSettingsPayload {
 export interface PeerSummary {
   deviceId: string;
   deviceName: string;
+  avatarDataUrl?: string;
   platform: string;
   shortCode: string;
   online: boolean;
@@ -82,6 +99,7 @@ export interface PeerSummary {
 export interface RoomMemberSummary {
   deviceId: string;
   deviceName: string;
+  avatarDataUrl?: string;
   platform: string;
   online: boolean;
 }
@@ -150,6 +168,7 @@ export interface DirectorySnapshotPayload {
   self: {
     deviceId: string;
     deviceName: string;
+    avatarDataUrl?: string;
     shortCode: string;
     pairToken: string;
     historyAuthToken: string;
@@ -332,6 +351,14 @@ function hasOptionalBooleanField(payload: Record<string, unknown>, field: string
   return payload[field] === undefined || typeof payload[field] === 'boolean';
 }
 
+function hasOptionalAvatarDataUrlField(payload: Record<string, unknown>, field: string) {
+  const value = payload[field];
+  return (
+    value === undefined ||
+    (typeof value === 'string' && (value.trim() === '' || normalizeDeviceAvatarDataUrl(value) !== undefined))
+  );
+}
+
 function isNativeLanCapabilityPayload(value: unknown) {
   if (value === undefined) {
     return true;
@@ -356,6 +383,7 @@ function isNativeLanCapabilityPayload(value: unknown) {
 function isDeviceSettingsPayload(payload: Record<string, unknown>) {
   return (
     hasOptionalStringField(payload, 'deviceName') &&
+    hasOptionalAvatarDataUrlField(payload, 'avatarDataUrl') &&
     hasOptionalStringField(payload, 'platform') &&
     hasOptionalStringField(payload, 'accountId') &&
     hasOptionalBooleanField(payload, 'autoConnect') &&

@@ -46,6 +46,11 @@ describe('browser OCR runtime', () => {
 
     expect(job.status).toBe('complete')
     expect(job.text).toBe('第一行文字')
+    expect(job.createdAt).toBeDefined()
+    expect(job.expiresAt).toBeDefined()
+    expect(Date.parse(job.expiresAt ?? '') - Date.parse(job.createdAt ?? '')).toBe(
+      90 * 24 * 60 * 60 * 1000,
+    )
     expect(job.lines).toEqual([
       {
         text: '第一行文字',

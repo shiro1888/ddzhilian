@@ -97,9 +97,7 @@ import {
 import type { SnapLinkOcrImageTarget, SnapLinkOcrStatus } from '../../lib/ocr-utils'
 import {
   createSnapLinkAvatarDataUrl,
-  readStoredSnapLinkAvatar,
   readStoredSnapLinkTrustedDeviceIds,
-  writeStoredSnapLinkAvatar,
   writeStoredSnapLinkTrustedDeviceIds,
 } from '../../lib/device-preferences'
 import {
@@ -400,6 +398,7 @@ export type SnapLinkStageProps = {
   activeView: SnapLinkActiveView
   deviceId?: string
   deviceName: string
+  deviceAvatarDataUrl?: string | null
   devicePlatform: string
   deviceShortCode?: string
   signalingState: SettingsPanelSignalingState
@@ -448,7 +447,7 @@ export type SnapLinkStageProps = {
   onUpdateRoomState: (payload: { roomId: string; pinned?: boolean; lastReadAt?: string }) => void
   onStartPrivateChat: (deviceId: string) => void
   onDeviceNameChange: (deviceName: string) => void
-  onDeviceSettingsChange: (patch: Partial<Pick<DeviceSettingsPayload, 'autoConnect' | 'discoverable' | 'allowShortCode'>>) => void
+  onDeviceSettingsChange: (patch: Partial<Pick<DeviceSettingsPayload, 'avatarDataUrl' | 'autoConnect' | 'discoverable' | 'allowShortCode'>>) => void
   onDevicePreferencesChange: (patch: Partial<DevicePreferencesPayload>) => void
   onRequestSnapshot: () => void
   onOpenRoomHome: () => void
@@ -488,6 +487,7 @@ export function SnapLinkStage({
   activeView,
   deviceId,
   deviceName,
+  deviceAvatarDataUrl = null,
   devicePlatform,
   deviceShortCode,
   signalingState,
@@ -608,7 +608,6 @@ export function SnapLinkStage({
   const [resolvedThemeMode, setResolvedThemeMode] = useState<ResolvedThemeMode>(() =>
     resolveInitialSnapLinkThemeMode(readStoredSnapLinkThemeMode()),
   )
-  const [deviceAvatarDataUrl, setDeviceAvatarDataUrl] = useState<string | null>(() => readStoredSnapLinkAvatar())
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [isZenMode, setIsZenMode] = useState(false)
   const [selectedWorkbenchDeviceId, setSelectedWorkbenchDeviceId] = useState<string | null>(null)
@@ -1375,7 +1374,7 @@ export function SnapLinkStage({
   const selectedRoomTechnicalNote = isSelectedRoomAssistant
     ? ''
     : isSelectedRoomPublic
-      ? '技术信息：内容经服务器同步 · 文件会上传历史副本，最长保留 7 天'
+      ? '技术信息：内容经服务器同步 · 文件和图片会上传历史副本，最长保留 3 个月'
       : '技术信息：通过 WebRTC 在设备间直连 · 文件不上传服务器历史副本'
   const selectedRoomMoreDetails = isSelectedRoomAssistant
     ? []
@@ -1397,7 +1396,7 @@ export function SnapLinkStage({
           {
             id: 'retention',
             label: '历史副本',
-            value: '最长 7 天',
+            value: '最长 3 个月',
           },
         ]
       : isSelectedGroupRoom
@@ -2360,8 +2359,7 @@ export function SnapLinkStage({
 
     void createSnapLinkAvatarDataUrl(file)
       .then((dataUrl) => {
-        setDeviceAvatarDataUrl(dataUrl)
-        writeStoredSnapLinkAvatar(dataUrl)
+        onDeviceSettingsChange({ avatarDataUrl: dataUrl })
         showSettingsFeedback('头像已更新')
       })
       .catch((error) => {
@@ -4527,6 +4525,9 @@ export function SnapLinkStage({
 
           {filteredRooms.map((room) => {
             const isActive = room.roomId === selectedRoomId
+            const roomAvatarDataUrl = room.isPublic
+              ? undefined
+              : room.members.find((member) => !member.isSelf)?.avatarDataUrl
 
             return (
               <a
@@ -4550,8 +4551,12 @@ export function SnapLinkStage({
                 }}
                 title={`进入${room.title}`}
               >
-                <span className="dd-snaplink__conversation-avatar" aria-hidden="true">
-                  {room.isPublic ? '世' : Array.from(room.title.trim() || '房')[0]}
+                <span
+                  className={`dd-snaplink__conversation-avatar${roomAvatarDataUrl ? ' has-image' : ''}`}
+                  style={roomAvatarDataUrl ? { '--dd-avatar': `url("${roomAvatarDataUrl}")` } as CSSProperties : undefined}
+                  aria-hidden="true"
+                >
+                  {roomAvatarDataUrl ? null : room.isPublic ? '世' : Array.from(room.title.trim() || '房')[0]}
                   <i className={room.onlineCount > 0 ? 'is-online' : ''} />
                 </span>
                 <span className="dd-snaplink__conversation-main">
@@ -4586,8 +4591,12 @@ export function SnapLinkStage({
                 onClick={() => handleWorkbenchDeviceSendText(device.deviceId)}
                 title={`打开 ${device.deviceName} 的设备会话`}
               >
-                <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
-                  {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
+                <span
+                  className={`dd-snaplink__conversation-avatar is-device${device.avatarDataUrl ? ' has-image' : ''}`}
+                  style={device.avatarDataUrl ? { '--dd-avatar': `url("${device.avatarDataUrl}")` } as CSSProperties : undefined}
+                  aria-hidden="true"
+                >
+                  {device.avatarDataUrl ? null : Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
                   <i className="is-online" />
                 </span>
                 <span className="dd-snaplink__conversation-main">
@@ -5858,16 +5867,29 @@ export function SnapLinkStage({
                     const actorIdentity = resolveActorIdentity(renderedEntry, isBotMessage)
                     const showSenderIdentity = !isGroupedWithPrevious
                     const showMessageTime = !isGroupedWithNext
-                    const shouldUseSelfAvatarImage = renderedEntry.fromSelf && Boolean(deviceAvatarDataUrl)
+                    const avatarDataUrl = isBotMessage
+                      ? undefined
+                      : renderedEntry.fromSelf
+                        ? deviceAvatarDataUrl ?? undefined
+                        : renderedEntry.avatarDataUrl
+                    const shouldUseAvatarImage = Boolean(avatarDataUrl)
                     const avatarClassName = [
                       'dd-snaplink__avatar',
                       showSenderIdentity ? '' : 'is-placeholder',
-                      shouldUseSelfAvatarImage ? 'has-image' : '',
+                      shouldUseAvatarImage ? 'has-image' : '',
                     ].filter(Boolean).join(' ')
-                    const selfAvatarStyle =
-                      shouldUseSelfAvatarImage
-                        ? { '--dd-avatar': `url("${deviceAvatarDataUrl}")` } as CSSProperties
+                    const avatarStyle =
+                      shouldUseAvatarImage
+                        ? { '--dd-avatar': `url("${avatarDataUrl}")` } as CSSProperties
                         : undefined
+                    const avatarContent = shouldUseAvatarImage ? (
+                      <img
+                        src={avatarDataUrl!}
+                        alt=""
+                        className="dd-snaplink__avatar-img"
+                        draggable={false}
+                      />
+                    ) : actorIdentity.avatarLabel
                     const isImageOnlyMessage =
                       renderedEntry.entryType === 'text' && isImageOnlyRichText(renderedEntry.text)
 
@@ -5875,8 +5897,8 @@ export function SnapLinkStage({
                       <div key={entry.id} className="dd-snaplink__entry">
                         <div className={rowClassName} data-snaplink-entry-id={entry.id}>
                           {!renderedEntry.fromSelf ? (
-                            <span className={avatarClassName} aria-hidden="true">
-                              {actorIdentity.avatarLabel}
+                            <span className={avatarClassName} style={avatarStyle} aria-hidden="true">
+                              {avatarContent}
                             </span>
                           ) : null}
                           <div className="dd-snaplink__message-main">
@@ -5924,17 +5946,8 @@ export function SnapLinkStage({
                             ) : null}
                           </div>
                           {renderedEntry.fromSelf ? (
-                            <span className={avatarClassName} style={selfAvatarStyle} aria-hidden="true">
-                              {shouldUseSelfAvatarImage ? (
-                                <img
-                                  src={deviceAvatarDataUrl!}
-                                  alt=""
-                                  className="dd-snaplink__avatar-img"
-                                  draggable={false}
-                                />
-                              ) : (
-                                actorIdentity.avatarLabel
-                              )}
+                            <span className={avatarClassName} style={avatarStyle} aria-hidden="true">
+                              {avatarContent}
                             </span>
                           ) : null}
                         </div>

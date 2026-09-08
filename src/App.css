@@ -23449,6 +23449,7 @@
 
 .dd-snaplink__rail-avatar.has-image,
 .dd-snaplink__avatar.has-image,
+.dd-snaplink__conversation-avatar.has-image,
 .dd-snaplink__settings-avatar.has-image {
   background-image: var(--dd-avatar);
   background-size: cover;

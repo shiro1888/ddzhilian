@@ -775,6 +775,7 @@ function App() {
           return {
             deviceId: peer.deviceId,
             deviceName: peer.deviceName,
+            avatarDataUrl: peer.avatarDataUrl,
             platform: peer.platform,
             shortCode: peer.shortCode,
             pairToken: peer.pairToken,
@@ -799,11 +800,42 @@ function App() {
     }
     return next
   }, [onlinePeers, rooms, self])
+  const deviceAvatarDataUrlById = useMemo(() => {
+    const next = new Map<string, string>()
+    if (self?.avatarDataUrl) {
+      next.set(self.deviceId, self.avatarDataUrl)
+    }
+    for (const peer of onlinePeers) {
+      if (peer.avatarDataUrl) {
+        next.set(peer.deviceId, peer.avatarDataUrl)
+      }
+    }
+    for (const room of rooms) {
+      for (const member of room.members) {
+        if (member.avatarDataUrl) {
+          next.set(member.deviceId, member.avatarDataUrl)
+        }
+      }
+    }
+    for (const session of sessions) {
+      if (session.peer?.avatarDataUrl) {
+        next.set(session.peer.deviceId, session.peer.avatarDataUrl)
+      }
+    }
+    return next
+  }, [onlinePeers, rooms, self, sessions])
 
   const sessionPeerNameById = useMemo(() => {
     const next = new Map<string, string>()
     for (const session of sessions) {
       next.set(session.sessionId, session.peer?.deviceName ?? session.peerId)
+    }
+    return next
+  }, [sessions])
+  const sessionPeerIdById = useMemo(() => {
+    const next = new Map<string, string>()
+    for (const session of sessions) {
+      next.set(session.sessionId, session.peer?.deviceId ?? session.peerId)
     }
     return next
   }, [sessions])
@@ -1231,6 +1263,7 @@ function App() {
         id: item.id,
         historyId: item.historyId,
         sessionId: item.sessionId,
+        sourceDeviceId: self?.deviceId,
         kind: 'outgoing' as const,
         fromSelf: true,
         createdAt: item.createdAt,
@@ -1273,6 +1306,7 @@ function App() {
         id: `incoming-${file.id}`,
         historyId: file.historyId,
         sessionId: file.sessionId,
+        sourceDeviceId: file.fromDeviceId,
         kind: 'incoming' as const,
         fromSelf: false,
         createdAt: file.createdAt,
@@ -1304,6 +1338,7 @@ function App() {
         id: `history-${file.historyId}`,
         historyId: file.historyId,
         sessionId: file.sessionId,
+        sourceDeviceId: file.sourceDeviceId,
         kind: file.sourceDeviceId === self?.deviceId ? ('outgoing' as const) : ('incoming' as const),
         fromSelf: file.sourceDeviceId === self?.deviceId,
         createdAt: file.createdAt,
@@ -1364,6 +1399,7 @@ function App() {
         id: item.id,
         historyId: item.historyId,
         sessionId: item.sessionId,
+        sourceDeviceId: self?.deviceId,
         kind: 'outgoing' as const,
         fromSelf: true,
         createdAt: item.createdAt,
@@ -1406,6 +1442,7 @@ function App() {
         id: `incoming-${file.id}`,
         historyId: file.historyId,
         sessionId: file.sessionId,
+        sourceDeviceId: file.fromDeviceId,
         kind: 'incoming' as const,
         fromSelf: false,
         createdAt: file.createdAt,
@@ -1450,6 +1487,7 @@ function App() {
         entryType: 'text' as const,
         sessionId: record.sessionId,
         sourceDeviceId,
+        avatarDataUrl: sourceDeviceId ? deviceAvatarDataUrlById.get(sourceDeviceId) : undefined,
         fromSelf: record.fromSelf,
         senderName: record.fromSelf
           ? selfName
@@ -1472,17 +1510,27 @@ function App() {
       createdAt: notice.createdAt,
       text: notice.text,
     })),
-    ...fileConversationEntries.map((entry) => ({
-      id: `file-${entry.id}`,
-      entryType: 'file' as const,
-      sessionId: entry.sessionId ?? '',
-      fromSelf: entry.fromSelf,
-      senderName: entry.fromSelf
-        ? selfName
-        : sessionPeerNameById.get(entry.sessionId ?? '') ?? entry.subtitle ?? '对方设备',
-      createdAt: entry.createdAt,
-      file: entry,
-    })),
+    ...fileConversationEntries.map((entry) => {
+      const sourceDeviceId =
+        entry.sourceDeviceId ??
+        (entry.fromSelf
+          ? self?.deviceId
+          : sessionPeerIdById.get(entry.sessionId ?? ''))
+
+      return {
+        id: `file-${entry.id}`,
+        entryType: 'file' as const,
+        sessionId: entry.sessionId ?? '',
+        sourceDeviceId,
+        avatarDataUrl: sourceDeviceId ? deviceAvatarDataUrlById.get(sourceDeviceId) : undefined,
+        fromSelf: entry.fromSelf,
+        senderName: entry.fromSelf
+          ? selfName
+          : sessionPeerNameById.get(entry.sessionId ?? '') ?? entry.subtitle ?? '对方设备',
+        createdAt: entry.createdAt,
+        file: entry,
+      }
+    }),
   ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
 
   const fileConversationEmptyState =
@@ -1705,6 +1753,7 @@ function App() {
         members: room.members.map((member) => ({
           deviceId: member.deviceId,
           deviceName: deviceNameById.get(member.deviceId) ?? member.deviceName,
+          avatarDataUrl: member.avatarDataUrl,
           platform: member.platform,
           online: member.online,
           isSelf: member.deviceId === self?.deviceId,
@@ -2432,6 +2481,7 @@ function App() {
       activeView={isAdminView ? 'admin' : isImageView ? 'image' : isCommandView ? 'command' : isAiChatView ? 'ai-chat' : 'conversation'}
       deviceId={self?.deviceId ?? localIdentity.deviceId}
       deviceName={selfName}
+      deviceAvatarDataUrl={self?.avatarDataUrl ?? localIdentity.avatarDataUrl ?? null}
       devicePlatform={self?.platform ?? localIdentity.platform}
       deviceShortCode={self?.shortCode}
       signalingState={socketState}

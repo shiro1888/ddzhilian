@@ -61,8 +61,8 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `PING_INTERVAL_MS`: websocket keepalive interval
 - `SESSION_IDLE_MS`: stale session cleanup threshold
 - `ROOM_EXIT_GRACE_MS`: how long a disconnected browser keeps its room membership, default 30 minutes
-- `HISTORY_RETENTION_MS`: file history retention window, default 7 days, capped at 7 days
-- `HISTORY_TEXT_RETENTION_MS`: text history retention window, default 7 days, capped at 7 days
+- `HISTORY_RETENTION_MS`: file and uploaded-image history retention window, default 90 days (3 months), capped at 90 days
+- `HISTORY_TEXT_RETENTION_MS`: text history retention window, default 90 days (3 months), capped at 90 days
 - `HISTORY_PAGE_SIZE`: history text lazy-load page size, default `50`
 - `TURN_URL`: optional single TURN server URL
 - `TURN_URLS`: optional comma-separated TURN server URLs
@@ -132,7 +132,7 @@ Copy `.env.example` to `.env` if you want custom ports or TURN credentials.
 - `OCR_BASE_URL`: backend-only PaddleOCR service base URL, default `http://127.0.0.1:8088`; the server calls `${OCR_BASE_URL}/ocr`
 - `OCR_REQUEST_TIMEOUT_MS`: OCR model request timeout, default `60000`
 - `OCR_MAX_UPLOAD_BYTES`: single OCR image upload cap, default `8388608`
-- `OCR_HISTORY_RETENTION_MS`: local OCR job-history retention, default 7 days and capped at 7 days
+- `OCR_HISTORY_RETENTION_MS`: local OCR job-history retention, default 90 days (3 months) and capped at 90 days
 - `OCR_MAX_JOBS`: maximum local OCR job records kept in `server/data/ocr/jobs.json`, default `200`
 
 ## History Cleanup
@@ -148,8 +148,8 @@ Admin access uses Supabase account login instead of a shared admin password. Sup
 
 Public rooms do not have a separate cleanup policy. They use the same file-history rules as every other room:
 
-- `HISTORY_RETENTION_MS` removes file records older than the configured retention window. The default is 7 days, and the server caps it at 7 days.
-- `HISTORY_TEXT_RETENTION_MS` removes text records older than the configured retention window. The default and maximum are 7 days.
+- `HISTORY_RETENTION_MS` removes file and uploaded-image records older than the configured retention window. The default is 90 days (3 months), and the server caps it at 90 days.
+- `HISTORY_TEXT_RETENTION_MS` removes text records older than the configured retention window. The default and maximum are 90 days (3 months).
 - `HISTORY_MAX_BYTES` caps historical file storage per room. The default is 10 GiB.
 - `HISTORY_PAGE_SIZE` controls how many historical texts are returned per request. The default is 50.
 - When a room exceeds the byte cap, cleanup removes the oldest files first until the room is under the limit.

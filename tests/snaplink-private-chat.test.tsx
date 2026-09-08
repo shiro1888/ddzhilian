@@ -43,8 +43,9 @@ describe('SnapLinkStage private chat entry', () => {
   it('still opens an existing private room when selected by state', () => {
     const onStartPrivateChat = vi.fn()
     const onOpenRoomConversation = vi.fn()
+    const peerAvatarDataUrl = 'data:image/jpeg;base64,ZmFrZQ=='
 
-    render(
+    const { container } = render(
       <SnapLinkStage
         {...createBaseProps({
           onOpenRoomConversation,
@@ -74,6 +75,8 @@ describe('SnapLinkStage private chat entry', () => {
               id: 'entry-private',
               entryType: 'text',
               sessionId: 'session-private',
+              sourceDeviceId: 'device-peer',
+              avatarDataUrl: peerAvatarDataUrl,
               fromSelf: false,
               senderName: 'android-PEER',
               createdAt: '2026-06-16T10:00:00.000Z',
@@ -98,6 +101,9 @@ describe('SnapLinkStage private chat entry', () => {
       expect(screen.getByRole('region', { name: 'DD直连房间会话工作台' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: '查看更多功能' })).toBeInTheDocument()
       expect(screen.getByText('私聊已建立')).toBeInTheDocument()
+      expect(
+        container.querySelector('.dd-snaplink__row.is-peer .dd-snaplink__avatar-img'),
+      ).toHaveAttribute('src', peerAvatarDataUrl)
       expect(onOpenRoomConversation).not.toHaveBeenCalled()
       expect(onStartPrivateChat).not.toHaveBeenCalled()
     })

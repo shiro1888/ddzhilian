@@ -1,6 +1,11 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { deleteBrowserOcrHistory, listBrowserOcrHistory, startBrowserOcrJob } from './browser-ocr'
 import { createBrowserId } from './create-browser-id'
+import {
+  normalizeSnapLinkAvatarDataUrl,
+  readStoredSnapLinkAvatar,
+  writeStoredSnapLinkAvatar,
+} from './device-preferences'
 import { resolveDocumentPreviewKind } from './document-preview'
 import type {
   AiChatImageInput,
@@ -212,6 +217,7 @@ type StoredIdentity = {
   /** Server-issued proof of possession; required to reclaim deviceId later. */
   deviceSecret?: string
   deviceName: string
+  avatarDataUrl?: string
   platform: string
   accountId?: string
   autoConnect: boolean
@@ -311,6 +317,7 @@ function getDefaultIdentity(): StoredIdentity {
 
   return {
     deviceName,
+    avatarDataUrl: readStoredSnapLinkAvatar() ?? undefined,
     platform: system,
     autoConnect: true,
     discoverable: true,
@@ -329,9 +336,10 @@ function readStoredIdentity(): StoredIdentity {
     const parsed = { ...fallback, ...(JSON.parse(raw) as StoredIdentity) }
     const next: StoredIdentity = {
       ...parsed,
+      avatarDataUrl: normalizeSnapLinkAvatarDataUrl(parsed.avatarDataUrl) ?? fallback.avatarDataUrl,
       platform: normalizeStoredDevicePlatform(parsed.platform, fallback.platform),
     }
-    let shouldPersist = next.platform !== parsed.platform
+    let shouldPersist = next.platform !== parsed.platform || next.avatarDataUrl !== parsed.avatarDataUrl
 
     if (!next.deviceName || isLegacyGeneratedName(next.deviceName)) {
       next.deviceName = fallback.deviceName
@@ -1071,6 +1079,7 @@ export function useDdzhilian() {
       deviceId: snapshot.self.deviceId,
       deviceSecret: snapshot.self.deviceSecret ?? identityRef.current.deviceSecret,
       deviceName: snapshot.self.deviceName,
+      avatarDataUrl: snapshot.self.avatarDataUrl,
       platform: snapshot.self.platform,
       accountId: snapshot.self.accountId,
       autoConnect: snapshot.self.autoConnect,
@@ -1080,6 +1089,7 @@ export function useDdzhilian() {
 
     identityRef.current = nextIdentity
     writeStoredIdentity(nextIdentity)
+    writeStoredSnapLinkAvatar(nextIdentity.avatarDataUrl ?? null)
     setLocalIdentity(nextIdentity)
 
     const normalizedPeers = normalizePeerLists(snapshot)
@@ -1397,13 +1407,13 @@ export function useDdzhilian() {
       startTransition(() => {
         setTextRecords((previous) => [
           ...previous,
-            {
-              id: message.id,
-              sourceDeviceId: fromDeviceId,
-              sessionId,
-              roomId: sessionsRef.current[sessionId]?.roomId,
-              fromSelf: false,
-              text: message.text,
+          {
+            id: message.id,
+            sourceDeviceId: fromDeviceId,
+            sessionId,
+            roomId: sessionsRef.current[sessionId]?.roomId,
+            fromSelf: false,
+            text: message.text,
             createdAt: message.createdAt,
           },
         ])
@@ -2097,7 +2107,10 @@ export function useDdzhilian() {
           requestedPairToken: token,
         }
 
-        debugLog('send hello', payload)
+        debugLog('send hello', {
+          ...payload,
+          avatarDataUrl: payload.avatarDataUrl ? '[set]' : undefined,
+        })
         socket.send(
           JSON.stringify({
             type: 'hello',
@@ -3059,13 +3072,22 @@ export function useDdzhilian() {
   }
 
   const updateSettings = (patch: Partial<DeviceSettingsPayload>) => {
+    const normalizedAvatarDataUrl = patch.avatarDataUrl === undefined
+      ? identityRef.current.avatarDataUrl
+      : normalizeSnapLinkAvatarDataUrl(patch.avatarDataUrl) ?? undefined
+    const normalizedPatch = patch.avatarDataUrl === undefined
+      ? patch
+      : { ...patch, avatarDataUrl: normalizedAvatarDataUrl }
     const nextIdentity: StoredIdentity = {
       ...identityRef.current,
-      ...patch,
+      ...normalizedPatch,
     }
 
     identityRef.current = nextIdentity
     writeStoredIdentity(nextIdentity)
+    if (patch.avatarDataUrl !== undefined) {
+      writeStoredSnapLinkAvatar(normalizedAvatarDataUrl ?? null)
+    }
     setLocalIdentity(nextIdentity)
 
     startTransition(() => {
@@ -3073,7 +3095,7 @@ export function useDdzhilian() {
         previous
           ? {
               ...previous,
-              ...patch,
+              ...normalizedPatch,
             }
           : previous,
       )
@@ -3083,6 +3105,10 @@ export function useDdzhilian() {
       type: 'update-settings',
       payload: {
         deviceName: nextIdentity.deviceName,
+        avatarDataUrl:
+          patch.avatarDataUrl !== undefined && !normalizedAvatarDataUrl
+            ? ''
+            : nextIdentity.avatarDataUrl,
         platform: nextIdentity.platform,
         accountId: nextIdentity.accountId,
         autoConnect: nextIdentity.autoConnect,

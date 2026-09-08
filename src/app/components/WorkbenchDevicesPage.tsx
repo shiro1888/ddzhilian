@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   ArrowRight,
   Check,
@@ -201,8 +202,12 @@ export function WorkbenchDevicesPage({
                 onDoubleClick={() => onSendText(device.deviceId)}
                 title={`打开 ${device.deviceName}（双击进入会话）`}
               >
-                <span className="dd-snaplink__conversation-avatar is-device" aria-hidden="true">
-                  {Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
+                <span
+                  className={`dd-snaplink__conversation-avatar is-device${device.avatarDataUrl ? ' has-image' : ''}`}
+                  style={device.avatarDataUrl ? { '--dd-avatar': `url("${device.avatarDataUrl}")` } as CSSProperties : undefined}
+                  aria-hidden="true"
+                >
+                  {device.avatarDataUrl ? null : Array.from(device.deviceName.trim() || '设')[0].toUpperCase()}
                   <i className="is-online" />
                 </span>
                 <span className="dd-snaplink__conversation-main">

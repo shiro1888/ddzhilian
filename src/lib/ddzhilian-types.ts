@@ -30,6 +30,7 @@ export type DeviceSettingsPayload = {
   deviceId?: string
   deviceSecret?: string
   deviceName?: string
+  avatarDataUrl?: string
   platform?: string
   accountId?: string
   autoConnect?: boolean
@@ -41,6 +42,7 @@ export type DeviceSettingsPayload = {
 export type PeerSummary = {
   deviceId: string
   deviceName: string
+  avatarDataUrl?: string
   platform: string
   shortCode: string
   /** Only present for the viewer's own device; peers never expose theirs. */
@@ -58,6 +60,7 @@ export type PeerSummary = {
 export type RoomMemberSummary = {
   deviceId: string
   deviceName: string
+  avatarDataUrl?: string
   platform: string
   online: boolean
 }
@@ -125,6 +128,7 @@ export type DirectorySnapshotPayload = {
   self: {
     deviceId: string
     deviceName: string
+    avatarDataUrl?: string
     shortCode: string
     pairToken: string
     historyAuthToken: string
