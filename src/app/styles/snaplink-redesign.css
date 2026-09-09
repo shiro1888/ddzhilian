@@ -925,6 +925,18 @@ button.is-primary:active:not(:disabled),
   border-left: 3px solid var(--snap-green) !important;
 }
 
+/* 普通文字按内容宽度自然伸展，仅收紧轮廓；图片、文件卡片和代码块沿用各自形态。 */
+.dd-snaplink__row.is-self .dd-snaplink__bubble:not(.is-image-only):not(.has-code-block) {
+  border-radius: 9px !important;
+  border-bottom-right-radius: 3px !important;
+}
+
+.dd-snaplink__row.is-peer .dd-snaplink__bubble:not(.is-image-only):not(.has-code-block),
+.dd-snaplink__row.is-bot .dd-snaplink__bubble:not(.is-image-only):not(.has-code-block) {
+  border-radius: 9px !important;
+  border-bottom-left-radius: 3px !important;
+}
+
 /* 纯图片消息气泡：原生图片自然展示，无底色、无多余内边距 (Image-Only Bubble) */
 .dd-snaplink__bubble.is-image-only,
 .dd-snaplink__bubble-shell .dd-snaplink__bubble.is-image-only,
