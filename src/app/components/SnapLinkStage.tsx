@@ -64,6 +64,7 @@ import type {
 } from '../../lib/ddzhilian-types'
 import type { ResolvedThemeMode, ThemeMode } from '../../lib/preferences/theme'
 import { applyThemeMode, subscribeToSystemTheme } from '../../lib/preferences/theme-utils'
+import { resolveSnapLinkPinnedToBottom } from '../snaplink-message-scroll'
 import {
   getSnapLinkThemeContrastColor,
   normalizeSnapLinkThemeColor,
@@ -716,6 +717,7 @@ export function SnapLinkStage({
     firstEntryId: string | null
   } | null>(null)
   const isPinnedToBottomRef = useRef(true)
+  const previousMessageScrollTopRef = useRef<number | null>(null)
   const outgoingEntryAnimationStateRef = useRef<{
     roomId: string | null
     ids: Set<string>
@@ -1488,6 +1490,8 @@ export function SnapLinkStage({
   // `visibleConversationEntries.length` saturates at messageRenderCount, so a
   // room at the render cap would stop firing the auto-scroll effect entirely.
   const latestConversationEntryId = visibleConversationEntries.at(-1)?.id ?? null
+  const firstVisibleConversationEntryId = visibleConversationEntries[0]?.id ?? null
+  const visibleConversationEntryCount = visibleConversationEntries.length
   const ocrPanelId = `${fileInputId}-ocr-panel`
   const ocrResultText = getSnapLinkOcrText(ocrJob)
   const hasOcrResultText = ocrResultText.length > 0
@@ -1509,6 +1513,7 @@ export function SnapLinkStage({
   useEffect(() => {
     messageScrollRestoreRef.current = null
     isPinnedToBottomRef.current = true
+    previousMessageScrollTopRef.current = null
   }, [selectedRoomId])
 
   useEffect(() => {
@@ -1749,20 +1754,27 @@ export function SnapLinkStage({
       return
     }
 
-    // Recorded before the early return below, so it stays accurate no matter
-    // where in the stream the user is reading.
-    isPinnedToBottomRef.current =
-      messages.scrollHeight - messages.scrollTop - messages.clientHeight <= snapLinkPinnedToBottomThreshold
+    // Any deliberate upward movement immediately releases auto-follow, even
+    // while the viewport is still within the old near-bottom threshold.
+    isPinnedToBottomRef.current = resolveSnapLinkPinnedToBottom({
+      previousScrollTop: previousMessageScrollTopRef.current,
+      scrollTop: messages.scrollTop,
+      scrollHeight: messages.scrollHeight,
+      clientHeight: messages.clientHeight,
+      wasPinnedToBottom: isPinnedToBottomRef.current,
+      threshold: snapLinkPinnedToBottomThreshold,
+    })
+    previousMessageScrollTopRef.current = messages.scrollTop
 
     if (!selectedRoomId || !hasActiveRoom || messages.scrollTop > snapLinkHistoryLoadThreshold) {
       return
     }
 
-    if (visibleConversationEntries.length < filteredConversationEntries.length) {
+    if (visibleConversationEntryCount < filteredConversationEntries.length) {
       messageScrollRestoreRef.current = {
         previousScrollHeight: messages.scrollHeight,
         previousScrollTop: messages.scrollTop,
-        firstEntryId: visibleConversationEntries[0]?.id ?? null,
+        firstEntryId: firstVisibleConversationEntryId,
       }
       setMessageRenderState((current) => {
         const currentCount = current.roomId === selectedRoomId
@@ -1780,7 +1792,7 @@ export function SnapLinkStage({
     messageScrollRestoreRef.current = {
       previousScrollHeight: messages.scrollHeight,
       previousScrollTop: messages.scrollTop,
-      firstEntryId: visibleConversationEntries[0]?.id ?? null,
+      firstEntryId: firstVisibleConversationEntryId,
     }
     setMessageRenderState((current) => {
       const currentCount = current.roomId === selectedRoomId
@@ -1798,7 +1810,8 @@ export function SnapLinkStage({
     hasActiveRoom,
     onLoadOlderRoomHistory,
     selectedRoomId,
-    visibleConversationEntries,
+    firstVisibleConversationEntryId,
+    visibleConversationEntryCount,
   ])
 
   useEffect(() => {
@@ -1828,11 +1841,12 @@ export function SnapLinkStage({
       // Only restore when older entries were actually prepended. If the load
       // returned nothing the ref is stale, and applying it would jump the user
       // backwards on the next incoming message.
-      if ((visibleConversationEntries[0]?.id ?? null) !== restore.firstEntryId) {
+      if (firstVisibleConversationEntryId !== restore.firstEntryId) {
         messages.scrollTop = Math.max(
           0,
           messages.scrollHeight - restore.previousScrollHeight + restore.previousScrollTop,
         )
+        previousMessageScrollTopRef.current = messages.scrollTop
         return
       }
     }
@@ -1843,12 +1857,14 @@ export function SnapLinkStage({
     }
 
     messages.scrollTop = messages.scrollHeight
+    previousMessageScrollTopRef.current = messages.scrollTop
   }, [
+    firstVisibleConversationEntryId,
     hasActiveRoom,
     latestConversationEntryId,
     selectedRoomId,
     shouldShowAiThinking,
-    visibleConversationEntries,
+    visibleConversationEntryCount,
   ])
 
   useEffect(() => {

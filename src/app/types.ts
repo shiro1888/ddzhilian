@@ -35,6 +35,7 @@ export type FileConversationEntry = {
   onOpenDocumentPreview?: () => DocumentPreviewPayload | Promise<DocumentPreviewPayload>
   isDocumentPreviewDisabled?: boolean
   action?: 'retry' | 'cancel'
+  cancelTransferIds?: string[]
   canRecall?: boolean
 }
 

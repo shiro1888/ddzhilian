@@ -101,6 +101,17 @@ function FileActionsContent({
     onRecallFile(file)
   }
 
+  const handleCancelTransfer = () => {
+    const groupedTransferIds = file.cancelTransferIds
+    const transferIds = groupedTransferIds && groupedTransferIds.length > 0
+      ? groupedTransferIds
+      : [file.id]
+
+    for (const transferId of new Set(transferIds)) {
+      onCancelTransfer(transferId)
+    }
+  }
+
   const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
   const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
 
@@ -145,7 +156,7 @@ function FileActionsContent({
         </button>
       ) : null}
       {file.action === 'cancel' ? (
-        <button type="button" onClick={() => onCancelTransfer(file.id)}>
+        <button type="button" onClick={handleCancelTransfer}>
           <X size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
           <span>取消</span>
         </button>

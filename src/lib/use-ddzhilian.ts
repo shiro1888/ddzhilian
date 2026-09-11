@@ -7,6 +7,13 @@ import {
   writeStoredSnapLinkAvatar,
 } from './device-preferences'
 import { resolveDocumentPreviewKind } from './document-preview'
+import {
+  applyTransferPatch,
+  createTransferCancelledError,
+  isTransferCancellation,
+  throwIfTransferAborted,
+  waitForTransferBuffer,
+} from './transfer-control'
 import type {
   AiChatImageInput,
   AiChatConversationRecord,
@@ -47,9 +54,6 @@ import type {
 const STORAGE_KEY = 'ddzhilian.identity.v1'
 const CHUNK_SIZE = 64 * 1024
 const SERVER_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024
-const CHANNEL_BUFFER_HIGH_WATER = 4 * 1024 * 1024
-const CHANNEL_BUFFER_LOW_WATER = 1 * 1024 * 1024
-const CHANNEL_BUFFER_WAIT_TIMEOUT_MS = 60_000
 const DATA_CHANNEL_HEARTBEAT_INTERVAL_MS = 1_000
 const TEXT_SEND_STATUS_MIN_MS = 900
 const HISTORY_PAGE_SIZE = 50
@@ -539,6 +543,7 @@ export function useDdzhilian() {
   const sessionsRef = useRef<Record<string, LiveSession>>({})
   const connectionStatesRef = useRef<Record<string, PeerConnectionState>>({})
   const transferItemsRef = useRef<TransferItem[]>([])
+  const transferAbortControllersRef = useRef(new Map<string, AbortController>())
   const textRecordsRef = useRef<TextRecord[]>([])
   const receivedFilesRef = useRef<ReceivedFile[]>([])
   const historyFilesRef = useRef<HistoryFileSummary[]>([])
@@ -821,24 +826,12 @@ export function useDdzhilian() {
 
   const updateTransfer = (transferId: string, patch: Partial<TransferItem>) => {
     transferItemsRef.current = transferItemsRef.current.map((item) =>
-      item.id === transferId
-        ? {
-            ...item,
-            ...patch,
-          }
-        : item,
+      applyTransferPatch(item, transferId, patch),
     )
 
     startTransition(() => {
       setTransferItems((previous) =>
-        previous.map((item) =>
-          item.id === transferId
-            ? {
-                ...item,
-                ...patch,
-              }
-            : item,
-        ),
+        previous.map((item) => applyTransferPatch(item, transferId, patch)),
       )
     })
   }
@@ -2081,6 +2074,9 @@ export function useDdzhilian() {
     const objectUrls = objectUrlsRef.current
     const peerConnections = peerConnectionsRef.current
     const dataChannelHeartbeatIntervals = dataChannelHeartbeatIntervalsRef.current
+    const transferAbortControllers = transferAbortControllersRef.current
+    const transferResumeWaiters = transferResumeWaitersRef.current
+    const transferAckWaiters = transferAckWaitersRef.current
 
     const connect = () => {
       if (disposed) {
@@ -2180,6 +2176,23 @@ export function useDdzhilian() {
         window.clearInterval(heartbeatIntervalId)
       }
       dataChannelHeartbeatIntervals.clear()
+
+      for (const controller of transferAbortControllers.values()) {
+        controller.abort()
+      }
+      transferAbortControllers.clear()
+
+      for (const waiter of transferResumeWaiters.values()) {
+        window.clearTimeout(waiter.timeoutId)
+        waiter.reject(createTransferCancelledError())
+      }
+      transferResumeWaiters.clear()
+
+      for (const waiter of transferAckWaiters.values()) {
+        window.clearTimeout(waiter.timeoutId)
+        waiter.reject(createTransferCancelledError())
+      }
+      transferAckWaiters.clear()
 
       socketRef.current?.close()
     }
@@ -2454,18 +2467,31 @@ export function useDdzhilian() {
 
   const cancelTransfer = (transferId: string) => {
     const transfer = transferItemsRef.current.find((item) => item.id === transferId)
+    if (!transfer || transfer.status === 'completed' || transfer.status === 'cancelled') {
+      return
+    }
+
+    updateTransfer(transferId, {
+      status: 'cancelled',
+      errorMessage: undefined,
+    })
+    transferAbortControllersRef.current.get(transferId)?.abort()
 
     if (transfer?.sessionId) {
       const channel = dataChannelsRef.current.get(transfer.sessionId)
       if (channel && channel.readyState === 'open') {
-        channel.send(
-          JSON.stringify({
-            type: 'file-cancel',
-            id: transferId,
-            reason: '发送方已取消传输。',
-            createdAt: new Date().toISOString(),
-          } satisfies ChannelMessage),
-        )
+        try {
+          channel.send(
+            JSON.stringify({
+              type: 'file-cancel',
+              id: transferId,
+              reason: '发送方已取消传输。',
+              createdAt: new Date().toISOString(),
+            } satisfies ChannelMessage),
+          )
+        } catch (error) {
+          debugLog('failed to notify receiver about cancellation', { transferId, error })
+        }
       }
     }
 
@@ -2473,20 +2499,17 @@ export function useDdzhilian() {
     if (resumeWaiter) {
       window.clearTimeout(resumeWaiter.timeoutId)
       transferResumeWaitersRef.current.delete(transferId)
-      resumeWaiter.reject(new Error('传输已取消。'))
+      resumeWaiter.reject(createTransferCancelledError())
     }
 
     const ackWaiter = transferAckWaitersRef.current.get(transferId)
     if (ackWaiter) {
       window.clearTimeout(ackWaiter.timeoutId)
       transferAckWaitersRef.current.delete(transferId)
-      ackWaiter.reject(new Error('传输已取消。'))
+      ackWaiter.reject(createTransferCancelledError())
     }
 
-    updateTransfer(transferId, {
-      status: 'cancelled',
-      errorMessage: undefined,
-    })
+    transferFilesRef.current.delete(transferId)
     debugLog('transfer cancelled', { transferId })
   }
 
@@ -2748,7 +2771,11 @@ export function useDdzhilian() {
 
   const startTransfer = async (transferId: string, preferredSessionId?: string | null) => {
     const transfer = transferItemsRef.current.find((item) => item.id === transferId)
-    if (!transfer) {
+    if (
+      !transfer ||
+      transfer.status === 'cancelled' ||
+      transferAbortControllersRef.current.has(transferId)
+    ) {
       return
     }
 
@@ -2796,6 +2823,16 @@ export function useDdzhilian() {
       return
     }
 
+    const abortController = new AbortController()
+    const { signal } = abortController
+    transferAbortControllersRef.current.set(transferId, abortController)
+    const throwIfCancelled = () => {
+      throwIfTransferAborted(signal)
+      if (transferItemsRef.current.find((item) => item.id === transferId)?.status === 'cancelled') {
+        throw createTransferCancelledError()
+      }
+    }
+
     updateTransfer(transferId, {
       status: 'ready',
       sessionId: target.sessionId,
@@ -2811,12 +2848,14 @@ export function useDdzhilian() {
     })
 
     try {
+      throwIfCancelled()
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       const createdAt = new Date().toISOString()
 
       const resume = await waitForTransferResume(
         transferId,
         () => {
+          throwIfCancelled()
           channel.send(
             JSON.stringify({
               type: 'file-meta',
@@ -2832,6 +2871,7 @@ export function useDdzhilian() {
           )
         },
       )
+      throwIfCancelled()
       const startIndex = Math.min(Math.max(resume.nextIndex, 0), totalChunks)
       let sentBytes = Math.min(startIndex * CHUNK_SIZE, file.size)
       const acknowledgedBytes = Math.min(Math.max(resume.receivedBytes, 0), file.size)
@@ -2849,13 +2889,11 @@ export function useDdzhilian() {
       debugLog('state transition', { transferId, status: 'transferring' })
 
       for (let index = startIndex; index < totalChunks; index += 1) {
-        const currentTransfer = transferItemsRef.current.find((item) => item.id === transferId)
-        if (currentTransfer?.status === 'cancelled') {
-          throw new Error('传输已取消。')
-        }
+        throwIfCancelled()
 
         const slice = file.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE)
         const buffer = await slice.arrayBuffer()
+        throwIfCancelled()
         sentBytes += buffer.byteLength
 
         channel.send(
@@ -2876,9 +2914,10 @@ export function useDdzhilian() {
         })
         debugLog('bytes sent', { transferId, sentBytes, totalBytes: file.size })
 
-        await waitForBufferedAmount(channel)
+        await waitForBufferedAmount(channel, signal)
       }
 
+      throwIfCancelled()
       channel.send(
         JSON.stringify({
           type: 'file-complete',
@@ -2887,10 +2926,7 @@ export function useDdzhilian() {
       )
       debugLog('file completion sent', { transferId })
 
-      const currentTransfer = transferItemsRef.current.find((item) => item.id === transferId)
-      if (currentTransfer?.status === 'cancelled') {
-        throw new Error('传输已取消。')
-      }
+      throwIfCancelled()
 
       const ack = await new Promise<ChannelMessage & { type: 'file-ack' }>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
@@ -2904,6 +2940,7 @@ export function useDdzhilian() {
           timeoutId,
         })
       })
+      throwIfCancelled()
 
       updateTransfer(transferId, {
         status: ack.completed ? 'completed' : 'failed',
@@ -2926,7 +2963,7 @@ export function useDdzhilian() {
       })
     } catch (error) {
       const currentTransfer = transferItemsRef.current.find((item) => item.id === transferId)
-      if (currentTransfer?.status === 'cancelled') {
+      if (currentTransfer?.status === 'cancelled' || isTransferCancellation(error, signal)) {
         debugLog('transfer cancelled before completion', { transferId })
         return
       }
@@ -2936,6 +2973,10 @@ export function useDdzhilian() {
         errorMessage: error instanceof Error ? error.message : '传输失败。',
       })
       debugLog('failure reason', { transferId, error })
+    } finally {
+      if (transferAbortControllersRef.current.get(transferId) === abortController) {
+        transferAbortControllersRef.current.delete(transferId)
+      }
     }
   }
 
@@ -3161,48 +3202,8 @@ export function useDdzhilian() {
     })
   }
 
-  const waitForBufferedAmount = async (channel: RTCDataChannel) => {
-    if (channel.readyState !== 'open') {
-      throw new Error('数据通道已断开，传输中止。')
-    }
-
-    if (channel.bufferedAmount < CHANNEL_BUFFER_HIGH_WATER) {
-      return
-    }
-
-    // A channel that dies while its buffer is full never fires
-    // 'bufferedamountlow', so settle on every terminal condition instead —
-    // otherwise the send loop parks forever holding the File and the channel.
-    await new Promise<void>((resolve, reject) => {
-      channel.bufferedAmountLowThreshold = CHANNEL_BUFFER_LOW_WATER
-
-      const cleanup = () => {
-        channel.removeEventListener('bufferedamountlow', onFlush)
-        channel.removeEventListener('close', onDead)
-        channel.removeEventListener('error', onDead)
-        window.clearTimeout(timeoutId)
-      }
-
-      const onFlush = () => {
-        cleanup()
-        resolve()
-      }
-
-      const onDead = () => {
-        cleanup()
-        reject(new Error('数据通道已断开，传输中止。'))
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        cleanup()
-        reject(new Error('等待通道缓冲区释放超时。'))
-      }, CHANNEL_BUFFER_WAIT_TIMEOUT_MS)
-
-      channel.addEventListener('bufferedamountlow', onFlush)
-      channel.addEventListener('close', onDead)
-      channel.addEventListener('error', onDead)
-    })
-  }
+  const waitForBufferedAmount = (channel: RTCDataChannel, signal?: AbortSignal) =>
+    waitForTransferBuffer(channel, { signal })
 
   const waitForTransferResume = async (
     transferId: string,
@@ -3985,6 +3986,7 @@ export function useDdzhilian() {
     createdAt: string
     start?: number
     end?: number
+    signal?: AbortSignal
   }): Promise<
     | { complete: false; offset: number }
     | { complete: true; offset: number; file: HistoryFileSummary }
@@ -4012,6 +4014,7 @@ export function useDdzhilian() {
       method: 'POST',
       headers,
       body,
+      signal: input.signal,
     })
     const payload = await response.json().catch(() => ({})) as {
       offset?: number
@@ -4061,6 +4064,10 @@ export function useDdzhilian() {
       }
 
       const existingTransfer = transferItemsRef.current.find((transfer) => transfer.id === historyId)
+      if (existingTransfer?.status === 'cancelled') {
+        continue
+      }
+
       const previewUrl = existingTransfer?.previewUrl ?? (
         isPreviewableMediaType(file.type || undefined)
           ? URL.createObjectURL(file)
@@ -4099,6 +4106,9 @@ export function useDdzhilian() {
         errorMessage: undefined,
         startedAt: existingTransfer?.startedAt ?? createdAt,
       }
+      const abortController = new AbortController()
+      const { signal } = abortController
+      transferAbortControllersRef.current.set(historyId, abortController)
 
       transferFilesRef.current.set(historyId, file)
       transferItemsRef.current = [
@@ -4117,6 +4127,7 @@ export function useDdzhilian() {
       try {
         let offset = 0
         let uploadedSummary: HistoryFileSummary | undefined
+        throwIfTransferAborted(signal)
 
         if (file.size === 0) {
           const next = await uploadRoomFileChunk({
@@ -4125,7 +4136,9 @@ export function useDdzhilian() {
             file,
             activeSelf,
             createdAt,
+            signal,
           })
+          throwIfTransferAborted(signal)
           if (next.complete) {
             uploadedSummary = next.file
           }
@@ -4147,7 +4160,9 @@ export function useDdzhilian() {
               createdAt,
               start: offset,
               end,
+              signal,
             })
+            throwIfTransferAborted(signal)
 
             if (next.complete) {
               uploadedSummary = next.file
@@ -4174,6 +4189,7 @@ export function useDdzhilian() {
             })
           }
         }
+        throwIfTransferAborted(signal)
 
         const summary = uploadedSummary ?? {
           historyId,
@@ -4198,6 +4214,12 @@ export function useDdzhilian() {
         })
         debugLog('room file archived', { historyId, roomId, fileName: file.name })
       } catch (error) {
+        const currentTransfer = transferItemsRef.current.find((transfer) => transfer.id === historyId)
+        if (currentTransfer?.status === 'cancelled' || isTransferCancellation(error, signal)) {
+          debugLog('room file upload cancelled', { historyId, roomId })
+          continue
+        }
+
         updateTransfer(historyId, {
           status: 'failed',
           errorMessage: error instanceof Error ? error.message : '公共房间文件上传失败。',
@@ -4205,6 +4227,9 @@ export function useDdzhilian() {
         throw error
       } finally {
         archivingHistoryIdsRef.current.delete(historyId)
+        if (transferAbortControllersRef.current.get(historyId) === abortController) {
+          transferAbortControllersRef.current.delete(historyId)
+        }
       }
     }
   }

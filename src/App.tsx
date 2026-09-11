@@ -59,6 +59,7 @@ import type {
 import { resolveDocumentPreviewKind } from './lib/document-preview'
 import type { DocumentPreviewSource } from './lib/document-preview'
 import { createBrowserId } from './lib/create-browser-id'
+import { isSnapLinkTransferActive } from './lib/device-display'
 import { useAccountAuth } from './lib/use-account-auth'
 import { useAdminPermissions } from './lib/use-admin-permissions'
 import { useDdzhilian } from './lib/use-ddzhilian'
@@ -1145,11 +1146,9 @@ function App() {
   ].map((items) => {
     const primary = items[0]
     const statuses = new Set(items.map((item) => item.status))
-    const status: typeof primary.status = statuses.has('failed')
-      ? 'failed'
-      : items.every((item) => item.status === 'completed')
-        ? 'completed'
-        : statuses.has('transferring')
+    const status: typeof primary.status = items.every((item) => item.status === 'completed')
+      ? 'completed'
+      : statuses.has('transferring')
           ? 'transferring'
           : statuses.has('ready')
             ? 'ready'
@@ -1157,7 +1156,12 @@ function App() {
               ? 'connecting'
               : statuses.has('waiting_for_target')
                 ? 'waiting_for_target'
-                : 'queued'
+                : statuses.has('queued')
+                  ? 'queued'
+                  : 'failed'
+    const cancelTransferIds = items
+      .filter((item) => isSnapLinkTransferActive(item.status))
+      .map((item) => item.id)
     const targetNames = [
       ...new Set(
         items
@@ -1188,6 +1192,7 @@ function App() {
           ? `${targetNames.length} 台设备`
           : targetNames[0] ?? primary.targetDeviceName,
       errorMessage: items.find((item) => item.errorMessage)?.errorMessage,
+      cancelTransferIds,
     }
   })
 
@@ -1282,12 +1287,13 @@ function App() {
         documentPreviewKind: documentPreviewPayload?.kind,
         documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
         onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
+        cancelTransferIds: item.cancelTransferIds,
         action:
-          item.status === 'failed'
+          item.cancelTransferIds.length > 0
+            ? ('cancel' as const)
+            : item.status === 'failed'
             ? ('retry' as const)
-            : item.status !== 'completed'
-              ? ('cancel' as const)
-              : undefined,
+            : undefined,
         canRecall: item.status === 'completed',
       }
     }),
