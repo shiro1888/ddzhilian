@@ -21,7 +21,8 @@
     "test": "vitest run",
     "test:admin": "vitest run tests/admin-v2-provider-api.test.ts tests/admin-v2-provider-page.test.tsx tests/admin-v2-providers-workspace.test.tsx tests/admin-v2-ai-draft-providers.test.ts",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test:full": "npm run typecheck && npm run test && npm run lint && npm run build && npm run build --prefix server"
+    "test:server:smoke": "npm run build --prefix server && node scripts/smoke-server.mjs",
+    "test:full": "npm run typecheck && npm run test && npm run lint && npm run build && npm run build --prefix server && node scripts/smoke-server.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.0",

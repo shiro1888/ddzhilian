@@ -36,6 +36,7 @@ export type FileConversationEntry = {
   isDocumentPreviewDisabled?: boolean
   action?: 'retry' | 'cancel'
   cancelTransferIds?: string[]
+  retryTransferIds?: string[]
   canRecall?: boolean
 }
 

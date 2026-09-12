@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AccountEmailCheckResponse, AccountSessionResponse, AccountUser } from './ddzhilian-types'
 
 function readPublicSignalingHttpUrl() {
@@ -14,7 +14,7 @@ function resolveAccountApiBaseUrl() {
 
   const { protocol, hostname, host } = window.location
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:8787'
+    return `${protocol}//${hostname}:8787`
   }
 
   return `${protocol}//${host}`
@@ -77,8 +77,12 @@ export function useAccountAuth() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const sessionRevisionRef = useRef(0)
+  const authMutationRef = useRef(false)
 
   const refreshSession = useCallback(async () => {
+    if (authMutationRef.current) return
+    const revision = ++sessionRevisionRef.current
     setIsLoading(true)
     setError(null)
 
@@ -92,12 +96,16 @@ export function useAccountAuth() {
       }
 
       const payload = await response.json() as AccountSessionResponse
-      setUser(payload.authenticated && payload.user ? payload.user : null)
+      if (revision === sessionRevisionRef.current) {
+        setUser(payload.authenticated && payload.user ? payload.user : null)
+      }
     } catch (sessionError) {
-      setUser(null)
-      setError(sessionError instanceof Error ? sessionError.message : '账号状态加载失败。')
+      if (revision === sessionRevisionRef.current) {
+        setUser(null)
+        setError(sessionError instanceof Error ? sessionError.message : '账号状态加载失败。')
+      }
     } finally {
-      setIsLoading(false)
+      if (revision === sessionRevisionRef.current) setIsLoading(false)
     }
   }, [])
 
@@ -106,6 +114,9 @@ export function useAccountAuth() {
   }, [refreshSession])
 
   const login = useCallback(async (email: string, password: string) => {
+    authMutationRef.current = true
+    const revision = ++sessionRevisionRef.current
+    setIsLoading(false)
     setIsSubmitting(true)
     setError(null)
 
@@ -116,36 +127,45 @@ export function useAccountAuth() {
         throw new Error('账号会话创建失败。')
       }
 
-      setUser(nextUser)
+      if (revision === sessionRevisionRef.current) setUser(nextUser)
       return nextUser
     } catch (loginError) {
       const message = loginError instanceof Error ? loginError.message : '账号登录失败。'
-      setError(message)
+      if (revision === sessionRevisionRef.current) setError(message)
       throw new Error(message)
     } finally {
-      setIsSubmitting(false)
+      if (revision === sessionRevisionRef.current) {
+        authMutationRef.current = false
+        setIsSubmitting(false)
+      }
     }
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
+    authMutationRef.current = true
+    const revision = ++sessionRevisionRef.current
+    setIsLoading(false)
     setIsSubmitting(true)
     setError(null)
 
     try {
       const payload = await submitAccountCredentials('/api/auth/register', email, password)
       if (payload.authenticated && payload.user) {
-        setUser(payload.user)
+        if (revision === sessionRevisionRef.current) setUser(payload.user)
         return payload
       }
 
-      setUser(null)
+      if (revision === sessionRevisionRef.current) setUser(null)
       return payload
     } catch (registerError) {
       const message = registerError instanceof Error ? registerError.message : '账号注册失败。'
-      setError(message)
+      if (revision === sessionRevisionRef.current) setError(message)
       throw new Error(message)
     } finally {
-      setIsSubmitting(false)
+      if (revision === sessionRevisionRef.current) {
+        authMutationRef.current = false
+        setIsSubmitting(false)
+      }
     }
   }, [])
 
@@ -165,17 +185,28 @@ export function useAccountAuth() {
   }, [])
 
   const logout = useCallback(async () => {
+    authMutationRef.current = true
+    const revision = ++sessionRevisionRef.current
+    setIsLoading(false)
     setIsSubmitting(true)
     setError(null)
 
     try {
-      await fetch(`${ACCOUNT_API_BASE_URL}/api/auth/logout`, {
+      const response = await fetch(`${ACCOUNT_API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       })
+      if (!response.ok) throw new Error(await readAccountApiError(response, '退出账号失败，请重试。'))
+      if (revision === sessionRevisionRef.current) setUser(null)
+    } catch (logoutError) {
+      const message = logoutError instanceof Error ? logoutError.message : '退出账号失败，请重试。'
+      if (revision === sessionRevisionRef.current) setError(message)
+      throw new Error(message)
     } finally {
-      setUser(null)
-      setIsSubmitting(false)
+      if (revision === sessionRevisionRef.current) {
+        authMutationRef.current = false
+        setIsSubmitting(false)
+      }
     }
   }, [])
 

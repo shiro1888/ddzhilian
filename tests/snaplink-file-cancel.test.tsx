@@ -26,6 +26,14 @@ function createCancellableFile(overrides: Partial<FileConversationEntry> = {}): 
 afterEach(cleanup)
 
 describe('FileActions transfer cancellation', () => {
+  it('retries the failed recipients without resending to a completed primary recipient', () => {
+    const retry = vi.fn()
+    render(<FileActions file={createCancellableFile({ id: 'completed-primary', action: 'retry',
+      retryTransferIds: ['failed-a', 'failed-b'] })} isLoadingPreview={false}
+      onOpenDocumentPreview={vi.fn()} onRetryTransfer={retry} onCancelTransfer={vi.fn()} onRecallFile={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(retry.mock.calls).toEqual([['failed-a'], ['failed-b']])
+  })
   it('cancels every active transfer represented by a grouped file card', () => {
     const onCancelTransfer = vi.fn()
 

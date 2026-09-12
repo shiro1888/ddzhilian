@@ -5,10 +5,12 @@ import {
   isSameHostOrigin,
   parseContentDisposition,
   parseCookies,
+  parseRequestUrl,
   readBearerToken,
   readMultipartBoundary,
   readRequestBuffer,
   resolveRequestBaseUrl,
+  shouldServeHistoryFileInline,
 } from '../server/src/http/utils'
 
 async function* streamOf(...chunks: (Buffer | string)[]) {
@@ -16,6 +18,27 @@ async function* streamOf(...chunks: (Buffer | string)[]) {
     yield chunk
   }
 }
+
+describe('request URL validation', () => {
+  it.each(['%', '%GG', '%E0%A4%A', '%FF'])('rejects malformed path escaping %s before routing', (value) => {
+    expect(parseRequestUrl(`/api/history/download/${value}`)).toBeNull()
+  })
+
+  it('preserves encoded ids and query strings for the router', () => {
+    const url = parseRequestUrl('/api/history/download/a%252Fb?room=ROOM01')
+    expect(url?.pathname).toBe('/api/history/download/a%252Fb')
+    expect(url?.searchParams.get('room')).toBe('ROOM01')
+  })
+})
+
+describe('download content handling', () => {
+  it('does not treat active HTML or SVG as inline PDF based on the filename', () => {
+    expect(shouldServeHistoryFileInline({ fileName: 'document.pdf', mimeType: 'text/html' })).toBe(false)
+    expect(shouldServeHistoryFileInline({ fileName: 'document.pdf', mimeType: 'image/svg+xml' })).toBe(false)
+    expect(shouldServeHistoryFileInline({ fileName: 'document.pdf', mimeType: 'application/octet-stream' })).toBe(true)
+    expect(shouldServeHistoryFileInline({ fileName: 'document', mimeType: 'application/pdf' })).toBe(true)
+  })
+})
 
 describe('readRequestBuffer', () => {
   it('concatenates chunks into one buffer', async () => {

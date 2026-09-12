@@ -113,6 +113,11 @@ function FileActionsContent({
   }
 
   const documentPreviewHref = file.documentPreviewKind === 'pdf' ? file.documentPreviewHref : undefined
+  const handleRetryTransfer = () => {
+    for (const transferId of new Set(file.retryTransferIds ?? [file.id])) {
+      onRetryTransfer(transferId)
+    }
+  }
   const canPreviewDocument = Boolean(file.documentPreviewKind && (documentPreviewHref || file.onOpenDocumentPreview))
 
   if (!canPreviewDocument && !file.downloadUrl && !file.onDownload && !file.action && !file.canRecall) {
@@ -150,7 +155,7 @@ function FileActionsContent({
         </a>
       ) : null}
       {file.action === 'retry' ? (
-        <button type="button" onClick={() => onRetryTransfer(file.id)}>
+        <button type="button" onClick={handleRetryTransfer}>
           <RotateCw size={12} className="dd-snaplink__file-action-icon" aria-hidden="true" />
           <span>重试</span>
         </button>

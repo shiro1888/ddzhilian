@@ -43,6 +43,64 @@ export function applyTransferPatch(
   }
 }
 
+export type TransferReplyWaiter<T> = {
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+}
+
+export function waitForTransferReply<T>(
+  waiters: Map<string, TransferReplyWaiter<T>>,
+  id: string,
+  options: { channel: RTCDataChannel; signal: AbortSignal; send: () => void; timeoutMs: number; timeoutMessage: string },
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const cleanup = () => {
+      if (waiters.get(id) === waiter) waiters.delete(id)
+      window.clearTimeout(timeoutId)
+      options.signal.removeEventListener('abort', onAbort)
+      options.channel.removeEventListener('close', onClose)
+      options.channel.removeEventListener('error', onClose)
+    }
+    const waiter: TransferReplyWaiter<T> = {
+      resolve(value) {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(value)
+      },
+      reject(error) {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error)
+      },
+    }
+    const onAbort = () => waiter.reject(createTransferCancelledError())
+    const onClose = () => waiter.reject(new Error('数据通道已断开，传输中止。'))
+    const timeoutId = window.setTimeout(() => waiter.reject(new Error(options.timeoutMessage)), options.timeoutMs)
+    waiters.get(id)?.reject(new Error('传输请求已被替换。'))
+    waiters.set(id, waiter)
+    options.signal.addEventListener('abort', onAbort, { once: true })
+    options.channel.addEventListener('close', onClose)
+    options.channel.addEventListener('error', onClose)
+    if (options.signal.aborted) {
+      onAbort()
+      return
+    }
+    if (options.channel.readyState !== 'open') {
+      onClose()
+      return
+    }
+    // Register before sending so even an immediate reply cannot be missed.
+    try {
+      options.send()
+    } catch (error) {
+      waiter.reject(error)
+    }
+  })
+}
+
 type TransferBufferWaitOptions = {
   signal?: AbortSignal
   highWaterMark?: number
@@ -118,6 +176,10 @@ export async function waitForTransferBuffer(
     // registration without waiting for the timeout.
     if (signal?.aborted) {
       onAbort()
+    } else if (channel.readyState !== 'open') {
+      onDead()
+    } else if (channel.bufferedAmount <= lowWaterMark) {
+      onFlush()
     }
   })
 }

@@ -15,6 +15,7 @@ import {
   parseContentDisposition,
   parseCookies,
   parseMultipartHeaders,
+  parseRequestUrl,
   pipeStorageFileResponse,
   readBearerToken,
   readHeaderString,
@@ -78,6 +79,7 @@ import { AiChatConversationRegistry } from './registry/ai-chat-conversation-regi
 import { AiUsageRegistry } from './registry/ai-usage-registry.js';
 import {
   HistoryFileTooLargeError,
+  HistoryConflictError,
   HistoryRegistry,
 } from './registry/history-registry.js';
 import {
@@ -6473,7 +6475,11 @@ const httpServer = createServer((request, response) => {
     return;
   }
 
-  const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+  const url = parseRequestUrl(request.url);
+  if (!url) {
+    writeJson(response, 400, { error: 'Invalid request URL.' });
+    return;
+  }
 
   if (url.pathname === '/api/snaplink/theme-submissions' && request.method === 'POST') {
     void handleSnapLinkThemeSubmissionRequest(request, response);
@@ -6774,7 +6780,7 @@ const httpServer = createServer((request, response) => {
         .catch((error) => {
           const requestTooLarge = error instanceof RequestBodyTooLargeError;
           const historyTooLarge = error instanceof HistoryFileTooLargeError;
-          writeJson(response, requestTooLarge || historyTooLarge ? 413 : 500, {
+          writeJson(response, requestTooLarge || historyTooLarge ? 413 : error instanceof HistoryConflictError ? 409 : 500, {
             error: requestTooLarge
               ? 'Chunk exceeds declared Content-Range size.'
               : historyTooLarge
@@ -6804,7 +6810,7 @@ const httpServer = createServer((request, response) => {
       })
       .catch((error) => {
         const historyTooLarge = error instanceof HistoryFileTooLargeError;
-        writeJson(response, historyTooLarge ? 413 : 500, {
+        writeJson(response, historyTooLarge ? 413 : error instanceof HistoryConflictError ? 409 : 500, {
           error: historyTooLarge
             ? 'History file exceeds maximum allowed size.'
             : 'History upload failed.',
@@ -6815,13 +6821,10 @@ const httpServer = createServer((request, response) => {
 
   if (url.pathname === '/api/history/text' && request.method === 'GET') {
     const roomId = url.searchParams.get('roomId')?.trim();
-    const limit = Math.max(
-      1,
-      Math.min(
-        config.historyPageSize,
-        Number(url.searchParams.get('limit')?.trim() || config.historyPageSize),
-      ),
-    );
+    const requestedLimit = Number(url.searchParams.get('limit'));
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.max(1, Math.min(config.historyPageSize, Math.floor(requestedLimit)))
+      : config.historyPageSize;
     const beforeCreatedAt = url.searchParams.get('beforeCreatedAt')?.trim();
     const beforeHistoryId = url.searchParams.get('beforeHistoryId')?.trim();
     if (!roomId) {
@@ -6871,15 +6874,22 @@ const httpServer = createServer((request, response) => {
 
     void readRequestBuffer(request, { maxBytes: historyTextRequestMaxBytes })
       .then((buffer) => {
-        const payload = JSON.parse(buffer.toString('utf8')) as {
-          historyId?: string;
-          roomId?: string;
-          sessionId?: string;
-          text?: string;
-          createdAt?: string;
-        };
+        let payload: unknown;
+        try {
+          payload = JSON.parse(buffer.toString('utf8'));
+        } catch {
+          writeJson(response, 400, { error: 'Invalid JSON body.' });
+          return;
+        }
 
-        if (!payload.historyId || !payload.roomId || !payload.text) {
+        if (
+          !isObjectRecord(payload) ||
+          typeof payload.historyId !== 'string' || !payload.historyId.trim() ||
+          typeof payload.roomId !== 'string' || !payload.roomId.trim() ||
+          typeof payload.text !== 'string' || !payload.text ||
+          (payload.sessionId !== undefined && typeof payload.sessionId !== 'string') ||
+          (payload.createdAt !== undefined && (typeof payload.createdAt !== 'string' || !Number.isFinite(Date.parse(payload.createdAt))))
+        ) {
           writeJson(response, 400, {
             error: 'Missing historyId, roomId, or text.',
           });
@@ -6917,8 +6927,8 @@ const httpServer = createServer((request, response) => {
           writeJson(response, 200, { ok: true, text: history.toTextSummary(record) });
           broadcastSnapshots();
         }).catch((error) => {
-          writeJson(response, 500, {
-            error: error instanceof Error ? error.message : 'History text upload failed.',
+          writeJson(response, error instanceof HistoryConflictError ? 409 : 500, {
+            error: 'History text upload failed.',
           });
         });
       })
@@ -6978,7 +6988,8 @@ const httpServer = createServer((request, response) => {
       const range = parseRangeHeader(request.headers.range, fileSize);
       const contentDispositionType = shouldServeHistoryFileInline(record) ? 'inline' : 'attachment';
       const baseHeaders = {
-        'content-type': record.mimeType || 'application/octet-stream',
+        'content-type': contentDispositionType === 'inline' ? 'application/pdf' : record.mimeType || 'application/octet-stream',
+        'x-content-type-options': 'nosniff',
         'content-disposition': `${contentDispositionType}; filename*=UTF-8''${encodeURIComponent(record.fileName)}`,
         'accept-ranges': 'bytes',
         'cache-control': isPublicRecord ? 'public, max-age=3600' : 'private, max-age=3600',

@@ -1333,7 +1333,11 @@ export function ImageGenerationStage({
             </div>
             <div className="dd-image-stage__account">
               <span className="dd-image-stage__email">{userEmail}</span>
-              <button type="button" onClick={() => { void onLogout() }}>
+              <button type="button" onClick={() => {
+                void onLogout().catch((error: unknown) => {
+                  setComposerError(error instanceof Error ? error.message : '退出账号失败，请重试。')
+                })
+              }}>
                 退出
               </button>
             </div>

@@ -404,6 +404,21 @@ function isDeviceHelloPayload(payload: Record<string, unknown>) {
   );
 }
 
+function isSignalEnvelope(value: unknown) {
+  if (!isRecord(value)) return false;
+  if (value.kind === 'offer' || value.kind === 'answer') {
+    return isRecord(value.description) && typeof value.description.sdp === 'string' &&
+      value.description.type === value.kind;
+  }
+  if (value.kind !== 'ice-candidate' || !isRecord(value.candidate)) return false;
+  const candidate = value.candidate;
+  return typeof candidate.candidate === 'string' &&
+    (candidate.sdpMid == null || typeof candidate.sdpMid === 'string') &&
+    (candidate.usernameFragment == null || typeof candidate.usernameFragment === 'string') &&
+    (candidate.sdpMLineIndex == null || (Number.isInteger(candidate.sdpMLineIndex) &&
+      Number(candidate.sdpMLineIndex) >= 0 && Number(candidate.sdpMLineIndex) <= 65535));
+}
+
 /**
  * Every entry maps a client event type to a predicate over its payload. Events
  * whose payload is optional map to `null`. The dispatcher in index.ts reads
@@ -430,12 +445,11 @@ const clientEventPayloadGuards: Record<
   signal: (payload) =>
     hasStringField(payload, 'sessionId') &&
     hasStringField(payload, 'targetDeviceId') &&
-    isRecord(payload.signal) &&
-    hasStringField(payload.signal, 'kind'),
+    isSignalEnvelope(payload.signal),
   'session-state': (payload) =>
     hasStringField(payload, 'sessionId') &&
     hasStringField(payload, 'targetDeviceId') &&
-    hasStringField(payload, 'state'),
+    typeof payload.state === 'string' && ['connecting', 'connected', 'failed', 'closed'].includes(payload.state),
   'create-public-room': null,
   'create-bot-room': null,
   'request-snapshot': null,

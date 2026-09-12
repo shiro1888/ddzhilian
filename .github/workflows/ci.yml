@@ -60,3 +60,6 @@ jobs:
 
       - name: Build backend
         run: npm run build --prefix server
+
+      - name: Smoke test compiled server
+        run: node scripts/smoke-server.mjs

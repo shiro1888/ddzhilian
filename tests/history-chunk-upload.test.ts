@@ -2,10 +2,10 @@
 // HistoryRegistry resolves its default storage root from import.meta.url,
 // which is not a file: URL under the jsdom environment this project defaults
 // to. Each test also gets its own storageRoot so nothing touches real data.
-import { mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Readable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HistoryRegistry } from '../server/src/registry/history-registry'
 
@@ -46,6 +46,91 @@ afterEach(async () => {
 })
 
 describe('HistoryRegistry.saveFileChunk', () => {
+  it.each(['archive.part1.zip', 'archive.part', 'archive.part-abc'])('never sweeps a completed file named %s', async (fileName) => {
+    const registry = await createRegistry()
+    const file = await registry.saveFile({
+      ...baseInput('history-part-name'),
+      fileName,
+      data: Buffer.from('keep this completed file'),
+    })
+    const oldTime = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    await utimes(file.storagePath, oldTime, oldTime)
+    // Directly await maintenance so this also catches a fire-and-forget sweep.
+    await Reflect.get(registry, 'sweepAbandonedPartialUploads').call(registry, Date.now())
+    expect(await readFile(file.storagePath, 'utf8')).toBe('keep this completed file')
+  })
+
+  it('handles an aborted stream while it waits behind another upload', async () => {
+    const registry = await createRegistry()
+    const input = baseInput('queued-abort')
+    const firstStream = new PassThrough()
+    const first = registry.saveFileStream({ ...input, stream: firstStream })
+    const queuedStream = new PassThrough()
+    const queued = registry.saveFileStream({ ...input, stream: queuedStream })
+    const rejected = expect(queued).rejects.toThrow('client disconnected')
+    queuedStream.destroy(new Error('client disconnected'))
+    await new Promise((resolve) => setImmediate(resolve))
+    firstStream.end('original')
+    const saved = await first
+    await rejected
+    expect(await readFile(saved.storagePath, 'utf8')).toBe('original')
+  })
+
+  it('rejects reuse of a private history id by another room or sender', async () => {
+    const registry = await createRegistry()
+    const input = baseInput('private-file')
+    const original = await registry.saveFile({ ...input, data: Buffer.from('private bytes') })
+    for (const changed of [{ roomId: 'OTHER' }, { sourceDeviceId: 'other-device' }]) {
+      await expect(registry.saveFileStream({
+        ...input, ...changed, stream: Readable.from(['replacement']),
+      })).rejects.toThrow(/conflict|another/i)
+      await expect(registry.saveFileChunk({
+        ...input, ...changed, start: 0, end: 3, total: 4, data: Buffer.from('evil'),
+      })).rejects.toThrow(/conflict|another/i)
+    }
+    expect(await readFile(original.storagePath, 'utf8')).toBe('private bytes')
+
+    const text = { ...input, text: 'private message' }
+    await registry.saveText(text)
+    await expect(registry.saveText({ ...text, roomId: 'OTHER' })).rejects.toThrow(/conflict|another/i)
+  })
+
+  it('does not combine partial bytes from different senders', async () => {
+    const registry = await createRegistry()
+    const input = baseInput('partial-owner')
+    await registry.saveFileChunk({ ...input, start: 0, end: 3, total: 8, data: Buffer.from('AAAA') })
+    const foreign = await registry.saveFileChunk({
+      ...input, sourceDeviceId: 'other-device', start: 4, end: 7, total: 8, data: Buffer.from('EVIL'),
+    })
+    expect(foreign.complete).toBe(false)
+    expect(foreign.offset).toBe(0)
+    const result = await registry.saveFileChunk({
+      ...input, start: 4, end: 7, total: 8, data: Buffer.from('BBBB'),
+    })
+    expect(result.complete).toBe(true)
+    if (result.complete) expect(await readFile(result.record.storagePath, 'utf8')).toBe('AAAABBBB')
+  })
+
+  it('serializes streaming and chunked writes of the same history id', async () => {
+    const registry = await createRegistry()
+    const input = baseInput('mixed-writes')
+    const [streamed, chunked] = await Promise.all([
+      registry.saveFileStream({ ...input, stream: Readable.from(['AAAA']) }),
+      registry.saveFileChunk({ ...input, start: 0, end: 3, total: 4, data: Buffer.from('BBBB') }),
+    ])
+    expect(chunked.complete).toBe(true)
+    if (chunked.complete) expect(chunked.record).toBe(streamed)
+    expect(await readFile(streamed.storagePath, 'utf8')).toBe('AAAA')
+  })
+
+  it('keeps distinct ids distinct after filename sanitization', async () => {
+    const registry = await createRegistry()
+    const first = await registry.saveFile({ ...baseInput('same?id'), data: Buffer.from('first') })
+    const second = await registry.saveFile({ ...baseInput('same*id'), data: Buffer.from('second') })
+    expect(first.storagePath).not.toBe(second.storagePath)
+    expect(await readFile(first.storagePath, 'utf8')).toBe('first')
+  })
+
   it('treats a zero history cap as unlimited for chunked and streamed files', async () => {
     const registry = await createRegistry(0)
 

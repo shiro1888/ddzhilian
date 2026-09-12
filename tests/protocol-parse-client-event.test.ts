@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { parseClientEvent } from '../server/src/protocol'
 
 describe('parseClientEvent', () => {
+  it('rejects incomplete RTC descriptions, candidates and unknown session states', () => {
+    for (const signal of [{ kind: 'offer' }, { kind: 'unknown' }, { kind: 'ice-candidate', candidate: {} },
+      { kind: 'offer', description: { sdp: '', type: 'answer' } }]) {
+      expect(parseClientEvent(JSON.stringify({ type: 'signal', payload: {
+        sessionId: 'session', targetDeviceId: 'peer', signal,
+      } }))).toBeNull()
+    }
+    expect(parseClientEvent(JSON.stringify({ type: 'session-state', payload: {
+      sessionId: 'session', targetDeviceId: 'peer', state: 'unknown',
+    } }))).toBeNull()
+    for (const signal of [{ kind: 'offer', description: { sdp: 'v=0', type: 'offer' } },
+      { kind: 'ice-candidate', candidate: { candidate: '', sdpMid: null, sdpMLineIndex: null } }]) {
+      expect(parseClientEvent(JSON.stringify({ type: 'signal', payload: {
+        sessionId: 'session', targetDeviceId: 'peer', signal,
+      } }))).not.toBeNull()
+    }
+  })
   it('accepts a well-formed event', () => {
     const event = parseClientEvent(
       JSON.stringify({ type: 'join-room', payload: { roomId: 'ROOM01' } }),

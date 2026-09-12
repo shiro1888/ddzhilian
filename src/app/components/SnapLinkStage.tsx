@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -712,10 +712,11 @@ export function SnapLinkStage({
   const [activeSharedTab, setActiveSharedTab] = useState<SnapLinkSharedTab | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messageScrollRestoreRef = useRef<{
-    previousScrollHeight: number
-    previousScrollTop: number
     firstEntryId: string | null
+    anchorId?: string
+    anchorTop?: number
   } | null>(null)
+  const previousMessageWindowRef = useRef<{ roomId: string | null; count: number; latestId: string | null } | null>(null)
   const isPinnedToBottomRef = useRef(true)
   const previousMessageScrollTopRef = useRef<number | null>(null)
   const outgoingEntryAnimationStateRef = useRef<{
@@ -1492,6 +1493,7 @@ export function SnapLinkStage({
   const latestConversationEntryId = visibleConversationEntries.at(-1)?.id ?? null
   const firstVisibleConversationEntryId = visibleConversationEntries[0]?.id ?? null
   const visibleConversationEntryCount = visibleConversationEntries.length
+  const conversationEntryCount = conversationEntriesWithRecallGhosts.length
   const ocrPanelId = `${fileInputId}-ocr-panel`
   const ocrResultText = getSnapLinkOcrText(ocrJob)
   const hasOcrResultText = ocrResultText.length > 0
@@ -1510,11 +1512,22 @@ export function SnapLinkStage({
     }
   }, [onListOcrHistory])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     messageScrollRestoreRef.current = null
     isPinnedToBottomRef.current = true
     previousMessageScrollTopRef.current = null
   }, [selectedRoomId])
+
+  useLayoutEffect(() => {
+    const previous = previousMessageWindowRef.current
+    previousMessageWindowRef.current = { roomId: selectedRoomId, count: conversationEntryCount, latestId: latestConversationEntryId }
+    if (previous?.roomId === selectedRoomId && !isPinnedToBottomRef.current &&
+      previous.latestId !== latestConversationEntryId && conversationEntryCount > previous.count) {
+      // While reading history, append new arrivals without evicting the oldest
+      // visible messages from the render window. Adjust before paint.
+      setMessageRenderState((current) => ({ ...current, count: current.count + conversationEntryCount - previous.count }))
+    }
+  }, [conversationEntryCount, latestConversationEntryId, selectedRoomId])
 
   useEffect(() => {
     const nextEntryIds = new Set(unifiedConversationEntries.map((entry) => entry.id))
@@ -1769,12 +1782,13 @@ export function SnapLinkStage({
     if (!selectedRoomId || !hasActiveRoom || messages.scrollTop > snapLinkHistoryLoadThreshold) {
       return
     }
+    const anchor = messages.querySelector<HTMLElement>('[data-snaplink-entry-id]')
 
     if (visibleConversationEntryCount < filteredConversationEntries.length) {
       messageScrollRestoreRef.current = {
-        previousScrollHeight: messages.scrollHeight,
-        previousScrollTop: messages.scrollTop,
         firstEntryId: firstVisibleConversationEntryId,
+        anchorId: anchor?.dataset.snaplinkEntryId,
+        anchorTop: anchor?.getBoundingClientRect().top,
       }
       setMessageRenderState((current) => {
         const currentCount = current.roomId === selectedRoomId
@@ -1790,9 +1804,9 @@ export function SnapLinkStage({
     }
 
     messageScrollRestoreRef.current = {
-      previousScrollHeight: messages.scrollHeight,
-      previousScrollTop: messages.scrollTop,
       firstEntryId: firstVisibleConversationEntryId,
+      anchorId: anchor?.dataset.snaplinkEntryId,
+      anchorTop: anchor?.getBoundingClientRect().top,
     }
     setMessageRenderState((current) => {
       const currentCount = current.roomId === selectedRoomId
@@ -1828,7 +1842,7 @@ export function SnapLinkStage({
     }
   }, [shouldAutoExpandDesktopQueue, workbenchVisibleTransferQueueCount])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const messages = messagesRef.current
     if (!messages || !hasActiveRoom) {
       return
@@ -1836,18 +1850,18 @@ export function SnapLinkStage({
 
     const restore = messageScrollRestoreRef.current
     if (restore) {
-      messageScrollRestoreRef.current = null
-
-      // Only restore when older entries were actually prepended. If the load
-      // returned nothing the ref is stale, and applying it would jump the user
-      // backwards on the next incoming message.
+      // Keep the pending anchor across unrelated arrivals. If older messages
+      // appear, compensate only for its actual movement, including any native
+      // browser scroll anchoring that already happened.
       if (firstVisibleConversationEntryId !== restore.firstEntryId) {
-        messages.scrollTop = Math.max(
-          0,
-          messages.scrollHeight - restore.previousScrollHeight + restore.previousScrollTop,
-        )
-        previousMessageScrollTopRef.current = messages.scrollTop
-        return
+        messageScrollRestoreRef.current = null
+        const anchor = Array.from(messages.querySelectorAll<HTMLElement>('[data-snaplink-entry-id]'))
+          .find((element) => element.dataset.snaplinkEntryId === restore.anchorId)
+        if (anchor && restore.anchorTop !== undefined) {
+          messages.scrollTop += anchor.getBoundingClientRect().top - restore.anchorTop
+          previousMessageScrollTopRef.current = messages.scrollTop
+          return
+        }
       }
     }
 

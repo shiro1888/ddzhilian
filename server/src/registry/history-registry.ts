@@ -1,5 +1,6 @@
-import { appendFileSync, createWriteStream, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -43,6 +44,34 @@ export interface HistoryTextRecord {
   sourceDeviceName: string;
   text: string;
   createdAt: string;
+}
+
+type HistoryFileInput = Omit<HistoryFileRecord, 'size' | 'storagePath'>;
+type FileChunkInput = HistoryFileInput & {
+  start: number;
+  end: number;
+  total: number;
+  data: Buffer;
+};
+
+export class HistoryConflictError extends Error {
+  constructor() {
+    super('History id conflicts with another room or sender.');
+    this.name = 'HistoryConflictError';
+  }
+}
+
+function assertSameHistoryOwner(
+  record: Pick<HistoryFileRecord, 'roomId' | 'sourceDeviceId'>,
+  input: Pick<HistoryFileRecord, 'roomId' | 'sourceDeviceId'>,
+) {
+  if (record.roomId !== input.roomId || record.sourceDeviceId !== input.sourceDeviceId) {
+    throw new HistoryConflictError();
+  }
+}
+
+function storageIdentity(...values: unknown[]) {
+  return createHash('sha256').update(JSON.stringify(values)).digest('hex');
 }
 
 export interface HistoryStats {
@@ -191,7 +220,8 @@ function sortByCreatedAt(
 }
 
 function safeFileSegment(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'file';
+  const segment = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+  return !segment || segment === '.' || segment === '..' ? 'file' : segment;
 }
 
 function buildStoragePath(
@@ -203,7 +233,7 @@ function buildStoragePath(
   return join(
     filesRoot,
     safeFileSegment(roomId),
-    `${safeFileSegment(historyId)}-${safeFileSegment(basename(fileName))}`,
+    `${storageIdentity(roomId, historyId)}-${safeFileSegment(basename(fileName)).slice(0, 80)}`,
   );
 }
 
@@ -382,8 +412,22 @@ export class HistoryRegistry {
 
   private readonly textIdsByRoomId = new Map<string, Set<string>>();
 
-  /** Serializes concurrent chunk appends per historyId. */
-  private readonly chunkLocks = new Map<string, Promise<void>>();
+  /** All upload modes share a lock; a streaming retry must not overwrite chunks. */
+  private readonly fileLocks = new Map<string, Promise<void>>();
+
+  private readonly activeUploadPaths = new Set<string>();
+
+  private async withFileLock<T>(historyId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.fileLocks.get(historyId) ?? Promise.resolve();
+    const current = previous.then(operation);
+    const tail = current.then(() => undefined, () => undefined);
+    this.fileLocks.set(historyId, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.fileLocks.get(historyId) === tail) this.fileLocks.delete(historyId);
+    }
+  }
 
   listForRoom(roomId: string) {
     this.prune();
@@ -529,21 +573,15 @@ export class HistoryRegistry {
     }
   }
 
-  async saveFile(input: {
-    historyId: string;
-    roomId: string;
-    sessionId?: string;
-    isPublic: boolean;
-    sourceDeviceId: string;
-    sourceDeviceName: string;
-    fileName: string;
-    mimeType?: string;
-    createdAt: string;
-    data: Buffer;
-  }) {
+  async saveFile(input: HistoryFileInput & { data: Buffer }) {
+    return this.withFileLock(input.historyId, () => this.saveFileExclusive(input));
+  }
+
+  private async saveFileExclusive(input: HistoryFileInput & { data: Buffer }) {
     this.prune();
     const existing = this.filesById.get(input.historyId);
     if (existing) {
+      assertSameHistoryOwner(existing, input);
       return existing;
     }
 
@@ -585,21 +623,27 @@ export class HistoryRegistry {
     }
   }
 
-  async saveFileStream(input: {
-    historyId: string;
-    roomId: string;
-    sessionId?: string;
-    isPublic: boolean;
-    sourceDeviceId: string;
-    sourceDeviceName: string;
-    fileName: string;
-    mimeType?: string;
-    createdAt: string;
-    stream: NodeJS.ReadableStream;
-  }) {
+  async saveFileStream(input: HistoryFileInput & { stream: NodeJS.ReadableStream }) {
+    let streamError: unknown;
+    const onError = (error: unknown) => { streamError = error; };
+    // The request may abort while waiting behind another upload's lock,
+    // before pipeline has attached its own error listener.
+    input.stream.on('error', onError);
+    try {
+      return await this.withFileLock(input.historyId, () => {
+        if (streamError) throw streamError;
+        return this.saveFileStreamExclusive(input);
+      });
+    } finally {
+      input.stream.removeListener('error', onError);
+    }
+  }
+
+  private async saveFileStreamExclusive(input: HistoryFileInput & { stream: NodeJS.ReadableStream }) {
     this.prune();
     const existing = this.filesById.get(input.historyId);
     if (existing) {
+      assertSameHistoryOwner(existing, input);
       await drainStream(input.stream, this.maxBytes);
       return existing;
     }
@@ -608,13 +652,16 @@ export class HistoryRegistry {
     await fs.mkdir(roomDir, { recursive: true });
 
     const storagePath = buildStoragePath(this.filesRoot, input.roomId, input.historyId, input.fileName);
-    const tempPath = `${storagePath}.part-${Date.now().toString(36)}`;
+    const tempPath = `${storagePath}.part-${randomUUID()}`;
+    this.activeUploadPaths.add(tempPath);
+    let published = false;
 
     try {
       await pipeline(input.stream, createMaxBytesGuard(this.maxBytes), createWriteStream(tempPath));
       const stat = await fs.stat(tempPath);
       this.assertWithinMaxBytes(stat.size);
       await fs.rename(tempPath, storagePath);
+      published = true;
 
       const record: HistoryFileRecord = {
         historyId: input.historyId,
@@ -643,7 +690,12 @@ export class HistoryRegistry {
       } catch {
         // Ignore partial-file cleanup failures.
       }
+      if (published) {
+        await fs.unlink(storagePath).catch(() => undefined);
+      }
       throw error;
+    } finally {
+      this.activeUploadPaths.delete(tempPath);
     }
   }
 
@@ -651,6 +703,7 @@ export class HistoryRegistry {
     this.prune();
     const existing = this.textsById.get(input.historyId);
     if (existing) {
+      assertSameHistoryOwner(existing, input);
       return existing;
     }
 
@@ -697,62 +750,15 @@ export class HistoryRegistry {
     }
   }
 
-  async saveFileChunk(input: {
-    historyId: string;
-    roomId: string;
-    sessionId?: string;
-    isPublic: boolean;
-    sourceDeviceId: string;
-    sourceDeviceName: string;
-    fileName: string;
-    mimeType?: string;
-    createdAt: string;
-    start: number;
-    end: number;
-    total: number;
-    data: Buffer;
-  }) {
-    // Reading the current offset and appending straddles awaits, so two
-    // concurrent chunks for one historyId would both observe the same offset
-    // and both append. Chain every chunk of a given upload onto the previous.
-    const previous = this.chunkLocks.get(input.historyId) ?? Promise.resolve();
-    const current = previous.then(() => this.saveFileChunkExclusive(input));
-    // The stored tail must never reject, or the next waiter inherits the
-    // rejection instead of taking its turn.
-    const tail = current.then(
-      () => undefined,
-      () => undefined,
-    );
-
-    this.chunkLocks.set(input.historyId, tail);
-
-    try {
-      return await current;
-    } finally {
-      if (this.chunkLocks.get(input.historyId) === tail) {
-        this.chunkLocks.delete(input.historyId);
-      }
-    }
+  async saveFileChunk(input: FileChunkInput) {
+    return this.withFileLock(input.historyId, () => this.saveFileChunkExclusive(input));
   }
 
-  private async saveFileChunkExclusive(input: {
-    historyId: string;
-    roomId: string;
-    sessionId?: string;
-    isPublic: boolean;
-    sourceDeviceId: string;
-    sourceDeviceName: string;
-    fileName: string;
-    mimeType?: string;
-    createdAt: string;
-    start: number;
-    end: number;
-    total: number;
-    data: Buffer;
-  }) {
+  private async saveFileChunkExclusive(input: FileChunkInput) {
     this.prune();
     const existing = this.filesById.get(input.historyId);
     if (existing) {
+      assertSameHistoryOwner(existing, input);
       return {
         complete: true as const,
         accepted: true as const,
@@ -772,7 +778,9 @@ export class HistoryRegistry {
     await fs.mkdir(roomDir, { recursive: true });
 
     const storagePath = buildStoragePath(this.filesRoot, input.roomId, input.historyId, input.fileName);
-    const tempPath = `${storagePath}.part`;
+    // Persist the sender and file identity in the partial filename. This also
+    // isolates resumable uploads across restarts without trusting shared IDs.
+    const tempPath = `${storagePath}.${storageIdentity(input.sourceDeviceId, input.total, input.fileName, input.mimeType)}.part`;
     const currentOffset = await this.readPartialSize(tempPath);
 
     if (input.start !== currentOffset) {
@@ -783,7 +791,7 @@ export class HistoryRegistry {
       };
     }
 
-    appendFileSync(tempPath, input.data);
+    await fs.appendFile(tempPath, input.data);
     const nextOffset = currentOffset + input.data.byteLength;
 
     if (nextOffset < input.total) {
@@ -912,6 +920,7 @@ export class HistoryRegistry {
   }
 
   private async sweepAbandonedPartialUploads(now: number) {
+    const completedPaths = new Set([...this.filesById.values()].map((record) => record.storagePath));
     let roomDirs: string[];
     try {
       roomDirs = await fs.readdir(this.filesRoot);
@@ -930,11 +939,14 @@ export class HistoryRegistry {
       }
 
       for (const entry of entries) {
-        if (!entry.includes('.part')) {
+        if (!/\.part(?:-[a-z0-9-]+)?$/i.test(entry)) {
           continue;
         }
 
         const partialPath = join(roomPath, entry);
+        if (completedPaths.has(partialPath) || this.activeUploadPaths.has(partialPath)) {
+          continue;
+        }
 
         try {
           const stats = await fs.stat(partialPath);

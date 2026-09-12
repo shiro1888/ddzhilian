@@ -21,7 +21,7 @@ This repository contains:
 - File transfer: support drag-and-drop selection, progress state, receive queues, and completed history.
 - Long-text exchange: support plain text, pasted rich text, and Markdown rendering.
 - Public rooms: support public room entry links and room-scoped history.
-- History management: keep text history for 24 hours by default and clean temporary file history by retention and size limits.
+- History management: retain text, files and uploaded images for 90 days (3 months) by default, subject to configured file storage capacity.
 - OCR helper: run the PaddleOCR.js tiny model in the user's browser and keep only short-lived local job history.
 - Account-gated image generation: require Supabase-backed login for text-to-image or image-edit generation, support multi-image uploads, enforce per-account daily free image quota plus paid image quota balances stored on the Supabase user profile row, store generated image files on the backend, return authenticated image URLs instead of base64 JSON payloads, and keep lazy-loaded generated-image history per account.
 - Account-based admin: use Supabase account email/password for admin login, read super admins from `ADMIN_SUPER_EMAILS`, store normal admins in `admin_roles`, and restrict API key configuration to super admins.
@@ -31,7 +31,7 @@ This repository contains:
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | Next.js static export, React 19, TypeScript, react-router-dom |
+| Frontend | Next.js static export, React 19, TypeScript, browser history routing |
 | Backend | Node.js, TypeScript, ws |
 | Realtime | WebSocket signaling + WebRTC data channels |
 | Checks | ESLint, TypeScript, Next.js build |
@@ -57,7 +57,7 @@ This repository contains:
 
 ### Requirements
 
-- Node.js 20 or newer
+- Node.js 22.13+ within the 22.x line, or Node.js 24+, is recommended. CI uses Node.js 22.
 - npm
 
 ### Install Dependencies
@@ -122,7 +122,7 @@ Messages that already contain HTML or externally pasted rich text continue throu
 
 ## Backend Responsibilities
 
-The backend coordinates connections instead of acting as permanent file storage. It handles:
+The backend coordinates connections and stores files and messages for the configured retention period. It handles:
 
 - device presence and reconnect identity
 - short codes and pair tokens

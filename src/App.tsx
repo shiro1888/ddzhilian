@@ -1193,6 +1193,7 @@ function App() {
           : targetNames[0] ?? primary.targetDeviceName,
       errorMessage: items.find((item) => item.errorMessage)?.errorMessage,
       cancelTransferIds,
+      retryTransferIds: items.filter((item) => item.status === 'failed').map((item) => item.id),
     }
   })
 
@@ -1262,7 +1263,7 @@ function App() {
         ? item.fileSize
         : Math.min(Math.max(item.acknowledgedBytes, 0), item.fileSize)
       const transferTelemetry = transferTelemetryById[item.id] ?? {}
-      const transferProgress = resolveAcknowledgedTransferProgress(item)
+      const transferProgress = item.progress
 
       return {
         id: item.id,
@@ -1288,6 +1289,7 @@ function App() {
         documentPreviewHref: resolvePdfPreviewHref(documentPreviewPayload),
         onOpenDocumentPreview: documentPreviewPayload ? () => documentPreviewPayload : undefined,
         cancelTransferIds: item.cancelTransferIds,
+        retryTransferIds: item.retryTransferIds,
         action:
           item.cancelTransferIds.length > 0
             ? ('cancel' as const)

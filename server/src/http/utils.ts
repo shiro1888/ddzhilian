@@ -7,6 +7,18 @@ export class RequestBodyTooLargeError extends Error {
   }
 }
 
+/** Validate escaping before any route-specific decodeURIComponent runs. */
+export function parseRequestUrl(raw: string): URL | null {
+  try {
+    // Routing only needs path/query; an untrusted Host is not a parsing base.
+    const url = new URL(raw, 'http://localhost');
+    decodeURIComponent(url.pathname);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export function isLoopbackOrigin(origin: string) {
   try {
     const url = new URL(origin);
@@ -149,7 +161,9 @@ export function pipeStorageFileResponse(
 }
 
 export function shouldServeHistoryFileInline(record: { mimeType?: string; fileName: string }) {
-  return record.mimeType?.toLowerCase() === 'application/pdf' || record.fileName.toLowerCase().endsWith('.pdf');
+  const mimeType = record.mimeType?.split(';', 1)[0].trim().toLowerCase();
+  return mimeType === 'application/pdf' ||
+    ((!mimeType || mimeType === 'application/octet-stream') && record.fileName.toLowerCase().endsWith('.pdf'));
 }
 
 export function isObjectRecord(value: unknown): value is Record<string, unknown> {

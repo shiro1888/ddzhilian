@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { TransferItem } from '../src/lib/ddzhilian-types'
 import {
   applyTransferPatch,
   waitForTransferBuffer,
+  waitForTransferReply,
+  type TransferReplyWaiter,
 } from '../src/lib/transfer-control'
 
 function createTransfer(overrides: Partial<TransferItem> = {}): TransferItem {
@@ -32,6 +34,25 @@ function createBufferedChannel() {
 }
 
 describe('transfer cancellation control', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('clears its waiter and timeout when sending metadata throws', async () => {
+    vi.useFakeTimers()
+    const waiters = new Map<string, TransferReplyWaiter<string>>()
+    const send = () => { throw new Error('channel closed during send') }
+    await expect(waitForTransferReply(waiters, 'id', { channel: createBufferedChannel(),
+      signal: new AbortController().signal, send, timeoutMs: 120000, timeoutMessage: 'timeout' })).rejects.toThrow('channel closed during send')
+    expect(waiters.size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('registers a waiter before sending to handle an immediate response', async () => {
+    const waiters = new Map<string, TransferReplyWaiter<string>>()
+    await expect(waitForTransferReply(waiters, 'id', { channel: createBufferedChannel(),
+      signal: new AbortController().signal, send: () => waiters.get('id')!.resolve('ack'),
+      timeoutMs: 1000, timeoutMessage: 'timeout' })).resolves.toBe('ack')
+    expect(waiters.size).toBe(0)
+  })
   it('does not allow a stale async patch to revive a cancelled transfer', () => {
     const cancelled = createTransfer({ status: 'cancelled' })
 
